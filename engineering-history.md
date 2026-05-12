@@ -7,6 +7,21 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-12 — Add `roadmap.md` and wire it into session onboarding
+
+Added `roadmap.md` at the repo root with an initial backlog of ~18 items
+spanning `infra`, `new-feature`, `ui`, `backend`, `algo`, `security`, `ops`,
+`skunkworks`. Each item is rated Priority (1–10) and LOE (1–10) with a brief
+detail block.
+
+Updated `new-engineering-session-instructions.md` to require reading
+`roadmap.md` (step 2) and asking the user at session start whether to work
+off the roadmap or something else (step 3). Renumbered subsequent steps.
+
+PR: #TBD.
+
+---
+
 ## 2026-05-12 — v1 prototype deploy to GoDaddy Web Hosting Plus
 
 ### Context
