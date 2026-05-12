@@ -35,7 +35,15 @@ input[type=text], input[type=email], input[type=password], input[type=url], inpu
 
 /* nav */
 .topnav { display: flex; gap: 1.2em; padding: 0.8em 1.2em; border-bottom: 1px solid var(--line); background: white; align-items: center; }
-.topnav .brand { font-weight: 600; margin-right: 1em; }
+.topnav .brand {
+  font-family: ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, serif;
+  font-weight: 500;
+  font-size: 1.05em;
+  letter-spacing: 0.01em;
+  margin-right: 1em;
+}
+.topnav .brand em { font-weight: 400; font-style: italic; }
+.topnav .brand .brand-slash { color: var(--muted); margin: 0 0.35em; font-weight: 400; }
 .topnav a, .topnav .linkbtn { color: var(--fg); }
 main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 
