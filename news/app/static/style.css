@@ -41,6 +41,10 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 
 /* feed */
 .feed-header h1 { margin: 0 0 0.2em; }
+.category-tabs { display: flex; gap: 0.4em; flex-wrap: wrap; margin: 1em 0 0.2em; padding-bottom: 0.4em; border-bottom: 1px solid var(--line); }
+.cat-tab { padding: 0.35em 0.9em; border-radius: 20px; border: 1px solid var(--line); background: white; color: var(--fg); font-size: 0.9em; text-transform: capitalize; }
+.cat-tab:hover { background: #f0efeb; text-decoration: none; }
+.cat-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1em; margin-top: 1em; }
 .card { background: white; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
 .card .thumb img { width: 100%; height: 160px; object-fit: cover; display: block; }

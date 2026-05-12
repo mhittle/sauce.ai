@@ -37,9 +37,15 @@ def index():
     weights = _active_weights()
     page = max(1, int(request.args.get("page", 1)))
     page_size = 30
+    category = (request.args.get("category") or "").strip() or None
 
     score_expr, score_params = build_score_sql(weights)
     filter_sql, filter_params = build_filters_sql(weights)
+
+    cat_filter_sql = ""
+    if category:
+        filter_params["category_tab"] = category
+        cat_filter_sql = " AND f.category = %(category_tab)s"
 
     sql = f"""
       SELECT a.id, a.title, a.summary, a.url, a.thumbnail_url, a.byline,
@@ -54,6 +60,7 @@ def index():
       WHERE a.status = 'classified'
         AND a.published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
         {filter_sql}
+        {cat_filter_sql}
       ORDER BY score DESC, a.published_at DESC
       LIMIT %(limit)s OFFSET %(offset)s
     """
@@ -61,8 +68,25 @@ def index():
     articles = query(sql, params)
 
     if request.headers.get("HX-Request"):
-        return render_template("partials/feed_cards.html", articles=articles, page=page, weights=weights)
-    return render_template("feed.html", articles=articles, page=page, weights=weights)
+        return render_template(
+            "partials/feed_cards.html",
+            articles=articles, page=page, weights=weights, category=category,
+        )
+
+    cat_rows = query("""
+        SELECT f.category, COUNT(*) AS n
+        FROM article_features f
+        JOIN articles a ON a.id = f.article_id
+        WHERE a.status = 'classified'
+          AND a.published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+          AND f.category IS NOT NULL AND f.category <> ''
+        GROUP BY f.category ORDER BY n DESC
+    """)
+    return render_template(
+        "feed.html",
+        articles=articles, page=page, weights=weights,
+        categories=cat_rows, active_category=category,
+    )
 
 
 @bp.route("/click/<int:article_id>", methods=["POST"])
