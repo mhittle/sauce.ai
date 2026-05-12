@@ -37,6 +37,9 @@
       <td>{{ s.last_status or '—' }}</td>
       <td>{{ s.error_count }}</td>
       <td>
+        <form method="post" action="{{ url_for('admin.feeds_refresh', sid=s.id) }}" class="inline">
+          <button type="submit" title="Hit the feed URL now; on success resets error count and re-enables">Refresh</button>
+        </form>
         <form method="post" action="{{ url_for('admin.feeds_toggle', sid=s.id) }}" class="inline">
           <button type="submit">{{ 'Disable' if s.is_active else 'Enable' }}</button>
         </form>
