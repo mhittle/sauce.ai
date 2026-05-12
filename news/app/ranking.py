@@ -1,37 +1,89 @@
-"""Ranking: weight vector -> SQL score expression, plus presets and human-readable code."""
+"""Ranking: weight vector -> SQL score expression, plus presets and human-readable code.
+
+Feature config is 3-axis per feature:
+  - direction: where on the feature's scale you want articles to be
+  - weight:    how much you care about it (soft contribution to score)
+  - threshold: optional hard filter (`|value - direction| <= threshold`)
+
+The on-disk shape (user_algorithms.weights_json) holds keys per feature:
+  <fk>             -> weight (float)
+  <fk>_direction   -> target value on the feature's scale
+  <fk>_threshold   -> hard-filter distance from direction; None / missing = off
+
+Backward compat: pre-3-axis saves used `<fk>_target` instead of `<fk>_direction`
+for signed features and had no direction at all for unsigned features. The
+parser / scorer accept the legacy shape and default unsigned direction to the
+catalog default (typically 1.0 = "high is good").
+"""
 import json
 
-# All numeric features the user can weight. Keep keys in sync with feature_catalog.
-FEATURE_KEYS = [
-    "political_lean",        # signed_scale -1..1
-    "source_lean",           # signed_scale -1..1
-    "objectivity",
-    "reading_level",
-    "info_density",
-    "journalist_reputation",
-    "source_reputation",
-    "popularity",
+# Declarative per-feature catalog. The template + ranking both read from this.
+FEATURES = [
+    {"key": "political_lean",        "scale": "signed",   "label": "Political lean",
+     "low": "Left",         "high": "Right",     "default_direction": 0.0, "default_weight": 0.6},
+    {"key": "source_lean",           "scale": "signed",   "label": "Source lean",
+     "low": "Left",         "high": "Right",     "default_direction": 0.0, "default_weight": 0.4},
+    {"key": "objectivity",           "scale": "unsigned", "label": "Objectivity",
+     "low": "Subjective",   "high": "Objective", "default_direction": 1.0, "default_weight": 1.0},
+    {"key": "reading_level",         "scale": "unsigned", "label": "Reading level",
+     "low": "Easy",         "high": "Dense",     "default_direction": 0.5, "default_weight": 0.3},
+    {"key": "info_density",          "scale": "unsigned", "label": "Info density",
+     "low": "Sparse",       "high": "Dense",     "default_direction": 1.0, "default_weight": 0.8},
+    {"key": "journalist_reputation", "scale": "unsigned", "label": "Journalist reputation",
+     "low": "Lower",        "high": "Higher",    "default_direction": 1.0, "default_weight": 0.6},
+    {"key": "source_reputation",     "scale": "unsigned", "label": "Source reputation",
+     "low": "Lower",        "high": "Higher",    "default_direction": 1.0, "default_weight": 0.9},
+    {"key": "popularity",            "scale": "unsigned", "label": "Popularity",
+     "low": "Niche",        "high": "Viral",     "default_direction": 0.5, "default_weight": 0.3},
 ]
-
-# For signed_scale features the algorithm carries both a weight and a target
-# (e.g. "I want pieces close to lean = -0.2"). For unsigned features only a weight.
-SIGNED_FEATURES = {"political_lean", "source_lean"}
+FEATURES_BY_KEY = {f["key"]: f for f in FEATURES}
+FEATURE_KEYS = [f["key"] for f in FEATURES]
+SIGNED_FEATURES = {f["key"] for f in FEATURES if f["scale"] == "signed"}
 
 CATEGORIES = ["politics", "world", "tech", "business", "science", "sports", "general"]
+
+
+def _direction_from_weights(weights, feat):
+    """Resolve the direction for a feature, accepting both `_direction` and the
+    legacy `_target` key, falling back to the catalog default."""
+    fk = feat["key"]
+    for key in (f"{fk}_direction", f"{fk}_target"):
+        if key in weights and weights[key] not in (None, ""):
+            try:
+                return float(weights[key])
+            except (TypeError, ValueError):
+                pass
+    return float(feat["default_direction"])
+
+
+def _threshold_from_weights(weights, feat):
+    fk = feat["key"]
+    v = weights.get(f"{fk}_threshold")
+    if v in (None, ""):
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _scale_width(feat):
+    return 2.0 if feat["scale"] == "signed" else 1.0
+
 
 PRESETS = {
     "balanced": {
         "label": "Balanced & high-quality",
         "description": "High objectivity, high info density, centrist lean, broad mix.",
         "weights": {
-            "political_lean": 0.6, "political_lean_target": 0.0,
-            "source_lean": 0.4,    "source_lean_target": 0.0,
-            "objectivity": 1.0,
-            "reading_level": 0.3,
-            "info_density": 0.8,
-            "journalist_reputation": 0.6,
-            "source_reputation": 0.9,
-            "popularity": 0.3,
+            "political_lean": 0.6, "political_lean_direction": 0.0,
+            "source_lean": 0.4,    "source_lean_direction": 0.0,
+            "objectivity": 1.0,    "objectivity_direction": 1.0,
+            "reading_level": 0.3,  "reading_level_direction": 0.5,
+            "info_density": 0.8,   "info_density_direction": 1.0,
+            "journalist_reputation": 0.6, "journalist_reputation_direction": 1.0,
+            "source_reputation": 0.9,     "source_reputation_direction": 1.0,
+            "popularity": 0.3,     "popularity_direction": 0.5,
             "recency": 0.7,
         },
         "category_filter": [],
@@ -40,14 +92,14 @@ PRESETS = {
         "label": "Deep reads",
         "description": "Long-form, analytical pieces with high reading level and density.",
         "weights": {
-            "political_lean": 0.2, "political_lean_target": 0.0,
-            "source_lean": 0.2,    "source_lean_target": 0.0,
-            "objectivity": 0.6,
-            "reading_level": 1.0,
-            "info_density": 1.0,
-            "journalist_reputation": 0.7,
-            "source_reputation": 0.8,
-            "popularity": 0.1,
+            "political_lean": 0.2, "political_lean_direction": 0.0,
+            "source_lean": 0.2,    "source_lean_direction": 0.0,
+            "objectivity": 0.6,    "objectivity_direction": 1.0,
+            "reading_level": 1.0,  "reading_level_direction": 1.0,
+            "info_density": 1.0,   "info_density_direction": 1.0,
+            "journalist_reputation": 0.7, "journalist_reputation_direction": 1.0,
+            "source_reputation": 0.8,     "source_reputation_direction": 1.0,
+            "popularity": 0.1,     "popularity_direction": 0.5,
             "recency": 0.2,
         },
         "category_filter": [],
@@ -56,14 +108,14 @@ PRESETS = {
         "label": "Just the facts",
         "description": "Maximum objectivity, low opinion, high source reputation.",
         "weights": {
-            "political_lean": 1.0, "political_lean_target": 0.0,
-            "source_lean": 0.8,    "source_lean_target": 0.0,
-            "objectivity": 1.5,
-            "reading_level": 0.1,
-            "info_density": 0.6,
-            "journalist_reputation": 0.6,
-            "source_reputation": 1.0,
-            "popularity": 0.2,
+            "political_lean": 1.0, "political_lean_direction": 0.0,
+            "source_lean": 0.8,    "source_lean_direction": 0.0,
+            "objectivity": 1.5,    "objectivity_direction": 1.0,
+            "reading_level": 0.1,  "reading_level_direction": 0.5,
+            "info_density": 0.6,   "info_density_direction": 1.0,
+            "journalist_reputation": 0.6, "journalist_reputation_direction": 1.0,
+            "source_reputation": 1.0,     "source_reputation_direction": 1.0,
+            "popularity": 0.2,     "popularity_direction": 0.5,
             "recency": 0.8,
         },
         "category_filter": [],
@@ -72,14 +124,14 @@ PRESETS = {
         "label": "Local + world",
         "description": "Heavy on world and local news; balanced ideology.",
         "weights": {
-            "political_lean": 0.5, "political_lean_target": 0.0,
-            "source_lean": 0.4,    "source_lean_target": 0.0,
-            "objectivity": 0.7,
-            "reading_level": 0.2,
-            "info_density": 0.5,
-            "journalist_reputation": 0.4,
-            "source_reputation": 0.7,
-            "popularity": 0.4,
+            "political_lean": 0.5, "political_lean_direction": 0.0,
+            "source_lean": 0.4,    "source_lean_direction": 0.0,
+            "objectivity": 0.7,    "objectivity_direction": 1.0,
+            "reading_level": 0.2,  "reading_level_direction": 0.5,
+            "info_density": 0.5,   "info_density_direction": 1.0,
+            "journalist_reputation": 0.4, "journalist_reputation_direction": 1.0,
+            "source_reputation": 0.7,     "source_reputation_direction": 1.0,
+            "popularity": 0.4,     "popularity_direction": 0.5,
             "recency": 1.0,
         },
         "category_filter": ["world", "politics", "general"],
@@ -92,37 +144,38 @@ def default_weights():
 
 
 def build_score_sql(weights: dict):
-    """Return (sql_expression, params_dict) computing a score from article_features columns.
+    """Return (sql_expression, params_dict) computing a per-article score.
 
-    Recency uses an exponential decay on hours since publish:
-      recency = EXP( -hours_since_published / 24 )
+    Per feature: score = weight * (1 - |value - direction| / scale_width).
+    For unsigned features this generalises the old `weight * value` (which
+    is the special case direction=1.0) and lets users explicitly target a
+    low or mid value as well.
 
-    For signed features we score `1 - |value - target|` so values near the target get max score.
-    For unsigned features we score the value directly.
+    Recency uses an exponential decay on minutes since publish.
     """
     parts = []
     params = {}
 
-    def w(key, default=0.0):
+    for feat in FEATURES:
+        fk = feat["key"]
         try:
-            return float(weights.get(key, default))
+            w = float(weights.get(fk, 0) or 0)
         except (TypeError, ValueError):
-            return default
-
-    for fk in FEATURE_KEYS:
-        weight = w(fk, 0.0)
-        if weight == 0:
+            w = 0.0
+        if w == 0:
             continue
-        if fk in SIGNED_FEATURES:
-            target = w(f"{fk}_target", 0.0)
-            params[f"{fk}_w"] = weight
-            params[f"{fk}_t"] = target
-            parts.append(f"(%({fk}_w)s * (1 - ABS(f.{fk} - %({fk}_t)s)/2))")
-        else:
-            params[f"{fk}_w"] = weight
-            parts.append(f"(%({fk}_w)s * f.{fk})")
+        d = _direction_from_weights(weights, feat)
+        scale = _scale_width(feat)
+        params[f"{fk}_w"] = w
+        params[f"{fk}_d"] = d
+        parts.append(
+            f"(%({fk}_w)s * (1 - ABS(f.{fk} - %({fk}_d)s) / {scale}))"
+        )
 
-    recency_w = w("recency", 0.0)
+    try:
+        recency_w = float(weights.get("recency", 0) or 0)
+    except (TypeError, ValueError):
+        recency_w = 0.0
     if recency_w != 0:
         params["recency_w"] = recency_w
         parts.append("(%(recency_w)s * EXP(-TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP())/1440))")
@@ -132,9 +185,24 @@ def build_score_sql(weights: dict):
 
 
 def build_filters_sql(weights: dict):
-    """Optional hard filters: category list, source allow/deny, lean band."""
+    """Hard filters: category list, source deny, per-feature thresholds.
+
+    A feature threshold filters out articles whose value is more than
+    `threshold` away from `direction` on the feature's scale.
+    """
     clauses = []
     params = {}
+
+    for feat in FEATURES:
+        fk = feat["key"]
+        th = _threshold_from_weights(weights, feat)
+        if th is None or th < 0:
+            continue
+        d = _direction_from_weights(weights, feat)
+        params[f"{fk}_d_th"] = d
+        params[f"{fk}_th"] = th
+        clauses.append(f"ABS(f.{fk} - %({fk}_d_th)s) <= %({fk}_th)s")
+
     cats = weights.get("category_filter") or []
     if cats:
         placeholders = []
@@ -154,22 +222,36 @@ def build_filters_sql(weights: dict):
 def weights_to_expression(weights: dict) -> str:
     """Generate a read-only Python-style snippet equivalent to the active weights."""
     parts = []
-    for fk in FEATURE_KEYS:
-        wv = float(weights.get(fk, 0) or 0)
-        if wv == 0:
-            continue
-        if fk in SIGNED_FEATURES:
-            t = float(weights.get(f"{fk}_target", 0) or 0)
-            parts.append(f"    {wv:.2f} * (1 - abs(article.{fk} - {t:.2f}) / 2)")
-        else:
-            parts.append(f"    {wv:.2f} * article.{fk}")
-    rec = float(weights.get("recency", 0) or 0)
+    filters = []
+    for feat in FEATURES:
+        fk = feat["key"]
+        try:
+            w = float(weights.get(fk, 0) or 0)
+        except (TypeError, ValueError):
+            w = 0.0
+        if w != 0:
+            d = _direction_from_weights(weights, feat)
+            scale = _scale_width(feat)
+            parts.append(f"    {w:.2f} * (1 - abs(article.{fk} - {d:.2f}) / {scale:.0f})")
+        th = _threshold_from_weights(weights, feat)
+        if th is not None and th >= 0:
+            d = _direction_from_weights(weights, feat)
+            filters.append(f"abs(article.{fk} - {d:.2f}) <= {th:.2f}")
+
+    try:
+        rec = float(weights.get("recency", 0) or 0)
+    except (TypeError, ValueError):
+        rec = 0.0
     if rec != 0:
         parts.append(f"    {rec:.2f} * exp(-article.hours_old / 24)")
+
     cat_filter = weights.get("category_filter") or []
     deny = weights.get("source_deny") or []
 
     lines = ["def score(article):"]
+    if filters:
+        lines.append("    if not (" + " and ".join(filters) + "):")
+        lines.append("        return None  # filtered by threshold")
     if not parts:
         lines.append("    return 0  # no weights set")
     else:
@@ -193,3 +275,26 @@ def parse_weights_json(text: str) -> dict:
     if not isinstance(d, dict):
         return default_weights()
     return d
+
+
+def resolved_weights_for_view(weights: dict) -> dict:
+    """Materialize defaults so the template can read weights[key+'_direction'] etc.
+
+    Legacy `<fk>_target` is upgraded to `<fk>_direction`. Missing weights default
+    to 0. Threshold stays None when unset (UI uses that to mean 'off')."""
+    out = dict(weights)
+    for feat in FEATURES:
+        fk = feat["key"]
+        if out.get(f"{fk}_direction") is None:
+            if out.get(f"{fk}_target") is not None:
+                try:
+                    out[f"{fk}_direction"] = float(out[f"{fk}_target"])
+                except (TypeError, ValueError):
+                    out[f"{fk}_direction"] = float(feat["default_direction"])
+            else:
+                out[f"{fk}_direction"] = float(feat["default_direction"])
+        if out.get(fk) is None:
+            out[fk] = 0.0
+    if out.get("recency") is None:
+        out["recency"] = 0.0
+    return out

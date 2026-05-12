@@ -4,9 +4,9 @@ from flask import Blueprint, render_template, request, redirect, url_for, g, jso
 from ..auth import login_required
 from ..db import query, execute, get_conn
 from ..ranking import (
-    PRESETS, FEATURE_KEYS, SIGNED_FEATURES, CATEGORIES,
+    PRESETS, FEATURES, FEATURE_KEYS, SIGNED_FEATURES, CATEGORIES,
     default_weights, parse_weights_json, weights_to_expression,
-    build_score_sql, build_filters_sql,
+    build_score_sql, build_filters_sql, resolved_weights_for_view,
 )
 
 bp = Blueprint("algo", __name__)
@@ -22,6 +22,34 @@ def _get_active(user_id):
     return row["id"], parse_weights_json(row["weights_json"])
 
 
+def _parse_form_weights(form):
+    """Pull direction + weight + threshold per feature from the algo form."""
+    weights = {}
+    for fk in FEATURE_KEYS:
+        try:
+            weights[fk] = float(form.get(f"w_{fk}", 0) or 0)
+        except ValueError:
+            weights[fk] = 0.0
+        try:
+            weights[f"{fk}_direction"] = float(form.get(f"d_{fk}", 0) or 0)
+        except ValueError:
+            weights[f"{fk}_direction"] = 0.0
+        raw_th = form.get(f"th_{fk}")
+        if raw_th in (None, "", "off"):
+            weights[f"{fk}_threshold"] = None
+        else:
+            try:
+                weights[f"{fk}_threshold"] = float(raw_th)
+            except ValueError:
+                weights[f"{fk}_threshold"] = None
+    try:
+        weights["recency"] = float(form.get("w_recency", 0) or 0)
+    except ValueError:
+        weights["recency"] = 0.0
+    weights["category_filter"] = [c for c in form.getlist("category_filter") if c in CATEGORIES]
+    return weights
+
+
 @bp.route("/")
 @login_required
 def index():
@@ -29,7 +57,8 @@ def index():
     expression = weights_to_expression(weights)
     return render_template(
         "algo.html",
-        weights=weights,
+        weights=resolved_weights_for_view(weights),
+        features=FEATURES,
         feature_keys=FEATURE_KEYS,
         signed_features=SIGNED_FEATURES,
         categories=CATEGORIES,
@@ -60,25 +89,7 @@ def onboarding():
 @bp.route("/save", methods=["POST"])
 @login_required
 def save():
-    form = request.form
-    weights = {}
-    for fk in FEATURE_KEYS:
-        try:
-            weights[fk] = float(form.get(f"w_{fk}", 0) or 0)
-        except ValueError:
-            weights[fk] = 0.0
-        if fk in SIGNED_FEATURES:
-            try:
-                weights[f"{fk}_target"] = float(form.get(f"t_{fk}", 0) or 0)
-            except ValueError:
-                weights[f"{fk}_target"] = 0.0
-    try:
-        weights["recency"] = float(form.get("w_recency", 0) or 0)
-    except ValueError:
-        weights["recency"] = 0.0
-    cats = form.getlist("category_filter")
-    weights["category_filter"] = [c for c in cats if c in CATEGORIES]
-
+    weights = _parse_form_weights(request.form)
     aid, _ = _get_active(g.user["id"])
     if aid:
         execute(
@@ -100,23 +111,7 @@ def save():
 @bp.route("/preview", methods=["POST"])
 @login_required
 def preview():
-    form = request.form
-    weights = {}
-    for fk in FEATURE_KEYS:
-        try:
-            weights[fk] = float(form.get(f"w_{fk}", 0) or 0)
-        except ValueError:
-            weights[fk] = 0.0
-        if fk in SIGNED_FEATURES:
-            try:
-                weights[f"{fk}_target"] = float(form.get(f"t_{fk}", 0) or 0)
-            except ValueError:
-                weights[f"{fk}_target"] = 0.0
-    try:
-        weights["recency"] = float(form.get("w_recency", 0) or 0)
-    except ValueError:
-        weights["recency"] = 0.0
-    weights["category_filter"] = [c for c in form.getlist("category_filter") if c in CATEGORIES]
+    weights = _parse_form_weights(request.form)
     return _preview_partial(weights)
 
 
