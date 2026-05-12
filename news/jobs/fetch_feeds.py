@@ -138,6 +138,7 @@ def main():
             cur.execute(
                 """SELECT id, feed_url FROM sources
                    WHERE is_active = 1
+                     AND error_count < 10
                    ORDER BY COALESCE(last_fetched_at, '1970-01-01') ASC
                    LIMIT %s""",
                 (batch,),
