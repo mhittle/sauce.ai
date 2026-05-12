@@ -84,6 +84,13 @@ def fetch_one(conn, source):
                    last_error=%s, error_count=error_count+1 WHERE id=%s""",
                 (str(e)[:1000], sid),
             )
+            # Auto-deactivate after 10 consecutive failures. The source stays
+            # visible in /admin/feeds; admin can hit Refresh to retry, which
+            # resets error_count + re-enables on success.
+            cur.execute(
+                "UPDATE sources SET is_active=0 WHERE id=%s AND error_count >= 10",
+                (sid,),
+            )
         conn.commit()
         return 0, 0, 1
 

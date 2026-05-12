@@ -118,6 +118,40 @@ def feeds_delete(sid):
     return redirect(url_for("admin.feeds"))
 
 
+@bp.route("/feeds/<int:sid>/refresh", methods=["POST"])
+@admin_required
+def feeds_refresh(sid):
+    """Re-poll the feed URL synchronously to check liveness. On success,
+    reset error_count and re-enable the source. On failure, increment
+    error_count (same path as the cron worker)."""
+    import socket
+    import feedparser
+    src = query("SELECT id, feed_url FROM sources WHERE id = %s", (sid,), one=True)
+    if not src:
+        return ("not found", 404)
+    socket.setdefaulttimeout(15)
+    try:
+        parsed = feedparser.parse(
+            src["feed_url"],
+            request_headers={"User-Agent": "sauce.ai-news/1.0"},
+        )
+        if parsed.bozo and not parsed.entries:
+            raise RuntimeError(f"feedparser bozo: {parsed.bozo_exception}")
+        execute(
+            """UPDATE sources SET last_fetched_at=UTC_TIMESTAMP(), last_status='ok',
+               last_error=NULL, error_count=0, is_active=1 WHERE id=%s""",
+            (sid,),
+        )
+    except Exception as e:
+        execute(
+            """UPDATE sources SET last_fetched_at=UTC_TIMESTAMP(), last_status='error',
+               last_error=%s, error_count=error_count+1 WHERE id=%s""",
+            (str(e)[:1000], sid),
+        )
+    get_conn().commit()
+    return redirect(url_for("admin.feeds"))
+
+
 @bp.route("/feeds/add", methods=["POST"])
 @admin_required
 def feeds_add():
