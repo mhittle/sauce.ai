@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Poll Reddit and Hacker News for popular URLs, match against our DB, update popularity."""
 import math
+import os
+import sys
 import time
 from urllib.parse import urlsplit
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import requests
 

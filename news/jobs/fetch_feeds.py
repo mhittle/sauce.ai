@@ -5,11 +5,14 @@ Run from cron every ~15 minutes. Rotates through active feeds so each one is hit
 every ~1-2 hours regardless of how many you have.
 """
 import hashlib
-import re
+import os
+import sys
 import time
 import socket
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import feedparser
 

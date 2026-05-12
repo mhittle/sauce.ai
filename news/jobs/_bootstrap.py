@@ -1,8 +1,16 @@
-"""Shared bootstrap for cron scripts. Sets up sys.path, logger, DB connection."""
+"""Shared bootstrap for cron scripts. Sets up sys.path, logger, DB connection.
+
+Cron scripts source this via:
+
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from _bootstrap import Config, get_conn, setup_logging, db_log
+
+so they work regardless of the caller's cwd.
+"""
 import os
 import sys
 import logging
-from datetime import datetime
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if HERE not in sys.path:
@@ -13,15 +21,17 @@ from app.db import connect_standalone  # noqa: E402
 
 
 def setup_logging(name):
-    logs_dir = os.path.join(HERE, "logs")
-    os.makedirs(logs_dir, exist_ok=True)
     fmt = "%(asctime)s %(levelname)s %(message)s"
-    log_path = os.path.join(logs_dir, f"{name}.log")
-    logging.basicConfig(
-        level=logging.INFO,
-        format=fmt,
-        handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
-    )
+    handlers = [logging.StreamHandler()]
+    try:
+        logs_dir = os.path.join(HERE, "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        handlers.insert(0, logging.FileHandler(os.path.join(logs_dir, f"{name}.log")))
+    except OSError:
+        pass
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(level=logging.INFO, format=fmt, handlers=handlers)
     return logging.getLogger(name)
 
 
