@@ -233,6 +233,8 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-12
 
+- **Editorial serif wordmark in topnav** — ad-hoc, ui. PR #13. Subtle
+  typographic personality: `sauce.ai` in system serif, `news` in italic.
 - **3-axis feature config (Direction + Weight + Threshold)** — Pri 8, LOE 7,
   ui/backend/algo. PR #9.
 - **Expand source catalog to ~635 sources** (shipped at 768) — Pri 8, LOE 5,
