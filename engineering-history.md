@@ -7,6 +7,31 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-12 — Add `engineering-session-wrapup.md` and `bugs.md`
+
+Two new docs to round out the session-management story:
+
+- `engineering-session-wrapup.md` — checklist the LLM runs at end-of-session
+  (or self-triggers when the session is stale/context-polluted). Forces
+  updates to history, roadmap, and bugs before stopping.
+- `bugs.md` — bug log with statuses `open` / `in-progress` / `attempted` /
+  `resolved` / `wontfix`. Pre-populated with the five bugs we hit in the
+  v1 deploy (BUG-001 shim, BUG-002 cPanel scaffold, BUG-003 anthropic,
+  BUG-004 APPLICATION_ROOT, BUG-005 INSTALL.txt paths).
+
+Updated `new-engineering-session-instructions.md`:
+- Step 2 now requires reading `roadmap.md` AND `bugs.md`.
+- New step 7: when the user reports a bug, log it in `bugs.md` immediately
+  before doing anything else with it.
+- New step 11: wrap-up procedure references `engineering-session-wrapup.md`
+  and instructs the agent to proactively suggest wrap-up when the session
+  is stale.
+- Subsequent steps renumbered.
+
+PR: #TBD.
+
+---
+
 ## 2026-05-12 — Add `roadmap.md` and wire it into session onboarding
 
 Added `roadmap.md` at the repo root with an initial backlog of ~18 items
