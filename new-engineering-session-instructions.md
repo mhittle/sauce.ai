@@ -22,11 +22,16 @@ After reading you'll know:
 - What's currently running in production and where the server-side artifacts
   live
 
-## Step 2 — Read `roadmap.md`
+## Step 2 — Read `roadmap.md` and `bugs.md`
 
-The backlog of future sprints, features, and projects. Each item is rated
-on Priority (1–10), LOE (1–10), and Category (`infra`, `new-feature`, `ui`,
-`backend`, `algo`, `security`, `ops`, `skunkworks`, `docs`).
+`roadmap.md` is the backlog of future sprints, features, and projects.
+Each item is rated on Priority (1–10), LOE (1–10), and Category
+(`infra`, `new-feature`, `ui`, `backend`, `algo`, `security`, `ops`,
+`skunkworks`, `docs`).
+
+`bugs.md` is the bug log. Read at least the `open`, `in-progress`, and
+`attempted` sections — the attempted ones describe live workarounds and
+ongoing risks (e.g., the CloudLinux shim symlinks).
 
 ## Step 3 — Ask the user what to work on
 
@@ -72,7 +77,17 @@ per-article Python at request time. The three user views are `/` (feed),
    commit if the install procedure changed.
 5. Open a draft PR. Don't self-merge; ask the user.
 
-## Step 7 — When you accomplish something meaningful, append to `engineering-history.md`
+## Step 7 — When the user reports a bug, log it in `bugs.md` immediately
+
+Before doing anything else with the bug: add an entry to `bugs.md` with a
+new sequential ID and status `open`. Include date, reporter (`user` if from
+the user), and the description as given. If you start working on it, flip
+to `in-progress`. Mark `resolved` only after the fix is verified.
+
+This rule applies even if you can fix the bug in 30 seconds. The log is the
+audit trail; skipping it because the fix is fast defeats the purpose.
+
+## Step 8 — When you accomplish something meaningful, append to `engineering-history.md`
 
 "Meaningful" means:
 
@@ -95,7 +110,7 @@ state touched, PRs.
 Keep entries terse. The reader is a future agent who needs to come up to
 speed fast.
 
-## Step 8 — Known sharp edges to watch for
+## Step 9 — Known sharp edges to watch for
 
 These are the foot-guns we've already hit. Don't re-discover them.
 
@@ -127,7 +142,7 @@ These are the foot-guns we've already hit. Don't re-discover them.
   immediately — Anthropic console for API keys, cPanel MySQL for DB
   passwords.
 
-## Step 9 — Coding conventions
+## Step 10 — Coding conventions
 
 - Default to **no comments**. Only add one when the WHY is non-obvious: a
   hidden constraint, a subtle invariant, a workaround for a specific bug.
@@ -141,7 +156,20 @@ These are the foot-guns we've already hit. Don't re-discover them.
   with `python -c "from app import create_app; create_app()"`. The cron
   scripts can be invoked directly: `python jobs/<script>.py`.
 
-## Step 10 — When in doubt
+## Step 11 — Wrapping up the session
+
+When the user signals they're done ("wrap up", "call it", "stopping
+point"), or when the session is getting stale and context-polluted, follow
+`engineering-session-wrapup.md`. That doc has the full checklist:
+append to `engineering-history.md`, update `roadmap.md` and `bugs.md`,
+confirm git state, audit server-side state, deliver a short summary.
+
+If you notice the session getting stale yourself (todo list recycling,
+making mistakes from context overload, just merged a major PR and the next
+task is unrelated), **proactively ask** the user if they want to wrap up.
+Don't assume; let them decide.
+
+## Step 12 — When in doubt
 
 - The original product spec is at the bottom of `engineering-history.md`.
 - `news/INSTALL.txt` §8 documents every failure mode encountered so far.
@@ -152,10 +180,12 @@ These are the foot-guns we've already hit. Don't re-discover them.
 
 ## tl;dr for the impatient
 
-1. `cat engineering-history.md` (entirely).
-2. `cat roadmap.md`.
-3. Ask the user: "Pick from the roadmap, or something else?"
+1. `cat engineering-history.md`, `cat roadmap.md`, `cat bugs.md` (entirely).
+2. Ask the user: "Pick from the roadmap, or something else?"
+3. Log any user-reported bugs into `bugs.md` immediately, before fixing.
 4. Do the work on a feature branch, open a draft PR.
 5. When something meaningful lands, append a new section to
    `engineering-history.md` and (if applicable) move the roadmap item
-   to the Done section.
+   to Done.
+6. At wrap-up, follow `engineering-session-wrapup.md`. If the session
+   feels stale, proactively suggest wrapping up.
