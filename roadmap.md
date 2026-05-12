@@ -25,7 +25,7 @@ shipped.
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
-| 8 | 7 | ui, backend, algo | 3-axis feature config (Direction + Weight + Threshold) | in-progress |
+| 8 | 7 | ui, backend, algo | 3-axis feature config (Direction + Weight + Threshold) | done (PR #TBD) |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
 | 8 | 5 | ops, new-feature | Expand source catalog to ~635 (add 500 more) | in-progress |
 | 8 | 3 | infra | Cron job hardening: timeouts + flock | backlog |
@@ -52,7 +52,7 @@ shipped.
 ## Items in detail
 
 ### 3-axis feature config (Direction + Weight + Threshold)
-**Priority:** 8 · **LOE:** 7 · **Category:** ui, backend, algo · **Status:** in-progress
+**Priority:** 8 · **LOE:** 7 · **Category:** ui, backend, algo · **Status:** done (PR #TBD)
 
 Redesign per-feature config from the current `{weight}` (or `{weight, target}`
 for signed features) to a uniform 3-axis model:

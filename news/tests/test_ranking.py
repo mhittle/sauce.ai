@@ -1,7 +1,7 @@
-import re
 from app.ranking import (
     build_score_sql, build_filters_sql, default_weights,
     weights_to_expression, parse_weights_json, PRESETS, FEATURE_KEYS,
+    FEATURES, resolved_weights_for_view,
 )
 
 
@@ -21,12 +21,29 @@ def test_build_score_sql_includes_active_features():
     assert params["recency_w"] == 0.7
 
 
-def test_build_score_sql_signed_feature_uses_target():
-    w = {"political_lean": 1.0, "political_lean_target": -0.3}
+def test_build_score_sql_uses_direction_for_all_features():
+    w = {"political_lean": 1.0, "political_lean_direction": -0.3,
+         "objectivity": 0.5, "objectivity_direction": 0.7}
     expr, params = build_score_sql(w)
     assert "f.political_lean" in expr
+    assert "f.objectivity" in expr
     assert "ABS" in expr
-    assert params["political_lean_t"] == -0.3
+    assert params["political_lean_d"] == -0.3
+    assert params["objectivity_d"] == 0.7
+
+
+def test_legacy_target_key_treated_as_direction():
+    w = {"political_lean": 1.0, "political_lean_target": -0.5}
+    expr, params = build_score_sql(w)
+    assert params["political_lean_d"] == -0.5
+
+
+def test_unsigned_feature_defaults_to_direction_one():
+    """Backward compat: unsigned features without _direction should default
+    to the catalog default (typically 1.0 = 'high is good')."""
+    w = {"objectivity": 1.0}  # no objectivity_direction
+    expr, params = build_score_sql(w)
+    assert params["objectivity_d"] == 1.0
 
 
 def test_zero_weight_feature_is_excluded():
@@ -34,6 +51,22 @@ def test_zero_weight_feature_is_excluded():
     expr, _ = build_score_sql(w)
     assert "f.info_density" in expr
     assert "f.objectivity" not in expr
+
+
+def test_threshold_creates_hard_filter():
+    w = {"objectivity": 1.0, "objectivity_direction": 1.0,
+         "objectivity_threshold": 0.3}
+    sql, params = build_filters_sql(w)
+    assert "ABS(f.objectivity - %(objectivity_d_th)s)" in sql
+    assert params["objectivity_th"] == 0.3
+    assert params["objectivity_d_th"] == 1.0
+
+
+def test_threshold_none_no_filter():
+    w = {"objectivity": 1.0, "objectivity_threshold": None}
+    sql, params = build_filters_sql(w)
+    assert "objectivity" not in sql
+    assert "objectivity_th" not in params
 
 
 def test_build_filters_sql_category():
@@ -50,11 +83,20 @@ def test_no_filters_returns_empty():
 
 
 def test_weights_to_expression_renders_python():
-    w = {"objectivity": 0.8, "info_density": 0.5, "political_lean": 1.0, "political_lean_target": 0.0}
+    w = {"objectivity": 0.8, "objectivity_direction": 1.0,
+         "political_lean": 1.0, "political_lean_direction": 0.0}
     out = weights_to_expression(w)
     assert "def score(article)" in out
     assert "article.objectivity" in out
     assert "article.political_lean" in out
+
+
+def test_weights_to_expression_includes_threshold_filter():
+    w = {"objectivity": 1.0, "objectivity_direction": 1.0,
+         "objectivity_threshold": 0.5}
+    out = weights_to_expression(w)
+    assert "filtered by threshold" in out
+    assert "abs(article.objectivity" in out
 
 
 def test_parse_weights_json_invalid_returns_default():
@@ -67,3 +109,28 @@ def test_presets_all_valid():
     for key, p in PRESETS.items():
         expr, _ = build_score_sql(p["weights"])
         assert isinstance(expr, str) and len(expr) > 0
+
+
+def test_features_catalog_has_required_metadata():
+    keys_seen = set()
+    for feat in FEATURES:
+        assert feat["key"] in FEATURE_KEYS
+        assert feat["scale"] in ("signed", "unsigned")
+        for k in ("label", "low", "high", "default_direction", "default_weight"):
+            assert k in feat
+        keys_seen.add(feat["key"])
+    assert keys_seen == set(FEATURE_KEYS)
+
+
+def test_resolved_weights_fills_in_missing_directions():
+    w = {"objectivity": 0.5}  # nothing else
+    out = resolved_weights_for_view(w)
+    assert out["objectivity_direction"] == 1.0  # catalog default
+    assert out["political_lean_direction"] == 0.0
+    assert "recency" in out
+
+
+def test_resolved_weights_upgrades_legacy_target():
+    w = {"political_lean": 0.6, "political_lean_target": -0.4}
+    out = resolved_weights_for_view(w)
+    assert out["political_lean_direction"] == -0.4
