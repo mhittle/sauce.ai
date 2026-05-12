@@ -25,16 +25,12 @@ shipped.
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
-| 8 | 7 | ui, backend, algo | 3-axis feature config (Direction + Weight + Threshold) | done (PR #TBD) |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
-| 8 | 5 | ops, new-feature | Expand source catalog to ~635 (add 500 more) | done (PR #TBD) |
 | 8 | 3 | infra | Cron job hardening: timeouts + flock | backlog |
 | 8 | 2 | backend | PyMySQL connection timeouts | backlog |
-| 7 | 6 | algo, new-feature | Obscurity features (story + source) | done (PR #TBD) |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
-| 7 | 3 | ui, new-feature | Category tabs on `/` feed | done (PR #TBD) |
 | 6 | 5 | backend, new-feature | Full-text article extraction | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
@@ -50,82 +46,6 @@ shipped.
 ---
 
 ## Items in detail
-
-### 3-axis feature config (Direction + Weight + Threshold)
-**Priority:** 8 · **LOE:** 7 · **Category:** ui, backend, algo · **Status:** done (PR #TBD)
-
-Redesign per-feature config from the current `{weight}` (or `{weight, target}`
-for signed features) to a uniform 3-axis model:
-
-- **Direction** — where on the feature's scale you want articles to be.
-  For signed features (lean): Left ←→ Right. For unsigned (objectivity,
-  density, etc.): Low ←→ High. Maps to a target value internally.
-- **Weight** — how much you care about it (0–10). Soft contribution to score.
-- **Threshold** — hard filter. Either "must be ≥ X", "must be ≤ X", or
-  "must be within ±X of direction" depending on feature type. Articles
-  outside the threshold are filtered out before ranking.
-
-Touches: `app/ranking.py` (new score and filter shapes), `app/templates/algo.html`
-(three controls per row, with per-feature-appropriate labels —
-"Left ←→ Right" vs "Easy ←→ Dense"), the four `PRESETS` dicts, and the
-`user_algorithms.weights_json` shape (extend, don't break — old saves with
-just weights still work).
-
-Approach: define a per-feature catalog in `ranking.py` declaring the scale
-shape (signed vs unsigned), the direction labels ("Left", "Right" /
-"Easy", "Dense"), and the default threshold behavior. Template iterates
-over the catalog. Score SQL adds a hard-filter clause for any feature with
-a threshold set, and the soft-weighted score otherwise.
-
-### Expand source catalog to ~635 sources
-**Priority:** 8 · **LOE:** 5 · **Category:** ops, new-feature · **Status:** done (PR #TBD)
-
-v1 ships ~135 curated RSS sources in `news/seed/source_lean.csv`. Add ~500
-more across categories (politics, world, tech, business, science, sports,
-general, plus opinion/long-form). Each entry needs `name`, `feed_url`,
-`homepage`, `source_lean` (−1..+1), `source_reputation` (0..1), `category`,
-`country`, `region`.
-
-Curation approach (confirmed with user): I draft 500 candidates with lean/
-reputation/category ratings, using public sources (AllSides, AdFontes, etc.)
-where available and best-effort estimates otherwise. User spot-checks before
-merging.
-
-### Obscurity features (story + source)
-**Priority:** 7 · **LOE:** 6 · **Category:** algo, new-feature · **Status:** done (PR #TBD)
-
-Two new ranking features, per user-confirmed scope:
-
-- **`source_obscurity`** — inverse of source frequency. Lesser-known
-  outlets score high; major outlets score low. Cheap to compute from
-  `sources.article_count` (or rolling 30-day equivalent) without any LLM
-  involvement. Source-level so it's static-ish across articles from the
-  same source — can live as a column on `sources`.
-- **`story_obscurity`** — inverse of recent coverage of the same story.
-  Stories that few sources have published score high. Needs at least a
-  coarse dedup signal (URL/title hash overlap, or coarse TF-IDF). For v1
-  we can ship a coarse version (title-similarity bucket) and improve once
-  the dedup work lands.
-
-Both join the existing weighted-SQL ranking pipeline. Schema: add
-`article_features.story_obscurity` and `article_features.source_obscurity`
-columns; populate during classify_pending. UI: two more rows in `algo.html`
-(or one per feature under the 3-axis config once that lands).
-
-Sequence: probably ship after the 3-axis config so the new features get
-the proper UI without rework.
-
-### Category tabs on `/` feed
-**Priority:** 7 · **LOE:** 3 · **Category:** ui, new-feature · **Status:** done (PR #TBD)
-
-Tabs across the top of `/` for each category in `feature_catalog` /
-`ranking.CATEGORIES`. Behaviour: **hard filter** the feed by category.
-URL: `/?category=tech`. "All" tab clears the filter. Active tab visually
-highlighted. Categories sourced from the existing list, ordered by article
-count over the past 24h (so empty categories don't show).
-
-Touches: `app/routes/feed.py` (read query param, append filter to SQL),
-`app/templates/feed.html` (tabs UI), small CSS.
 
 ### Sandboxed Python algorithm execution
 **Priority:** 9 · **LOE:** 8 · **Category:** backend, new-feature · **Status:** backlog
@@ -308,5 +228,28 @@ Toggle in the user nav. CSS custom-property swap. Persist preference in
 
 ## Done
 
-(Move items here when complete, with the PR# and date. Add a corresponding
-entry to `engineering-history.md`.)
+Reverse chronological. Each entry links to the merged PR; the matching
+narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-12
+
+- **3-axis feature config (Direction + Weight + Threshold)** — Pri 8, LOE 7,
+  ui/backend/algo. PR #9.
+- **Expand source catalog to ~635 sources** (shipped at 768) — Pri 8, LOE 5,
+  ops/new-feature. PR #11. Includes auto-deactivate of dead feeds at
+  error_count=10 + Refresh button in `/admin/feeds`.
+- **Obscurity features (story + source)** — Pri 7, LOE 6, algo/new-feature.
+  PR #10. Requires manual DB migration on existing installs
+  (`seed/migrations/2026-05-12-obscurity.sql`).
+- **Category tabs on `/` feed** — Pri 7, LOE 3, ui/new-feature. PR #8.
+- **BUG-006 — article links don't open on click** (filed in `bugs.md`). PR #7.
+
+### Earlier
+
+- **Session-management doc framework** — `engineering-history.md`,
+  `roadmap.md`, `bugs.md`, `engineering-session-wrapup.md`,
+  `new-engineering-session-instructions.md`. PRs #4, #5, #6.
+- **Anthropic SDK 0.39 → 0.101 (httpx 0.28 compat)** — PR #4.
+- **First GoDaddy deploy bug-fix bundle**
+  (`APPLICATION_ROOT` double-prefix, path mismatch, cron path/import
+  hardening, `_selftest.py`) — PR #3.

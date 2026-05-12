@@ -7,6 +7,124 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-12 — Feature batch: bug fix, category tabs, 3-axis config, obscurity, +633 sources
+
+User-reported batch of features and one bug. Five PRs (#7–#11) all merged.
+Site is live, pipeline healthy.
+
+### PR #7 — Fix BUG-006 (article clicks) + queue roadmap items
+
+The two `<a>` tags in `feed_cards.html` had `hx-post` for click-tracking,
+which HTMX intercepts with `preventDefault()`. Tracking POST fired but the
+browser never followed `href`, so articles never opened. Switched to
+vanilla `onclick="fetch(..., {method:'POST', keepalive:true})"` — browser
+navigation works normally and the tracking request survives page unload
+via keepalive. Firehose template already used plain anchors; no change
+needed there.
+
+Roadmap got four new entries marked in-progress (3-axis config, +500
+sources, obscurity, category tabs).
+
+### PR #8 — Category tabs on `/`
+
+Pill-style tabs above the feed cards, sourced from distinct categories in
+`article_features` over the last 7 days, ordered by article count desc.
+Empty categories don't show. "All" tab clears the filter. URL: `?category=X`.
+HTMX "Load more" preserves the active category through pagination.
+Hard filter on the SQL; doesn't interact with the user's algo weighting.
+
+### PR #9 — 3-axis feature config (Direction + Weight + Threshold)
+
+Replaced the per-feature `{weight}` / `{weight, target}` model with a
+uniform three-axis config:
+- **Direction**: where on the feature's scale you want articles
+- **Weight**: 0..2 soft contribution
+- **Threshold**: optional hard filter (`|value - direction| <= threshold`)
+
+Score formula is now uniform: `weight * (1 - |value - direction| / scale)`.
+For unsigned features with direction=1 this reduces to the old
+`weight * value`, so pre-existing user weights still work unchanged
+without migration.
+
+Touches `app/ranking.py` (new `FEATURES` catalog + uniform score/filter),
+`app/routes/algo.py` (centralized form parsing + view resolver),
+`app/templates/algo.html` (three controls per row with per-feature
+low/high labels), CSS, all four `PRESETS`, and tests (28 → 36 passing).
+
+### PR #10 — Obscurity features (story + source)
+
+Two new ranking features:
+- **`source_obscurity`** = log-scaled inverse of 30-day publication
+  volume. Tiny outlets → 1.0, ~1000/30d → 0.
+- **`story_obscurity`** = log-scaled inverse of how many articles share
+  the same normalized title (SHA1) over the last 24h. Only-this-story →
+  1.0, ~20 sources → 0. Coarse v1; will improve once the dedup roadmap
+  item lands.
+
+Schema additions (manual migration required for existing installs):
+- `articles.title_hash` CHAR(40) + index
+- `sources.article_count_30d` INT
+- `article_features.story_obscurity` / `source_obscurity` FLOAT
+
+Migration shipped at `news/seed/migrations/2026-05-12-obscurity.sql` —
+applied successfully on prod during the session.
+
+`fetch_feeds` hashes titles at insert time; `classify_pending` reads
+`article_count_30d` and computes both scores per batch (one grouped
+query for story counts); `maintenance.py` recomputes nightly so story
+clusters update as more articles arrive.
+
+Both features default to `weight=0` in the catalog, so existing user
+algos opt in.
+
+### PR #11 — Source catalog +633 + auto-deactivate + Refresh button
+
+Curated 633 net-new RSS feeds into `seed/source_lean.csv` (135 → 768).
+Coverage across `world / politics / general / tech / science / business /
+sports` and geographically across US/GB/EU/JP/IN/HK/SG/KR/AU/CA/ZA/NG/EG/KE
+plus a "QA" placeholder bucket for misc international.
+
+⚠ Feed URLs are best-effort from memory; non-zero rate of 404s and parse
+errors is expected on first cron cycle. Mitigations shipped in the same PR:
+- `fetch_feeds` SELECT skips sources with `error_count >= 10`
+- On the 10th consecutive failure the source flips to `is_active=0`
+- New `POST /admin/feeds/<id>/refresh` route + button on `/admin/feeds`
+  that synchronously re-polls the URL. On success, resets `error_count=0`
+  + `is_active=1`. On failure, increments `error_count` like the cron
+  path.
+- Delete button was already in the template + route; verified working.
+
+### Server-side state touched
+
+- `seed/migrations/2026-05-12-obscurity.sql` applied via phpMyAdmin
+  during the session.
+- Python App restarted post-migration.
+- 633 new sources to be imported via `/admin/feeds` → "Import / refresh
+  seed CSV" — **still pending on the user**.
+
+### Open items / next session candidates
+
+- Manual: hit `/admin/feeds` → "Import / refresh seed CSV" to land the
+  +633 sources, then sort by `error_count` to clean up dead URLs.
+- Manual: spot-check the lean/reputation ratings for major sources in
+  the new batch.
+- Roadmap stabilization items remain backlogged: cron job hardening
+  (timeouts + flock), PyMySQL connection timeouts, CSRF + auth rate
+  limiting. All small, none done.
+- v1 limitations still open (sandboxed Python exec, full-text article
+  extraction, click→popularity, dedup).
+
+### PRs in this session
+
+- **#7** Fix BUG-006 + roadmap entries (merged)
+- **#8** Category tabs (merged)
+- **#9** 3-axis feature config (merged)
+- **#10** Obscurity features (merged) — required manual DB migration
+- **#11** +633 sources + admin auto-deactivate/refresh (merged) —
+  requires manual seed CSV re-import
+
+---
+
 ## 2026-05-12 — Add `engineering-session-wrapup.md` and `bugs.md`
 
 Two new docs to round out the session-management story:
