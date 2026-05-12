@@ -27,7 +27,7 @@ shipped.
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 8 | 7 | ui, backend, algo | 3-axis feature config (Direction + Weight + Threshold) | done (PR #TBD) |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
-| 8 | 5 | ops, new-feature | Expand source catalog to ~635 (add 500 more) | in-progress |
+| 8 | 5 | ops, new-feature | Expand source catalog to ~635 (add 500 more) | done (PR #TBD) |
 | 8 | 3 | infra | Cron job hardening: timeouts + flock | backlog |
 | 8 | 2 | backend | PyMySQL connection timeouts | backlog |
 | 7 | 6 | algo, new-feature | Obscurity features (story + source) | done (PR #TBD) |
@@ -78,7 +78,7 @@ over the catalog. Score SQL adds a hard-filter clause for any feature with
 a threshold set, and the soft-weighted score otherwise.
 
 ### Expand source catalog to ~635 sources
-**Priority:** 8 · **LOE:** 5 · **Category:** ops, new-feature · **Status:** in-progress
+**Priority:** 8 · **LOE:** 5 · **Category:** ops, new-feature · **Status:** done (PR #TBD)
 
 v1 ships ~135 curated RSS sources in `news/seed/source_lean.csv`. Add ~500
 more across categories (politics, world, tech, business, science, sports,
