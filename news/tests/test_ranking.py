@@ -134,3 +134,18 @@ def test_resolved_weights_upgrades_legacy_target():
     w = {"political_lean": 0.6, "political_lean_target": -0.4}
     out = resolved_weights_for_view(w)
     assert out["political_lean_direction"] == -0.4
+
+
+def test_obscurity_features_in_catalog():
+    keys = {f["key"] for f in FEATURES}
+    assert "story_obscurity" in keys
+    assert "source_obscurity" in keys
+
+
+def test_obscurity_feature_in_score_sql_when_weighted():
+    w = {"story_obscurity": 1.0, "source_obscurity": 0.5}
+    expr, params = build_score_sql(w)
+    assert "f.story_obscurity" in expr
+    assert "f.source_obscurity" in expr
+    assert params["story_obscurity_w"] == 1.0
+    assert params["source_obscurity_w"] == 0.5

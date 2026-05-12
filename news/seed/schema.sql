@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS sources (
   category          VARCHAR(64) NOT NULL DEFAULT 'general',
   country           VARCHAR(8) NOT NULL DEFAULT 'US',
   region            VARCHAR(64) NOT NULL DEFAULT 'national',
+  article_count_30d INT UNSIGNED NOT NULL DEFAULT 0, -- refreshed by maintenance.py
   is_active         TINYINT(1) NOT NULL DEFAULT 1,
   last_fetched_at   DATETIME DEFAULT NULL,
   last_status       VARCHAR(32) DEFAULT NULL,
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS articles (
   url           VARCHAR(1000) NOT NULL,
   url_hash      CHAR(40) NOT NULL,
   title         VARCHAR(500) NOT NULL,
+  title_hash    CHAR(40) DEFAULT NULL,  -- sha1 of normalized title; null on legacy rows
   summary       TEXT,
   thumbnail_url VARCHAR(1000) DEFAULT NULL,
   byline        VARCHAR(300) DEFAULT NULL,
@@ -59,6 +61,7 @@ CREATE TABLE IF NOT EXISTS articles (
   KEY idx_articles_pub (published_at),
   KEY idx_articles_status (status),
   KEY idx_articles_source_pub (source_id, published_at),
+  KEY idx_articles_title_hash (title_hash, fetched_at),
   CONSTRAINT fk_articles_source FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -75,6 +78,8 @@ CREATE TABLE IF NOT EXISTS article_features (
   country               VARCHAR(8) NOT NULL DEFAULT 'US',
   region                VARCHAR(64) NOT NULL DEFAULT 'national',
   popularity            FLOAT NOT NULL DEFAULT 0,   -- 0..1
+  story_obscurity       FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = only-this-story
+  source_obscurity      FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = tiny/unknown source
   classifier_version    VARCHAR(32) NOT NULL DEFAULT 'v1',
   classified_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (article_id),

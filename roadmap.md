@@ -30,7 +30,7 @@ shipped.
 | 8 | 5 | ops, new-feature | Expand source catalog to ~635 (add 500 more) | in-progress |
 | 8 | 3 | infra | Cron job hardening: timeouts + flock | backlog |
 | 8 | 2 | backend | PyMySQL connection timeouts | backlog |
-| 7 | 6 | algo, new-feature | Obscurity features (story + source) | in-progress |
+| 7 | 6 | algo, new-feature | Obscurity features (story + source) | done (PR #TBD) |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
@@ -92,7 +92,7 @@ where available and best-effort estimates otherwise. User spot-checks before
 merging.
 
 ### Obscurity features (story + source)
-**Priority:** 7 · **LOE:** 6 · **Category:** algo, new-feature · **Status:** in-progress
+**Priority:** 7 · **LOE:** 6 · **Category:** algo, new-feature · **Status:** done (PR #TBD)
 
 Two new ranking features, per user-confirmed scope:
 

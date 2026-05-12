@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import feedparser
 
 from _bootstrap import Config, get_conn, setup_logging, db_log
+from app.classifier import title_hash as compute_title_hash
 
 JOB = "fetch_feeds"
 logger = setup_logging(JOB)
@@ -93,16 +94,18 @@ def fetch_one(conn, source):
             if not link or not title:
                 continue
             url_hash = _hash_url(link)
+            t_hash = compute_title_hash(title)
             try:
                 cur.execute(
                     """INSERT IGNORE INTO articles
-                       (source_id, url, url_hash, title, summary, thumbnail_url, byline, published_at, status)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending')""",
+                       (source_id, url, url_hash, title, title_hash, summary, thumbnail_url, byline, published_at, status)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')""",
                     (
                         sid,
                         link[:1000],
                         url_hash,
                         title[:500],
+                        t_hash,
                         (entry.get("summary") if isinstance(entry, dict) else getattr(entry, "summary", "")) or "",
                         _extract_thumbnail(entry),
                         _extract_byline(entry),
