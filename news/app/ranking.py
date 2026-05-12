@@ -35,6 +35,10 @@ FEATURES = [
      "low": "Lower",        "high": "Higher",    "default_direction": 1.0, "default_weight": 0.9},
     {"key": "popularity",            "scale": "unsigned", "label": "Popularity",
      "low": "Niche",        "high": "Viral",     "default_direction": 0.5, "default_weight": 0.3},
+    {"key": "story_obscurity",       "scale": "unsigned", "label": "Story obscurity",
+     "low": "Everywhere",   "high": "Rare",      "default_direction": 0.5, "default_weight": 0.0},
+    {"key": "source_obscurity",      "scale": "unsigned", "label": "Source obscurity",
+     "low": "Big outlets",  "high": "Indie",     "default_direction": 0.5, "default_weight": 0.0},
 ]
 FEATURES_BY_KEY = {f["key"]: f for f in FEATURES}
 FEATURE_KEYS = [f["key"] for f in FEATURES]

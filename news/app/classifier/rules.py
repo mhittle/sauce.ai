@@ -1,10 +1,46 @@
 """Cheap deterministic features. No network, no LLM."""
-import re
+import hashlib
 import math
+import re
 
 _WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]+")
 _SENT_RE = re.compile(r"[.!?]+")
 _VOWELS = "aeiouy"
+_TITLE_PUNCT_RE = re.compile(r"[^a-z0-9 ]+")
+_WS_RE = re.compile(r"\s+")
+
+
+def normalize_title(title: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace. Used for title_hash
+    so different sources publishing the same story group together."""
+    if not title:
+        return ""
+    t = _TITLE_PUNCT_RE.sub(" ", title.lower())
+    t = _WS_RE.sub(" ", t).strip()
+    return t
+
+
+def title_hash(title: str) -> str:
+    """SHA1 of the normalized title. Matches the SQL `SHA1(REGEXP_REPLACE(LOWER(title), ...))`
+    used in the obscurity migration so backfilled and runtime values line up."""
+    return hashlib.sha1(normalize_title(title).encode("utf-8", "ignore")).hexdigest()
+
+
+def source_obscurity_score(article_count_30d: int) -> float:
+    """Log-scale: tiny source = 1.0, ~1000 articles/30d source = 0.0.
+    count=1 -> ~0.9, count=10 -> ~0.67, count=100 -> ~0.33, count>=1000 -> 0."""
+    n = max(0, int(article_count_30d or 0))
+    if n == 0:
+        return 1.0
+    s = math.log10(n + 1) / 3.0  # log10(1001) ≈ 3
+    return max(0.0, min(1.0, 1.0 - s))
+
+
+def story_obscurity_score(cluster_count: int) -> float:
+    """Log-scale: only this story = 1.0, ~20 sources covering same story = 0.0."""
+    n = max(1, int(cluster_count or 1))
+    s = math.log10(n) / math.log10(20)  # ~1.3
+    return max(0.0, min(1.0, 1.0 - s))
 
 
 def _strip_html(text: str) -> str:

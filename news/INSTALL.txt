@@ -210,6 +210,14 @@ CI/CD on push to main FTP-syncs the repo to the account.
       migrations on shared hosting deserve human eyes; not
       automated by CI/CD.
 
+      Migration files live in news/seed/migrations/ named by date.
+      For each one not yet applied:
+        phpMyAdmin -> select the news DB -> SQL tab ->
+        paste the file contents -> Go.
+      Migrations are written to be safe-but-not-idempotent:
+        re-running will error on duplicate-column ALTERs.
+        Apply each exactly once per environment.
+
 
 ------------------------------------------------------------------
 7. ONGOING OPERATIONS

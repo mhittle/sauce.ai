@@ -12,7 +12,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _bootstrap import Config, get_conn, setup_logging, db_log
-from app.classifier import compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline
+from app.classifier import (
+    compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline,
+    source_obscurity_score, story_obscurity_score,
+)
 from app.classifier.rules import split_bylines
 
 JOB = "classify_pending"
@@ -41,9 +44,10 @@ def main():
         while time.time() - start < cfg.CLASSIFY_BUDGET_SECONDS:
             with conn.cursor() as cur:
                 cur.execute(
-                    """SELECT a.id, a.title, a.summary, a.byline,
+                    """SELECT a.id, a.title, a.summary, a.byline, a.title_hash,
                               s.id AS source_id, s.name AS source_name,
-                              s.source_lean, s.source_reputation, s.category, s.country, s.region
+                              s.source_lean, s.source_reputation, s.category, s.country, s.region,
+                              s.article_count_30d
                        FROM articles a JOIN sources s ON s.id = a.source_id
                        WHERE a.status = 'pending'
                        ORDER BY a.fetched_at ASC LIMIT %s""",
@@ -52,6 +56,23 @@ def main():
                 batch = cur.fetchall()
             if not batch:
                 break
+
+            # Story-obscurity needs counts of articles sharing each title_hash
+            # in the last 24h. One grouped query per batch is enough; perfect
+            # accuracy isn't required since maintenance.py refreshes nightly.
+            title_hashes = [a["title_hash"] for a in batch if a.get("title_hash")]
+            story_counts = {}
+            if title_hashes:
+                placeholders = ", ".join(["%s"] * len(title_hashes))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""SELECT title_hash, COUNT(*) AS n FROM articles
+                            WHERE title_hash IN ({placeholders})
+                              AND fetched_at >= UTC_TIMESTAMP() - INTERVAL 1 DAY
+                            GROUP BY title_hash""",
+                        title_hashes,
+                    )
+                    story_counts = {r["title_hash"]: r["n"] for r in cur.fetchall()}
 
             # Step 1: rules features (always succeeds)
             rules_features = {}
@@ -91,12 +112,16 @@ def main():
                         "political_lean": float(art["source_lean"]),  # fallback
                         "objectivity": 0.5,
                     })
+                    src_obs = source_obscurity_score(art.get("article_count_30d") or 0)
+                    th = art.get("title_hash")
+                    story_obs = story_obscurity_score(story_counts.get(th, 1)) if th else 0.5
                     cur.execute(
                         """INSERT INTO article_features
                            (article_id, political_lean, reading_level, objectivity, info_density,
                             journalist_reputation, source_lean, source_reputation, category,
-                            country, region, popularity, classifier_version)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            country, region, popularity, story_obscurity, source_obscurity,
+                            classifier_version)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            ON DUPLICATE KEY UPDATE
                               political_lean=VALUES(political_lean),
                               reading_level=VALUES(reading_level),
@@ -108,13 +133,15 @@ def main():
                               category=VALUES(category),
                               country=VALUES(country),
                               region=VALUES(region),
+                              story_obscurity=VALUES(story_obscurity),
+                              source_obscurity=VALUES(source_obscurity),
                               classifier_version=VALUES(classifier_version),
                               classified_at=UTC_TIMESTAMP()""",
                         (
                             aid, llm["political_lean"], rf["reading_level"], llm["objectivity"],
                             rf["info_density"], rf["journalist_reputation"], rf["source_lean"],
                             rf["source_reputation"], rf["category"], rf["country"], rf["region"],
-                            0.0, cfg.CLASSIFIER_VERSION,
+                            0.0, story_obs, src_obs, cfg.CLASSIFIER_VERSION,
                         ),
                     )
                     # bylines
