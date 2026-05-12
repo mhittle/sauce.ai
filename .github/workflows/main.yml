@@ -16,7 +16,7 @@ jobs:
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
-          server: ${{ secrets.FTPA }}
+          server: ftp.bitflume.com
           username: ${{ secrets.FTPU }}
           password: ${{ secrets.FTPP }}
           protocol: ftp
