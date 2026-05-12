@@ -25,6 +25,7 @@ shipped.
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
+| 7 | 4 | algo, new-feature | Paywall feature (per-article detection) | in-progress |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
 | 8 | 3 | infra | Cron job hardening: timeouts + flock | backlog |
 | 8 | 2 | backend | PyMySQL connection timeouts | backlog |
@@ -46,6 +47,27 @@ shipped.
 ---
 
 ## Items in detail
+
+### Paywall feature (per-article detection)
+**Priority:** 7 · **LOE:** 4 · **Category:** algo, new-feature · **Status:** in-progress
+
+Add a `paywall` feature to the ranking catalog so users can down-weight or
+hard-filter articles behind subscription walls.
+
+v1 detection is active per-article: during `classify_pending`, GET the
+article URL with an 8s timeout and look for paywall signals — JSON-LD
+`isAccessibleForFree: false`, `<meta property="article:content_tier">`
+locked/paid/metered, and a small set of paywall phrases on short bodies.
+Sites that block (timeout, 4xx) score 0.5 (suspected) per product
+direction. Stored in `article_features.paywall` as 0..1.
+
+Catalog entry is unsigned, default direction 0.0 (prefer free), default
+weight 0.0 (opt-in — existing user algos unchanged). Threshold off by
+default; set ~0.2 to hide anything but free articles.
+
+Follow-ups: per-source override in admin if active detection is
+unreliable for a given outlet; signed-in-browser reader heuristic for
+soft paywalls.
 
 ### Sandboxed Python algorithm execution
 **Priority:** 9 · **LOE:** 8 · **Category:** backend, new-feature · **Status:** backlog

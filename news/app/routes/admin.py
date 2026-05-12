@@ -59,10 +59,15 @@ def index():
 @admin_required
 def feeds():
     sources = query("""
-        SELECT id, name, feed_url, category, country, source_lean, source_reputation,
-               is_active, last_fetched_at, last_status, last_error, error_count
-        FROM sources
-        ORDER BY is_active DESC, error_count DESC, name ASC
+        SELECT s.id, s.name, s.feed_url, s.category, s.country,
+               s.source_lean, s.source_reputation,
+               s.is_active, s.last_fetched_at, s.last_status, s.last_error, s.error_count,
+               (SELECT AVG(f.paywall)
+                FROM articles a JOIN article_features f ON f.article_id = a.id
+                WHERE a.source_id = s.id
+                  AND a.fetched_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY) AS paywall_avg
+        FROM sources s
+        ORDER BY s.is_active DESC, s.error_count DESC, s.name ASC
     """)
     return render_template("admin/feeds.html", sources=sources)
 

@@ -9,12 +9,14 @@ import sys
 import time
 from datetime import datetime
 
+import requests
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _bootstrap import Config, get_conn, setup_logging, db_log
 from app.classifier import (
     compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline,
-    source_obscurity_score, story_obscurity_score,
+    source_obscurity_score, story_obscurity_score, detect_paywall,
 )
 from app.classifier.rules import split_bylines
 
@@ -40,11 +42,12 @@ def main():
     conn = get_conn()
     classified_total = llm_articles = 0
     cost_total = 0.0
+    http = requests.Session()
     try:
         while time.time() - start < cfg.CLASSIFY_BUDGET_SECONDS:
             with conn.cursor() as cur:
                 cur.execute(
-                    """SELECT a.id, a.title, a.summary, a.byline, a.title_hash,
+                    """SELECT a.id, a.url, a.title, a.summary, a.byline, a.title_hash,
                               s.id AS source_id, s.name AS source_name,
                               s.source_lean, s.source_reputation, s.category, s.country, s.region,
                               s.article_count_30d
@@ -103,6 +106,14 @@ def main():
             except LLMUnavailable as e:
                 logger.info("LLM unavailable, using source-level defaults: %s", e)
 
+            # Step 2b: paywall detection per article. HTTP-bound, so we honour
+            # the wallclock budget here and fall through to write whatever we have.
+            paywall_by_id = {}
+            for art in batch:
+                if time.time() - start >= cfg.CLASSIFY_BUDGET_SECONDS:
+                    break
+                paywall_by_id[art["id"]] = detect_paywall(art.get("url"), session=http)
+
             # Step 3: write features + bylines
             with conn.cursor() as cur:
                 for art in batch:
@@ -115,13 +126,14 @@ def main():
                     src_obs = source_obscurity_score(art.get("article_count_30d") or 0)
                     th = art.get("title_hash")
                     story_obs = story_obscurity_score(story_counts.get(th, 1)) if th else 0.5
+                    paywall = paywall_by_id.get(aid, 0.5)  # budget cut-off => suspected
                     cur.execute(
                         """INSERT INTO article_features
                            (article_id, political_lean, reading_level, objectivity, info_density,
                             journalist_reputation, source_lean, source_reputation, category,
                             country, region, popularity, story_obscurity, source_obscurity,
-                            classifier_version)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            paywall, classifier_version)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            ON DUPLICATE KEY UPDATE
                               political_lean=VALUES(political_lean),
                               reading_level=VALUES(reading_level),
@@ -135,13 +147,14 @@ def main():
                               region=VALUES(region),
                               story_obscurity=VALUES(story_obscurity),
                               source_obscurity=VALUES(source_obscurity),
+                              paywall=VALUES(paywall),
                               classifier_version=VALUES(classifier_version),
                               classified_at=UTC_TIMESTAMP()""",
                         (
                             aid, llm["political_lean"], rf["reading_level"], llm["objectivity"],
                             rf["info_density"], rf["journalist_reputation"], rf["source_lean"],
                             rf["source_reputation"], rf["category"], rf["country"], rf["region"],
-                            0.0, story_obs, src_obs, cfg.CLASSIFIER_VERSION,
+                            0.0, story_obs, src_obs, paywall, cfg.CLASSIFIER_VERSION,
                         ),
                     )
                     # bylines
@@ -176,6 +189,7 @@ def main():
         logger.info(msg)
         db_log(conn, JOB, "info", msg)
     finally:
+        http.close()
         conn.close()
 
 
