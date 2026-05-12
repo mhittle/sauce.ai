@@ -2,48 +2,39 @@
 sauce.ai/news — install on GoDaddy Web Hosting Plus (cPanel)
 ================================================================
 
-This document covers the *first-time* setup on the GoDaddy host.
-CI/CD already syncs this repo into the account root, so the code
-is on disk at:
+This is the *first-time* setup. CI/CD syncs the repo via FTP to
+the account on every push to `main`. The code lands at:
 
-    /home/YOURACCOUNT/sauce.ai/news/
+    /home/YOURACCOUNT/public_html/sauce.ai/news/
 
-You only need to do the steps below once per environment. After
-that, every git push refreshes the code automatically; you just
-"Restart" the Python app to pick up changes (step 6 covers this).
-
-Conventions:
-  YOURACCOUNT           = your cPanel username
-  YOURACCOUNT_news      = example MySQL DB / user (yours will differ)
-  $ ...                 = command in cPanel Terminal
+Notation in this doc:
+    YOURACCOUNT       = your cPanel username (e.g. lt1ih6uyy2z6)
+    YOURACCOUNT_news  = example DB name; yours will differ
+    $ ...             = command in cPanel Terminal
 
 
 ------------------------------------------------------------------
-0. WHAT YOU NEED
+0. PREREQS
 ------------------------------------------------------------------
-  - cPanel access (you have this).
-  - SSH/Terminal enabled. If your plan does not include Terminal,
-    every command below also works from
-    "Setup Python App" -> "Enter to the virtual environment".
-  - An Anthropic API key (https://console.anthropic.com).
-    Optional: without one the classifier degrades to rules-only.
-    The site still works; political_lean/objectivity just fall
-    back to source-level defaults.
+- cPanel access with SSH/Terminal enabled (or "Setup Python App"
+  -> "Enter to the virtual environment" works for every command).
+- An Anthropic API key (https://console.anthropic.com). Without
+  one the classifier degrades to rules-only; the site still works.
 
-  Verify CI/CD landed the code:
-      $ ls /home/YOURACCOUNT/sauce.ai/news/passenger_wsgi.py
-  If that file exists you're ready for step 1.
+Verify CI/CD has landed the code:
+    $ ls /home/YOURACCOUNT/public_html/sauce.ai/news/passenger_wsgi.py
+If that prints the path, you're ready.
 
 
 ------------------------------------------------------------------
 1. CREATE THE DATABASE
 ------------------------------------------------------------------
 1a) cPanel -> "MySQL Databases".
-1b) Create a database:                YOURACCOUNT_news
-1c) Create a user with a strong pw:   YOURACCOUNT_newsuser
+1b) Create a database:           YOURACCOUNT_news
+1c) Create a user (strong pw):   YOURACCOUNT_newsuser
 1d) Add the user to the database with ALL PRIVILEGES.
 
-1e) cPanel -> "phpMyAdmin" -> select the new DB -> "Import" ->
+1e) phpMyAdmin -> select the new DB -> "Import" ->
     upload  news/seed/schema.sql  -> Go.
 
 1f) Same again with  news/seed/feature_catalog.sql .
@@ -53,37 +44,54 @@ Conventions:
 2. CREATE THE PYTHON APP
 ------------------------------------------------------------------
 2a) cPanel -> "Setup Python App" -> "Create Application":
-        Python version:        3.10 (or whichever 3.x is offered)
-        Application root:      sauce.ai/news
+
+        Python version:        3.11 (or whichever 3.x is offered)
+        Application root:      public_html/sauce.ai/news
         Application URL:       sauce.ai/news
         Application startup:   passenger_wsgi.py
         Application entry pt:  application
-    Click "Create".
 
-2b) On the app's page, click "Edit" and add environment variables:
+    Click "Create". cPanel will create the venv at:
+        /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/
 
-        SECRET_KEY              <generate: `python -c "import secrets;print(secrets.token_hex(32))"`>
+    Important: Application root must be `public_html/sauce.ai/news`
+    (not `sauce.ai/news`). The FTP deploy lands code under
+    public_html/. Mismatch between Application root and code
+    location is the most common cause of a 500 / fork-bomb on
+    boot.
+
+2b) On the app's page, click "Edit" and add environment variables.
+    Generate a real SECRET_KEY first; do NOT paste the placeholder.
+    In Terminal:
+
+        $ python3 -c "import secrets; print(secrets.token_hex(32))"
+
+    Then set in cPanel:
+
+        SECRET_KEY              <output of above>
         DB_HOST                 localhost
         DB_PORT                 3306
         DB_USER                 YOURACCOUNT_newsuser
         DB_PASSWORD             <password from step 1c>
         DB_NAME                 YOURACCOUNT_news
-        APPLICATION_ROOT        /news
-        ANTHROPIC_API_KEY       <your key, or leave blank for rules-only mode>
+        ANTHROPIC_API_KEY       <your key, or blank for rules-only>
         ANTHROPIC_MODEL         claude-haiku-4-5-20251001
         ADMIN_EMAIL             your-email@example.com
 
-    Save.
+    Do NOT set APPLICATION_ROOT. LiteSpeed/Passenger already
+    mounts the app at /news via the "Application URL" setting;
+    setting APPLICATION_ROOT in env vars causes a double-prefix
+    bug where every URL returns 404.
 
-    NOTE: Do NOT commit a .env file to the repo. cPanel env vars
-    are the canonical place for secrets here; the app reads them
-    via app/config.py.
+    Do NOT commit a .env to the repo. cPanel env vars are canonical.
 
 2c) On the same page, copy the "Enter to the virtual environment"
-    command (it looks like:
-        source /home/YOURACCOUNT/virtualenv/sauce.ai/news/3.10/bin/activate \
-        && cd /home/YOURACCOUNT/sauce.ai/news
-    ). Paste it into Terminal, then:
+    command. It looks like:
+
+        source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+        && cd /home/YOURACCOUNT/public_html/sauce.ai/news
+
+    Run it in Terminal, then:
 
         $ pip install -r requirements.txt
 
@@ -91,149 +99,222 @@ Conventions:
         $ pip install --no-build-isolation feedparser
     first, then re-run pip install.
 
+2d) Sanity-check the interpreter before letting Passenger
+    touch it (skipping this step is how you trigger the
+    fork-spawn loop):
+
+        $ /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/python \
+          -c "import sys, flask, pymysql, anthropic; print(sys.version.split()[0], 'ok')"
+
+    Expected output is one line like `3.11.14 ok`. If it
+    instead prints "No such file or directory" for `activate`,
+    `set_env_vars.py`, or `python_bin`, the venv shim is broken
+    -- destroy the Python App and recreate it before continuing.
+
 
 ------------------------------------------------------------------
 3. FIRST RUN
 ------------------------------------------------------------------
-3a) Back on "Setup Python App", click "Restart".
+3a) On "Setup Python App" click "Restart".
 
-3b) Visit  https://sauce.ai/news/auth/signup  and create your
+3b) Visit https://sauce.ai/news/ . You should see the feed page
+    (empty until the pipeline has run).
+
+3c) Visit https://sauce.ai/news/auth/signup and create your
     account using ADMIN_EMAIL from step 2b.
 
-3c) In phpMyAdmin, run:
+3d) In phpMyAdmin:
         UPDATE users SET is_admin = 1 WHERE email = 'your-email@example.com';
 
-3d) Reload the site; you'll now see an "Admin" link in the nav.
+3e) Reload the site; you'll see an "Admin" link in the nav.
 
-3e) Go to  https://sauce.ai/news/admin/feeds  -> click
-    "Import / refresh seed CSV". This loads ~135 seed sources.
+3f) https://sauce.ai/news/admin/feeds -> click
+    "Import / refresh seed CSV". Loads ~135 seed sources.
 
 
 ------------------------------------------------------------------
 4. CRON JOBS
 ------------------------------------------------------------------
-cPanel -> "Cron Jobs". You need the path to the venv's python; copy
-it from the "Setup Python App" page (under "Python executable").
-Example:  /home/YOURACCOUNT/virtualenv/sauce.ai/news/3.10/bin/python
+Before adding the cron jobs in cPanel, validate from Terminal
+that one run works end-to-end. cPanel cron does NOT source the
+venv automatically, so every cron line must `source activate`
+itself before invoking python.
 
-Add four cron jobs (replace PYTHON and HOME accordingly):
+4a) Test the diagnostic from a fresh shell:
 
-  # every 15 minutes: fetch RSS feeds
-  */15 * * * *  cd /home/YOURACCOUNT/sauce.ai/news/jobs && PYTHON /home/YOURACCOUNT/sauce.ai/news/jobs/fetch_feeds.py >/dev/null 2>&1
+        $ source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+          && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs \
+          && python _selftest.py
 
-  # every 5 minutes: classify pending articles (rules + LLM)
-  */5  * * * *  cd /home/YOURACCOUNT/sauce.ai/news/jobs && PYTHON /home/YOURACCOUNT/sauce.ai/news/jobs/classify_pending.py >/dev/null 2>&1
+    Every line should print PASS. If MySQL connect fails, the
+    env vars from step 2b aren't being passed through -- fix
+    that before adding cron entries.
 
-  # every 30 minutes: poll Reddit + HN for popularity signals
-  */30 * * * *  cd /home/YOURACCOUNT/sauce.ai/news/jobs && PYTHON /home/YOURACCOUNT/sauce.ai/news/jobs/popularity_poll.py >/dev/null 2>&1
+4b) Test fetch_feeds once by hand:
 
-  # nightly 3:30am UTC: prune old data, refresh journalist reputation
-  30  3  * * *  cd /home/YOURACCOUNT/sauce.ai/news/jobs && PYTHON /home/YOURACCOUNT/sauce.ai/news/jobs/maintenance.py >/dev/null 2>&1
+        $ python fetch_feeds.py
 
-You can run each one manually first from Terminal to confirm it works:
+    Should print a summary like `fetched=80 fresh=300 stale=20`.
+    Run classify_pending.py once after that.
 
-  $ source /home/YOURACCOUNT/virtualenv/sauce.ai/news/3.10/bin/activate
-  $ cd /home/YOURACCOUNT/sauce.ai/news/jobs
-  $ python fetch_feeds.py
-  $ python classify_pending.py
+4c) cPanel -> "Cron Jobs". Add four entries, replacing
+    YOURACCOUNT in each line:
+
+# every 15 min: fetch RSS feeds
+*/15 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python fetch_feeds.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# every 5 min: classify pending articles
+*/5  * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python classify_pending.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# every 30 min: popularity poll
+*/30 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python popularity_poll.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# nightly 3:30am UTC: prune + reputation refresh
+30  3 * * *   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python maintenance.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+    Note: output is redirected to logs/cron.log (NOT /dev/null).
+    If a cron job goes wrong you must be able to see the error.
+    Tail with:  $ tail -100 ~/public_html/sauce.ai/news/logs/cron.log
 
 
 ------------------------------------------------------------------
 5. VERIFY
 ------------------------------------------------------------------
-5a) Visit  https://sauce.ai/news/admin  -> the "Overview" shows
-    feed counts and pipeline state. After one or two classify
-    runs you should see classified > 0.
+5a) /admin -> "Overview" shows feed counts and pipeline state.
+    After one or two classify runs, classified > 0.
 
-5b) Visit  https://sauce.ai/news/admin/tests  -> click "Run tests".
-    The bundled pytest suite should pass green.
+5b) /admin/tests -> "Run tests". The bundled pytest suite passes.
 
-5c) Visit  https://sauce.ai/news  -> sign up a second test
-    account -> pick a preset -> verify the feed loads with cards.
+5c) Sign up a second test account, pick a preset, the feed loads.
 
-5d) Visit  https://sauce.ai/news/firehose  -> articles should
-    appear in real time as classify_pending runs.
+5d) /firehose shows articles streaming in.
 
 
 ------------------------------------------------------------------
 6. DEPLOYING UPDATES
 ------------------------------------------------------------------
-Code updates land via CI/CD on every push to main. To pick them up:
+CI/CD on push to main FTP-syncs the repo to the account.
 
-  - If you changed Python code or templates only:
-        cPanel -> "Setup Python App" -> "Restart"
-    (or:  $ touch /home/YOURACCOUNT/sauce.ai/news/tmp/restart.txt )
+- Python or template changes:
+      "Setup Python App" -> "Restart"
+  (or: $ touch /home/YOURACCOUNT/public_html/sauce.ai/news/tmp/restart.txt)
 
-  - If you changed requirements.txt:
-        $ source /home/YOURACCOUNT/virtualenv/sauce.ai/news/3.10/bin/activate
-        $ cd /home/YOURACCOUNT/sauce.ai/news
-        $ pip install -r requirements.txt
-    then restart the Python app.
+- requirements.txt changes:
+      $ source ~/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+        && cd ~/public_html/sauce.ai/news \
+        && pip install -r requirements.txt
+  then restart.
 
-  - If you changed seed/schema.sql:
-        phpMyAdmin -> Import (or run ALTER TABLE manually). This
-        is intentionally NOT automated; schema migrations on
-        shared hosting deserve human eyes.
+- seed/schema.sql changes:
+      phpMyAdmin -> Import (or ALTER TABLE manually). Schema
+      migrations on shared hosting deserve human eyes; not
+      automated by CI/CD.
 
 
 ------------------------------------------------------------------
 7. ONGOING OPERATIONS
 ------------------------------------------------------------------
 Admin pages (require is_admin = 1):
-  /admin              overview & pipeline / LLM spend
-  /admin/feeds        per-source status; add/disable/delete feeds
-  /admin/content      7-day breakdown by category / source, lean histogram
-  /admin/users        list / promote / delete users
-  /admin/traffic      signups, clicks, top articles
-  /admin/features     edit feature catalog (controls UI of "Your Algo")
-  /admin/logs         pipeline_log table tail
-  /admin/tests        run pytest
+  /admin           overview & pipeline / LLM spend
+  /admin/feeds     per-source status; add/disable/delete feeds
+  /admin/content   7-day breakdown by category / source
+  /admin/users     list / promote / delete users
+  /admin/traffic   signups, clicks, top articles
+  /admin/features  feature catalog (controls "Your Algo" UI)
+  /admin/logs      pipeline_log table tail
+  /admin/tests     run pytest
 
 Logs:
-  cron jobs also write to /home/YOURACCOUNT/sauce.ai/news/logs/*.log
-  and to the pipeline_log table (visible in /admin/logs).
+  Cron stdout/stderr -> ~/public_html/sauce.ai/news/logs/cron.log
+  Per-job structured -> ~/public_html/sauce.ai/news/logs/<job>.log
+  Pipeline events     -> pipeline_log table  (/admin/logs)
+  Passenger boot      -> "Setup Python App" -> stderr.log
 
 
 ------------------------------------------------------------------
 8. TROUBLESHOOTING
 ------------------------------------------------------------------
-- 500 errors on every request:
-    Setup Python App -> "stderr.log". 95% of the time it's a
-    missing env var or wrong DB credentials.
+A. Site hangs or returns 404 on every URL, Passenger log shows
+   thousands of "fork: Resource temporarily unavailable" plus
+   "/activate: No such file or directory":
 
-- Empty feed:
-    Check /admin -> classified count. If 0, run classify_pending.py
-    by hand from Terminal and read the output. If it says "LLM
-    unavailable" that's fine — articles still classify with rules.
+   This is the venv-shim fork-bomb. The CloudLinux python shim
+   couldn't resolve its CWD and Passenger respawned in a tight
+   loop, exhausting nproc. Two causes:
+     1. Application root in cPanel doesn't match where CI/CD
+        deployed code (i.e. you set `sauce.ai/news` instead of
+        `public_html/sauce.ai/news`).
+     2. Stale Python App entry still configured at the wrong
+        path. Only ever have ONE Python App per URL.
 
-- feedparser sgmllib3k build error:
-    pip install --no-build-isolation feedparser
+   Recovery: "Stop App" in cPanel, then
+       $ pkill -u YOURACCOUNT -f python ; sleep 5 ; \
+         pkill -9 -u YOURACCOUNT -f python
+   Wait 60s. `ps -ef | grep ^YOURACCOUNT | wc -l` should drop
+   to single digits. Then destroy + recreate the Python App with
+   the correct root (step 2a).
 
-- Articles never get popularity > 0:
-    Normal — popularity_poll.py only matches URLs that appear on
-    Reddit/HN. Typical match rates ~5-10% after a week.
+B. Site returns 404 with a clean Passenger log:
 
-- "Module not found: app":
-    Make sure the Python App's "Application root" is exactly
-    sauce.ai/news (not just sauce.ai). The app expects
-    passenger_wsgi.py at the root of its own directory.
+   You set APPLICATION_ROOT=/news in cPanel env vars. Don't.
+   LiteSpeed already mounts the app at /news; Flask then
+   double-prefixes and 404s every request. Remove the env var
+   (or set it to `/`) and Restart.
 
-- Changes from a fresh git push don't show up:
-    Restart the Python App. CI/CD writes files but Passenger keeps
-    the old import cached until restart.
+C. Cron jobs silently do nothing:
+
+   Every cron line must `source activate` before running python,
+   and must redirect output to logs/cron.log (not /dev/null).
+   Run jobs/_selftest.py from a fresh shell with the activate +
+   cd combo above to see exactly which check fails.
+
+D. fork: Resource temporarily unavailable on every command:
+
+   You've hit your CloudLinux nproc/EP limit. Stop the Python App,
+   pkill your python processes, wait 2 minutes, open a fresh
+   Terminal. If it persists, contact GoDaddy support to raise
+   the EP limit (Web Hosting Plus defaults around 20-30 EPs).
+
+E. "Module not found: app":
+
+   Application root in Setup Python App is wrong. Must be
+   `public_html/sauce.ai/news`, not `public_html/sauce.ai`.
+
+F. Articles never get popularity > 0:
+
+   Normal. popularity_poll only matches URLs that appear on
+   Reddit / HN. Typical match rate ~5-10% after a week.
+
+G. Code from a fresh git push isn't visible:
+
+   "Setup Python App" -> "Restart". Passenger caches imports
+   until restart, even after CI/CD writes new files.
 
 
 ------------------------------------------------------------------
-9. KNOWN v1 LIMITATIONS (will be addressed in v2)
+9. SECRETS HYGIENE
 ------------------------------------------------------------------
-- Python user algorithms: UI-only in v1. The "Code" tab shows the
-  generated Python equivalent but does not execute user-supplied
-  code. Sandboxed execution is intentionally deferred.
+- API keys and DB passwords live only in cPanel "Setup Python
+  App" env vars. NEVER paste them into chat tools, screenshots,
+  or commits.
+- If you suspect a key was exposed, rotate immediately:
+    Anthropic: console.anthropic.com -> API Keys -> revoke.
+    MySQL pw:  cPanel -> MySQL Databases -> change password,
+               then update cPanel env var, then restart app.
+- The repo's `.htaccess` only carries env vars; cPanel writes
+  it. Treat that file as sensitive even though it's not in the
+  repo.
+
+
+------------------------------------------------------------------
+10. KNOWN v1 LIMITATIONS
+------------------------------------------------------------------
+- "Your Algo" Code tab renders the Python equivalent of the
+  UI-chosen weights but does not execute user-supplied code.
+  Sandboxed exec deferred to v2.
 - No CSRF tokens beyond same-site cookies, no email verification,
-  no rate limiting on auth endpoints. Treat the prototype as
-  password-protected by obscurity until v2.
-- Articles store summary + link only (no full-text extraction).
-- Popularity is from Reddit + HN externally; internal click signal
-  is recorded but not yet folded into the popularity score.
+  no rate limiting on auth endpoints.
+- Articles store summary + link only; no full-text extraction.
+- Internal click signal is recorded but not folded into popularity.
 
 You're done. Visit  https://sauce.ai/news .

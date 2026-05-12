@@ -13,8 +13,6 @@ class Config:
     DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
     DB_NAME = os.environ.get("DB_NAME", "")
 
-    APPLICATION_ROOT = os.environ.get("APPLICATION_ROOT", "/news")
-    SESSION_COOKIE_PATH = APPLICATION_ROOT or "/"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 

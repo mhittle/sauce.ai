@@ -8,8 +8,6 @@ without Flask installed.
 
 def create_app():
     from flask import Flask, g
-    from werkzeug.middleware.dispatcher import DispatcherMiddleware
-    from werkzeug.exceptions import NotFound
 
     from .config import Config
     from .db import close_conn
@@ -27,10 +25,7 @@ def create_app():
 
     @app.context_processor
     def _inject():
-        return {
-            "current_user": getattr(g, "user", None),
-            "APP_ROOT": app.config["APPLICATION_ROOT"],
-        }
+        return {"current_user": getattr(g, "user", None)}
 
     from .routes.feed import bp as feed_bp
     from .routes.algo import bp as algo_bp
@@ -43,9 +38,5 @@ def create_app():
     app.register_blueprint(firehose_bp, url_prefix="/firehose")
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(auth_bp, url_prefix="/auth")
-
-    root = app.config.get("APPLICATION_ROOT", "/")
-    if root and root != "/":
-        app.wsgi_app = DispatcherMiddleware(NotFound(), {root: app.wsgi_app})
 
     return app

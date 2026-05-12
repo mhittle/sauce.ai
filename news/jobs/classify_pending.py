@@ -4,8 +4,12 @@
 Run every ~5 minutes from cron. Walltime-budgeted so a stuck LLM call can't
 exhaust shared-host CPU quota.
 """
+import os
+import sys
 import time
 from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _bootstrap import Config, get_conn, setup_logging, db_log
 from app.classifier import compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline
