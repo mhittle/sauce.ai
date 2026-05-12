@@ -10,7 +10,8 @@ INSERT INTO feature_catalog (feature_key, label, type, range_min, range_max, des
   ('source_reputation',    'News source reputation', 'scale',         0, 1, 'Publication reputation from lookup table.', 1, 70),
   ('popularity',           'Popularity',             'scale',         0, 1, 'External signal from Reddit + HN today.', 1, 80),
   ('category',             'Category',               'categorical',   0, 0, 'politics / world / tech / business / science / sports / local / general', 1, 90),
-  ('geography',            'Geography',              'categorical',   0, 0, 'Country and region of the source.', 1, 100);
+  ('geography',            'Geography',              'categorical',   0, 0, 'Country and region of the source.', 1, 100),
+  ('paywall',              'Paywall',                'scale',         0, 1, 'Per-article paywall score detected at classify time. 0 = free, 1 = subscription required, 0.5 = blocked/unknown.', 1, 110);
 
 -- Default presets used by the onboarding picker. Stored as JSON in a user_algorithms-like row template;
 -- the app reads these constants from app/ranking.py PRESETS; no DB row needed.

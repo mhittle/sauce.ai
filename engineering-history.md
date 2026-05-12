@@ -7,6 +7,31 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-12 — Editorial serif wordmark in topnav (PR #13)
+
+User wanted "a very, very subtle hint of personality" on the title/logo —
+"high-intelligence... sophisticated simplicity, for the discerning reader."
+
+Restyled the `.brand` element in `base.html` only. `sauce.ai` now renders in
+a system serif stack (`ui-serif`, "Iowan Old Style", "Charter",
+"Source Serif Pro", Georgia); the `/` separator is muted gray with light
+spacing; `news` is set in serif italic. Weight 500 roman / 400 italic, size
+1.05em. The rest of the UI keeps the system sans.
+
+Implementation is two-file:
+- `app/templates/base.html` — split brand text into `sauce.ai`,
+  `<span class="brand-slash">/</span>`, `<em>news</em>`.
+- `app/static/style.css` — extended `.topnav .brand` rule + two child
+  selectors. No new assets, no JS.
+
+No server-side state touched.
+
+### PR
+
+- **#13** Editorial serif wordmark in topnav (merged)
+
+---
+
 ## 2026-05-12 — Feature batch: bug fix, category tabs, 3-axis config, obscurity, +633 sources
 
 User-reported batch of features and one bug. Five PRs (#7–#11) all merged.

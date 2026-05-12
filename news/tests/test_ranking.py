@@ -149,3 +149,27 @@ def test_obscurity_feature_in_score_sql_when_weighted():
     assert "f.source_obscurity" in expr
     assert params["story_obscurity_w"] == 1.0
     assert params["source_obscurity_w"] == 0.5
+
+
+def test_paywall_feature_in_catalog():
+    keys = {f["key"] for f in FEATURES}
+    assert "paywall" in keys
+    paywall = next(f for f in FEATURES if f["key"] == "paywall")
+    assert paywall["scale"] == "unsigned"
+    assert paywall["default_direction"] == 0.0
+    assert paywall["default_weight"] == 0.0  # opt-in: must not perturb existing user algos
+
+
+def test_paywall_in_score_sql_when_weighted():
+    w = {"paywall": 1.0, "paywall_direction": 0.0}
+    expr, params = build_score_sql(w)
+    assert "f.paywall" in expr
+    assert params["paywall_w"] == 1.0
+    assert params["paywall_d"] == 0.0
+
+
+def test_paywall_threshold_creates_filter():
+    w = {"paywall_direction": 0.0, "paywall_threshold": 0.2}
+    sql, params = build_filters_sql(w)
+    assert "ABS(f.paywall - %(paywall_d_th)s)" in sql
+    assert params["paywall_th"] == 0.2

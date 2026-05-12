@@ -144,6 +144,11 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .data-table { width: 100%; border-collapse: collapse; margin-top: 1em; font-size: 0.9em; }
 .data-table th, .data-table td { padding: 0.4em 0.5em; border-bottom: 1px solid var(--line); text-align: left; }
 .data-table tr.inactive { opacity: 0.4; }
+.paywall-cell { font-variant-numeric: tabular-nums; }
+.paywall-cell.paywall-na { color: var(--muted); }
+.paywall-cell.paywall-low { color: var(--ok); }
+.paywall-cell.paywall-mid { color: var(--warn); }
+.paywall-cell.paywall-high { color: var(--err); }
 .feed-add { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4em; margin: 0.5em 0; }
 .feature-edit { padding: 0.6em; border-bottom: 1px solid var(--line); }
 .feature-edit .row { display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; }

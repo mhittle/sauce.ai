@@ -39,6 +39,8 @@ FEATURES = [
      "low": "Everywhere",   "high": "Rare",      "default_direction": 0.5, "default_weight": 0.0},
     {"key": "source_obscurity",      "scale": "unsigned", "label": "Source obscurity",
      "low": "Big outlets",  "high": "Indie",     "default_direction": 0.5, "default_weight": 0.0},
+    {"key": "paywall",               "scale": "unsigned", "label": "Paywall",
+     "low": "Free",         "high": "Paywalled", "default_direction": 0.0, "default_weight": 0.0},
 ]
 FEATURES_BY_KEY = {f["key"]: f for f in FEATURES}
 FEATURE_KEYS = [f["key"] for f in FEATURES]
