@@ -1,0 +1,41 @@
+{% if articles %}
+{% for a in articles %}
+  <article class="card">
+    {% if a.thumbnail_url %}
+      <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener"
+         hx-post="{{ url_for('feed.click', article_id=a.id) }}" hx-swap="none">
+        <img src="{{ a.thumbnail_url }}" alt="" loading="lazy" />
+      </a>
+    {% endif %}
+    <div class="card-body">
+      <div class="card-meta">
+        <span class="source">{{ a.source_name }}</span>
+        <span class="lean-dot" style="--lean: {{ a.political_lean }}"
+              title="article lean {{ '%+.2f' % a.political_lean }}"></span>
+        <span class="category">{{ a.category }}</span>
+        <span class="muted">{{ a.published_at.strftime('%b %d, %H:%M') if a.published_at else '' }}</span>
+      </div>
+      <h2 class="card-title">
+        <a href="{{ a.url }}" target="_blank" rel="noopener"
+           hx-post="{{ url_for('feed.click', article_id=a.id) }}" hx-swap="none">{{ a.title }}</a>
+      </h2>
+      {% if a.summary %}<p class="summary">{{ a.summary|striptags|truncate(220) }}</p>{% endif %}
+      <div class="feature-bars">
+        <span title="Objectivity"><b>obj</b><i style="width: {{ (a.objectivity * 100)|round }}%"></i></span>
+        <span title="Info density"><b>dens</b><i style="width: {{ (a.info_density * 100)|round }}%"></i></span>
+        <span title="Reading level"><b>read</b><i style="width: {{ (a.reading_level * 100)|round }}%"></i></span>
+        <span title="Source rep"><b>rep</b><i style="width: {{ (a.source_reputation * 100)|round }}%"></i></span>
+        <span title="Popularity"><b>pop</b><i style="width: {{ (a.popularity * 100)|round }}%"></i></span>
+      </div>
+      {% if a.byline %}<div class="byline muted">{{ a.byline }}</div>{% endif %}
+    </div>
+  </article>
+{% endfor %}
+  <div class="load-more">
+    <button hx-get="{{ url_for('feed.index', page=page+1) }}"
+            hx-target="closest .load-more" hx-swap="outerHTML"
+            hx-select=".cards > *">Load more</button>
+  </div>
+{% else %}
+  <p class="empty">No articles yet. The classifier is warming up — check back in a few minutes.</p>
+{% endif %}

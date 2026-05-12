@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Your algorithm{% endblock %}
+{% block content %}
+<div class="algo" x-data="{ tab: 'ui' }">
+  <header class="algo-header">
+    <h1>Your algorithm</h1>
+    <nav class="tabs">
+      <button :class="tab==='ui' && 'active'" @click="tab='ui'">UI</button>
+      <button :class="tab==='code' && 'active'" @click="tab='code'">Code</button>
+      <button :class="tab==='presets' && 'active'" @click="tab='presets'">Presets</button>
+    </nav>
+  </header>
+
+  <section x-show="tab==='ui'">
+    <form id="algo-form"
+          hx-post="{{ url_for('algo.preview') }}"
+          hx-trigger="input changed delay:300ms from:form, change delay:50ms from:form"
+          hx-target="#preview-pane">
+      <div class="features">
+        {% for fk in feature_keys %}
+        <div class="feature-row">
+          <div class="feature-name">{{ fk.replace('_', ' ') }}</div>
+          <label class="slider">
+            Weight
+            <input type="range" min="0" max="2" step="0.1"
+                   name="w_{{ fk }}" value="{{ weights.get(fk, 0) }}"
+                   oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)" />
+            <output>{{ '%.1f' % (weights.get(fk, 0) or 0) }}</output>
+          </label>
+          {% if fk in signed_features %}
+          <label class="slider">
+            Target
+            <input type="range" min="-1" max="1" step="0.1"
+                   name="t_{{ fk }}" value="{{ weights.get(fk + '_target', 0) }}"
+                   oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)" />
+            <output>{{ '%.1f' % (weights.get(fk + '_target', 0) or 0) }}</output>
+          </label>
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="feature-row">
+          <div class="feature-name">recency</div>
+          <label class="slider">
+            Weight
+            <input type="range" min="0" max="2" step="0.1"
+                   name="w_recency" value="{{ weights.get('recency', 0) }}"
+                   oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)" />
+            <output>{{ '%.1f' % (weights.get('recency', 0) or 0) }}</output>
+          </label>
+        </div>
+
+        <div class="feature-row">
+          <div class="feature-name">category filter</div>
+          <div class="checkboxes">
+            {% for c in categories %}
+              <label><input type="checkbox" name="category_filter" value="{{ c }}"
+                     {% if c in (weights.get('category_filter') or []) %}checked{% endif %} /> {{ c }}</label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="algo-actions">
+        <button type="button"
+                hx-post="{{ url_for('algo.save') }}"
+                hx-include="#algo-form"
+                hx-target="#preview-pane">Save algorithm</button>
+        <a href="{{ url_for('feed.index') }}">View my feed →</a>
+      </div>
+    </form>
+  </section>
+
+  <section x-show="tab==='code'" id="code-tab">
+    <p class="muted">This is the read-only Python equivalent of your current weights. v2 will let you edit it directly with sandboxed execution.</p>
+    <pre class="code">{{ expression }}</pre>
+  </section>
+
+  <section x-show="tab==='presets'">
+    <p class="muted">Replace your current algorithm with a preset.</p>
+    <div class="presets">
+      {% for key, p in presets.items() %}
+        <form method="post" action="{{ url_for('algo.use_preset', key=key) }}" class="preset-card">
+          <div>
+            <h3>{{ p.label }}</h3>
+            <p class="muted">{{ p.description }}</p>
+          </div>
+          <button type="submit">Use this</button>
+        </form>
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside id="preview-pane" class="preview">
+    <h3>Top 8 right now</h3>
+    <p class="muted">Updates live as you adjust sliders.</p>
+  </aside>
+</div>
+{% endblock %}

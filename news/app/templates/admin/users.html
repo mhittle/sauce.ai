@@ -1,0 +1,29 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Users</h1>
+<table class="data-table">
+  <thead>
+    <tr><th>Email</th><th>Admin?</th><th>Algos</th><th>Clicks</th><th>Joined</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.email }}</td>
+      <td>{{ 'yes' if u.is_admin else 'no' }}</td>
+      <td>{{ u.algo_count }}</td>
+      <td>{{ u.click_count }}</td>
+      <td class="muted">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin.users_toggle_admin', uid=u.id) }}" class="inline">
+          <button type="submit">{{ 'Demote' if u.is_admin else 'Promote' }}</button>
+        </form>
+        <form method="post" action="{{ url_for('admin.users_delete', uid=u.id) }}" class="inline"
+              onsubmit="return confirm('Delete this user?')">
+          <button type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

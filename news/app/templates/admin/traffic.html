@@ -1,0 +1,18 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Traffic</h1>
+
+<h2>Signups (30d)</h2>
+<table class="data-table"><thead><tr><th>Date</th><th>Signups</th></tr></thead>
+<tbody>{% for r in signups %}<tr><td>{{ r.d }}</td><td>{{ r.n }}</td></tr>{% endfor %}</tbody></table>
+
+<h2>Clicks (30d)</h2>
+<table class="data-table"><thead><tr><th>Date</th><th>Clicks</th></tr></thead>
+<tbody>{% for r in clicks %}<tr><td>{{ r.d }}</td><td>{{ r.n }}</td></tr>{% endfor %}</tbody></table>
+
+<h2>Top articles (7d by clicks)</h2>
+<table class="data-table"><thead><tr><th>Title</th><th>Source</th><th>Clicks</th></tr></thead>
+<tbody>{% for r in top_articles %}
+<tr><td><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title|truncate(110) }}</a></td><td>{{ r.source_name }}</td><td>{{ r.clicks }}</td></tr>
+{% endfor %}</tbody></table>
+{% endblock %}

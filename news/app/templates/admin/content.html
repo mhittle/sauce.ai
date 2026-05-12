@@ -1,0 +1,39 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Content stats (7 days)</h1>
+
+<h2>By category</h2>
+<table class="data-table">
+  <thead><tr><th>Category</th><th>Articles</th><th>Avg lean</th><th>Avg obj</th></tr></thead>
+  <tbody>
+    {% for r in by_category %}
+    <tr>
+      <td>{{ r.category }}</td>
+      <td>{{ r.n }}</td>
+      <td>{{ '%+.2f' % (r.avg_lean or 0) }}</td>
+      <td>{{ '%.2f' % (r.avg_obj or 0) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Top sources (last 24h)</h2>
+<table class="data-table">
+  <thead><tr><th>Source</th><th>Articles</th></tr></thead>
+  <tbody>
+    {% for r in by_source %}<tr><td>{{ r.name }}</td><td>{{ r.n }}</td></tr>{% endfor %}
+  </tbody>
+</table>
+
+<h2>Political lean distribution</h2>
+<div class="lean-hist">
+  {% set max_n = (lean_hist|map(attribute='n')|max) or 1 %}
+  {% for h in lean_hist %}
+    <div class="lean-bar">
+      <span class="bucket">{{ '%+.1f' % h.bucket }}</span>
+      <i style="width: {{ (h.n / max_n * 100)|round }}%"></i>
+      <span class="count">{{ h.n }}</span>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

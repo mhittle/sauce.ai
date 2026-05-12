@@ -1,0 +1,220 @@
+================================================================
+sauce.ai/news — install on GoDaddy Web Hosting Plus (cPanel)
+================================================================
+
+This document walks you, step by step, from the .zip in hand to a
+running site at https://sauce.ai/news . Time required: ~30 minutes.
+
+Conventions in this file:
+  ~/news                 = the directory you'll unzip into (your cPanel home)
+  YOURACCOUNT_news       = example MySQL DB / user name (yours will differ)
+  $ ...                  = command in cPanel Terminal
+
+
+------------------------------------------------------------------
+0. WHAT YOU NEED
+------------------------------------------------------------------
+  - GoDaddy Web Hosting Plus account with cPanel access.
+  - SSH/Terminal enabled (cPanel -> "Terminal"). If your plan does
+    not include Terminal, every command here also works inside
+    cPanel -> "Setup Python App" -> "Run pip install" / your
+    venv's "Enter to the virtual environment" command.
+  - An Anthropic API key (https://console.anthropic.com).
+    Without one the classifier still runs in "rules-only" mode and
+    you'll see a flat lean/objectivity. The site still works.
+
+
+------------------------------------------------------------------
+1. UPLOAD THE CODE
+------------------------------------------------------------------
+1a) In cPanel -> File Manager, upload sauce-news.zip into your
+    home directory (the one that contains 'public_html').
+
+1b) Right-click the zip -> "Extract" -> extract to:
+        /home/YOURACCOUNT/news
+    You should end up with:
+        /home/YOURACCOUNT/news/passenger_wsgi.py
+        /home/YOURACCOUNT/news/app/...
+        /home/YOURACCOUNT/news/jobs/...
+        /home/YOURACCOUNT/news/seed/...
+        /home/YOURACCOUNT/news/tests/...
+
+
+------------------------------------------------------------------
+2. CREATE THE DATABASE
+------------------------------------------------------------------
+2a) cPanel -> "MySQL Databases".
+2b) Create a database:                YOURACCOUNT_news
+2c) Create a user with a strong pw:   YOURACCOUNT_newsuser
+2d) Add the user to the database with ALL PRIVILEGES.
+
+2e) cPanel -> "phpMyAdmin" -> select the new DB -> "Import" ->
+    upload seed/schema.sql -> Go.
+
+2f) Same again with seed/feature_catalog.sql.
+
+
+------------------------------------------------------------------
+3. CREATE THE PYTHON APP
+------------------------------------------------------------------
+3a) cPanel -> "Setup Python App" -> "Create Application":
+        Python version:        3.10 (or whichever 3.x is offered)
+        Application root:      news
+        Application URL:       sauce.ai/news
+        Application startup:   passenger_wsgi.py
+        Application entry pt:  application
+    Click "Create".
+
+3b) On the app's page, click "Edit" and add environment variables:
+
+        SECRET_KEY              <generate: `python -c "import secrets;print(secrets.token_hex(32))"`>
+        DB_HOST                 localhost
+        DB_PORT                 3306
+        DB_USER                 YOURACCOUNT_newsuser
+        DB_PASSWORD             <password from step 2c>
+        DB_NAME                 YOURACCOUNT_news
+        APPLICATION_ROOT        /news
+        ANTHROPIC_API_KEY       <your key, or leave blank for rules-only mode>
+        ANTHROPIC_MODEL         claude-haiku-4-5-20251001
+        ADMIN_EMAIL             your-email@example.com
+
+    Save.
+
+3c) On the same page, copy the command shown under
+    "Enter to the virtual environment" (it looks like
+        source /home/YOURACCOUNT/virtualenv/news/3.10/bin/activate \
+        && cd /home/YOURACCOUNT/news
+    ). Open Terminal and paste it, then:
+
+        $ pip install -r requirements.txt
+
+    (If `feedparser` -> `sgmllib3k` fails to build, run:
+        $ pip install --no-build-isolation feedparser
+     first, then re-run pip install.)
+
+
+------------------------------------------------------------------
+4. FIRST RUN
+------------------------------------------------------------------
+4a) Back on the "Setup Python App" page, click "Restart".
+
+4b) Visit https://sauce.ai/news/auth/signup and create your account
+    using ADMIN_EMAIL from step 3b.
+
+4c) In phpMyAdmin, run:
+        UPDATE users SET is_admin = 1 WHERE email = 'your-email@example.com';
+
+4d) Reload the site; you'll now see an "Admin" link in the nav.
+
+4e) Go to https://sauce.ai/news/admin/feeds -> click
+    "Import / refresh seed CSV". This loads ~135 seed sources.
+
+
+------------------------------------------------------------------
+5. CRON JOBS
+------------------------------------------------------------------
+cPanel -> "Cron Jobs". You need the path to the venv's python; copy
+it from the "Setup Python App" page (under "Python executable").
+Example: /home/YOURACCOUNT/virtualenv/news/3.10/bin/python
+
+Add four cron jobs (replace PYTHON and HOME accordingly):
+
+  # every 15 minutes: fetch RSS feeds
+  */15 * * * *  cd /home/YOURACCOUNT/news/jobs && PYTHON /home/YOURACCOUNT/news/jobs/fetch_feeds.py >/dev/null 2>&1
+
+  # every 5 minutes: classify pending articles (rules + LLM)
+  */5  * * * *  cd /home/YOURACCOUNT/news/jobs && PYTHON /home/YOURACCOUNT/news/jobs/classify_pending.py >/dev/null 2>&1
+
+  # every 30 minutes: poll Reddit + HN for popularity signals
+  */30 * * * *  cd /home/YOURACCOUNT/news/jobs && PYTHON /home/YOURACCOUNT/news/jobs/popularity_poll.py >/dev/null 2>&1
+
+  # nightly 3:30am UTC: prune old data, refresh journalist reputation
+  30  3  * * *  cd /home/YOURACCOUNT/news/jobs && PYTHON /home/YOURACCOUNT/news/jobs/maintenance.py >/dev/null 2>&1
+
+You can run each one manually first from Terminal to confirm it
+works:
+
+  $ source /home/YOURACCOUNT/virtualenv/news/3.10/bin/activate
+  $ cd /home/YOURACCOUNT/news/jobs
+  $ python fetch_feeds.py
+  $ python classify_pending.py
+
+
+------------------------------------------------------------------
+6. VERIFY
+------------------------------------------------------------------
+6a) Visit https://sauce.ai/news/admin -> the "Overview" shows feed
+    counts and pipeline state. After one or two classify runs you
+    should see classified > 0.
+
+6b) Visit https://sauce.ai/news/admin/tests -> click "Run tests".
+    The bundled pytest suite should pass green.
+
+6c) Visit https://sauce.ai/news -> sign up a second test account ->
+    pick a preset -> verify the feed loads with cards.
+
+6d) Visit https://sauce.ai/news/firehose -> articles should appear
+    in real time as classify_pending runs.
+
+
+------------------------------------------------------------------
+7. ONGOING OPERATIONS
+------------------------------------------------------------------
+Admin pages (require is_admin = 1):
+  /admin              overview & pipeline / LLM spend
+  /admin/feeds        per-source status; add/disable/delete feeds
+  /admin/content      7-day breakdown by category / source, lean histogram
+  /admin/users        list / promote / delete users
+  /admin/traffic      signups, clicks, top articles
+  /admin/features     edit feature catalog (controls UI of "Your Algo")
+  /admin/logs         pipeline_log table tail
+  /admin/tests        run pytest
+
+Logs:
+  cron jobs also write to /home/YOURACCOUNT/news/logs/*.log
+  and to the pipeline_log table (visible in /admin/logs).
+
+
+------------------------------------------------------------------
+8. TROUBLESHOOTING
+------------------------------------------------------------------
+- 500 errors on every request:
+    Look in Setup Python App -> "stderr.log". 95% of the time it's
+    a missing env var or wrong DB credentials.
+
+- Empty feed:
+    Check /admin -> classified count. If 0, run classify_pending.py
+    by hand from Terminal and read the output. If it says "LLM
+    unavailable" that's fine — articles will classify with rules
+    only.
+
+- feedparser sgmllib3k build error:
+    pip install --no-build-isolation feedparser
+
+- Articles never get popularity > 0:
+    Normal — popularity_poll.py only matches URLs that appear on
+    Reddit/HN. After a week you'll see typical match rates ~5-10%.
+
+- "Module not found: app":
+    Make sure passenger_wsgi.py is at /home/YOURACCOUNT/news/passenger_wsgi.py
+    (NOT inside an extra news/ folder from a nested zip).
+
+- Changes to .py files don't show up:
+    Click "Restart" in Setup Python App, or `touch tmp/restart.txt`
+    in the app root.
+
+
+------------------------------------------------------------------
+9. KNOWN v1 LIMITATIONS (will be addressed in v2)
+------------------------------------------------------------------
+- Python user algorithms: UI-only in v1. The "Code" tab shows the
+  generated Python equivalent but does not execute user-supplied
+  code. Sandboxed execution is intentionally deferred.
+- No CSRF tokens beyond same-site cookies, no email verification,
+  no rate limiting on auth endpoints. Treat the prototype as
+  password-protected by obscurity until v2.
+- Articles store summary + link only (no full-text extraction).
+- Popularity is from Reddit + HN externally; internal click signal
+  is recorded but not yet folded into the popularity score.
+
+You're done. Visit https://sauce.ai/news .
