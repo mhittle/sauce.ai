@@ -86,6 +86,20 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-006 — Article links in feed do nothing on click
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-12 · **Closed:** 2026-05-12
+
+`feed_cards.html` had `hx-post` directly on the article `<a>` tags for
+click-tracking. HTMX intercepts the click and calls `preventDefault()` on
+anchors with `hx-*` attributes, so the tracking POST fired but the browser
+never navigated to the article URL.
+
+**Fix:** replaced `hx-post` on the two anchors (thumbnail + title) with
+`onclick="fetch('/news/click/<id>', {method:'POST', keepalive:true})"`. The
+browser now follows `href` normally and the tracking request uses
+`keepalive: true` so it survives the page transition. The firehose template
+already used plain anchors (no `hx-post`) so no change needed there.
+
 ### BUG-003 — `anthropic==0.39.0` crashes on fresh install with httpx>=0.28
 **Status:** resolved · **Reporter:** internal · **Opened:** 2026-05-12 · **Closed:** 2026-05-12 (PR #4)
 
