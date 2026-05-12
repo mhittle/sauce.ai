@@ -9,6 +9,17 @@
   </p>
 </header>
 
+{% if categories %}
+<nav class="category-tabs" aria-label="Filter by category">
+  <a class="cat-tab {% if not active_category %}active{% endif %}"
+     href="{{ url_for('feed.index') }}">All</a>
+  {% for c in categories %}
+    <a class="cat-tab {% if active_category == c.category %}active{% endif %}"
+       href="{{ url_for('feed.index', category=c.category) }}">{{ c.category }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
 <div id="feed-cards" class="cards">
   {% include "partials/feed_cards.html" %}
 </div>

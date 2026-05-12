@@ -34,7 +34,7 @@ shipped.
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
-| 7 | 3 | ui, new-feature | Category tabs on `/` feed | in-progress |
+| 7 | 3 | ui, new-feature | Category tabs on `/` feed | done (PR #TBD) |
 | 6 | 5 | backend, new-feature | Full-text article extraction | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
@@ -116,7 +116,7 @@ Sequence: probably ship after the 3-axis config so the new features get
 the proper UI without rework.
 
 ### Category tabs on `/` feed
-**Priority:** 7 · **LOE:** 3 · **Category:** ui, new-feature · **Status:** in-progress
+**Priority:** 7 · **LOE:** 3 · **Category:** ui, new-feature · **Status:** done (PR #TBD)
 
 Tabs across the top of `/` for each category in `feature_catalog` /
 `ranking.CATEGORIES`. Behaviour: **hard filter** the feed by category.
