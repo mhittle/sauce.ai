@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Your feed{% endblock %}
+{% block content %}
+<header class="feed-header">
+  <h1>Your feed</h1>
+  <p class="muted">
+    Top-ranked articles from the last 7 days, scored by your algorithm.
+    {% if not current_user %}<a href="{{ url_for('auth.signup') }}">Sign up</a> to save your own.{% endif %}
+  </p>
+</header>
+
+<div id="feed-cards" class="cards">
+  {% include "partials/feed_cards.html" %}
+</div>
+{% endblock %}

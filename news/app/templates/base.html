@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}News{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='alpine.min.js') }}" defer></script>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="{{ url_for('feed.index') }}">sauce.ai / news</a>
+  <a href="{{ url_for('feed.index') }}">Feed</a>
+  <a href="{{ url_for('firehose.index') }}">Firehose</a>
+  {% if current_user %}
+    <a href="{{ url_for('algo.index') }}">Your Algo</a>
+    {% if current_user.is_admin %}<a href="{{ url_for('admin.index') }}">Admin</a>{% endif %}
+    <form method="post" action="{{ url_for('auth.logout') }}" class="inline">
+      <button type="submit" class="linkbtn">Sign out ({{ current_user.email }})</button>
+    </form>
+  {% else %}
+    <a href="{{ url_for('auth.login') }}">Sign in</a>
+    <a href="{{ url_for('auth.signup') }}">Sign up</a>
+  {% endif %}
+</nav>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

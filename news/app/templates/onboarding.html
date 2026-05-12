@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Pick your algorithm{% endblock %}
+{% block content %}
+<div class="onboarding">
+  <h1>Pick a starting algorithm</h1>
+  <p class="muted">You can fully customize this later on the Your Algo page. Pick whichever sounds closest.</p>
+  <form method="post" class="presets">
+    {% for key, p in presets.items() %}
+      <label class="preset-card">
+        <input type="radio" name="preset" value="{{ key }}" {% if key == 'balanced' %}checked{% endif %} />
+        <div>
+          <h3>{{ p.label }}</h3>
+          <p class="muted">{{ p.description }}</p>
+        </div>
+      </label>
+    {% endfor %}
+    <button type="submit" class="primary">Use this algorithm</button>
+  </form>
+</div>
+{% endblock %}

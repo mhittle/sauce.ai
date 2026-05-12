@@ -1,0 +1,18 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Overview</h1>
+<div class="stats-grid">
+  <div class="stat"><b>{{ feeds.total or 0 }}</b><span>feeds total</span></div>
+  <div class="stat"><b>{{ feeds.active or 0 }}</b><span>active feeds</span></div>
+  <div class="stat"><b>{{ feeds.errored or 0 }}</b><span>errored feeds</span></div>
+  <div class="stat"><b>{{ pipeline.pending or 0 }}</b><span>articles pending</span></div>
+  <div class="stat"><b>{{ pipeline.classified or 0 }}</b><span>articles classified</span></div>
+  <div class="stat"><b>{{ pipeline.failed or 0 }}</b><span>articles failed</span></div>
+  <div class="stat"><b>{{ today_articles.n }}</b><span>fetched today</span></div>
+  <div class="stat"><b>{{ users.n }}</b><span>users</span></div>
+  <div class="stat"><b>{{ clicks.n }}</b><span>clicks today</span></div>
+  <div class="stat"><b>${{ '%.2f' % llm_today.cost }}</b><span>LLM spend today</span></div>
+  <div class="stat"><b>${{ '%.2f' % llm_month.cost }}</b><span>LLM spend 30d</span></div>
+  <div class="stat"><b>{{ llm_today.articles }}</b><span>articles classified by LLM today</span></div>
+</div>
+{% endblock %}

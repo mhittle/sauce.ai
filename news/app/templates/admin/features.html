@@ -1,0 +1,18 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Feature catalog</h1>
+<p class="muted">These rows drive the toggles on the Your Algo page. Disable a feature to hide it from users.</p>
+{% for f in features %}
+<form method="post" class="feature-edit">
+  <input type="hidden" name="feature_key" value="{{ f.feature_key }}" />
+  <div class="row">
+    <code>{{ f.feature_key }}</code>
+    <input type="text" name="label" value="{{ f.label }}" />
+    <input type="number" name="sort_order" value="{{ f.sort_order }}" min="0" max="999" style="width:5em" />
+    <label><input type="checkbox" name="is_active" {% if f.is_active %}checked{% endif %} /> active</label>
+    <button type="submit">Save</button>
+  </div>
+  <textarea name="description" rows="2">{{ f.description or '' }}</textarea>
+</form>
+{% endfor %}
+{% endblock %}

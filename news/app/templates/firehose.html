@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Firehose{% endblock %}
+{% block content %}
+<div class="firehose" x-data="{ paused: false }">
+  <header class="firehose-header">
+    <h1>Firehose</h1>
+    <p class="muted">Every classified article as it lands. Bars show this feature's value;
+       intensity reflects how much your algorithm cares.</p>
+    <button @click="paused = !paused" x-text="paused ? 'Resume' : 'Pause'"></button>
+  </header>
+
+  <template x-if="!paused">
+    <div id="firehose-feed"
+         hx-get="{{ url_for('firehose.stream') }}"
+         hx-trigger="load, every 4s"
+         hx-swap="innerHTML">
+      <p class="muted">Loading the latest…</p>
+    </div>
+  </template>
+  <template x-if="paused">
+    <div id="firehose-feed-paused" class="muted">Paused — click Resume to keep streaming.</div>
+  </template>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Unit tests</h1>
+<p class="muted">Runs the bundled <code>pytest</code> suite from <code>tests/</code> using this app's Python interpreter.</p>
+<form method="post">
+  <button type="submit" class="primary">Run tests</button>
+</form>
+{% if output is not none %}
+  <h2 class="{{ 'ok' if success else 'fail' }}">{{ 'PASSED' if success else 'FAILED' }}</h2>
+  <pre class="code">{{ output }}</pre>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="admin">
+  <aside class="admin-nav">
+    <h2>Admin</h2>
+    <a href="{{ url_for('admin.index') }}">Overview</a>
+    <a href="{{ url_for('admin.feeds') }}">Feeds</a>
+    <a href="{{ url_for('admin.content') }}">Content</a>
+    <a href="{{ url_for('admin.users') }}">Users</a>
+    <a href="{{ url_for('admin.traffic') }}">Traffic</a>
+    <a href="{{ url_for('admin.features') }}">Features</a>
+    <a href="{{ url_for('admin.logs') }}">Logs</a>
+    <a href="{{ url_for('admin.tests') }}">Tests</a>
+  </aside>
+  <section class="admin-main">
+    {% block admin %}{% endblock %}
+  </section>
+</div>
+{% endblock %}

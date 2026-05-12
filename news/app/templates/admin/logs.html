@@ -1,0 +1,17 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Pipeline logs (most recent 200)</h1>
+<table class="data-table">
+  <thead><tr><th>Time</th><th>Job</th><th>Level</th><th>Message</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr class="log-{{ r.level }}">
+      <td class="muted">{{ r.ts.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      <td>{{ r.job }}</td>
+      <td>{{ r.level }}</td>
+      <td><code>{{ r.message }}</code></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

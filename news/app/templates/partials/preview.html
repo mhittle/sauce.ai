@@ -1,0 +1,21 @@
+<h3>Top 8 right now</h3>
+{% if preview %}
+<ol class="preview-list">
+  {% for p in preview %}
+  <li>
+    <div class="preview-meta">
+      <span class="source">{{ p.source_name }}</span>
+      <span class="lean-dot" style="--lean: {{ p.political_lean }}"></span>
+      <span class="score">{{ '%.2f' % p.score }}</span>
+    </div>
+    <a href="#" title="{{ p.title }}">{{ p.title|truncate(120) }}</a>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="muted">No articles match these settings yet.</p>
+{% endif %}
+<details>
+  <summary>Generated code</summary>
+  <pre class="code">{{ expression }}</pre>
+</details>
