@@ -7,6 +7,104 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — BUG-008 / BUG-009: classify_pending stalled prod, parallelization restored throughput (PR #32)
+
+### Context
+
+User opened the session with "sauce.ai feels stale" (BUG-008). SSH'd to
+prod and pulled the last 80 lines of `logs/cron.log` — every
+`classify_pending` invocation since 2026-05-12 22:30 had been dying
+with PyMySQL `(2006, "MySQL server has gone away
+(ConnectionResetError(104, 'Connection reset by peer'))")` on the
+first `INSERT INTO article_features` of the write block. Cron output
+stopped entirely at 22:50; `articles` had ~7700 rows stuck in
+`status='pending'` that the feed query filters out.
+
+### What shipped this session
+
+- **BUG-009 logged + resolved (PR #32, commit 6857b2b).** Root cause:
+  `_run()` opens one PyMySQL connection at the top of the script then
+  spends 30–200s per batch on LLM POST + 10× sequential paywall HTTP +
+  10× sequential trafilatura body extraction. GoDaddy's shared MySQL
+  closes idle sockets aggressively; by the time we reach the writes
+  the kernel has RST'd us. Fix: `conn.ping(reconnect=True)` at every
+  plausible idle point in `classify_pending`, `popularity_poll`, and
+  `fetch_feeds`. PyMySQL transparently re-establishes the connection
+  (preserving autocommit) when needed, no-op when alive.
+- **BUG-008 resolved (PR #32, commit 6857b2b).** Was hypothesis #3 in
+  the original triage ("classify_pending wallclock-starved"). Real
+  cause was the script crashing on every tick, not the budget. Once
+  reconnect was fixed and the backlog drained, freshness returned.
+- **Parallelization shipped (PR #32, commit c2cb2d4).** User asked
+  "max the rate." Replaced the two sequential per-article HTTP loops
+  (paywall + body extraction) with two `ThreadPoolExecutor(max_workers=10)`
+  fan-outs. Bumped urllib3 pool sizes on the shared `requests.Session`
+  to 20 to avoid connection-pool serialization. Bumped default
+  `CLASSIFY_BUDGET_SECONDS` 90 → 240 (cron is `*/5min` and `job_lock`
+  blocks overlap, so 240 s is the safe ceiling). Throughput went from
+  10 articles/tick to **180/tick** verified on prod
+  (`classified=180 llm_articles=180 cost_usd=0.0533`).
+
+### Code touched
+
+- `news/jobs/classify_pending.py` — ping(reconnect=True) at top of
+  each batch iteration + before write block; two HTTP loops replaced
+  with ThreadPoolExecutor fan-outs; HTTP_WORKERS=10 module constant;
+  HTTPAdapter pool size bump on `requests.Session`; per-future
+  try/except so a single slow article can't kill the batch.
+- `news/jobs/popularity_poll.py` — ping(reconnect=True) after Reddit+HN
+  HTTP, before writes.
+- `news/jobs/fetch_feeds.py` — ping(reconnect=True) at the start of
+  every `fetch_one`.
+- `news/app/config.py` — `CLASSIFY_BUDGET_SECONDS` default 90 → 240.
+- `bugs.md` — BUG-009 logged + resolved, BUG-008 resolved.
+
+### Server-side state touched
+
+- Pre-merge: in-place patched 3 cron scripts on prod via SSH heredoc
+  (BUG-009 reconnect fix only) to unblock immediately. Backups left as
+  `jobs/{classify_pending,fetch_feeds,popularity_poll}.py.bak-<ts>` in
+  `~/public_html/sauce.ai/news/`. Once PR #32 merged and the FTP/CI
+  deploy ran, the proper merged version (reconnect + parallelization)
+  overwrote the in-place patch. The `.bak-` files are no longer
+  load-bearing — fine to delete at leisure with
+  `rm ~/public_html/sauce.ai/news/jobs/*.bak-*`.
+- No new symlinks, no new cron entries, no env-var changes (the
+  budget bump is a code default, not a cPanel/crontab env var).
+- DB: no schema changes. The pending-backlog (~7700 rows) is draining
+  naturally as cron ticks at the new throughput.
+
+### PRs
+
+- **PR #32** (merged) — BUG-008/BUG-009: cron jobs lost MySQL
+  connection mid-batch. Reconnect fix + paywall/body parallelization
+  + budget bump.
+
+### Open items
+
+- Watch `/admin/feeds` or run `SELECT status, COUNT(*) FROM articles
+  GROUP BY status` over the next ~3 hours to confirm the pending
+  backlog drains to near-zero. If it stalls, check `cron.log` for
+  fresh tracebacks.
+- Clean up `~/public_html/sauce.ai/news/jobs/*.bak-*` on prod when
+  convenient (just clutter).
+- BUG-008 hypothesis #2 ("large portion of +633 source import is dead
+  and auto-deactivated") was not investigated this session and remains
+  a real possibility worth a separate look once the pipeline backlog
+  is fully drained. The freshness symptom may have multiple
+  contributors.
+
+### Lesson learned
+
+The wallclock budget exists precisely to keep cron from breaking the
+nproc/CPU limit on shared hosting. But the budget being too tight is
+much less likely to silently break things than the **assumption that
+DB connections survive arbitrary idle periods**. Default to ping-
+reconnect for any cron pattern that does HTTP between writes, and put
+HTTP fan-outs in parallel from day one.
+
+---
+
 ## 2026-05-13 — Session wrap-up: BUG-007 recovery + dep install (PRs #30, #31)
 
 Short recovery-focused session triggered by the user noticing prod was

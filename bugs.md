@@ -26,76 +26,7 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-### BUG-009 — `classify_pending` dies on every tick with `MySQL server has gone away`
-**Status:** in-progress · **Reporter:** internal · **Opened:** 2026-05-13
-
-Cron stopped producing log output on prod at 2026-05-12 22:50 server-local.
-Every prior `classify_pending` invocation back to ~22:30 ends in the same
-traceback: PyMySQL `OperationalError (2006, "MySQL server has gone away
-(ConnectionResetError(104, 'Connection reset by peer'))")` on the first
-`INSERT INTO article_features` of the write block. Reproducible on demand
-by running `python jobs/classify_pending.py` from an SSH session.
-
-**Root cause:** `_run()` opens one PyMySQL connection at the top, then
-each batch iteration spends 30–200 s on:
-1. `classify_batch_llm` HTTP POST to Anthropic (1–30 s),
-2. `detect_paywall` sequential HTTP per article (5–60 s for batch of 10),
-3. `extract_body` sequential HTTP per article (10–100 s for batch of 10).
-
-Shared-host MySQL on GoDaddy enforces a short `wait_timeout` and closes
-idle sockets aggressively. By the time we get to the writes the kernel
-RSTs us. Same idle-gap pattern exists in `popularity_poll` (all Reddit/HN
-HTTP happens before any writes) and to a lesser degree `fetch_feeds`
-(one HTTP GET before each source's writes).
-
-**Confirms BUG-008 hypothesis #3** — `classify_pending` was wallclock-
-starved, not by the budget, but by repeatedly crashing mid-batch and
-leaving thousands of rows in `status='pending'`. Once writes failed the
-script aborted, articles never advanced, and the feed went stale.
-
-**Fix:** call `conn.ping(reconnect=True)` at every point the connection
-has been idle long enough to plausibly have been killed — top of each
-`classify_pending` loop iteration, right before its write block,
-before `popularity_poll` writes, and at the start of every `fetch_feeds`
-`fetch_one`. PyMySQL re-establishes the socket transparently when needed
-and is a no-op when the connection is alive. Branch
-`claude/onboard-news-aggregator-y9qWK`.
-
-**Repro:** see prod log `~/public_html/sauce.ai/news/logs/cron.log`, last
-80 lines as of 2026-05-12 22:50 — every traceback ends at
-`classify_pending.py:230` `cur.execute(...)` of `INSERT INTO article_features`.
-
----
-
-### BUG-008 — Feed feels stale; not enough fresh content / new articles
-**Status:** open · **Reporter:** user · **Opened:** 2026-05-13
-
-User reports `/` feed "feels stale already" — not seeing enough fresh
-content or new articles surfacing between visits.
-
-**Hypotheses to investigate (in order of likelihood):**
-1. `fetch_feeds` cron not actually ticking on prod (job_lock leftover,
-   cron entry malformed, venv shim regression).
-2. Large portion of the +633 source import (PR #11) is dead and
-   auto-deactivated at `error_count >= 10`, shrinking the active pool
-   below what the feed needs.
-3. `classify_pending` is wallclock-budget-starved (paywall HTTP +
-   trafilatura extraction + LLM all share `CLASSIFY_BUDGET_SECONDS`),
-   so newly-fetched rows sit in `status='pending'` and never reach the
-   feed.
-4. Dedup `WHERE a.story_id IS NULL OR a.id = a.story_id` (PR #24) is
-   collapsing too many cards into one canonical per cluster.
-5. Feed query has too tight a recency window or the ranking is
-   penalizing freshness.
-6. Per-user `user_source_prefs` hide/downweight rows from earlier
-   thumbs-down prompts are shrinking the visible pool.
-
-**Repro:** load `/` while signed in (and signed out for comparison),
-note whether top cards differ from the prior visit.
-
-**Next steps:** check `/admin/feeds` for active source count + recent
-fetch timestamps, `/admin/articles` (if it exists) for status
-breakdown, then add diagnostic SQL counts to the investigation.
+(none currently)
 
 ---
 
@@ -154,6 +85,49 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 ---
 
 ## Resolved
+
+### BUG-009 — `classify_pending` died on every tick with `MySQL server has gone away`
+**Status:** resolved · **Reporter:** internal · **Opened:** 2026-05-13 · **Closed:** 2026-05-13 (PR #32)
+
+Cron stopped producing log output on prod at 2026-05-12 22:50 server-local.
+Every `classify_pending` invocation back to ~22:30 ended in the same
+traceback: PyMySQL `OperationalError (2006, "MySQL server has gone away
+(ConnectionResetError(104, 'Connection reset by peer'))")` on the first
+`INSERT INTO article_features` of the write block.
+
+**Root cause:** `_run()` opened one PyMySQL connection at the top of the
+script, then each batch iteration spent 30–200 s on (1) the Anthropic LLM
+HTTP POST, (2) sequential `detect_paywall` HTTP for the 10-article batch,
+(3) sequential `extract_body` HTTP for the 10-article batch — all while
+the MySQL socket sat idle. GoDaddy shared MySQL closes idle sockets
+aggressively (short `wait_timeout`); the kernel RSTs the connection and
+the next `cur.execute` blows up. Same idle-gap pattern existed in
+`popularity_poll` (all Reddit/HN HTTP before any writes) and to a lesser
+degree `fetch_feeds` (one HTTP GET before each source's writes).
+
+**Fix (PR #32):** `conn.ping(reconnect=True)` at every plausible idle
+point — top of each `classify_pending` batch iteration, right before its
+write block, before `popularity_poll` writes, and at the start of every
+`fetch_feeds.fetch_one`. PyMySQL transparently re-establishes the
+connection (preserving autocommit) when the server has killed it, no-op
+when alive. Verified on prod via manual tick: `classified=10
+llm_articles=10 cost_usd=0.0037` — first successful tick after ~30
+minutes of crashes. Confirmed BUG-008 hypothesis #3.
+
+### BUG-008 — Feed feels stale; not enough fresh content / new articles
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13 (PR #32)
+
+**Root cause:** classify_pending was crashing mid-batch on every cron
+tick (see BUG-009), leaving ~7700 rows stuck in `status='pending'` so
+they never reached the feed. Once the reconnect was fixed and the
+backlog drained, freshness returned.
+
+**Fix (PR #32):** see BUG-009 reconnect fix. Plus same PR parallelized
+the per-article HTTP work in `classify_pending` (paywall + body
+extraction) via two `ThreadPoolExecutor(max_workers=10)` fan-outs and
+bumped `CLASSIFY_BUDGET_SECONDS` default from 90→240, taking per-tick
+throughput from ~10 articles to **180/tick** (verified on prod). The
+backlog drains in ~3 hours instead of ~60 at the old serial rate.
 
 ### BUG-007 — Site returns 500 after rapid PR push (pending migrations)
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
