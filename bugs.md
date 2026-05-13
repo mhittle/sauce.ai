@@ -26,7 +26,23 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-010 — Per-feature ranking bars on cards don't reflect feature values
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-13
+
+At the bottom of every feed card there's a graphic that should show
+where the article ranks on each ranking feature, but it isn't working —
+every card looks the same regardless of the article's actual feature
+values.
+
+**Repro:** load `/`, scroll through cards, observe the per-feature bar
+graphic at the bottom of each card. All cards render identical bars
+instead of varying with the article's `article_features` row.
+
+**Investigation needed:** check `app/templates/partials/feed_cards.html`
+(or wherever the bars are rendered) and the feed query in
+`app/routes/feed.py` — bars likely either (a) not being passed the
+per-article feature values, (b) reading from a placeholder, or (c)
+CSS clamping the width to a constant.
 
 ---
 
