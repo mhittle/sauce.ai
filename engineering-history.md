@@ -7,6 +7,45 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — BUG-010: feature bars on feed cards rendered identically
+
+User reported "at the bottom of every card is a graphic that is supposed
+to show where they rank on each feature, but it doesn't actually work,
+so they're all the same."
+
+### Root cause
+
+Template/CSS contract mismatch. `app/templates/partials/feed_cards.html`
+set the per-feature bar value via inline `style="width: NN%"`, but
+`app/static/style.css:99` makes `.feature-bars i` a flex child with
+`flex: 1` — flex children ignore `width` in favor of `flex-grow`, so
+the inline value was discarded. The visible fill is actually driven by
+the next CSS rule (line 100): `linear-gradient(to right, var(--accent)
+var(--w, 50%), #e3e3df var(--w, 50%))`. Nothing in the template ever
+set `--w`, so every bar rendered at the `50%` fallback.
+
+### Fix
+
+One-template change: write the value as `style="--w: NN%"` instead of
+`style="width: NN%"`. Also added the numeric value to the `title`
+attribute so a hover readout shows the actual feature score.
+
+### Code touched
+
+- `app/templates/partials/feed_cards.html` — `width:` → `--w:` on all
+  five bars; title tooltip enriched with the numeric value.
+
+### Server-side state touched
+
+None. Restart the Python App after deploy so Jinja reloads cleanly,
+though template autoreload usually handles it.
+
+### PR
+
+- **#TBD** — Fix BUG-010 (draft).
+
+---
+
 ## 2026-05-13 — BUG-008 / BUG-009: classify_pending stalled prod, parallelization restored throughput (PR #32)
 
 ### Context
