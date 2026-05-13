@@ -28,7 +28,7 @@ shipped.
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | backlog |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
-| 8 | 6 | backend, new-feature, ui | In-app reader view (body extraction + sauce.ai/read/<id>) | backlog |
+| 8 | 6 | backend, new-feature, ui | In-app reader view (body extraction + sauce.ai/read/<id>) | in-progress |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
@@ -242,7 +242,7 @@ Could ship before the full dossier page as a faster wedge into the
 Depends on Article deduplication (story_id). Pairs with Story dossier.
 
 ### In-app reader view (with body extraction)
-**Priority:** 8 · **LOE:** 6 · **Category:** backend, new-feature, ui · **Status:** backlog
+**Priority:** 8 · **LOE:** 6 · **Category:** backend, new-feature, ui · **Status:** in-progress
 
 `sauce.ai/news/read/<article_id>` renders the article body inside our
 own typography and chrome. Pipeline change: `classify_pending` (or a

@@ -7,6 +7,91 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — In-app reader view + body extraction (PR #21)
+
+Roadmap Pri 8, LOE 6. Article body is extracted post-fetch into a new
+`article_bodies` table and rendered at `/read/<id>` inside our own
+typography. Foundational unlock — body text feeds future summary, TTS,
+dedup-on-body, and search work.
+
+### What shipped
+
+- **New `article_bodies` table** (separate from `articles` to keep the
+  feed-join row lean). Columns: `body_text`, `body_html`, `lead_image`,
+  `author`, `word_count`, `extractor`, `status` (`ok|empty|blocked|
+  error`), `extracted_at`. Migration
+  `seed/migrations/2026-05-13-article-bodies.sql`.
+- **`app/extractor.py`** — pure `extract_body(url, *, session, timeout)`
+  returns an `ExtractResult` dict. Uses `trafilatura` (lazy import) for
+  body + metadata, with a 1 MB HTTP cap and a `MIN_WORDS=60` floor (below
+  that → `status='empty'`). HTTP 4xx/5xx → `blocked`; network errors →
+  `error`.
+- **`jobs/classify_pending.py`** runs extraction immediately after
+  paywall scoring, sharing the `requests.Session`. Articles already
+  flagged paywall=1.0 are skipped (the fetch would just record an
+  `error` row). All steps share the existing `CLASSIFY_BUDGET_SECONDS`
+  wallclock budget.
+- **`/read/<id>` route** (`app/routes/reader.py`, new blueprint). Joins
+  `articles + sources + article_features + article_bodies` and renders
+  `templates/reader.html` — large serif title, hero image (lead_image
+  falling back to thumbnail), paragraphs split on newlines, ~min-read
+  stat, fallback message keyed off `body_status`, "Read at <source>"
+  footer link that fires the existing click-tracking POST.
+- **Entry point on cards** — single `Read →` link appended to
+  `card-meta` in `feed_cards.html`, sitting alongside the thumbs from
+  PR #19. Default click behaviour on title/thumbnail anchors is
+  unchanged.
+- **Nightly prune** in `maintenance.py` deletes from `article_bodies`
+  older than `BODY_RETENTION_DAYS` (default 30, env-overrideable).
+  Independent of `ARTICLE_RETENTION_DAYS` so bodies can be tightened
+  without losing feed history. Bookmark-aware retention can override
+  later when `/saved` lands.
+- **Safety**: body_html is captured but the template renders only
+  `body_text` split into paragraphs. trafilatura's html output isn't
+  sanitized for direct injection; bleach pass deferred until needed.
+
+### Code touched
+
+- `app/extractor.py` (new).
+- `app/routes/reader.py` (new), `app/__init__.py` (register blueprint).
+- `app/templates/reader.html` (new), `app/templates/partials/feed_cards.html`
+  (one-line Read link in card-meta).
+- `app/static/style.css` (appended `.reader-*` rules + `.card-meta
+  .reader-link`).
+- `app/config.py` (`BODY_RETENTION_DAYS`).
+- `jobs/classify_pending.py` (extraction step + INSERT).
+- `jobs/maintenance.py` (body prune).
+- `seed/schema.sql` (article_bodies),
+  `seed/migrations/2026-05-13-article-bodies.sql`.
+- `requirements.txt` (`trafilatura==1.12.2`).
+- `tests/test_extractor.py` (10 cases, stubs trafilatura via
+  `monkeypatch.setitem(sys.modules, ...)`).
+- `INSTALL.txt` §10.
+
+### Server-side state touched
+
+- **Migration pending**: run
+  `seed/migrations/2026-05-13-article-bodies.sql` via phpMyAdmin before
+  the next classify_pending cycle, otherwise the new INSERT errors.
+- **New dependency**: `trafilatura==1.12.2`. `pip install -r
+  requirements.txt` on cPanel after deploy. Restart the Python App
+  once the migration and dependency are in place.
+
+### Open items
+
+- Per-user setting "card click goes to reader vs. source" is the next
+  slice of this theme — now that thumbs (#19) have landed alongside,
+  the card body has the surface area for it.
+- `body_html` is stored but unused by the template. A bleach pass +
+  formatting-preserving render is a follow-up.
+- Bookmark-aware retention waits on `/saved`.
+
+### PR
+
+- **#21** In-app reader view + body extraction (draft)
+
+---
+
 ## 2026-05-13 — Thumbs up/down on cards + signal foundation (PR #19)
 
 Shipping the cheapest explicit reader signal (thumbs) and laying the

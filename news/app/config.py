@@ -22,6 +22,7 @@ class Config:
     CLASSIFIER_VERSION = os.environ.get("CLASSIFIER_VERSION", "v1")
 
     ARTICLE_RETENTION_DAYS = int(os.environ.get("ARTICLE_RETENTION_DAYS", "30"))
+    BODY_RETENTION_DAYS = int(os.environ.get("BODY_RETENTION_DAYS", "30"))
     FEED_FETCH_BATCH = int(os.environ.get("FEED_FETCH_BATCH", "20"))
     CLASSIFY_BUDGET_SECONDS = int(os.environ.get("CLASSIFY_BUDGET_SECONDS", "90"))
     CLASSIFY_BATCH_LIMIT = int(os.environ.get("CLASSIFY_BATCH_LIMIT", "200"))
