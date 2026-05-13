@@ -25,7 +25,7 @@ shipped.
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
-| 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | in-progress |
+| 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | done |
 | 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
 | 7 | 7 | ops, new-feature | Automated source discovery — social firehoses (Mastodon, Bluesky, X/Twitter) | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
@@ -73,7 +73,7 @@ Open questions:
   request.
 
 ### Story dossier
-**Priority:** 9 · **LOE:** 6 · **Category:** backend, ui, new-feature, algo · **Status:** in-progress
+**Priority:** 9 · **LOE:** 6 · **Category:** backend, ui, new-feature, algo · **Status:** done (v1, PR #43)
 
 `sauce.ai/news/story/<story_id>` aggregates every article in a
 deduplicated story group and presents them across the political-lean
