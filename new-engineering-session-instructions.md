@@ -22,7 +22,7 @@ After reading you'll know:
 - What's currently running in production and where the server-side artifacts
   live
 
-## Step 2 — Read `roadmap.md` and `bugs.md`
+## Step 2 — Read `roadmap.md`, `bugs.md`, and `manual-actions.md`
 
 `roadmap.md` is the backlog of future sprints, features, and projects.
 Each item is rated on Priority (1–10), LOE (1–10), and Category
@@ -33,12 +33,22 @@ Each item is rated on Priority (1–10), LOE (1–10), and Category
 `attempted` sections — the attempted ones describe live workarounds and
 ongoing risks (e.g., the CloudLinux shim symlinks).
 
-## Step 3 — Ask the user what to work on
+`manual-actions.md` is the tracker for outstanding server-side actions
+(DB migrations, cron entries, symlinks, env-var changes) that must be
+performed manually on prod. Read the **Open** section — anything listed
+there is load-bearing for features that have already been merged.
+
+## Step 3 — Ask the user what to work on, and whether any open manual actions are done
 
 Before doing anything else, ask:
 
 > "Want to pick something off `roadmap.md`, or are we working on something
 > else this session?"
+
+If `manual-actions.md` has any **Open** entries, ask the user in the
+same turn whether each has been completed. For any the user confirms
+done, move the entry to **Completed** with today's date in your first
+commit. Don't silently assume — explicit confirmation per item.
 
 If they pick from the roadmap, confirm the item and update its status to
 `in-progress` in `roadmap.md` as part of your first commit. If they have
@@ -263,8 +273,10 @@ Don't assume; let them decide.
 
 ## tl;dr for the impatient
 
-1. `cat engineering-history.md`, `cat roadmap.md`, `cat bugs.md` (entirely).
-2. Ask the user: "Pick from the roadmap, or something else?"
+1. `cat engineering-history.md`, `cat roadmap.md`, `cat bugs.md`,
+   `cat manual-actions.md` (entirely).
+2. Ask the user: "Pick from the roadmap, or something else?" AND
+   "Are the items in `manual-actions.md` Open section done yet?"
 3. Log any user-reported bugs into `bugs.md` immediately, before fixing.
 4. Do the work on a feature branch, open a draft PR.
 5. If other Claude sessions are in flight (check `git branch -r`),

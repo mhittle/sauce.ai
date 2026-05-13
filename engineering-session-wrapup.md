@@ -126,7 +126,24 @@ If the session touched the production server:
 - Confirm any rotated secrets are documented as rotated (without writing
   the values down anywhere persistent).
 
-### 6. Final summary to the user
+### 6. Manual-actions tracker
+
+If this session produced any new prod action the user must run manually
+(DB migration, cron entry, symlink, env-var change, file restore):
+
+- Append a new entry to the **Open** section of `manual-actions.md`
+  with the **full command/SQL inline** — not just a file path. The doc
+  is the canonical, copy-paste-ready source of truth.
+- Also paste the exact same command/SQL into the chat in this session,
+  so the user can act on it immediately without opening any files.
+- Reference the migration filename (if any) in the entry, but do not
+  rely on the file alone — entries with only a path are not acceptable.
+
+If the session **completed** any previously-Open manual action (the
+user confirmed it was run), move that entry to the **Completed**
+section with today's date.
+
+### 7. Final summary to the user
 
 A short message: what shipped, what's open, recommended next session
 focus. Two to four sentences.
@@ -135,7 +152,7 @@ If a PR is in draft awaiting merge, mention it. If there's a server-side
 action the user needs to take (e.g., restart the Python App, run a
 migration, rotate a key), call it out explicitly.
 
-### 7. Stop
+### 8. Stop
 
 Don't take new work after wrap-up unless the user reopens the session.
 The next session will read `engineering-history.md` and pick up cleanly.
@@ -148,8 +165,12 @@ Don't:
 
 - Skip the history entry because "nothing important happened" — the
   decision *that* nothing important happened is itself worth logging.
-- Update one tracking doc and forget the others (history, roadmap, bugs
-  must all stay in sync).
+- Update one tracking doc and forget the others (history, roadmap,
+  bugs, manual-actions must all stay in sync).
+- Ship a manual prod action without (a) logging it in
+  `manual-actions.md` with full inline SQL/commands and (b) pasting
+  the exact same SQL/commands into chat. A file path alone is not
+  enough.
 - Leave the user a wall-of-text summary. Three sentences is plenty.
 - Self-trigger wrap-up prematurely (before any real work has happened)
   — the prompt is for *stale* sessions, not short ones.

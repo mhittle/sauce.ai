@@ -1,0 +1,95 @@
+# sauce.ai/news — Manual prod actions tracker
+
+Outstanding server-side actions that must be performed manually on prod
+(usually via phpMyAdmin or cPanel) before a feature works end-to-end.
+**Reviewed at the start of every engineering session** per
+`new-engineering-session-instructions.md` — the agent asks the user
+whether each open item has been completed.
+
+When a new manual action is required (e.g. DB migration, cron entry,
+symlink, env-var change), the session that ships the feature must:
+
+1. Append a new entry to the **Open** section below, with the **full
+   command/SQL inline** (not just a path to a file), so it's
+   copy-paste-ready straight from this doc.
+2. Also paste the same command/SQL into chat so the user can act on it
+   immediately without opening any files.
+3. After the user confirms completion, move the entry to **Completed**
+   with the completion date.
+
+If the migration also lives as a `news/seed/migrations/*.sql` file,
+reference the filename in the entry — but the entry must still carry the
+full SQL inline. The file is for fresh installs / replay; this doc is
+for the live prod database.
+
+## Conventions
+
+Each entry: title, status, opened date, related PR, exact command,
+where to run it, verification step, and (when done) completion date.
+
+Status values: `open` (action required) · `completed` (verified done).
+
+Sort **Open** newest-first. **Completed** newest-first.
+
+---
+
+## Open
+
+### 2026-05-13 — Migration: user_signals + user_source_prefs
+**Status:** open · **PR:** #19 · **Opened:** 2026-05-13 ·
+**File reference:** `news/seed/migrations/2026-05-13-signals.sql`
+
+Adds the two tables that back the thumbs up/down feature: `user_signals`
+(generic per-user signal stream, sized for the full Signal Learning
+vocabulary) and `user_source_prefs` (per-user-source weight, 0 = hidden,
+0.5 = downweighted, default 1.0). Until this runs on prod, the
+`POST /signal/<id>/<type>` and `POST /signal/source/<id>` route INSERTs
+will error.
+
+**Where to run:** phpMyAdmin → SQL tab → database `lt1ih6uyy2z6_news`.
+
+**SQL:**
+
+```sql
+CREATE TABLE IF NOT EXISTS user_signals (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id     INT UNSIGNED NOT NULL,
+  article_id  BIGINT UNSIGNED NOT NULL,
+  signal_type VARCHAR(32) NOT NULL,
+  value       FLOAT DEFAULT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_signal_binary (user_id, article_id, signal_type),
+  KEY idx_signal_user_type_ts (user_id, signal_type, created_at),
+  KEY idx_signal_article_type (article_id, signal_type),
+  CONSTRAINT fk_signal_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_signal_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_source_prefs (
+  user_id    INT UNSIGNED NOT NULL,
+  source_id  INT UNSIGNED NOT NULL,
+  weight     FLOAT NOT NULL DEFAULT 1.0,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, source_id),
+  CONSTRAINT fk_usp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_usp_source FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Verify:**
+
+```sql
+SHOW TABLES LIKE 'user_signals';
+SHOW TABLES LIKE 'user_source_prefs';
+```
+
+Both should return one row.
+
+**Post:** Restart the Python App (cPanel → Setup Python App → Restart).
+
+---
+
+## Completed
+
+(none yet)
