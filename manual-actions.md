@@ -35,6 +35,63 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-13 — Cron entry: daily email digest
+**Status:** open · **PR:** #23 · **Opened:** 2026-05-13
+
+Adds the noon-UTC cron line that runs `jobs/send_digest.py` once a day.
+Safe to add before any users opt in — the job exits as a no-op when no
+candidates match. Skipping this means the digest feature ships but
+never fires until the cron is in place.
+
+**Where to add:** cPanel → "Cron Jobs" → "Add New Cron Job".
+
+**Command** (replace `YOURACCOUNT`):
+
+```
+0 12 * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python send_digest.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+```
+
+**Verify:** After noon UTC the next day, tail `~/public_html/sauce.ai/news/logs/cron.log`
+and look for `digest candidates: N` and `sent=… skipped_empty=… failed=… candidates=…`
+lines.
+
+---
+
+### 2026-05-13 — Migration: users digest columns
+**Status:** open · **PR:** #23 · **Opened:** 2026-05-13 ·
+**File reference:** `news/seed/migrations/2026-05-13-digest.sql`
+
+Adds the three opt-in/tracking columns to `users` that the daily email
+digest needs: `digest_enabled` (0/1 toggle), `digest_unsub_token`
+(40-hex; minted on first opt-in, rotated on unsubscribe),
+`digest_last_sent_at` (resend guard). Until this runs on prod, the
+`POST /account/settings` route will error when a user toggles the
+digest on.
+
+**Where to run:** phpMyAdmin → SQL tab → database `lt1ih6uyy2z6_news`.
+
+**SQL:**
+
+```sql
+ALTER TABLE users
+  ADD COLUMN digest_enabled      TINYINT(1) NOT NULL DEFAULT 0 AFTER created_at,
+  ADD COLUMN digest_unsub_token  CHAR(40) NOT NULL DEFAULT '' AFTER digest_enabled,
+  ADD COLUMN digest_last_sent_at DATETIME DEFAULT NULL AFTER digest_unsub_token,
+  ADD KEY idx_users_digest (digest_enabled, digest_last_sent_at);
+```
+
+**Verify:**
+
+```sql
+SHOW COLUMNS FROM users LIKE 'digest_%';
+```
+
+Should return three rows.
+
+**Post:** Restart the Python App (cPanel → Setup Python App → Restart).
+
+---
+
 ### 2026-05-13 — Migration: user_signals + user_source_prefs
 **Status:** open · **PR:** #19 · **Opened:** 2026-05-13 ·
 **File reference:** `news/seed/migrations/2026-05-13-signals.sql`
