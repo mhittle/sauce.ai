@@ -7,6 +7,66 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — BUG-007: prod 500 from pending migrations (PR #30)
+
+After ~20 PRs merged in rapid succession without testing between,
+`sauce.ai/news` started 500'ing on every request. Two outstanding
+prod migrations from `manual-actions.md` Open section were the cause —
+both reference columns/tables that the merged code paths query at
+request time.
+
+### What happened
+
+- `feed.py:65` and `firehose.py:49` reference `s.owner_id` in the
+  visibility WHERE clause on every page load (anon path included).
+  `sources.owner_id` (PR #29) hadn't been applied to prod, so every
+  reader route 500'd from a "Unknown column 's.owner_id'" SQL error.
+- `feed.py` also LEFT JOINs `user_source_prefs` for signed-in users.
+  `user_signals` + `user_source_prefs` (PR #19) similarly hadn't been
+  applied; would have 500'd the signed-in feed independently.
+
+### What shipped
+
+- BUG-007 logged in `bugs.md` with status `in-progress` immediately
+  on report (per the session-start protocol), then resolved after the
+  fix landed.
+- Both migrations applied to `lt1ih6uyy2z6_news` via phpMyAdmin;
+  Python App restarted; site recovered.
+- Both entries moved from Open → Completed in `manual-actions.md`
+  with the applied SQL inline.
+
+### Process learning
+
+The lifecycle hook from PR #22 worked exactly as designed — the
+migrations were logged in `manual-actions.md` the moment each PR
+landed. The gap was that nobody (user or session) actually *ran*
+them between merges, so the queue accumulated and the next deploy
+went live referencing columns that didn't exist. For high-PR runs:
+either run each migration before merging its PR, or batch and run
+them with a single Python App restart at the end. Don't trust
+"will run later" — `manual-actions.md` Open is a load-bearing
+queue, not a memo.
+
+### Code touched
+
+- `bugs.md` — BUG-007 entry (added open → moved to resolved).
+- `manual-actions.md` — two entries moved Open → Completed with
+  applied-date and applied SQL inline.
+
+### Server-side state touched
+
+- Prod DB `lt1ih6uyy2z6_news`: `sources.owner_id` column +
+  `idx_sources_owner` index + `fk_sources_owner` FK added;
+  `user_signals` and `user_source_prefs` tables created.
+- Python App restarted via cPanel.
+
+### PR
+
+- **#30** Log BUG-007 + tracking-doc updates (draft, ready to mark
+  ready-for-review).
+
+---
+
 ## 2026-05-13 — Article deduplication across sources (PR #24)
 
 Roadmap item Pri 8 / LOE 7. Surfaces a single canonical card per "story

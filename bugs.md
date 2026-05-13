@@ -26,33 +26,7 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-### BUG-007 — Site returns 500 after rapid PR push (≈20 PRs, untested between)
-**Status:** in-progress · **Reporter:** user · **Opened:** 2026-05-13
-
-User reports `sauce.ai/news` is now returning a 500 on every request after
-pushing roughly 20 PRs in succession without testing in between. Most likely
-culprits given recent work:
-
-1. **Missing prod DB migrations.** `manual-actions.md` Open section lists
-   two outstanding migrations that the merged code paths reference at
-   query time:
-   - `sources.owner_id` (PR #29) — `feed.py` and `firehose.py` JOIN/SELECT
-     on this column for every page load. Missing column → every reader
-     route 500s.
-   - `user_signals` + `user_source_prefs` (PR #19) — `feed.py` LEFT JOINs
-     `user_source_prefs` for signed-in users.
-   Either alone is enough to take the feed pages down.
-2. **`trafilatura` dependency** (PR #21) — only used in
-   `classify_pending`, shouldn't affect web requests.
-3. **`article_bodies` table** (PR #21) — only joined in `/read/<id>`,
-   shouldn't affect the home feed.
-4. cPanel may have re-scaffolded `passenger_wsgi.py` (BUG-002) or the
-   load-bearing symlinks may have been clobbered (BUG-001) — less likely
-   after a normal CI/CD push, but worth ruling out.
-
-**Repro:** load https://sauce.ai/news/ — returns 500.
-
-**Investigation/fix:** in progress this session.
+(none currently)
 
 ---
 
@@ -111,6 +85,33 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 ---
 
 ## Resolved
+
+### BUG-007 — Site returns 500 after rapid PR push (pending migrations)
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
+
+After merging ~20 PRs in succession without testing between them,
+`sauce.ai/news` started returning 500 on every request. Two outstanding
+prod migrations from `manual-actions.md` Open section were the cause:
+
+- `sources.owner_id` (PR #29) — `feed.py:65` and `firehose.py:49`
+  reference `s.owner_id` in the visibility WHERE clause on every page
+  load (anon path included), so a missing column alone 500'd every
+  reader route.
+- `user_signals` + `user_source_prefs` (PR #19) — `feed.py` LEFT JOINs
+  `user_source_prefs` for signed-in users; would also have 500'd
+  signed-in feed loads.
+
+**Fix:** ran both migrations in phpMyAdmin against `lt1ih6uyy2z6_news`,
+restarted the Python App from cPanel. Site recovered. Both manual-action
+entries moved to Completed.
+
+**Process learning:** merging code that references a not-yet-applied
+migration is a guaranteed prod break. The `manual-actions.md` tracker
+PR (#22) was created exactly for this and the lifecycle hook was
+followed — the entries were logged when the PRs landed. The gap was
+that the migrations didn't get *run* between merges. For high-PR
+sessions, run the migrations before each merge (or batch them and
+restart once at the end) instead of letting the queue grow.
 
 ### BUG-006 — Article links in feed do nothing on click
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-12 · **Closed:** 2026-05-12
