@@ -1,0 +1,13 @@
+sauce.ai / news — your digest for {{ digest_date }}
+
+{% for a in articles -%}
+{{ loop.index }}. {{ a.title }}
+   {{ a.source_name }}{% if a.category %} · {{ a.category }}{% endif %}{% if a.published_at %} · {{ a.published_at.strftime('%b %-d') }}{% endif %}
+   {{ a.url }}
+{% if a.summary %}   {{ a.summary|striptags|truncate(220) }}
+{% endif %}
+{% endfor %}
+--
+Read more at {{ site_url }}/
+Unsubscribe: {{ unsubscribe_url }}
+Manage settings: {{ site_url }}/account/settings

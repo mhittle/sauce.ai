@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="auth-form">
+  <h1>Settings</h1>
+
+  {% if saved %}<p class="muted">Saved.</p>{% endif %}
+
+  <form method="post">
+    <h2>Daily email digest</h2>
+    <p class="muted">A short morning email of the day's articles, ranked by your active algorithm. Sent once per day. Off by default.</p>
+    <label class="inline">
+      <input type="checkbox" name="digest_enabled" {% if digest_enabled %}checked{% endif %} />
+      Email me a daily digest
+    </label>
+    {% if digest_last_sent_at %}
+      <p class="muted">Last sent: {{ digest_last_sent_at.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+    {% endif %}
+    <p><button type="submit" class="primary">Save settings</button></p>
+  </form>
+</div>
+{% endblock %}
