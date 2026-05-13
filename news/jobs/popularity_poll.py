@@ -129,6 +129,10 @@ def _run():
         all_posts += [{**p, "source": "hn"} for p in _fetch_hn(http)]
         logger.info("collected %d posts from external sources", len(all_posts))
 
+        # Reddit + HN fetch can take 30-60s; shared-host MySQL kills idle
+        # sockets in less than that. Reconnect transparently before writes.
+        conn.ping(reconnect=True)
+
         best_for_article = {}  # article_id -> popularity score
         with conn.cursor() as cur:
             for p in all_posts:
