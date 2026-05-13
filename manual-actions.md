@@ -35,7 +35,38 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
+### 2026-05-13 — Migration: story_dossiers (framing-summary cache)
+**Status:** open · **PR:** TBD (story dossier) · **Opened:** 2026-05-13 ·
+**File reference:** `news/seed/migrations/2026-05-13-story-dossiers.sql`
+
+Adds the `story_dossiers` table that caches each story cluster's
+LLM-generated framing summary keyed by canonical `articles.id` and
+invalidated by `member_signature` (sha1 of sorted member ids). The
+`/story/<id>` route writes to this table on the first uncached view per
+signature — without the table, the first dossier-with-framing view 500s.
+Run via phpMyAdmin against `lt1ih6uyy2z6_news` **before merging the
+dossier PR**. Python App restart required after merge so the new
+blueprint registers.
+
+**SQL to run:**
+
+```sql
+CREATE TABLE IF NOT EXISTS story_dossiers (
+  story_id         BIGINT UNSIGNED NOT NULL,
+  member_signature CHAR(40) NOT NULL,
+  summary_text     TEXT NOT NULL,
+  article_count    INT UNSIGNED NOT NULL DEFAULT 0,
+  lean_buckets     VARCHAR(16) NOT NULL DEFAULT '',
+  model            VARCHAR(64) NOT NULL DEFAULT '',
+  generated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (story_id),
+  CONSTRAINT fk_dossier_story FOREIGN KEY (story_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Verify:** `SHOW TABLES LIKE 'story_dossiers';` should return one row.
+
+---
 
 ---
 

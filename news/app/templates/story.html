@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ canonical.title }} — story dossier — sauce.ai/news{% endblock %}
+{% block content %}
+<article class="dossier">
+  <header class="dossier-head">
+    <div class="dossier-meta">
+      <span class="muted">Story dossier · {{ members|length }} source{{ '' if members|length == 1 else 's' }}</span>
+      {% if canonical.category %}<span class="category">{{ canonical.category }}</span>{% endif %}
+    </div>
+    <h1 class="dossier-title">{{ canonical.title }}</h1>
+  </header>
+
+  {% if framing %}
+    <section class="dossier-framing">
+      <h2 class="dossier-framing-label">How coverage differed</h2>
+      <p>{{ framing }}</p>
+    </section>
+  {% elif framing_eligible %}
+    <section class="dossier-framing muted">
+      <p>Framing summary is queued — check back in a moment.</p>
+    </section>
+  {% else %}
+    <section class="dossier-framing muted">
+      <p>Framing summary requires at least {{ framing_min_members }} articles spanning {{ framing_min_buckets }} lean buckets — this cluster is too small.</p>
+    </section>
+  {% endif %}
+
+  <div class="dossier-columns">
+    {% for bucket_key, bucket_label in [('left','Left'), ('center','Center'), ('right','Right')] %}
+      <section class="dossier-col dossier-col-{{ bucket_key }}">
+        <h3 class="dossier-col-head">
+          {{ bucket_label }}
+          <span class="muted">({{ buckets[bucket_key]|length }})</span>
+        </h3>
+        {% if buckets[bucket_key] %}
+          {% for m in buckets[bucket_key] %}
+            <article class="dossier-card">
+              <div class="dossier-card-meta">
+                <a class="source" href="{{ m.url }}" target="_blank" rel="noopener"
+                   onclick="fetch('{{ url_for('feed.click', article_id=m.id) }}', {method:'POST', keepalive:true})">{{ m.source_name }}</a>
+                <span class="lean-dot" style="--lean: {{ m.political_lean or 0.0 }}"
+                      title="article lean {{ '%+.2f' % (m.political_lean or 0.0) }} · outlet lean {{ '%+.2f' % (m.source_lean or 0.0) }}"></span>
+                <span class="muted">{{ m.published_at.strftime('%b %d, %H:%M') if m.published_at else '' }}</span>
+              </div>
+              <h4 class="dossier-card-title">
+                <a href="{{ m.url }}" target="_blank" rel="noopener"
+                   onclick="fetch('{{ url_for('feed.click', article_id=m.id) }}', {method:'POST', keepalive:true})">{{ m.title }}</a>
+              </h4>
+              {% if m.lead %}<p class="dossier-card-lead">{{ m.lead|truncate(360) }}</p>{% endif %}
+              <div class="dossier-card-foot">
+                <a class="reader-link" href="{{ url_for('reader.read', article_id=m.id) }}">Read &rarr;</a>
+              </div>
+            </article>
+          {% endfor %}
+        {% else %}
+          <p class="dossier-empty muted">No coverage from this side.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+</article>
+{% endblock %}

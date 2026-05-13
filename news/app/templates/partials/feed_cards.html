@@ -24,6 +24,10 @@
           </span>
         {% endif %}
         <a class="reader-link" href="{{ url_for('reader.read', article_id=a.id) }}" title="Open in reader">Read &rarr;</a>
+        {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}
+          <a class="dossier-link" href="{{ url_for('story.view', story_id=a.story_id) }}"
+             title="See how this story is covered across the spectrum">+{{ a.cluster_size - 1 }} angle{{ '' if a.cluster_size == 2 else 's' }}</a>
+        {% endif %}
       </div>
       <h2 class="card-title">
         <a href="{{ a.url }}" target="_blank" rel="noopener"

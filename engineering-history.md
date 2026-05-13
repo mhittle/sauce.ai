@@ -7,6 +7,127 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — Story dossier v1 at `/story/<id>` (draft PR)
+
+### Context
+
+Roadmap Pri 9 / LOE 6 — the "killer demo" item from the dossier chain.
+Article deduplication (PR #24) already populates `articles.story_id`,
+so the cluster set exists; this PR builds the user-facing destination.
+
+### What shipped
+
+- **Schema** — new `story_dossiers` table keyed by canonical
+  `articles.id`. Caches the LLM-generated framing summary per
+  cluster-member signature (sha1 of sorted member ids); when the
+  cluster gains/loses a member, the signature shifts and the route
+  regenerates on the next view. Stored fields: `summary_text`,
+  `article_count`, `lean_buckets` ("LCR" subset present), `model`,
+  `generated_at`. Migration at
+  `seed/migrations/2026-05-13-story-dossiers.sql`.
+- **Route** — `GET /story/<int:story_id>` registered as a new
+  `story_bp` blueprint at the root mount. Validates the id is a
+  canonical cluster row (`articles.id == articles.story_id`), loads
+  members from the last 14 days honoring `sources.owner_id` visibility
+  (anon sees only global; signed-in additionally sees own personal
+  feeds), groups by political-lean bucket (`<=-0.2` left, `>=+0.2`
+  right, else center), and renders. Singleton clusters 404 per spec
+  ("single-source stories don't get a dossier").
+- **Framing summary** — new `app/classifier/framing.py` ·
+  `generate_framing(members, *, api_key, model, max_members=12)`.
+  Single Haiku call with a tight system prompt asking for 2-4
+  sentences of neutral framing commentary. Cost-gated on the route
+  side: only fires when `len(members) >= 3 AND distinct lean buckets
+  >= 2`. Cache-by-signature means repeat dossier views are free; only
+  cluster-set changes trigger a new call. Anthropic SDK imported
+  lazily, all failures raised as `LLMUnavailable`; the route catches
+  and renders the page without a summary so a missing API key never
+  500s.
+- **Template** — `templates/story.html`. Serif title, sticky framing
+  panel at top, three-column desktop layout (collapses to one column
+  under 800px). Each card carries source name, lean dot, headline,
+  lead paragraph (prefers `article_bodies.body_text` first paragraph
+  >=40 chars; falls back to `articles.summary`), and a "Read →" link
+  into the in-app reader. The original-source link on the source name
+  + title fires the existing `feed.click` tracking POST.
+- **Feed integration** — `feed_cards.html` gets a "+N angles" pill in
+  the card meta row when `cluster_size > 1`, linking to
+  `/story/{story_id}`. The feed query already exposes `cluster_size`
+  and `story_id` (added with PR #24), so no SQL changes.
+- **CSS** — `.card-meta .dossier-link` pill style + `.dossier-*` rules
+  appended to `style.css`.
+- **Tests** — 22 new across two files:
+  - `tests/test_story.py` (13) — covers 404 paths (unknown id, non-
+    canonical, singleton), two-member render without framing,
+    eligibility threshold (3+ members, 2+ buckets), cache hit on
+    matching signature skips LLM, cache miss on stale signature
+    regenerates, `LLMUnavailable` falls through gracefully, single-
+    bucket cluster skips framing, lean-bucket boundaries, signature
+    stability across order permutations, lead-paragraph fallback.
+  - `tests/test_framing.py` (9) — covers happy path, code-fence
+    stripping, no-api-key / empty-members / API exception /
+    unparseable JSON / empty summary all raising `LLMUnavailable`,
+    member cap, lead truncation. The Anthropic SDK is stubbed via
+    `sys.modules` so the suite still passes without the package
+    installed (matches the existing `feedparser` stub pattern in
+    `test_user_sources.py`).
+  - Full suite: 137 passing on this branch after rebase onto main
+    (was 132 after PR #38; +5 net after deduplication with concurrent
+    work).
+
+### Code touched
+
+- `news/seed/schema.sql` — `story_dossiers` table.
+- `news/seed/migrations/2026-05-13-story-dossiers.sql` — new.
+- `news/app/classifier/framing.py` — new helper.
+- `news/app/classifier/__init__.py` — export `generate_framing`.
+- `news/app/routes/story.py` — new blueprint.
+- `news/app/__init__.py` — register `story_bp` (no url_prefix; route
+  is `/story/<id>` at the root mount).
+- `news/app/templates/story.html` — new.
+- `news/app/templates/partials/feed_cards.html` — `+N angles` link in
+  card meta when `cluster_size > 1`.
+- `news/app/static/style.css` — `.dossier-*` rules + the card pill.
+- `news/tests/test_story.py`, `news/tests/test_framing.py` — new.
+
+### Server-side state touched
+
+- **Migration pending on prod**: run
+  `seed/migrations/2026-05-13-story-dossiers.sql` against
+  `lt1ih6uyy2z6_news` via phpMyAdmin **before merging this PR**. The
+  route's `_get_or_generate_framing` writes to `story_dossiers` on
+  the first uncached view; without the table the first dossier-with-
+  framing view would 500. Tracked in `manual-actions.md` with the
+  inline SQL.
+- No new cron entries, no new env vars, no new symlinks, no new
+  dependencies. Anthropic SDK is already in `requirements.txt`
+  (used by `classify_pending`); framing reuses the same client and
+  API key. Post-merge: restart the Python App so the new blueprint
+  registers.
+
+### Notes for next session
+
+- **Cost shape**: with cache-by-signature, a dossier view is one
+  Haiku call ($0.001-0.003) per cluster-signature transition. A
+  cluster that stops gaining members is effectively free thereafter.
+  No backfill / prewarming job — viewing a dossier is what triggers
+  generation. If popular dossiers see high read traffic on cold
+  clusters, a maintenance.py prewarmer (top-N clusters by
+  cluster_size each night) is the obvious follow-on.
+- **Word-level diff highlights** between headlines (the
+  screenshot-worthy power feature called out in roadmap detail) are
+  deferred. Same with per-cluster trending integration.
+- **Across-the-spectrum in-feed (Pri 7, LOE 3)** is the next
+  natural slice — same `cluster_size` + `story_id` plumbing, but as
+  an inline expander on the feed card rather than a destination
+  page. Effectively free once dossier exists.
+
+### PR
+
+- **PR #TBD** — Story dossier (draft).
+
+---
+
 ## 2026-05-13 — Mobile / responsive polish (PR #40)
 
 ### Context
