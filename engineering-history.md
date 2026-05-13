@@ -7,7 +7,7 @@ section whenever something meaningful happens — see
 
 ---
 
-## 2026-05-13 — Mobile / responsive polish (PR pending)
+## 2026-05-13 — Mobile / responsive polish (PR #40)
 
 ### Context
 
@@ -67,8 +67,9 @@ enough for the new CSS to land.
 
 ### PR
 
-- **Pending** — draft PR opening from
-  `claude/onboard-news-aggregator-j4xIY` with this commit.
+- **#40** Mobile / responsive polish (merged) — CSS-only. No DB
+  change, no cron, no env-var, no pip dep. FTP/CI deploy enough;
+  Python App restart not required.
 
 ### Open items
 

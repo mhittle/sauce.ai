@@ -31,7 +31,7 @@ shipped.
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
-| 7 | 4 | ui | Mobile / responsive polish | in-progress |
+| 7 | 4 | ui | Mobile / responsive polish | done |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
@@ -282,13 +282,6 @@ Approach: per-article click-rate (clicks per impression over rolling 24h)
 normalized to 0..1, max'd with the external signal so unpopular-on-Reddit-but-
 popular-here articles still rank.
 
-### Mobile / responsive polish
-**Priority:** 7 · **LOE:** 4 · **Category:** ui · **Status:** in-progress
-
-The card grid wraps OK on phone widths but the algo editor is a mess, the
-firehose table is a horror, and tap targets are small. Audit each page on
-375px width, fix.
-
 ### Article save / bookmark
 **Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
 
@@ -392,6 +385,15 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-13
 
+- **Mobile / responsive polish** — Pri 7, LOE 4, ui. PR #40. Single
+  additive `@media (max-width: 640px)` block in `app/static/style.css`
+  plus a `.table-scroll` utility — desktop layout untouched. Collapses
+  `.topnav` to wrap, `.algo` two-column grid to single, `.feature-row`
+  to stacked sliders; gives `#firehose-feed` `overflow-x: auto` with a
+  `min-width: 640px` table; stacks `.admin` + `.admin-nav`; enlarges
+  tap targets on `.cat-tab`, `.thumb-btn`, `.tabs button`; tightens
+  `.auth-form`, `.onboarding`, `.preset-card`. CSS-only — no DB
+  change, no cron, no pip dep.
 - **Automated source discovery (Reddit/HN + LLM agent)** — Pri 8, LOE 7,
   ops/backend/new-feature. PR #38. New `candidate_sources` table; three
   cron jobs (`discover_harvest` hourly, `discover_promote` nightly,
