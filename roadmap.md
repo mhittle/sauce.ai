@@ -25,6 +25,7 @@ shipped.
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
+| 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | backlog |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
 | 8 | 6 | backend, new-feature, ui | In-app reader view (body extraction + sauce.ai/read/<id>) | backlog |
@@ -33,14 +34,15 @@ shipped.
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
 | 7 | 4 | ui, algo | Thumbs up/down on cards | backlog |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
+| 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
+| 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
-| 6 | 5 | backend, new-feature | Full-text article extraction (superseded by In-app reader view) | backlog |
+| 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
 | 6 | 6 | new-feature, ui | Search across articles | backlog |
 | 6 | 7 | new-feature, infra | Daily personalized email digest | backlog |
-| 5 | 5 | new-feature, algo | Trending topics view | backlog |
 | 5 | 5 | infra | Test coverage expansion | backlog |
 | 5 | 3 | security | Email verification on signup | backlog |
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
@@ -71,6 +73,38 @@ Open questions:
   warning in UI?).
 - Caching of computed scores to avoid running user code per article per
   request.
+
+### Story dossier
+**Priority:** 9 · **LOE:** 6 · **Category:** backend, ui, new-feature, algo · **Status:** backlog
+
+`sauce.ai/news/story/<story_id>` aggregates every article in a
+deduplicated story group and presents them across the political-lean
+spectrum — three columns (left / center / right) on desktop, vertical
+bands on mobile. Each column shows source headline, lead paragraph,
+and a small lean badge.
+
+Sticky element at top: a Claude-generated **framing summary** — *"Left-
+leaning sources emphasized the demographic impact; right-leaning
+emphasized the procedural concerns; AP and Reuters stuck to the
+announcement itself."* Cached per story group, recomputed only when
+new articles join.
+
+Optional power feature: word-level diff highlights between headlines
+and lead paragraphs so coverage divergence is *visible* ("the suspect"
+vs "the gunman" vs "the alleged shooter"). This is the screenshot
+that gets shared.
+
+This is the **killer demo**. No other aggregator does this — and it's
+the feature that requires our opinionated multi-source backend. Without
+it, sauce.ai is a slightly nicer Google News; with it, a category of
+one.
+
+Cost gating: only run framing summaries for story groups with 3+
+articles spanning 2+ lean buckets. Single-source stories don't get a
+dossier — their card just links to the source.
+
+Hard dependency on **Article deduplication** (Pri 8) — story_id must
+exist first.
 
 ### Article deduplication across sources
 **Priority:** 8 · **LOE:** 7 · **Category:** algo, backend · **Status:** backlog
@@ -133,6 +167,55 @@ Side effect: 3+ downs on the same source surfaces a one-tap "less from
 
 Ship before Signal Learning — signal capture must be live first.
 
+### Reading diet meter
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature, algo · **Status:** backlog
+
+Personal-stats page at `/me/diet` showing the user a mirror of their
+own reading over rolling 7-day and 30-day windows. Metrics:
+
+- Political lean distribution ("68% center-left, 22% center, 10% right")
+- Source diversity (unique sources, unique categories)
+- Source reputation mix (mean / median)
+- Reading level + info density distribution
+- Paywall exposure ("47% of your reading was behind paywalls")
+- Category breakdown
+- Comparative deltas vs. the user's prior week
+
+v2: weekly in-app card or email *"Your reading week in numbers"* —
+Spotify-Wrapped energy, but truthful rather than gamified. v3:
+comparative ("vs. the median sauce.ai reader") if presentable without
+turning into a leaderboard.
+
+Why it's sticky: gives the user a literal feedback loop on whether
+their news diet matches their intent. Pairs naturally with Signal
+Learning — "we noticed you only read center-left this week; here are
+3 center-right pieces you might find worth your time".
+
+Depends on signal capture (user_clicks today; user_signals once Signal
+Learning lands).
+
+### Trending topics view
+**Priority:** 7 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** backlog
+
+`/trending` groups today's stories by topic/entity with source count.
+Big upgrade post-dedup: trending becomes "topics that hit N outlets"
+rather than "topics with N raw articles", so wire-syndicated noise
+stops dominating. A topic that 20 outlets cover ranks above one that
+one outlet covered 20 times.
+
+Topic/entity extraction piggybacks on the existing `classify_pending`
+LLM call (same body, additional output field — negligible incremental
+cost given the call is already batching). Store as
+`article_topics(article_id, topic)` many-to-many. `/trending` SQL
+aggregates by recent article count and unique-source count.
+
+Pairs with story dossier — each trending topic links to the
+dossier(s) under it. Pairs with diet meter — "trending in your top
+categories".
+
+Bumped from Pri 5 to Pri 7 because the dedup-enabled version is much
+stronger than the v1 version, and because it feeds the dossier theme.
+
 ### Why This Article
 **Priority:** 7 · **LOE:** 3 · **Category:** ui · **Status:** backlog
 
@@ -149,6 +232,29 @@ tool for tuning the ranking function.
 Trust + transparency feature — also makes thumbs-down decisions more
 informed ("oh, it ranked high because of X, but I don't actually care
 about X").
+
+### Across-the-spectrum in-feed
+**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo · **Status:** backlog
+
+The lightweight everyday cousin of the story dossier. Every card on
+the main feed that's part of a multi-source story gets a small
+"+3 other angles" affordance under the headline. Click expands inline
+to show 2-3 alternative source perspectives without leaving the feed.
+A "Full dossier →" link inside the expansion takes the user to the
+dossier page for the deep dive.
+
+Why have both: dossier is *destination* content (you go there to
+research a story); in-feed compare is *ambient* (you encounter it
+while skimming and it nudges you to broaden one story at a time).
+The in-feed version has much more surface area — every multi-source
+card carries it.
+
+Shares all the infrastructure of story dossier (story_id, source
+clustering, source_lean), so essentially free once dossier exists.
+Could ship before the full dossier page as a faster wedge into the
+"multi-source view" idea.
+
+Depends on Article deduplication (story_id). Pairs with Story dossier.
 
 ### In-app reader view (with body extraction)
 **Priority:** 8 · **LOE:** 6 · **Category:** backend, new-feature, ui · **Status:** backlog
@@ -226,18 +332,6 @@ The card grid wraps OK on phone widths but the algo editor is a mess, the
 firehose table is a horror, and tap targets are small. Audit each page on
 375px width, fix.
 
-### Full-text article extraction
-**Priority:** 6 · **LOE:** 5 · **Category:** backend, new-feature · **Status:** backlog
-
-Today the app stores `summary` + `link` only. Full text would enable better
-classification (Flesch-Kincaid is much more accurate on body text than RSS
-summaries), better dedup (title-only is brittle), and an on-site reader
-view that keeps users out of paywalls/redirects.
-
-Cheap path: `trafilatura` or `readability-lxml` invoked after fetch.
-Storage: a new `article_body` column or table to avoid bloating the main
-row.
-
 ### Article save / bookmark
 **Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
 
@@ -309,14 +403,6 @@ Once a day, send each user a 5–10 article digest ranked by their algorithm.
 Requires: outbound email (cPanel's SMTP works), digest template, opt-in
 toggle in settings, an unsubscribe link, and a new cron job. Watch
 deliverability — shared cPanel IPs are reputation-mixed.
-
-### Trending topics view
-**Priority:** 5 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** backlog
-
-After dedup exists, a "Trending" page that groups today's stories by
-entity/topic with a count of sources covering each. Topic extraction can
-piggyback on the existing classifier batch (cheap addition to the LLM
-call).
 
 ### Test coverage expansion
 **Priority:** 5 · **LOE:** 5 · **Category:** infra · **Status:** backlog
