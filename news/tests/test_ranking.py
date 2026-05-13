@@ -21,6 +21,31 @@ def test_build_score_sql_includes_active_features():
     assert params["recency_w"] == 0.7
 
 
+def test_recency_is_multiplicative_gate():
+    """BUG-011: recency must multiply the quality score, not just add a small term.
+    Otherwise a stack of high-quality static features can outweigh freshness."""
+    w = {"objectivity": 1.0, "recency": 0.7}
+    expr, _ = build_score_sql(w)
+    # The quality sum is parenthesised and multiplied by EXP(...).
+    assert ") * EXP(" in expr.replace("\n", " ")
+    # No additive recency term left over.
+    assert "+ (%(recency_w)s" not in expr
+
+
+def test_recency_zero_disables_decay():
+    w = {"objectivity": 1.0, "recency": 0}
+    expr, params = build_score_sql(w)
+    assert "EXP(" not in expr
+    assert "recency_w" not in params
+
+
+def test_recency_alone_without_quality_features():
+    w = {"recency": 1.0}
+    expr, params = build_score_sql(w)
+    assert "EXP(" in expr
+    assert params["recency_w"] == 1.0
+
+
 def test_build_score_sql_uses_direction_for_all_features():
     w = {"political_lean": 1.0, "political_lean_direction": -0.3,
          "objectivity": 0.5, "objectivity_direction": 0.7}

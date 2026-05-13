@@ -7,6 +7,75 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — BUG-011: feed staleness fixed via multiplicative recency gate
+
+### Context
+
+User reported that loading `/` still showed yesterday's articles on
+reload — fresh content wasn't surfacing even though the pipeline had
+recovered from BUG-009. Originally logged as BUG-010 in this session;
+renumbered to BUG-011 on rebase because a parallel session's PR #35
+landed BUG-010 first (feature bars).
+
+### Root cause
+
+`app/ranking.py:build_score_sql` summed feature contributions
+**additively**. Quality features (objectivity, info_density,
+source_reputation, journalist_reputation, etc.) summed to ~3.0 for a
+great article; the recency term `recency_w * EXP(-h/24)` capped at
+`recency_w` (default 0.7). A 3-day-old high-quality article scored
+~3.04; a 1-hour-old medium-quality article scored ~2.2. Static
+quality dominated; the top-30 didn't move minute to minute.
+
+### Fix
+
+Changed `recency` from an additive term to a **multiplicative
+freshness gate**: `score = quality * EXP(-recency_w * hours / 24)`.
+The slider now controls decay strength rather than additive
+contribution. With the default `recency=0.7`, multiplier is 1.0 at
+fresh, ~0.50 at 24h, ~0.25 at 48h, ~0.05 at 4d, ~0.007 at 7d — a
+4-day-old article is structurally crushed regardless of static
+quality. `recency=0` opts out (legacy behavior). `feed.py`'s 7-day
+window kept; multiplicative decay makes the window self-narrowing.
+
+`weights_to_expression` updated so the `/algo` Code tab's rendered
+Python preview matches the new math (`return quality * exp(-r *
+hours_old / 24)` instead of an additive recency line).
+
+### Code touched
+
+- `news/app/ranking.py` — `build_score_sql` wraps the quality sum in
+  the EXP multiplier when `recency > 0`; `weights_to_expression`
+  renders the multiplicative form.
+- `news/tests/test_ranking.py` — 3 new tests
+  (`test_recency_is_multiplicative_gate`,
+  `test_recency_zero_disables_decay`,
+  `test_recency_alone_without_quality_features`). Existing
+  `test_build_score_sql_includes_active_features` asserts still hold
+  (EXP present, recency_w param present).
+- `bugs.md` — BUG-011 logged + resolved.
+
+### Server-side state touched
+
+None. No DB changes, no cron changes, no env-var changes, no new
+symlinks. Restart Python App from cPanel after merge so the new
+ranking module loads.
+
+### PRs
+
+- **PR #34** — BUG-011: multiplicative recency gate.
+
+### Open items
+
+- None blocking. Verify on prod after restart that `/` shows fresh
+  content on reload.
+- Possible follow-up: rename the `/algo` slider label from
+  "Weight" to "Freshness decay" or similar so its new meaning is
+  obvious to users tuning it. Deferred — current label is at worst
+  ambiguous, not actively wrong.
+
+---
+
 ## 2026-05-13 — BUG-010: feature bars on feed cards rendered identically
 
 User reported "at the bottom of every card is a graphic that is supposed
