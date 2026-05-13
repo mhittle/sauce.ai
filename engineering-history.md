@@ -7,6 +7,62 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — Session wrap-up: BUG-007 recovery + dep install (PRs #30, #31)
+
+Short recovery-focused session triggered by the user noticing prod was
+500'ing after the 20-PR backlog landed. No roadmap items advanced; the
+whole session was draining the manual-action queue that had built up
+across the previous parallel sessions.
+
+### What shipped this session
+
+- **PR #30** — Logged BUG-007 and resolved it: both outstanding
+  `manual-actions.md` Open entries (`sources.owner_id`, `user_signals`
+  + `user_source_prefs`) applied to prod via phpMyAdmin; Python App
+  restarted; site recovered.
+- **PR #31** — Wrap-up: this history entry + manual-actions tracker
+  update for the deferred `pip install -r requirements.txt` (PR #21
+  trafilatura dependency) that the user completed manually via cPanel
+  Terminal after the cPanel "Run Pip Install" button proved disabled.
+- Confirmed via `SHOW COLUMNS` / `SHOW TABLES` that the earlier
+  pre-tracker migrations were already on prod (`article_features.paywall`
+  from PR #14, `article_bodies` from PR #21, `articles.simhash` /
+  `story_id` from PR #24, `users.digest_enabled` from PR #23). Schema
+  is fully synced as of session end.
+
+### Server-side state at session end
+
+- DB `lt1ih6uyy2z6_news`: all merged-PR migrations applied.
+- venv: `pip install -r requirements.txt` run from cPanel Terminal —
+  trafilatura now installed, so `classify_pending`'s body extraction
+  step will start producing `article_bodies` rows on the next cron tick.
+- Python App restarted post-install.
+- No new symlinks, no new cron entries, no env-var changes.
+
+### Process note for future sessions
+
+The two-PR-into-prod-without-running-the-migration failure mode is
+exactly what the manual-actions tracker (PR #22) was built to prevent,
+and the tracker itself worked — the entries were logged the moment
+each parent PR landed. The miss was operational, not procedural: the
+queue accumulated faster than it drained. Two adjustments worth
+considering if this happens again:
+
+- **Drain before merging the next migration-bearing PR.** Treat any
+  Open entry in `manual-actions.md` as a blocker on merging another
+  one. The tracker is supposed to be near-empty most of the time.
+- **Run `SHOW COLUMNS`/`SHOW TABLES` at session start** whenever
+  there's been heavy parallel-session activity, to confirm prod
+  schema matches what merged code is going to query.
+
+### PRs
+
+- **#30** Log + resolve BUG-007, move both migrations to Completed
+  (merged).
+- **#31** Wrap-up tracking-doc updates (draft).
+
+---
+
 ## 2026-05-13 — BUG-007: prod 500 from pending migrations (PR #30)
 
 After ~20 PRs merged in rapid succession without testing between,

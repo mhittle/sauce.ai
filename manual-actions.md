@@ -41,6 +41,31 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Completed
 
+### 2026-05-13 — pip install -r requirements.txt (trafilatura for PR #21)
+**Status:** completed · **PR:** #21 · **Opened:** 2026-05-13 ·
+**Completed:** 2026-05-13
+
+PR #21 added `trafilatura==1.12.2` (+ `lxml`) to `requirements.txt` for
+the in-app reader's body extractor. The cPanel "Run Pip Install" button
+in Setup Python App was greyed out, so the install was run manually
+from cPanel Terminal after activating the venv. `classify_pending` is
+the only consumer (lazy import in `app/extractor.py`); web routes were
+unaffected, so the site itself stayed up while this was pending.
+
+**Commands run:**
+
+```bash
+# In cPanel Terminal, after pasting cPanel's "Enter to the virtual
+# environment" command for the news app:
+source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+  && cd /home/YOURACCOUNT/public_html/sauce.ai/news
+pip install -r requirements.txt
+```
+
+**Post:** Python App restarted via cPanel.
+
+---
+
 ### 2026-05-13 — Migration: sources.owner_id (user-added feeds)
 **Status:** completed · **PR:** #29 · **Opened:** 2026-05-13 ·
 **Completed:** 2026-05-13 ·
