@@ -7,9 +7,11 @@ exhaust shared-host CPU quota.
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 import requests
+from requests.adapters import HTTPAdapter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -26,6 +28,7 @@ logger = setup_logging(JOB)
 
 SIMHASH_HAMMING_MAX = 8
 CLUSTER_LOOKBACK_HOURS = 48
+HTTP_WORKERS = 10
 
 
 def _assign_story_id(cur, art):
@@ -131,6 +134,12 @@ def _run():
     classified_total = llm_articles = 0
     cost_total = 0.0
     http = requests.Session()
+    # Default urllib3 pool is 10 hosts × 10 conns; we run HTTP_WORKERS=10
+    # concurrently across up to that many distinct hosts per batch, so bump
+    # the cache to avoid pool-full warnings and serial waits.
+    _adapter = HTTPAdapter(pool_connections=HTTP_WORKERS * 2, pool_maxsize=HTTP_WORKERS * 2)
+    http.mount("http://", _adapter)
+    http.mount("https://", _adapter)
     try:
         while time.time() - start < cfg.CLASSIFY_BUDGET_SECONDS:
             # Shared-host MySQL aggressively closes idle sockets; this loop
@@ -200,24 +209,44 @@ def _run():
             except LLMUnavailable as e:
                 logger.info("LLM unavailable, using source-level defaults: %s", e)
 
-            # Step 2b: paywall detection per article. HTTP-bound, so we honour
-            # the wallclock budget here and fall through to write whatever we have.
+            # Step 2b: paywall detection — fanned out across HTTP_WORKERS threads.
+            # Articles are independent (different hosts, no shared state in
+            # detect_paywall beyond the thread-safe session connection pool).
             paywall_by_id = {}
-            for art in batch:
-                if time.time() - start >= cfg.CLASSIFY_BUDGET_SECONDS:
-                    break
-                paywall_by_id[art["id"]] = detect_paywall(art.get("url"), session=http)
+            if time.time() - start < cfg.CLASSIFY_BUDGET_SECONDS:
+                with ThreadPoolExecutor(max_workers=HTTP_WORKERS) as ex:
+                    fut_to_id = {
+                        ex.submit(detect_paywall, art.get("url"), session=http): art["id"]
+                        for art in batch
+                    }
+                    for fut in as_completed(fut_to_id):
+                        aid = fut_to_id[fut]
+                        try:
+                            paywall_by_id[aid] = fut.result()
+                        except Exception as e:
+                            logger.warning("paywall probe failed for %d: %s", aid, e)
+                            paywall_by_id[aid] = 0.5  # SUSPECTED
 
-            # Step 2c: body extraction per article (for the in-app reader).
-            # Skip when paywall said "locked" — extraction would just record
-            # error rows and burn budget. Same wallclock gate.
+            # Step 2c: body extraction — same fan-out, skipping articles whose
+            # paywall came back "locked" (extraction would just record an
+            # error row and burn HTTP budget).
             bodies_by_id = {}
-            for art in batch:
-                if time.time() - start >= cfg.CLASSIFY_BUDGET_SECONDS:
-                    break
-                if paywall_by_id.get(art["id"], 0.0) >= 1.0:
-                    continue
-                bodies_by_id[art["id"]] = extract_body(art.get("url"), session=http)
+            if time.time() - start < cfg.CLASSIFY_BUDGET_SECONDS:
+                to_extract = [
+                    art for art in batch
+                    if paywall_by_id.get(art["id"], 0.0) < 1.0
+                ]
+                with ThreadPoolExecutor(max_workers=HTTP_WORKERS) as ex:
+                    fut_to_id = {
+                        ex.submit(extract_body, art.get("url"), session=http): art["id"]
+                        for art in to_extract
+                    }
+                    for fut in as_completed(fut_to_id):
+                        aid = fut_to_id[fut]
+                        try:
+                            bodies_by_id[aid] = fut.result()
+                        except Exception as e:
+                            logger.warning("body extraction failed for %d: %s", aid, e)
 
             # Step 3: write features + bylines. Ping again — paywall + body
             # extraction above can spend another 30-100s idle on the socket.
