@@ -32,7 +32,6 @@ shipped.
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
-| 7 | 4 | ui, algo | Thumbs up/down on cards | in-progress |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
@@ -152,20 +151,6 @@ Absorbs the older Pri-7 "Fold internal clicks into popularity" item —
 click signal becomes one input among many in the unified signal table.
 
 Ship after Thumbs Up/Down so explicit signals are flowing first.
-
-### Thumbs up/down on cards
-**Priority:** 7 · **LOE:** 4 · **Category:** ui, algo · **Status:** in-progress
-
-Subtle up/down affordance on each card (hover-revealed, sized for the
-"discerning reader" aesthetic — not Reddit-chunky). Writes to
-`user_signals`. Cheapest explicit signal and bootstraps the Signal
-Learning model before enough implicit (dwell/scroll) data accumulates.
-
-Side effect: 3+ downs on the same source surfaces a one-tap "less from
-`nyt.com`?" prompt that sets a per-user-source weight. Plus a hard
-"hide this source" option as a separate, more committed action.
-
-Ship before Signal Learning — signal capture must be live first.
 
 ### Reading diet meter
 **Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature, algo · **Status:** backlog
@@ -452,6 +437,12 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-13
 
+- **Thumbs up/down on cards** — Pri 7, LOE 4, ui/algo. PR #19. Adds the
+  generic `user_signals` table (forward-compat for Signal Learning) +
+  `user_source_prefs`. Subtle hover-revealed chevrons, toggle semantics,
+  3-downs-from-source prompt with Less / Hide / Reset actions, feed
+  query splice that filters/multiplies by per-user-source weight.
+  **Requires manual DB migration** (`seed/migrations/2026-05-13-signals.sql`).
 - **Cron job hardening: timeouts + flock** — Pri 8, LOE 3, infra. PR #15.
   Per-job fcntl mutex, requests timeouts on RSS/Reddit/HN, HN wallclock
   budget, anthropic `timeout=30`, `FEED_FETCH_BATCH` 80→20.

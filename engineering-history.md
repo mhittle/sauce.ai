@@ -7,7 +7,7 @@ section whenever something meaningful happens — see
 
 ---
 
-## 2026-05-13 — Thumbs up/down on cards + signal foundation (PR #TBD)
+## 2026-05-13 — Thumbs up/down on cards + signal foundation (PR #19)
 
 Shipping the cheapest explicit reader signal (thumbs) and laying the
 generic `user_signals` table that the Pri-8 Signal Learning roadmap item
@@ -67,7 +67,7 @@ will consume next. Includes the roadmap-called-out side effects:
 
 ### PR
 
-- **#TBD** Thumbs up/down on cards + signal foundation (draft)
+- **#19** Thumbs up/down on cards + signal foundation (merged) — requires manual DB migration
 
 ---
 
