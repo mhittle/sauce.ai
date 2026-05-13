@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS sources (
   category          VARCHAR(64) NOT NULL DEFAULT 'general',
   country           VARCHAR(8) NOT NULL DEFAULT 'US',
   region            VARCHAR(64) NOT NULL DEFAULT 'national',
+  owner_id          INT UNSIGNED DEFAULT NULL,        -- NULL = global pool; non-null = user-added personal source
   article_count_30d INT UNSIGNED NOT NULL DEFAULT 0, -- refreshed by maintenance.py
   is_active         TINYINT(1) NOT NULL DEFAULT 1,
   last_fetched_at   DATETIME DEFAULT NULL,
@@ -44,7 +45,9 @@ CREATE TABLE IF NOT EXISTS sources (
   last_error        TEXT,
   error_count       INT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_sources_feed (feed_url)
+  UNIQUE KEY uk_sources_feed (feed_url),
+  KEY idx_sources_owner (owner_id),
+  CONSTRAINT fk_sources_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS articles (

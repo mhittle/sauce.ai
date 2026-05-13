@@ -35,6 +35,43 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-13 — Migration: sources.owner_id (user-added feeds)
+**Status:** open · **PR:** #TBD (this session) · **Opened:** 2026-05-13 ·
+**File reference:** `news/seed/migrations/2026-05-13-user-sources.sql`
+
+Adds the `owner_id` column to `sources` so user-added RSS feeds can be
+scoped to the user that added them. NULL = global pool (all existing
+rows); non-null = personal source visible only to that user's `/`,
+`/firehose`, and `/sources`. Until this runs on prod, `POST /sources/`
+INSERTs error and `/sources` page query for personal sources errors.
+The visibility filters in `feed.py` and `firehose.py` reference
+`s.owner_id` so the reader-side pages will also 500 until the column
+exists.
+
+**Where to run:** phpMyAdmin → SQL tab → database `lt1ih6uyy2z6_news`.
+
+**SQL:**
+
+```sql
+ALTER TABLE sources
+  ADD COLUMN owner_id INT UNSIGNED DEFAULT NULL AFTER region,
+  ADD KEY idx_sources_owner (owner_id),
+  ADD CONSTRAINT fk_sources_owner FOREIGN KEY (owner_id)
+    REFERENCES users (id) ON DELETE CASCADE;
+```
+
+**Verify:**
+
+```sql
+SHOW COLUMNS FROM sources LIKE 'owner_id';
+```
+
+Should return one row with `Null=YES`, `Default=NULL`.
+
+**Post:** Restart the Python App (cPanel → Setup Python App → Restart).
+
+---
+
 ### 2026-05-13 — Migration: user_signals + user_source_prefs
 **Status:** open · **PR:** #19 · **Opened:** 2026-05-13 ·
 **File reference:** `news/seed/migrations/2026-05-13-signals.sql`
