@@ -85,8 +85,9 @@ the dossier (Pri 9) and across-the-spectrum-in-feed (Pri 7) work.
 
 ### PR
 
-- **#24** Article deduplication across sources (draft, ready for review)
-  — DB migration applied on prod.
+- **#24** Article deduplication across sources (merged) — DB migration
+  applied on prod. Python App restart required post-merge so the new
+  code path picks up the columns.
 
 ---
 
