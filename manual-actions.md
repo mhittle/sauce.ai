@@ -35,22 +35,26 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+(none currently)
+
+---
+
+## Completed
+
 ### 2026-05-13 — Migration: sources.owner_id (user-added feeds)
-**Status:** open · **PR:** #TBD (this session) · **Opened:** 2026-05-13 ·
+**Status:** completed · **PR:** #29 · **Opened:** 2026-05-13 ·
+**Completed:** 2026-05-13 ·
 **File reference:** `news/seed/migrations/2026-05-13-user-sources.sql`
 
-Adds the `owner_id` column to `sources` so user-added RSS feeds can be
+Added the `owner_id` column to `sources` so user-added RSS feeds can be
 scoped to the user that added them. NULL = global pool (all existing
-rows); non-null = personal source visible only to that user's `/`,
-`/firehose`, and `/sources`. Until this runs on prod, `POST /sources/`
-INSERTs error and `/sources` page query for personal sources errors.
-The visibility filters in `feed.py` and `firehose.py` reference
-`s.owner_id` so the reader-side pages will also 500 until the column
-exists.
+rows); non-null = personal source visible only to that user. Site was
+500'ing on every reader route until this ran because `feed.py:65` and
+`firehose.py:49` reference `s.owner_id` in the visibility WHERE clause
+on every page load. Ran via phpMyAdmin against `lt1ih6uyy2z6_news`,
+Python App restarted, site recovered. Filed as BUG-007 during recovery.
 
-**Where to run:** phpMyAdmin → SQL tab → database `lt1ih6uyy2z6_news`.
-
-**SQL:**
+**SQL applied:**
 
 ```sql
 ALTER TABLE sources
@@ -60,32 +64,21 @@ ALTER TABLE sources
     REFERENCES users (id) ON DELETE CASCADE;
 ```
 
-**Verify:**
-
-```sql
-SHOW COLUMNS FROM sources LIKE 'owner_id';
-```
-
-Should return one row with `Null=YES`, `Default=NULL`.
-
-**Post:** Restart the Python App (cPanel → Setup Python App → Restart).
-
 ---
 
 ### 2026-05-13 — Migration: user_signals + user_source_prefs
-**Status:** open · **PR:** #19 · **Opened:** 2026-05-13 ·
+**Status:** completed · **PR:** #19 · **Opened:** 2026-05-13 ·
+**Completed:** 2026-05-13 ·
 **File reference:** `news/seed/migrations/2026-05-13-signals.sql`
 
-Adds the two tables that back the thumbs up/down feature: `user_signals`
-(generic per-user signal stream, sized for the full Signal Learning
-vocabulary) and `user_source_prefs` (per-user-source weight, 0 = hidden,
-0.5 = downweighted, default 1.0). Until this runs on prod, the
-`POST /signal/<id>/<type>` and `POST /signal/source/<id>` route INSERTs
-will error.
+Added the two tables that back thumbs up/down: `user_signals` (generic
+per-user signal stream, sized for the full Signal Learning vocabulary)
+and `user_source_prefs` (per-user-source weight, 0 = hidden, 0.5 =
+downweighted, default 1.0). `feed.py` LEFT JOINs `user_source_prefs` for
+signed-in users so this also contributed to the BUG-007 outage. Ran in
+the same phpMyAdmin session as the owner_id ALTER.
 
-**Where to run:** phpMyAdmin → SQL tab → database `lt1ih6uyy2z6_news`.
-
-**SQL:**
+**SQL applied:**
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_signals (
@@ -114,20 +107,7 @@ CREATE TABLE IF NOT EXISTS user_source_prefs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-**Verify:**
-
-```sql
-SHOW TABLES LIKE 'user_signals';
-SHOW TABLES LIKE 'user_source_prefs';
-```
-
-Both should return one row.
-
-**Post:** Restart the Python App (cPanel → Setup Python App → Restart).
-
 ---
-
-## Completed
 
 ### 2026-05-13 — Migration: article dedup (story_id + simhash)
 **Status:** completed · **PR:** #24 · **Opened:** 2026-05-13 ·
