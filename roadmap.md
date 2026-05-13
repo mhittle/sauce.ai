@@ -26,9 +26,12 @@ shipped.
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
+| 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
-| 7 | 4 | algo | Fold internal clicks into popularity | backlog |
+| 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
+| 7 | 4 | ui, algo | Thumbs up/down on cards | backlog |
+| 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
 | 6 | 5 | backend, new-feature | Full-text article extraction | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
@@ -81,6 +84,68 @@ copy with a "N other sources" affordance.
 Cost concern: embedding every article through Claude adds non-trivial
 spend. Cheaper alternatives: TF-IDF on titles + first-paragraph for a coarse
 first pass, only embed near-matches.
+
+### Signal Learning
+**Priority:** 8 · **LOE:** 7 · **Category:** algo, backend, new-feature · **Status:** backlog
+
+Capture every reader signal in a uniform `user_signals` table — `click`,
+`dwell_ms`, `scroll_pct`, `thumb_up`, `thumb_down`, `save`, `share`,
+`hide`, `return_click`. Nightly job in `maintenance.py` regresses signals
+against feature values per user, producing a hidden per-user adjustment
+vector that rides alongside the explicit `/algo` weights.
+
+Forward-compatibility (key design constraint): when a new ranking
+feature lands later, `maintenance.py` back-classifies historical
+articles within a rolling window so the user's accumulated signal
+history informs the new dimension immediately. Same pattern as the
+obscurity-score backfill, generalized via a `features.added_at` column
++ rescore queue. This means future features instantly benefit from
+months of past reader behavior instead of needing fresh data to be
+useful.
+
+Two UX modes, staged:
+- **Suggest (v1)** — "You read 3x more high-objectivity articles than
+  the median. Bump objectivity weight to 1.5? [accept / dismiss]". User
+  stays in control; learning is a recommender, not a silent rewriter.
+- **Auto-tune (v2)** — hidden adjustment applied silently to ranking,
+  exposed on `/algo` as a "Learned tweaks" panel the user can audit and
+  reset to zero.
+
+Absorbs the older Pri-7 "Fold internal clicks into popularity" item —
+click signal becomes one input among many in the unified signal table.
+
+Ship after Thumbs Up/Down so explicit signals are flowing first.
+
+### Thumbs up/down on cards
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, algo · **Status:** backlog
+
+Subtle up/down affordance on each card (hover-revealed, sized for the
+"discerning reader" aesthetic — not Reddit-chunky). Writes to
+`user_signals`. Cheapest explicit signal and bootstraps the Signal
+Learning model before enough implicit (dwell/scroll) data accumulates.
+
+Side effect: 3+ downs on the same source surfaces a one-tap "less from
+`nyt.com`?" prompt that sets a per-user-source weight. Plus a hard
+"hide this source" option as a separate, more committed action.
+
+Ship before Signal Learning — signal capture must be live first.
+
+### Why This Article
+**Priority:** 7 · **LOE:** 3 · **Category:** ui · **Status:** backlog
+
+Small "i" icon on each card → popover showing the top 3 feature
+contributions to that article's score, plus learned-model influence
+when present: "high objectivity (+0.34), low paywall (+0.12), your
+reading history (+0.08)".
+
+Implementation: `/article/<id>/explain` endpoint fetches the article's
+feature row, computes weighted contributions against the user's algo,
+returns JSON. Frontend renders in a popover. Doubles as an admin debug
+tool for tuning the ranking function.
+
+Trust + transparency feature — also makes thumbs-down decisions more
+informed ("oh, it ranked high because of X, but I don't actually care
+about X").
 
 ### CSRF tokens + auth rate limiting
 **Priority:** 7 · **LOE:** 4 · **Category:** security · **Status:** backlog
