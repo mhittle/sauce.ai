@@ -42,7 +42,8 @@ though template autoreload usually handles it.
 
 ### PR
 
-- **#TBD** — Fix BUG-010 (draft).
+- **#35** — Fix BUG-010: feature bars used `width:` but CSS expected
+  the `--w` custom property (merged).
 
 ---
 
