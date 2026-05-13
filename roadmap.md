@@ -26,8 +26,6 @@ shipped.
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
-| 8 | 3 | infra | Cron job hardening: timeouts + flock | backlog |
-| 8 | 2 | backend | PyMySQL connection timeouts | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
@@ -83,32 +81,6 @@ copy with a "N other sources" affordance.
 Cost concern: embedding every article through Claude adds non-trivial
 spend. Cheaper alternatives: TF-IDF on titles + first-paragraph for a coarse
 first pass, only embed near-matches.
-
-### Cron job hardening: timeouts + flock
-**Priority:** 8 · **LOE:** 3 · **Category:** infra · **Status:** backlog
-
-The cron scripts have no mutex (a slow `fetch_feeds` run can be re-launched
-on top of itself when the 15-min cron fires again) and weak/no per-request
-timeouts on RSS fetches and the Claude API call. On shared hosting this can
-chew through the nproc/EP limit. Flagged in `engineering-history.md` §2026-05-12.
-
-Tasks:
-- Wrap each cron `main()` in an `fcntl.flock` on a per-job lockfile in `news/logs/`. Exit early if held.
-- `jobs/fetch_feeds.py`: fetch with `requests.get(url, timeout=(5, 15))`, hand bytes to `feedparser.parse()`. Drop the `socket.setdefaulttimeout(20)` line.
-- `app/classifier/llm.py`: pass `timeout=30.0` to `client.messages.create(...)`.
-- `jobs/popularity_poll.py`: shared `requests.Session`, wallclock budget on the HN item loop.
-- Lower `FEED_FETCH_BATCH` from 80 to ~20 until the loop is proven snappy.
-
-### PyMySQL connection timeouts
-**Priority:** 8 · **LOE:** 2 · **Category:** backend · **Status:** backlog
-
-`app/db.py` builds the connection with no `connect_timeout` / `read_timeout`
-/ `write_timeout`. If MySQL is slow or wedged, the web request hangs
-forever, holding a Passenger worker → quickly exhausts the cPanel process
-budget. Tiny fix; high-leverage.
-
-Add `connect_timeout=5, read_timeout=15, write_timeout=10` to both
-`pymysql.connect(...)` callsites.
 
 ### CSRF tokens + auth rate limiting
 **Priority:** 7 · **LOE:** 4 · **Category:** security · **Status:** backlog
@@ -230,6 +202,14 @@ Toggle in the user nav. CSS custom-property swap. Persist preference in
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-13
+
+- **Cron job hardening: timeouts + flock** — Pri 8, LOE 3, infra. PR #15.
+  Per-job fcntl mutex, requests timeouts on RSS/Reddit/HN, HN wallclock
+  budget, anthropic `timeout=30`, `FEED_FETCH_BATCH` 80→20.
+- **PyMySQL connection timeouts** — Pri 8, LOE 2, backend. PR #15 (same
+  PR). Web path `(5,15,10)`, cron path `(5,30,15)`.
 
 ### 2026-05-12
 
