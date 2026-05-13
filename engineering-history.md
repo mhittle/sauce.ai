@@ -90,6 +90,46 @@ the dossier (Pri 9) and across-the-spectrum-in-feed (Pri 7) work.
 
 ---
 
+## 2026-05-13 — Manual-actions tracker + lifecycle hooks (PR #22)
+
+User-driven convention change: server-side actions (DB migrations,
+cron entries, symlinks, env-var changes) were getting buried in
+history entries and INSTALL.txt; new sessions kept assuming prod was
+caught up when it wasn't.
+
+### What shipped
+
+- **`manual-actions.md`** at repo root. Sections: Open / Completed.
+  Each entry carries the **full SQL/command inline** in the doc (not
+  just a path to a `seed/migrations/*.sql` file). Pre-seeded with the
+  open `user_signals` + `user_source_prefs` migration from PR #19.
+- **Session-start hook** (`new-engineering-session-instructions.md`
+  Step 2/3): the agent now reads `manual-actions.md` alongside
+  `roadmap.md` and `bugs.md`, and at session start asks the user
+  whether each Open entry has been completed. Confirmed-done entries
+  move to Completed in the agent's first commit.
+- **Session-wrap-up hook** (`engineering-session-wrapup.md` new
+  Step 6): any session shipping a manual prod action must (a) append
+  a new Open entry to `manual-actions.md` with the SQL/commands inline
+  and (b) paste the same SQL/commands into chat. Path-only entries are
+  explicitly disallowed in the anti-patterns section.
+
+### Code touched
+
+- `manual-actions.md` (new, root).
+- `new-engineering-session-instructions.md` (Step 2/3 + tl;dr).
+- `engineering-session-wrapup.md` (new Step 6, renumber, anti-pattern).
+
+### Server-side state touched
+
+None.
+
+### PR
+
+- **#22** Manual-actions tracker + lifecycle hooks (merged)
+
+---
+
 ## 2026-05-13 — In-app reader view + body extraction (PR #21)
 
 Roadmap Pri 8, LOE 6. Article body is extracted post-fetch into a new
