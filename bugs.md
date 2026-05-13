@@ -86,7 +86,32 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
-### BUG-009 — `classify_pending` died on every tick with `MySQL server has gone away`
+### BUG-010 — Per-feature ranking bars on cards don't reflect feature values
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
+
+Every feed card's "feature-bars" graphic rendered identically regardless
+of the article's `objectivity / info_density / reading_level /
+source_reputation / popularity` values.
+
+**Root cause:** mismatch between the template and the CSS. The template
+in `app/templates/partials/feed_cards.html` set the bar value via inline
+`style="width: NN%"`, but `app/static/style.css:99` declares
+`.feature-bars i { flex: 1 }` which makes the `<i>` a flex child whose
+width is controlled by `flex-grow`, not `width` — so the inline width
+was ignored. The neighboring CSS rule at line 100 drives the visible
+fill with a `linear-gradient(... var(--w, 50%), ...)` and falls back to
+`50%` whenever `--w` is unset, which is what every card was rendering.
+
+**Fix:** changed the template to set `style="--w: NN%"` (matching the
+custom-property the gradient reads). Also enriched the `title` tooltip
+to include the numeric value (`Objectivity 0.87`) since the bars are
+small and a hover readout costs nothing.
+
+No DB change, no migration. The fix is a template/CSS-contract
+correction and is picked up on the next FTP deploy + Python App
+restart (Jinja autoreloads templates, but a restart is cleaner).
+
+
 **Status:** resolved · **Reporter:** internal · **Opened:** 2026-05-13 · **Closed:** 2026-05-13 (PR #32)
 
 Cron stopped producing log output on prod at 2026-05-12 22:50 server-local.

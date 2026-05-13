@@ -31,11 +31,11 @@
       </h2>
       {% if a.summary %}<p class="summary">{{ a.summary|striptags|truncate(220) }}</p>{% endif %}
       <div class="feature-bars">
-        <span title="Objectivity"><b>obj</b><i style="width: {{ (a.objectivity * 100)|round }}%"></i></span>
-        <span title="Info density"><b>dens</b><i style="width: {{ (a.info_density * 100)|round }}%"></i></span>
-        <span title="Reading level"><b>read</b><i style="width: {{ (a.reading_level * 100)|round }}%"></i></span>
-        <span title="Source rep"><b>rep</b><i style="width: {{ (a.source_reputation * 100)|round }}%"></i></span>
-        <span title="Popularity"><b>pop</b><i style="width: {{ (a.popularity * 100)|round }}%"></i></span>
+        <span title="Objectivity {{ '%.2f' % a.objectivity }}"><b>obj</b><i style="--w: {{ (a.objectivity * 100)|round }}%"></i></span>
+        <span title="Info density {{ '%.2f' % a.info_density }}"><b>dens</b><i style="--w: {{ (a.info_density * 100)|round }}%"></i></span>
+        <span title="Reading level {{ '%.2f' % a.reading_level }}"><b>read</b><i style="--w: {{ (a.reading_level * 100)|round }}%"></i></span>
+        <span title="Source rep {{ '%.2f' % a.source_reputation }}"><b>rep</b><i style="--w: {{ (a.source_reputation * 100)|round }}%"></i></span>
+        <span title="Popularity {{ '%.2f' % a.popularity }}"><b>pop</b><i style="--w: {{ (a.popularity * 100)|round }}%"></i></span>
       </div>
       {% if a.byline %}<div class="byline muted">{{ a.byline }}</div>{% endif %}
       {% if current_user %}
