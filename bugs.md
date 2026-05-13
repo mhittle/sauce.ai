@@ -26,7 +26,33 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-007 — Site returns 500 after rapid PR push (≈20 PRs, untested between)
+**Status:** in-progress · **Reporter:** user · **Opened:** 2026-05-13
+
+User reports `sauce.ai/news` is now returning a 500 on every request after
+pushing roughly 20 PRs in succession without testing in between. Most likely
+culprits given recent work:
+
+1. **Missing prod DB migrations.** `manual-actions.md` Open section lists
+   two outstanding migrations that the merged code paths reference at
+   query time:
+   - `sources.owner_id` (PR #29) — `feed.py` and `firehose.py` JOIN/SELECT
+     on this column for every page load. Missing column → every reader
+     route 500s.
+   - `user_signals` + `user_source_prefs` (PR #19) — `feed.py` LEFT JOINs
+     `user_source_prefs` for signed-in users.
+   Either alone is enough to take the feed pages down.
+2. **`trafilatura` dependency** (PR #21) — only used in
+   `classify_pending`, shouldn't affect web requests.
+3. **`article_bodies` table** (PR #21) — only joined in `/read/<id>`,
+   shouldn't affect the home feed.
+4. cPanel may have re-scaffolded `passenger_wsgi.py` (BUG-002) or the
+   load-bearing symlinks may have been clobbered (BUG-001) — less likely
+   after a normal CI/CD push, but worth ruling out.
+
+**Repro:** load https://sauce.ai/news/ — returns 500.
+
+**Investigation/fix:** in progress this session.
 
 ---
 
