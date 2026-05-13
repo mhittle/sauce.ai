@@ -75,6 +75,9 @@ def fetch_one(conn, source, http):
     sid = source["id"]
     url = source["feed_url"]
     fresh = stale = errors = 0
+    # Each call has a 5-15s HTTP gap before the writes; reconnect transparently
+    # if shared-host MySQL closed the socket since our last commit.
+    conn.ping(reconnect=True)
     try:
         resp = http.get(
             url,

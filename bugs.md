@@ -26,6 +26,47 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
+### BUG-009 — `classify_pending` dies on every tick with `MySQL server has gone away`
+**Status:** in-progress · **Reporter:** internal · **Opened:** 2026-05-13
+
+Cron stopped producing log output on prod at 2026-05-12 22:50 server-local.
+Every prior `classify_pending` invocation back to ~22:30 ends in the same
+traceback: PyMySQL `OperationalError (2006, "MySQL server has gone away
+(ConnectionResetError(104, 'Connection reset by peer'))")` on the first
+`INSERT INTO article_features` of the write block. Reproducible on demand
+by running `python jobs/classify_pending.py` from an SSH session.
+
+**Root cause:** `_run()` opens one PyMySQL connection at the top, then
+each batch iteration spends 30–200 s on:
+1. `classify_batch_llm` HTTP POST to Anthropic (1–30 s),
+2. `detect_paywall` sequential HTTP per article (5–60 s for batch of 10),
+3. `extract_body` sequential HTTP per article (10–100 s for batch of 10).
+
+Shared-host MySQL on GoDaddy enforces a short `wait_timeout` and closes
+idle sockets aggressively. By the time we get to the writes the kernel
+RSTs us. Same idle-gap pattern exists in `popularity_poll` (all Reddit/HN
+HTTP happens before any writes) and to a lesser degree `fetch_feeds`
+(one HTTP GET before each source's writes).
+
+**Confirms BUG-008 hypothesis #3** — `classify_pending` was wallclock-
+starved, not by the budget, but by repeatedly crashing mid-batch and
+leaving thousands of rows in `status='pending'`. Once writes failed the
+script aborted, articles never advanced, and the feed went stale.
+
+**Fix:** call `conn.ping(reconnect=True)` at every point the connection
+has been idle long enough to plausibly have been killed — top of each
+`classify_pending` loop iteration, right before its write block,
+before `popularity_poll` writes, and at the start of every `fetch_feeds`
+`fetch_one`. PyMySQL re-establishes the socket transparently when needed
+and is a no-op when the connection is alive. Branch
+`claude/onboard-news-aggregator-y9qWK`.
+
+**Repro:** see prod log `~/public_html/sauce.ai/news/logs/cron.log`, last
+80 lines as of 2026-05-12 22:50 — every traceback ends at
+`classify_pending.py:230` `cur.execute(...)` of `INSERT INTO article_features`.
+
+---
+
 ### BUG-008 — Feed feels stale; not enough fresh content / new articles
 **Status:** open · **Reporter:** user · **Opened:** 2026-05-13
 

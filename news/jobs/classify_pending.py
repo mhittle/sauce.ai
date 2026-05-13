@@ -133,6 +133,11 @@ def _run():
     http = requests.Session()
     try:
         while time.time() - start < cfg.CLASSIFY_BUDGET_SECONDS:
+            # Shared-host MySQL aggressively closes idle sockets; this loop
+            # spends 30-200s in LLM + paywall + body-extraction HTTP between
+            # batches, so the socket is often half-dead by the time we get
+            # here. ping(reconnect=True) is a no-op when alive.
+            conn.ping(reconnect=True)
             with conn.cursor() as cur:
                 cur.execute(
                     """SELECT a.id, a.url, a.title, a.summary, a.byline, a.title_hash,
@@ -214,7 +219,9 @@ def _run():
                     continue
                 bodies_by_id[art["id"]] = extract_body(art.get("url"), session=http)
 
-            # Step 3: write features + bylines
+            # Step 3: write features + bylines. Ping again — paywall + body
+            # extraction above can spend another 30-100s idle on the socket.
+            conn.ping(reconnect=True)
             with conn.cursor() as cur:
                 for art in batch:
                     aid = art["id"]
