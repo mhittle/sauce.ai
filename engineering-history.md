@@ -7,6 +7,85 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — Cron job hardening + PyMySQL timeouts (PR #15)
+
+Stabilization pass on the pipeline. Two roadmap items shipped together
+because they touch the same surface (cron entrypoints + connection
+setup): Cron job hardening (Pri 8, LOE 3) and PyMySQL connection
+timeouts (Pri 8, LOE 2).
+
+### What shipped
+
+- **Per-job mutex.** New `job_lock(name)` context manager in
+  `jobs/_bootstrap.py` uses `fcntl.flock` on per-job lockfiles under
+  `news/logs/`. Each cron `main()` wraps its body. Overlapping cron tick
+  (e.g. `classify_pending` running long because the LLM stalled) now
+  exits as a no-op instead of stacking. Directly addresses the
+  CloudLinux nproc-exhaustion failure mode.
+- **Request timeouts on every external call.**
+  - `fetch_feeds`: replaced `socket.setdefaulttimeout(20)` with explicit
+    `requests.get(url, timeout=(5, 15))`, bytes handed to
+    `feedparser.parse`. Shared `Session` across the batch.
+  - `popularity_poll`: shared `Session`, `(5, 10)` timeout, wallclock
+    budget `HN_BUDGET_SECONDS=60` on the per-item HN walk.
+  - `app/classifier/llm.py`: `timeout=30.0` on `messages.create`.
+- **PyMySQL timeouts** on both `pymysql.connect` callsites in
+  `app/db.py`. Web path `(5, 15, 10)`, cron path `(5, 30, 15)` (cron
+  does heavier batch INSERTs, especially now that classify_pending also
+  HTTP-probes for paywall).
+- **`FEED_FETCH_BATCH` default 80→20** per roadmap. With the new
+  per-source timeouts the original 80 is probably fine; raise via cPanel
+  env var if cron logs show idle wallclock.
+- Deferred `app.db` import inside `_bootstrap.get_conn()` so the lock
+  helper can be tested without dragging in pymysql.
+- `.gitignore` covers `news/logs/*.lock`.
+
+### Code touched
+
+- `jobs/_bootstrap.py` (new `job_lock` + `AlreadyRunning`; deferred db
+  import).
+- `jobs/fetch_feeds.py`, `classify_pending.py`, `popularity_poll.py`,
+  `maintenance.py` — wrap `main()` in `job_lock`; resource cleanup.
+- `app/db.py` — PyMySQL timeouts.
+- `app/classifier/llm.py` — anthropic timeout.
+- `app/config.py` — `FEED_FETCH_BATCH` default.
+- `tests/test_job_lock.py` (new, 4 cases).
+- `.gitignore`.
+
+### Server-side state touched
+
+- No DB changes. No migration. Restart the Python App so the new code
+  loads. New lockfiles appear in `news/logs/` automatically on each
+  job's next tick.
+
+### PR
+
+- **#15** Cron hardening + PyMySQL timeouts (merged)
+
+---
+
+## 2026-05-13 — Session wrap-up
+
+Three PRs shipped this session (#13, #14, #15). Two manual prod actions
+were required during the session and are confirmed done: import the
++633 sources via `/admin/feeds`, and run the paywall column migration.
+The cron-hardening PR (#15) needs only a Python App restart.
+
+PRs in this session:
+- **#13** Editorial serif wordmark in topnav.
+- **#14** Paywall feature (per-article detection) — required DB migration.
+- **#15** Cron hardening + PyMySQL timeouts — no DB change, restart only.
+
+Open follow-ups:
+- Manual: verify the +633 sources have cycled through `fetch_feeds` and
+  sort `/admin/feeds` by `error_count` to clean up dead URLs.
+- Roadmap top: Article deduplication (Pri 8), CSRF + auth rate limiting
+  (Pri 7), Fold internal clicks into popularity (Pri 7), Mobile polish
+  (Pri 7). Sandboxed Python algo execution (Pri 9) is the big one but
+  also the highest LOE.
+
+---
+
 ## 2026-05-12 — Paywall feature: active per-article detection (PR #14)
 
 New `paywall` ranking feature so users can down-weight or hard-filter
