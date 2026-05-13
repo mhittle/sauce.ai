@@ -211,3 +211,62 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .discovery-actions { display: flex; flex-wrap: wrap; gap: 0.4em; align-items: center; }
 .discovery-actions form { display: inline-flex; gap: 0.3em; flex-wrap: wrap; align-items: center; }
 .discovery-actions input { padding: 0.25em 0.4em; border: 1px solid var(--line); border-radius: 4px; font-size: 0.9em; }
+
+/* horizontally-scrolling table wrapper (used by firehose on narrow viewports) */
+.table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* mobile (≤640px): collapse multi-column layouts, enlarge tap targets */
+@media (max-width: 640px) {
+  main { padding: 1em 0.8em; }
+
+  .topnav {
+    flex-wrap: wrap;
+    gap: 0.5em 0.9em;
+    padding: 0.6em 0.8em;
+    font-size: 0.95em;
+  }
+  .topnav .brand { margin-right: 0.2em; width: 100%; }
+
+  .feed-header h1 { font-size: 1.4em; }
+  .category-tabs { gap: 0.3em; }
+  .cat-tab { padding: 0.45em 0.9em; font-size: 0.95em; }
+
+  .cards { grid-template-columns: 1fr; gap: 0.8em; }
+  .card .thumb img { height: 180px; }
+  .card-meta { flex-wrap: wrap; gap: 0.4em 0.6em; }
+  .thumbs { margin-left: auto; opacity: 0.9; }
+  .thumb-btn { padding: 0.25em 0.5em; font-size: 1em; }
+  .card-meta .reader-link { margin-left: 0; }
+
+  /* algo: stack sidebar under main; per-feature row stacks too */
+  .algo { grid-template-columns: 1fr; gap: 1em; }
+  .algo-header { flex-wrap: wrap; gap: 0.5em; }
+  .preview { position: static; }
+  .feature-row {
+    grid-template-columns: 1fr;
+    gap: 0.4em;
+    padding: 0.8em 0;
+  }
+  .feature-name { font-size: 1em; }
+  .slider { font-size: 0.85em; }
+  .tabs button { padding: 0.5em 1em; }
+
+  /* firehose: wrap header, give the table a horizontal scrollbar */
+  .firehose-header { flex-wrap: wrap; justify-content: flex-start; }
+  .firehose-header h1 { width: 100%; margin: 0; }
+  #firehose-feed { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .firehose-table { font-size: 0.85em; min-width: 640px; }
+  .firehose-table th, .firehose-table td { padding: 0.35em 0.4em; }
+
+  /* admin: stack nav above content; tighten cramped sub-grids */
+  .admin { grid-template-columns: 1fr; gap: 1em; }
+  .admin-nav { flex-direction: row; flex-wrap: wrap; gap: 0.2em 0.4em; }
+  .admin-nav h2 { width: 100%; margin: 0 0 0.2em; }
+  .admin-main { padding: 1em; }
+  .feed-add { grid-template-columns: 1fr 1fr; }
+  .data-table { font-size: 0.85em; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  .auth-form { margin: 1em auto; padding: 1.2em; }
+  .onboarding { margin: 1em auto; }
+  .preset-card { flex-direction: column; align-items: stretch; gap: 0.4em; }
+}

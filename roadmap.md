@@ -31,7 +31,7 @@ shipped.
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
-| 7 | 4 | ui | Mobile / responsive polish | backlog |
+| 7 | 4 | ui | Mobile / responsive polish | in-progress |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
@@ -283,7 +283,7 @@ normalized to 0..1, max'd with the external signal so unpopular-on-Reddit-but-
 popular-here articles still rank.
 
 ### Mobile / responsive polish
-**Priority:** 7 · **LOE:** 4 · **Category:** ui · **Status:** backlog
+**Priority:** 7 · **LOE:** 4 · **Category:** ui · **Status:** in-progress
 
 The card grid wraps OK on phone widths but the algo editor is a mess, the
 firehose table is a horror, and tap targets are small. Audit each page on
