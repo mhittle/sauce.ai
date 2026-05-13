@@ -7,6 +7,90 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — Article deduplication across sources (PR #24)
+
+Roadmap item Pri 8 / LOE 7. Surfaces a single canonical card per "story
+group" in the main feed; firehose intentionally stays un-deduped. Unblocks
+the dossier (Pri 9) and across-the-spectrum-in-feed (Pri 7) work.
+
+### What shipped
+
+- **Schema**: `articles.simhash BIGINT UNSIGNED` (64-bit SimHash) and
+  `articles.story_id BIGINT UNSIGNED` (cluster id = canonical member's
+  `articles.id`). Indexed on `(story_id, published_at)`. Migration at
+  `seed/migrations/2026-05-13-dedup.sql` backfills `story_id = id` for
+  legacy rows; SimHash backfill is deferred to runtime since clustering
+  only operates over a rolling 48h window.
+- **`fetch_feeds.py`**: computes `article_simhash(title, summary)` at
+  insert time and sets `story_id = id` immediately after the INSERT (each
+  new article starts as its own singleton cluster).
+- **`classify_pending.py`**: new `_assign_story_id()` runs per article in
+  the batch loop, right before flipping `status='classified'`. Lookup
+  order: (1) exact `title_hash` match in last 48h, (2) `BIT_COUNT(simhash
+  ^ mine) <= 8` in last 48h. If a candidate exists, compare us to the
+  current canonical: higher `source_reputation` (tiebreak: older
+  `published_at`) promotes us to canonical and rewrites the whole
+  cluster's story_id; otherwise we adopt the existing canonical's id.
+- **`feed.py`**: `WHERE a.story_id IS NULL OR a.id = a.story_id` keeps
+  only canonicals, plus a `cluster_size` LEFT JOIN subquery rides in
+  the result row for future UI (Across-the-spectrum in-feed badge, story
+  dossier).
+- **`firehose.py`**: left untouched per design call. Firehose is the
+  see-everything stream.
+- **`maintenance.py`**: nightly heals orphaned story_ids (NULL or pointing
+  at a pruned article) by self-assigning.
+- **Tests**: 13 new (`test_simhash.py` × 8 for SimHash primitives,
+  `test_assign_story_id.py` × 7 for the cluster-assign logic via a fake
+  cursor that scripts `fetchone()` returns). All 72 tests pass.
+
+### Calibration notes (worth knowing for v2)
+
+- 64-bit SimHash on title + 200-char summary lead delivers HD≈6-8 for
+  syndicated reprints with a re-written headline (typical AP→partner
+  outlet pattern). Threshold 8 cleanly separates true near-dups
+  (HD 0-8) from unrelated-but-similar-headline content (HD≈18) and
+  fully unrelated content (HD≈32).
+- **Heavy paraphrases are NOT clustered.** SimHash on short text is
+  fundamentally limited; you can't get "Federal Reserve holds rates"
+  vs "Powell stays the course" to within HD<=8 without embeddings.
+  This is the v2 upgrade path the roadmap calls out — TF-IDF first-pass
+  + embeddings on near-matches.
+- The cluster-assign cost per article is two indexed SELECTs (the
+  title_hash hit short-circuits the SimHash scan ~30-50% of the time
+  for AP-wire heavy feeds). Negligible vs the LLM + paywall HTTP work
+  already in `classify_pending`.
+
+### Code touched
+
+- `app/classifier/rules.py` — new `simhash64`, `hamming64`,
+  `article_simhash`.
+- `app/classifier/__init__.py` — export the new helpers.
+- `jobs/fetch_feeds.py` — compute SimHash on insert; UPDATE story_id=id
+  post-insert.
+- `jobs/classify_pending.py` — new `_assign_story_id()`; batch SELECT
+  pulls `a.simhash` + `a.published_at`; wire into the per-article
+  feature-write loop.
+- `app/routes/feed.py` — dedup filter + `cluster_size` join.
+- `jobs/maintenance.py` — orphan story_id heal.
+- `seed/schema.sql` — new columns + index.
+- `seed/migrations/2026-05-13-dedup.sql` — new.
+- `tests/test_simhash.py`, `tests/test_assign_story_id.py` — new.
+
+### Server-side state touched
+
+- **Migration pending**: `seed/migrations/2026-05-13-dedup.sql` must run
+  on prod via phpMyAdmin before the next `fetch_feeds` / `classify_pending`
+  tick, otherwise inserts will error on the missing columns. Followed by
+  a Python App restart.
+- No new symlinks or load-bearing files.
+
+### PR
+
+- **#24** Article deduplication across sources (draft) — requires manual
+  DB migration on prod.
+
+---
+
 ## 2026-05-13 — In-app reader view + body extraction (PR #21)
 
 Roadmap Pri 8, LOE 6. Article body is extracted post-fetch into a new

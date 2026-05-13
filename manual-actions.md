@@ -35,6 +35,50 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-13 — Migration: article dedup (story_id + simhash)
+**Status:** open · **PR:** #24 · **Opened:** 2026-05-13 ·
+**File reference:** `news/seed/migrations/2026-05-13-dedup.sql`
+
+Adds the two columns that back article deduplication: `articles.simhash`
+(64-bit SimHash of title + 200-char summary lead) and `articles.story_id`
+(cluster id = canonical member's `articles.id`), plus the
+`(story_id, published_at)` index. Backfills `story_id = id` for legacy
+rows so every existing article becomes its own (singleton) cluster.
+Until this runs on prod, the next `fetch_feeds` insert will error on
+the missing columns.
+
+**Where to run:** phpMyAdmin → SQL tab → database `lt1ih6uyy2z6_news`.
+
+**SQL:**
+
+```sql
+ALTER TABLE articles
+  ADD COLUMN simhash  BIGINT UNSIGNED DEFAULT NULL AFTER title_hash,
+  ADD COLUMN story_id BIGINT UNSIGNED DEFAULT NULL AFTER simhash,
+  ADD KEY idx_articles_story (story_id, published_at);
+
+UPDATE articles SET story_id = id WHERE story_id IS NULL;
+```
+
+**Verify:**
+
+```sql
+SHOW COLUMNS FROM articles LIKE 'simhash';
+SHOW COLUMNS FROM articles LIKE 'story_id';
+SELECT COUNT(*) AS unbackfilled FROM articles WHERE story_id IS NULL;
+```
+
+The two SHOW COLUMNS should each return one row; `unbackfilled` should
+be 0.
+
+**Post:** Restart the Python App (cPanel → Setup Python App → Restart).
+SimHash backfill is intentionally deferred to runtime: `fetch_feeds`
+fills it for new articles, and legacy rows stay NULL + remain
+self-clustered (clustering only operates over a rolling 48h window so
+this is fine).
+
+---
+
 ### 2026-05-13 — Migration: user_signals + user_source_prefs
 **Status:** open · **PR:** #19 · **Opened:** 2026-05-13 ·
 **File reference:** `news/seed/migrations/2026-05-13-signals.sql`

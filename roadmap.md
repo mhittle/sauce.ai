@@ -26,7 +26,6 @@ shipped.
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | backlog |
-| 8 | 7 | algo, backend | Article deduplication across sources | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
@@ -102,22 +101,6 @@ dossier — their card just links to the source.
 
 Hard dependency on **Article deduplication** (Pri 8) — story_id must
 exist first.
-
-### Article deduplication across sources
-**Priority:** 8 · **LOE:** 7 · **Category:** algo, backend · **Status:** backlog
-
-A single story (e.g. an AP wire) often gets republished by dozens of
-sources. The firehose and feed both currently show all copies, which is
-noisy.
-
-Approach: probably embedding-based similarity (Claude or sentence-transformer)
-clustered into "story groups". Each `articles` row gets a `story_id` and the
-feed dedupes by story_id, showing the canonical (highest-source-reputation)
-copy with a "N other sources" affordance.
-
-Cost concern: embedding every article through Claude adds non-trivial
-spend. Cheaper alternatives: TF-IDF on titles + first-paragraph for a coarse
-first pass, only embed near-matches.
 
 ### Signal Learning
 **Priority:** 8 · **LOE:** 7 · **Category:** algo, backend, new-feature · **Status:** backlog
@@ -395,6 +378,14 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-13
 
+- **Article deduplication across sources** — Pri 8, LOE 7, algo/backend. PR #24.
+  `articles.story_id` + `articles.simhash` columns; `fetch_feeds` computes
+  64-bit SimHash on title+summary lead; `classify_pending` per-article cluster
+  assignment via title_hash exact match OR SimHash Hamming<=8 over 48h window;
+  canonical = highest source_reputation, oldest tiebreak. Feed dedupes by
+  story_id, firehose stays un-deduped. Heavy paraphrases left to a future
+  embedding-based pass. **Requires manual DB migration**
+  (`seed/migrations/2026-05-13-dedup.sql`).
 - **In-app reader view (body extraction + `/read/<id>`)** — Pri 8, LOE 6,
   backend/new-feature/ui. PR #21. New `article_bodies` table, trafilatura
   extractor wired into `classify_pending` (paywall-aware, shares the

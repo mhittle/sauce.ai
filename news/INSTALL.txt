@@ -362,5 +362,10 @@ H. Daily digest cron runs but no email arrives:
   DKIM/SPF setup by default. Deliverability on shared cPanel IPs
   is mixed; configure a relay (SMTP_HOST + SMTP_USE_TLS=1 + creds)
   via cPanel env vars if first-send tests land in spam.
+- Article deduplication clusters byte-identical reprints (via
+  title_hash) and minor re-headlines of identical bodies (via
+  64-bit SimHash, Hamming<=8). Heavy paraphrases of the same
+  story do not cluster; an embedding-based v2 pass is on the
+  roadmap. Firehose is intentionally NOT deduped.
 
 You're done. Visit  https://sauce.ai/news .

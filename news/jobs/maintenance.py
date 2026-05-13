@@ -118,6 +118,16 @@ def _run():
             )
             bodies_pruned = cur.rowcount
 
+            # Heal any orphaned story_ids: rows where story_id IS NULL or
+            # points at a pruned article. Self-assign so they become their
+            # own (singleton) cluster again.
+            cur.execute(
+                """UPDATE articles a
+                   LEFT JOIN articles c ON c.id = a.story_id
+                   SET a.story_id = a.id
+                   WHERE a.story_id IS NULL OR c.id IS NULL"""
+            )
+
             # Trim old pipeline logs
             cur.execute("DELETE FROM pipeline_log WHERE ts < UTC_TIMESTAMP() - INTERVAL 14 DAY")
 

@@ -24,6 +24,85 @@ from app.extractor import extract_body
 JOB = "classify_pending"
 logger = setup_logging(JOB)
 
+SIMHASH_HAMMING_MAX = 8
+CLUSTER_LOOKBACK_HOURS = 48
+
+
+def _assign_story_id(cur, art):
+    """Attach `art` to a cluster within the last CLUSTER_LOOKBACK_HOURS using
+    title_hash exact-match OR simhash Hamming<=SIMHASH_HAMMING_MAX. If `art`
+    has higher source_reputation than the cluster's current canonical, promote
+    `art` to canonical and rewrite the cluster's story_id. Otherwise adopt
+    the existing canonical's id. No-op if no match is found.
+    """
+    my_id = art["id"]
+    my_sim = art.get("simhash")
+    my_th = art.get("title_hash")
+    my_rep = float(art.get("source_reputation") or 0.5)
+    my_pub = art.get("published_at")
+
+    # Find best existing candidate. Title-hash exact match wins (Hamming 0
+    # effectively), then nearest simhash. ORDER prefers smaller hd, then older
+    # article so deterministic.
+    candidate = None
+    if my_th:
+        cur.execute(
+            """SELECT a2.id, a2.story_id
+               FROM articles a2
+               WHERE a2.title_hash = %s
+                 AND a2.id <> %s
+                 AND a2.fetched_at >= UTC_TIMESTAMP() - INTERVAL %s HOUR
+               ORDER BY a2.id ASC LIMIT 1""",
+            (my_th, my_id, CLUSTER_LOOKBACK_HOURS),
+        )
+        candidate = cur.fetchone()
+    if not candidate and my_sim is not None:
+        cur.execute(
+            """SELECT a2.id, a2.story_id, BIT_COUNT(a2.simhash ^ %s) AS hd
+               FROM articles a2
+               WHERE a2.fetched_at >= UTC_TIMESTAMP() - INTERVAL %s HOUR
+                 AND a2.simhash IS NOT NULL
+                 AND a2.id <> %s
+                 AND BIT_COUNT(a2.simhash ^ %s) <= %s
+               ORDER BY hd ASC, a2.id ASC LIMIT 1""",
+            (my_sim, CLUSTER_LOOKBACK_HOURS, my_id, my_sim, SIMHASH_HAMMING_MAX),
+        )
+        candidate = cur.fetchone()
+    if not candidate:
+        return False
+
+    existing_story_id = candidate["story_id"] or candidate["id"]
+
+    # Look up the cluster's current canonical (the member whose id == story_id).
+    cur.execute(
+        """SELECT a3.id, a3.published_at, s3.source_reputation
+           FROM articles a3 JOIN sources s3 ON s3.id = a3.source_id
+           WHERE a3.id = %s AND a3.story_id = %s""",
+        (existing_story_id, existing_story_id),
+    )
+    canonical = cur.fetchone()
+    if not canonical:
+        # The cluster's pointed-at canonical is gone (pruned). Reset by adopting
+        # the candidate row's own id.
+        cur.execute("UPDATE articles SET story_id=%s WHERE id=%s",
+                    (candidate["id"], my_id))
+        return True
+
+    canon_rep = float(canonical["source_reputation"] or 0.5)
+    canon_pub = canonical["published_at"]
+    promote = (
+        my_rep > canon_rep
+        or (my_rep == canon_rep and my_pub is not None and canon_pub is not None
+            and my_pub < canon_pub)
+    )
+    if promote:
+        cur.execute("UPDATE articles SET story_id=%s WHERE story_id=%s",
+                    (my_id, existing_story_id))
+    else:
+        cur.execute("UPDATE articles SET story_id=%s WHERE id=%s",
+                    (existing_story_id, my_id))
+    return True
+
 
 def _ensure_journalist(cur, normalized, display):
     cur.execute("SELECT id FROM journalists WHERE normalized_name=%s", (normalized,))
@@ -57,6 +136,7 @@ def _run():
             with conn.cursor() as cur:
                 cur.execute(
                     """SELECT a.id, a.url, a.title, a.summary, a.byline, a.title_hash,
+                              a.simhash, a.published_at,
                               s.id AS source_id, s.name AS source_name,
                               s.source_lean, s.source_reputation, s.category, s.country, s.region,
                               s.article_count_30d
@@ -208,6 +288,7 @@ def _run():
                                 body.get("status", "error"),
                             ),
                         )
+                    _assign_story_id(cur, art)
                     cur.execute("UPDATE articles SET status='classified' WHERE id=%s", (aid,))
 
                 if usage:
