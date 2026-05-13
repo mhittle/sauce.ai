@@ -63,7 +63,7 @@ ranking module loads.
 
 ### PRs
 
-- **PR #34** — BUG-011: multiplicative recency gate.
+- **PR #34** (merged) — BUG-011: multiplicative recency gate.
 
 ### Open items
 
