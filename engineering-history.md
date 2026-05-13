@@ -131,6 +131,60 @@ None.
 
 ---
 
+## 2026-05-13 — User-added RSS feed subscriptions (PR #29)
+
+Roadmap Pri 6, LOE 4. Signed-in users can paste an RSS or Atom URL on
+a new `/sources` page; the URL is validated synchronously (HTTP GET +
+feedparser, must yield ≥1 entry) and on success persisted to `sources`
+with `owner_id` set. Cron `fetch_feeds` is unchanged — it polls every
+active row, so personal sources flow through the same pipeline. Per-user
+visibility is enforced at the reader-feed query layer via
+`(s.owner_id IS NULL OR s.owner_id = current_user_id)` in `feed.py` and
+`firehose.py`.
+
+### Co-existence with other parallel work merged today
+
+This session ran concurrently with the work that landed in PRs #19–#26
+(user_signals/thumbs, user_source_prefs, account settings, reader view,
+digest emails). All orthogonal:
+
+- `user_source_prefs` weights existing **global** sources up/down per
+  user; this PR adds **new personal** sources visible only to the
+  owner. The feed query carries both layers — first filters out
+  anything outside the user's visibility (this PR), then applies the
+  user's source-weight multiplier on what remains (PR #19).
+- Shared edits to `app/__init__.py` (blueprint registration),
+  `seed/schema.sql`, and `templates/base.html` (nav link) resolved
+  cleanly during rebase.
+
+### Code touched
+
+- `app/feed_validation.py` (new, Flask-free) — `validate_feed`,
+  `infer_category`.
+- `app/routes/sources.py` (new) — `/sources` blueprint, login-required.
+- `app/templates/me_sources.html` (new) — add form + status table.
+- `app/__init__.py` — register `sources_bp` at `/sources`.
+- `app/routes/feed.py`, `app/routes/firehose.py` — `owner_id`
+  visibility filter on the article and category-count queries.
+- `app/templates/base.html` — "Your Sources" nav link.
+- `seed/schema.sql` — `sources.owner_id INT UNSIGNED NULL` + index + FK.
+- `seed/migrations/2026-05-13-user-sources.sql` (new) — ALTER for prod.
+- `tests/test_user_sources.py` (new, 11 cases).
+
+### Server-side state touched
+
+- **Migration pending on prod**: `2026-05-13-user-sources.sql`. The
+  visibility filters reference `s.owner_id`, so the feed and firehose
+  pages will 500 until the column exists. Tracked in
+  `manual-actions.md` with full inline SQL.
+
+### PR
+
+- **#29** User-added RSS feed subscriptions (draft) — requires manual
+  DB migration on prod before merge.
+
+---
+
 ## 2026-05-13 — In-app reader view + body extraction (PR #21)
 
 Roadmap Pri 8, LOE 6. Article body is extracted post-fetch into a new

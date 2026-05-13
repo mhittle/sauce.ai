@@ -37,7 +37,7 @@ shipped.
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
-| 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | in-progress |
+| 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | done |
 | 6 | 6 | new-feature, ui | Search across articles | backlog |
 | 5 | 5 | infra | Test coverage expansion | backlog |
 | 5 | 3 | security | Email verification on signup | backlog |
@@ -314,15 +314,6 @@ next, playback speed.
 
 Depends on reader view body extraction.
 
-### User-added RSS feed subscriptions
-**Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** in-progress
-
-Let users paste an RSS URL and add it to their personal feed list. UI on
-`/algo` or a new `/sources` page. Server-side: validate the URL is a real
-feed before saving, then include user-added sources in `fetch_feeds`.
-Per-user filtering already exists via the algo weights; this just expands
-the source pool a given user pulls from.
-
 ### Search across articles
 **Priority:** 6 · **LOE:** 6 · **Category:** new-feature, ui · **Status:** backlog
 
@@ -386,6 +377,11 @@ narrative lives in `engineering-history.md` under the same date.
   story_id, firehose stays un-deduped. Heavy paraphrases left to a future
   embedding-based pass. **Requires manual DB migration**
   (`seed/migrations/2026-05-13-dedup.sql`).
+- **User-added RSS feed subscriptions** — Pri 6, LOE 4, new-feature/ui.
+  PR #29. New `/sources` page, signed-in users add personal feeds
+  scoped via `sources.owner_id`; feed/firehose queries filter by
+  visibility. **Requires manual DB migration**
+  (`seed/migrations/2026-05-13-user-sources.sql`).
 - **In-app reader view (body extraction + `/read/<id>`)** — Pri 8, LOE 6,
   backend/new-feature/ui. PR #21. New `article_bodies` table, trafilatura
   extractor wired into `classify_pending` (paywall-aware, shares the
