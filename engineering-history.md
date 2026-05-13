@@ -68,7 +68,7 @@ age out of the feed window over ~7 days.
 
 ### PR
 
-- **PR #42** English-only filter at fetch time (draft).
+- **PR #42** English-only filter at fetch time (merged).
 
 ### Open items
 
