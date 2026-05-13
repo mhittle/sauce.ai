@@ -37,7 +37,7 @@ shipped.
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
-| 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
+| 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | in-progress |
 | 6 | 6 | new-feature, ui | Search across articles | backlog |
 | 5 | 5 | infra | Test coverage expansion | backlog |
 | 5 | 3 | security | Email verification on signup | backlog |
@@ -315,7 +315,7 @@ next, playback speed.
 Depends on reader view body extraction.
 
 ### User-added RSS feed subscriptions
-**Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
+**Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** in-progress
 
 Let users paste an RSS URL and add it to their personal feed list. UI on
 `/algo` or a new `/sources` page. Server-side: validate the URL is a real

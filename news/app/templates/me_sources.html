@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Your sources{% endblock %}
+{% block content %}
+<style>
+  .me-sources { max-width: 880px; margin: 0 auto; }
+  .me-sources h1 { font-family: ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, serif; font-weight: 500; }
+  .me-sources .lede { color: #555; margin-bottom: 1.5rem; }
+  .me-sources form.add-feed { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .me-sources form.add-feed input[type=url] { flex: 1; min-width: 320px; padding: .55rem .7rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+  .me-sources form.add-feed input[type=text] { width: 200px; padding: .55rem .7rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+  .me-sources form.add-feed button { padding: .55rem 1rem; border: 0; background: #222; color: #fff; border-radius: 4px; cursor: pointer; }
+  .me-sources .alert { padding: .6rem .8rem; border-radius: 4px; margin-bottom: 1rem; }
+  .me-sources .alert.error { background: #fdecea; color: #61231b; }
+  .me-sources .alert.success { background: #e8f5e9; color: #1b4332; }
+  .me-sources table { width: 100%; border-collapse: collapse; }
+  .me-sources th, .me-sources td { text-align: left; padding: .55rem .35rem; border-bottom: 1px solid #eee; font-size: .92rem; }
+  .me-sources th { color: #777; font-weight: 500; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+  .me-sources td.status-ok { color: #2e7d32; }
+  .me-sources td.status-err { color: #b71c1c; }
+  .me-sources td.status-pending { color: #888; }
+  .me-sources form.inline { display: inline; }
+  .me-sources button.linkbtn { background: none; border: 0; color: #b71c1c; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+  .me-sources .empty { color: #888; font-style: italic; padding: 1rem 0; }
+  .me-sources .cap { color: #888; font-size: .82rem; text-align: right; }
+</style>
+
+<div class="me-sources">
+  <h1>Your sources</h1>
+  <p class="lede">
+    Paste an RSS or Atom feed URL to add it to your personal source pool.
+    Your feeds only show up in your feed and firehose — other users
+    won't see them. Use the Your Algo controls to tune how much weight
+    they get.
+  </p>
+
+  {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert success">{{ success }}</div>{% endif %}
+
+  <form class="add-feed" method="post" action="{{ url_for('sources.add') }}">
+    <input type="url" name="feed_url" placeholder="https://example.com/feed.xml" required maxlength="500" />
+    <input type="text" name="name" placeholder="Display name (optional)" maxlength="200" />
+    <button type="submit">Add feed</button>
+  </form>
+  <div class="cap">Personal sources: {{ sources|length }} / {{ max_sources }}</div>
+
+  {% if sources %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th><th>Category</th><th>Feed URL</th>
+          <th>Status</th><th>Last fetched</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sources %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td>{{ s.category }}</td>
+          <td><a href="{{ s.feed_url }}" target="_blank" rel="noopener">{{ s.feed_url | truncate(60) }}</a></td>
+          {% if s.last_status == 'ok' %}
+            <td class="status-ok">ok</td>
+          {% elif s.last_status == 'error' %}
+            <td class="status-err">error ({{ s.error_count }})</td>
+          {% else %}
+            <td class="status-pending">pending</td>
+          {% endif %}
+          <td>{{ s.last_fetched_at.strftime('%Y-%m-%d %H:%M') if s.last_fetched_at else '—' }}</td>
+          <td>
+            <form class="inline" method="post" action="{{ url_for('sources.delete', sid=s.id) }}"
+                  onsubmit="return confirm('Remove this feed from your pool?');">
+              <button type="submit" class="linkbtn">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">No personal sources yet. Add one above to get started.</div>
+  {% endif %}
+</div>
+{% endblock %}

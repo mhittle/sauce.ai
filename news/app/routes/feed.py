@@ -61,6 +61,10 @@ def index():
         pref_score_mult = " * COALESCE(usp.weight, 1.0)"
         pref_params["_pref_uid"] = u["id"]
 
+    uid = u["id"] if u else None
+    vis_sql = "(s.owner_id IS NULL OR s.owner_id = %(_vis_owner)s)" if uid else "s.owner_id IS NULL"
+    vis_params = {"_vis_owner": uid} if uid else {}
+
     # Dedup: `a.id = a.story_id` keeps only canonical members. Each cluster's
     # canonical was chosen at classify time by max(source_reputation), tiebreak
     # oldest published_at. `cluster_size` rides in the row for future UI use
@@ -88,13 +92,14 @@ def index():
       WHERE a.status = 'classified'
         AND a.published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
         AND (a.story_id IS NULL OR a.id = a.story_id)
+        AND {vis_sql}
         {filter_sql}
         {cat_filter_sql}
         {pref_filter_sql}
       ORDER BY score DESC, a.published_at DESC
       LIMIT %(limit)s OFFSET %(offset)s
     """
-    params = {**score_params, **filter_params, **pref_params,
+    params = {**score_params, **filter_params, **pref_params, **vis_params,
               "limit": page_size, "offset": (page - 1) * page_size}
     articles = query(sql, params)
 
@@ -120,15 +125,17 @@ def index():
             articles=articles, page=page, weights=weights, category=category,
         )
 
-    cat_rows = query("""
+    cat_rows = query(f"""
         SELECT f.category, COUNT(*) AS n
         FROM article_features f
         JOIN articles a ON a.id = f.article_id
+        JOIN sources s ON s.id = a.source_id
         WHERE a.status = 'classified'
           AND a.published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
           AND f.category IS NOT NULL AND f.category <> ''
+          AND {vis_sql}
         GROUP BY f.category ORDER BY n DESC
-    """)
+    """, vis_params)
     return render_template(
         "feed.html",
         articles=articles, page=page, weights=weights,

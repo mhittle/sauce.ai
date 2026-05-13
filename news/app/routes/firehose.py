@@ -45,6 +45,11 @@ def stream():
         where_extra = "AND f.classified_at > %(since)s"
         params["since"] = since
 
+    uid = (getattr(g, "user", None) or {}).get("id")
+    vis_sql = "(s.owner_id IS NULL OR s.owner_id = %(_vis_owner)s)" if uid else "s.owner_id IS NULL"
+    if uid:
+        params["_vis_owner"] = uid
+
     sql = f"""
       SELECT a.id, a.title, a.url, s.name AS source_name,
              a.published_at,
@@ -56,7 +61,7 @@ def stream():
       FROM articles a
       JOIN sources s ON s.id = a.source_id
       JOIN article_features f ON f.article_id = a.id
-      WHERE a.status = 'classified' {where_extra}
+      WHERE a.status = 'classified' AND {vis_sql} {where_extra}
       ORDER BY f.classified_at DESC
       LIMIT %(limit)s
     """
