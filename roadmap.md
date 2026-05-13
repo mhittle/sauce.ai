@@ -41,7 +41,6 @@ shipped.
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
 | 6 | 6 | new-feature, ui | Search across articles | backlog |
-| 6 | 7 | new-feature, infra | Daily personalized email digest | in-progress |
 | 5 | 5 | infra | Test coverage expansion | backlog |
 | 5 | 3 | security | Email verification on signup | backlog |
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
@@ -381,14 +380,6 @@ Full-text search box in the nav, results page sorted by relevance + recency.
 MySQL FULLTEXT index works for v1; revisit if quality is poor (then SQLite
 FTS5 in-process, or Meilisearch on a VPS).
 
-### Daily personalized email digest
-**Priority:** 6 · **LOE:** 7 · **Category:** new-feature, infra · **Status:** in-progress
-
-Once a day, send each user a 5–10 article digest ranked by their algorithm.
-Requires: outbound email (cPanel's SMTP works), digest template, opt-in
-toggle in settings, an unsubscribe link, and a new cron job. Watch
-deliverability — shared cPanel IPs are reputation-mixed.
-
 ### Test coverage expansion
 **Priority:** 5 · **LOE:** 5 · **Category:** infra · **Status:** backlog
 
@@ -437,6 +428,13 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-13
 
+- **Daily personalized email digest** — Pri 6, LOE 7, new-feature/infra.
+  PR #23. Opt-in toggle on `/account/settings`, `users.digest_enabled`
+  + 40-hex unsub token, noon-UTC cron `jobs/send_digest.py` reusing the
+  feed's ranking SQL, MIME alternative HTML+text via stdlib `smtplib`
+  (localhost MTA by default). One-click List-Unsubscribe header wired.
+  **Requires manual DB migration** (`seed/migrations/2026-05-13-digest.sql`)
+  and a new noon-UTC cron entry.
 - **Thumbs up/down on cards** — Pri 7, LOE 4, ui/algo. PR #19. Adds the
   generic `user_signals` table (forward-compat for Signal Learning) +
   `user_source_prefs`. Subtle hover-revealed chevrons, toggle semantics,
