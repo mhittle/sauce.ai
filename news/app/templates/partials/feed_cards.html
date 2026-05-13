@@ -1,6 +1,7 @@
 {% if articles %}
 {% for a in articles %}
-  <article class="card">
+  <article class="card"
+           {% if current_user %}x-data='cardSignals({{ a.id }}, {{ a.source_id }}, {{ a.thumb|tojson if a.thumb else "null" }}, {{ a.source_name|tojson }})'{% endif %}>
     {% if a.thumbnail_url %}
       <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener"
          onclick="fetch('{{ url_for('feed.click', article_id=a.id) }}', {method:'POST', keepalive:true})">
@@ -14,6 +15,14 @@
               title="article lean {{ '%+.2f' % a.political_lean }}"></span>
         <span class="category">{{ a.category }}</span>
         <span class="muted">{{ a.published_at.strftime('%b %d, %H:%M') if a.published_at else '' }}</span>
+        {% if current_user %}
+          <span class="thumbs" role="group" aria-label="Rate this article">
+            <button type="button" class="thumb-btn up" :class="{ active: state === 'thumb_up' }"
+                    @click="vote('thumb_up')" aria-label="Thumbs up">&#x25B2;</button>
+            <button type="button" class="thumb-btn down" :class="{ active: state === 'thumb_down' }"
+                    @click="vote('thumb_down')" aria-label="Thumbs down">&#x25BC;</button>
+          </span>
+        {% endif %}
       </div>
       <h2 class="card-title">
         <a href="{{ a.url }}" target="_blank" rel="noopener"
@@ -28,6 +37,14 @@
         <span title="Popularity"><b>pop</b><i style="width: {{ (a.popularity * 100)|round }}%"></i></span>
       </div>
       {% if a.byline %}<div class="byline muted">{{ a.byline }}</div>{% endif %}
+      {% if current_user %}
+        <div class="source-prompt" x-show="prompt" x-cloak x-transition>
+          <span>Seeing too much from <strong x-text="prompt && prompt.source_name"></strong>?</span>
+          <button type="button" class="linkbtn" @click="sourcePref('downweight')">Less</button>
+          <button type="button" class="linkbtn" @click="sourcePref('hide')">Hide</button>
+          <button type="button" class="linkbtn muted" @click="prompt = null">Dismiss</button>
+        </div>
+      {% endif %}
     </div>
   </article>
 {% endfor %}

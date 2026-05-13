@@ -7,6 +7,70 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — Thumbs up/down on cards + signal foundation (PR #TBD)
+
+Shipping the cheapest explicit reader signal (thumbs) and laying the
+generic `user_signals` table that the Pri-8 Signal Learning roadmap item
+will consume next. Includes the roadmap-called-out side effects:
+"3+ downs from {source}" prompt + per-user-source downweight/hide.
+
+### What shipped
+
+- **`user_signals` table** (new) — generic, forward-compat for the full
+  Signal Learning vocabulary (`thumb_up`, `thumb_down`, `save`, `share`,
+  `hide`, `dwell_ms`, `scroll_pct`, `return_click`). `value` is NULL for
+  binary signals; numeric for magnitude-bearing ones. Unique constraint
+  on `(user_id, article_id, signal_type)` makes toggle an INSERT/DELETE.
+- **`user_source_prefs` table** (new) — per-user-source weight. Missing
+  row = 1.0 (default). `weight=0` hides the source from the feed;
+  anything `<1` downweights.
+- **New `/signal` blueprint** with two routes:
+  - `POST /signal/<article_id>/<thumb_up|thumb_down>` — toggle semantics
+    (same thumb twice undoes; opposite thumb replaces). Returns JSON
+    `{state, prompt}`. After a thumb-down, if the user has ≥3 downs
+    from that source in the last 30 days AND has no existing pref row,
+    `prompt` carries `{source_id, source_name, down_count}` for the UI.
+  - `POST /signal/source/<source_id>` body `{action: hide|downweight|reset}`
+    — writes `user_source_prefs.weight` (0, 0.5, or DELETE row).
+- **Feed query integration** in `feed.index()` only — keeps the algo
+  system in `ranking.py` untouched. For signed-in users: LEFT JOIN
+  `user_source_prefs`, filter `COALESCE(usp.weight, 1.0) > 0`, multiply
+  score by `COALESCE(usp.weight, 1.0)`. Anon users get the existing
+  unmodified query.
+- **UI on feed cards** — subtle `▲`/`▼` chevrons in the card meta row,
+  hover-revealed (opacity 0.25 → 0.75 on card hover, 1.0 when active).
+  Active state colors: up green, down red. Anon users see no thumbs.
+  Alpine.js `cardSignals(...)` factory lives in `feed.html`; after a
+  down that triggers the prompt, an inline yellow strip appears under
+  the feature bars with three actions: Less / Hide / Dismiss.
+- **HTMX + Alpine re-init** — `htmx:afterSwap` hooks `Alpine.initTree`
+  on the swapped target so the "Load more" cards are reactive too.
+
+### Code touched
+
+- `news/seed/schema.sql` — `user_signals`, `user_source_prefs`.
+- `news/seed/migrations/2026-05-13-signals.sql` (new) — same two tables.
+- `news/app/routes/signals.py` (new).
+- `news/app/__init__.py` — blueprint registration.
+- `news/app/routes/feed.py` — pref JOIN + thumb attach.
+- `news/app/templates/partials/feed_cards.html` — thumb buttons + Alpine
+  data + source prompt.
+- `news/app/templates/feed.html` — `cardSignals` JS + HTMX init hook.
+- `news/app/static/style.css` — `.thumbs`, `.thumb-btn`, `.source-prompt`.
+- `news/tests/test_signals.py` (new, 13 cases).
+
+### Server-side state touched
+
+- **Migration pending:** `seed/migrations/2026-05-13-signals.sql` must
+  run on prod via phpMyAdmin before the new code goes live, otherwise
+  the signal route INSERTs error. Followed by a Python App restart.
+
+### PR
+
+- **#TBD** Thumbs up/down on cards + signal foundation (draft)
+
+---
+
 ## 2026-05-13 — Cron job hardening + PyMySQL timeouts (PR #15)
 
 Stabilization pass on the pipeline. Two roadmap items shipped together

@@ -72,6 +72,26 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
   background: hsl(calc(220 - (var(--lean) + 1) * 110), 80%, 55%);
 }
 
+/* thumbs (subtle, hover-revealed) */
+[x-cloak] { display: none !important; }
+.thumbs { margin-left: auto; display: inline-flex; gap: 0.15em; opacity: 0.25; transition: opacity 0.15s ease; }
+.card:hover .thumbs { opacity: 0.75; }
+.thumbs:focus-within { opacity: 1; }
+.thumb-btn {
+  background: none; border: none; padding: 0 0.25em;
+  font-size: 0.85em; line-height: 1; color: var(--muted); cursor: pointer;
+  border-radius: 3px;
+}
+.thumb-btn:hover { background: #f0efeb; color: var(--fg); }
+.thumb-btn.active.up { color: var(--ok); opacity: 1; }
+.thumb-btn.active.down { color: var(--err); opacity: 1; }
+.thumbs:has(.thumb-btn.active) { opacity: 1; }
+.source-prompt {
+  margin-top: 0.4em; padding: 0.5em 0.6em; background: #fbf8ec; border: 1px solid #ecd9a8;
+  border-radius: 4px; font-size: 0.85em; display: flex; gap: 0.6em; align-items: center; flex-wrap: wrap;
+}
+.source-prompt .linkbtn { padding: 0; }
+
 /* feature bars on card */
 .feature-bars { display: flex; gap: 0.5em; font-size: 0.7em; color: var(--muted); }
 .feature-bars span { display: flex; align-items: center; gap: 4px; flex: 1; }
