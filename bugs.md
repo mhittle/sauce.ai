@@ -86,6 +86,45 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-012 — Refreshing the feed page returns the same content
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
+
+With the multiplicative recency gate from BUG-011 the feed was fresh
+in absolute terms, but ranking was fully deterministic — the same
+top-N articles rank identically on every reload until either a new
+article arrives or enough time passes for recency decay to reshuffle
+the top. From the reader's perspective the feed felt static between
+visits.
+
+**Root cause:** `app/ranking.py:build_score_sql` produced a pure
+arithmetic SQL expression with no random component. With `ORDER BY
+score DESC, a.published_at DESC`, identical inputs guarantee
+identical outputs. Refreshes inside the multi-second recency-decay
+plateau saw zero shuffle.
+
+**Fix (BUG-012, this commit):** added an opt-in `jitter` kwarg to
+`build_score_sql`. When `jitter > 0` and the score has any active
+quality features, the final expression is wrapped in
+`* (1 + RAND() * %(jitter)s)`. The live feed route (`/`) now passes
+`current_app.config["FEED_JITTER"]` (default 0.10) so consecutive
+refreshes shuffle articles within ~10% score bands — peer-rank
+articles trade places, but a clearly-better article still beats a
+clearly-worse one. The digest job, `/firehose`, and `/algo` preview
+keep the default `jitter=0` so their outputs stay deterministic
+(digest must be stable per send; firehose orders by
+`f.classified_at` anyway; algo preview is a tuning surface where
+randomness would just confuse the user). Env-var
+`FEED_JITTER=0` disables on prod if it ever causes issues.
+
+**Known caveat:** because jitter is per-query, an article on the
+border between page N and page N+1 could appear on both (or neither)
+when the user paginates via "Load more". Acceptable for v1 — the
+page-1 refresh experience is the primary win, and the JS-level
+duplicate-by-id behaviour the template already has prevents a
+visible double-render. Per-user seen-recently downrank is the
+principled follow-on (now noted on the Signal Learning roadmap
+entry).
+
 ### BUG-011 — Feed shows same articles on page reload; doesn't refresh by recency
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
 

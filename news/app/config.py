@@ -21,6 +21,8 @@ class Config:
     LLM_BATCH_SIZE = int(os.environ.get("LLM_BATCH_SIZE", "10"))
     CLASSIFIER_VERSION = os.environ.get("CLASSIFIER_VERSION", "v1")
 
+    FEED_JITTER = float(os.environ.get("FEED_JITTER", "0.10"))
+
     ARTICLE_RETENTION_DAYS = int(os.environ.get("ARTICLE_RETENTION_DAYS", "30"))
     BODY_RETENTION_DAYS = int(os.environ.get("BODY_RETENTION_DAYS", "30"))
     FEED_FETCH_BATCH = int(os.environ.get("FEED_FETCH_BATCH", "20"))

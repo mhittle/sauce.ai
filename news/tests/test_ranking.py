@@ -46,6 +46,43 @@ def test_recency_alone_without_quality_features():
     assert params["recency_w"] == 1.0
 
 
+def test_jitter_off_by_default():
+    """BUG-012 guard: the default call must remain deterministic so the
+    digest, algo preview, and tests aren't randomized."""
+    w = {"objectivity": 1.0, "recency": 0.5}
+    expr, params = build_score_sql(w)
+    assert "RAND(" not in expr
+    assert "jitter" not in params
+
+
+def test_jitter_wraps_score_with_rand_multiplier():
+    """BUG-012 fix: with jitter > 0 the final score is multiplied by
+    (1 + RAND() * jitter) so refreshes shuffle within a score band."""
+    w = {"objectivity": 1.0, "recency": 0.5}
+    expr, params = build_score_sql(w, jitter=0.1)
+    assert "RAND()" in expr
+    assert "%(jitter)s" in expr
+    assert params["jitter"] == 0.1
+    # Underlying score expression is still in there.
+    assert "f.objectivity" in expr
+    assert "EXP(" in expr
+
+
+def test_jitter_zero_disables_wrap():
+    w = {"objectivity": 1.0}
+    expr, params = build_score_sql(w, jitter=0)
+    assert "RAND(" not in expr
+    assert "jitter" not in params
+
+
+def test_jitter_skipped_when_no_active_features():
+    """No features weighted → no quality score → jitter on `0` is a no-op."""
+    w = {"recency": 0.5}
+    expr, params = build_score_sql(w, jitter=0.2)
+    assert "RAND(" not in expr
+    assert "jitter" not in params
+
+
 def test_build_score_sql_uses_direction_for_all_features():
     w = {"political_lean": 1.0, "political_lean_direction": -0.3,
          "objectivity": 0.5, "objectivity_direction": 0.7}

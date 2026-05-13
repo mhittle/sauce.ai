@@ -149,7 +149,7 @@ def default_weights():
     return PRESETS["balanced"]["weights"].copy()
 
 
-def build_score_sql(weights: dict):
+def build_score_sql(weights: dict, *, jitter: float = 0.0):
     """Return (sql_expression, params_dict) computing a per-article score.
 
     Per feature: weight * (1 - |value - direction| / scale_width). The sum
@@ -163,6 +163,11 @@ def build_score_sql(weights: dict):
     additive recency term can't outweigh a stack of high-quality static
     features, so old high-quality articles dominated the feed forever
     (BUG-011).
+
+    `jitter` (0..1): when >0, the final score is multiplied by
+    (1 + RAND() * jitter) so consecutive refreshes shuffle articles
+    within a score band (BUG-012). Default 0 keeps digest / algo preview
+    / tests deterministic; only the live feed route opts in.
     """
     parts = []
     params = {}
@@ -198,6 +203,14 @@ def build_score_sql(weights: dict):
         )
     else:
         expr = quality_expr
+
+    try:
+        j = float(jitter or 0)
+    except (TypeError, ValueError):
+        j = 0.0
+    if j > 0 and parts:
+        params["jitter"] = j
+        expr = f"({expr}) * (1 + RAND() * %(jitter)s)"
 
     return expr, params
 

@@ -1,5 +1,5 @@
 import json
-from flask import Blueprint, render_template, request, g, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, g, redirect, url_for, jsonify, current_app
 
 from ..db import query, execute, get_conn
 from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
@@ -39,7 +39,8 @@ def index():
     page_size = 30
     category = (request.args.get("category") or "").strip() or None
 
-    score_expr, score_params = build_score_sql(weights)
+    jitter = float(current_app.config.get("FEED_JITTER", 0.0) or 0.0)
+    score_expr, score_params = build_score_sql(weights, jitter=jitter)
     filter_sql, filter_params = build_filters_sql(weights)
 
     cat_filter_sql = ""

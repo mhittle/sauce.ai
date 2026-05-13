@@ -153,6 +153,11 @@ Two UX modes, staged:
 
 Absorbs the older Pri-7 "Fold internal clicks into popularity" item —
 click signal becomes one input among many in the unified signal table.
+Also absorbs the principled follow-on to BUG-012's score-jitter
+patch: a **per-user seen-recently downrank** (impression tracking on
+card render, downweight for N hours after impression) so refresh
+shuffle is informed by what the user has actually seen rather than a
+uniform random nudge.
 
 Ship after Thumbs Up/Down so explicit signals are flowing first.
 
