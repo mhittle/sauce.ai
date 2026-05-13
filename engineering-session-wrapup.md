@@ -96,6 +96,18 @@ still accurate.
 ### 4. Confirm Git state
 
 - All changes committed.
+- **Rebase the feature branch on the latest `main`** before declaring
+  the PR ready. If parallel sessions merged work during this session,
+  the branch may be behind:
+  ```
+  git fetch origin
+  git rebase origin/main
+  git push --force-with-lease origin <your-branch>
+  ```
+  Resolve any conflicts (especially in `roadmap.md` /
+  `engineering-history.md` / `bugs.md` if `merge=union` produced
+  duplicates). See `new-engineering-session-instructions.md` Step 7
+  for the full parallel-session protocol.
 - All commits pushed to the feature branch.
 - Any draft PRs are either:
   - merged,

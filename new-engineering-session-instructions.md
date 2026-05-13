@@ -77,7 +77,90 @@ per-article Python at request time. The three user views are `/` (feed),
    commit if the install procedure changed.
 5. Open a draft PR. Don't self-merge; ask the user.
 
-## Step 7 — When the user reports a bug, log it in `bugs.md` immediately
+## Step 7 — Parallel sessions and merge hygiene
+
+Multiple Claude sessions may be working on this repo simultaneously.
+Without coordination, the tracking docs (`roadmap.md`,
+`engineering-history.md`, `bugs.md`) and central code files
+(`app/ranking.py`, `seed/schema.sql`, `seed/feature_catalog.sql`,
+`requirements.txt`) become merge-conflict magnets. The rules below
+keep parallel work clean without a merge queue.
+
+### 7.1 Before you start a task
+
+- **One session = one branch = one PR = one task.** Don't mix scopes.
+  If the user pivots mid-session to an unrelated task, finish/park the
+  current one cleanly before starting the new one (or start a fresh
+  session).
+- **Check what other branches and PRs are in flight.** Use
+  `mcp__github__list_pull_requests` and `git fetch` + `git branch -r`
+  to see other Claude session branches (typically prefixed
+  `claude/...`). If your assigned task overlaps with another session's
+  file scope, pause and ask the user to redirect or wait.
+- **Confirm your file scope with the user up front** when there are
+  parallel sessions, especially if your task could touch any of the
+  central files listed above. Better to spend 30 seconds confirming
+  than to land a conflicting PR.
+
+### 7.2 Rebase before opening or updating a PR
+
+If `main` has moved since you branched, **rebase your branch onto the
+new main before pushing or opening the PR**:
+
+```
+git fetch origin
+git rebase origin/main
+# resolve any conflicts, then `git rebase --continue`
+git push --force-with-lease origin <your-branch>
+```
+
+- Always use `--force-with-lease`, never plain `--force`. The lease
+  protects against clobbering remote changes you don't know about.
+- Rebase keeps history linear and surfaces conflicts on your branch
+  (clean, in isolation) instead of as messy merge commits on `main`.
+- If two parallel PRs touch overlapping files, whichever lands first
+  wins; the second has to rebase and resolve before it can merge.
+  This is normal and expected.
+
+### 7.3 Avoid parallelizing dependency chains
+
+Several roadmap items form chains where downstream work depends on
+upstream work landing first:
+
+- Article dedup → Story dossier → Across-the-spectrum in-feed
+- Reader view → Article summary → Save/bookmark → TTS audio mode
+- Thumbs up/down → Why-this-article → Signal Learning
+
+**Pick the head of a chain per session; let children sit until the
+parent merges.** Running children in parallel guarantees rework.
+
+### 7.4 Tracking-doc conflicts
+
+`roadmap.md`, `engineering-history.md`, and `bugs.md` are touched by
+every session and are the highest-conflict files in the repo. If
+`.gitattributes` has them configured with `merge=union`, Git will
+auto-take both sides on conflict, which works well for append-style
+edits (new bug entries, new history sections) but can produce
+duplicate rows in the roadmap at-a-glance table after a union merge.
+**Scan the at-a-glance table on your branch after a rebase and clean
+up any duplicates in the same PR.**
+
+### 7.5 Central files require care
+
+These files are the "registry" surfaces — editing them is normal, but
+two sessions editing them in parallel almost always conflicts:
+
+- `app/ranking.py` — `FEATURES` catalog
+- `seed/schema.sql` — table definitions
+- `seed/feature_catalog.sql` — feature metadata
+- `seed/migrations/YYYY-MM-DD-*.sql` — filename collisions if two
+  sessions add migrations on the same day; coordinate filenames
+- `app/templates/base.html`, `app/static/style.css` — UI-wide changes
+
+If your task requires editing any of these and another session is
+likely to as well, **confirm with the user before starting**.
+
+## Step 8 — When the user reports a bug, log it in `bugs.md` immediately
 
 Before doing anything else with the bug: add an entry to `bugs.md` with a
 new sequential ID and status `open`. Include date, reporter (`user` if from
@@ -87,7 +170,7 @@ to `in-progress`. Mark `resolved` only after the fix is verified.
 This rule applies even if you can fix the bug in 30 seconds. The log is the
 audit trail; skipping it because the fix is fast defeats the purpose.
 
-## Step 8 — When you accomplish something meaningful, append to `engineering-history.md`
+## Step 9 — When you accomplish something meaningful, append to `engineering-history.md`
 
 "Meaningful" means:
 
@@ -110,7 +193,7 @@ state touched, PRs.
 Keep entries terse. The reader is a future agent who needs to come up to
 speed fast.
 
-## Step 9 — Known sharp edges to watch for
+## Step 10 — Known sharp edges to watch for
 
 These are the foot-guns we've already hit. Don't re-discover them.
 
@@ -142,7 +225,7 @@ These are the foot-guns we've already hit. Don't re-discover them.
   immediately — Anthropic console for API keys, cPanel MySQL for DB
   passwords.
 
-## Step 10 — Coding conventions
+## Step 11 — Coding conventions
 
 - Default to **no comments**. Only add one when the WHY is non-obvious: a
   hidden constraint, a subtle invariant, a workaround for a specific bug.
@@ -156,7 +239,7 @@ These are the foot-guns we've already hit. Don't re-discover them.
   with `python -c "from app import create_app; create_app()"`. The cron
   scripts can be invoked directly: `python jobs/<script>.py`.
 
-## Step 11 — Wrapping up the session
+## Step 12 — Wrapping up the session
 
 When the user signals they're done ("wrap up", "call it", "stopping
 point"), or when the session is getting stale and context-polluted, follow
@@ -169,7 +252,7 @@ making mistakes from context overload, just merged a major PR and the next
 task is unrelated), **proactively ask** the user if they want to wrap up.
 Don't assume; let them decide.
 
-## Step 12 — When in doubt
+## Step 13 — When in doubt
 
 - The original product spec is at the bottom of `engineering-history.md`.
 - `news/INSTALL.txt` §8 documents every failure mode encountered so far.
@@ -184,8 +267,12 @@ Don't assume; let them decide.
 2. Ask the user: "Pick from the roadmap, or something else?"
 3. Log any user-reported bugs into `bugs.md` immediately, before fixing.
 4. Do the work on a feature branch, open a draft PR.
-5. When something meaningful lands, append a new section to
+5. If other Claude sessions are in flight (check `git branch -r`),
+   confirm your file scope with the user before starting. Rebase your
+   branch on `main` before opening or updating the PR
+   (`git fetch && git rebase origin/main && git push --force-with-lease`).
+6. When something meaningful lands, append a new section to
    `engineering-history.md` and (if applicable) move the roadmap item
    to Done.
-6. At wrap-up, follow `engineering-session-wrapup.md`. If the session
+7. At wrap-up, follow `engineering-session-wrapup.md`. If the session
    feels stale, proactively suggest wrapping up.
