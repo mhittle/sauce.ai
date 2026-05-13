@@ -7,7 +7,7 @@ section whenever something meaningful happens — see
 
 ---
 
-## 2026-05-13 — Automated source discovery: Reddit/HN harvest + LLM agent + admin review (PR #TBD)
+## 2026-05-13 — Automated source discovery: Reddit/HN harvest + LLM agent + admin review (PR #38)
 
 ### Context
 
@@ -135,9 +135,10 @@ roadmapped as a separate phase 3 PR.
 
 ### PR
 
-- **#TBD** Automated source discovery (Reddit/HN + LLM agent) +
-  admin review queue (draft) — requires manual DB migration + three
-  new cron entries.
+- **#38** Automated source discovery (Reddit/HN + LLM agent) +
+  admin review queue (merged) — DB migration applied on prod, three
+  new cron entries added in cPanel (hourly harvest, nightly promote,
+  weekly LLM). Python App restarted post-migration.
 
 ---
 

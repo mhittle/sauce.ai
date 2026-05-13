@@ -26,7 +26,7 @@ shipped.
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | backlog |
-| 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | in-progress |
+| 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
 | 7 | 7 | ops, new-feature | Automated source discovery — social firehoses (Mastodon, Bluesky, X/Twitter) | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
@@ -103,30 +103,6 @@ dossier — their card just links to the source.
 
 Hard dependency on **Article deduplication** (Pri 8) — story_id must
 exist first.
-
-### Automated source discovery (Reddit/HN + LLM agent)
-**Priority:** 8 · **LOE:** 7 · **Category:** ops, backend, new-feature · **Status:** in-progress
-
-Cron-driven loop that grows the source catalog without manual CSV imports.
-Three subjobs:
-
-- `jobs/discover_harvest.py` (hourly) — re-polls the same Reddit subs + HN
-  top-stories that `popularity_poll` already hits. For every submitted URL
-  whose domain isn't in `sources`, upserts a row in a new
-  `candidate_sources` table and increments its hit count.
-- `jobs/discover_llm.py` (weekly) — Claude Haiku call per category asking
-  for high-quality feed URLs we don't already have. Hallucinated URLs are
-  filtered by the same RSS validation that handles social-signal candidates.
-- `jobs/discover_promote.py` (nightly) — for candidates above the
-  promotion threshold, runs RSS auto-discovery (tries `/feed`, `/rss`,
-  `/feed.xml`, `/atom.xml`, parses `<link rel="alternate">` from homepage
-  HTML) and validates via `app/feed_validation.py`. Validated rows surface
-  on `/admin/discovery` for one-click approve / reject / blacklist.
-
-Promotion is gated behind admin review by default (BUG-008 hypothesis #2 —
-the +633 seed import already left a long tail of dead feeds). Once the
-score signal is trusted, a config flag can flip to auto-approve over a
-high threshold.
 
 ### Automated source discovery — social firehoses
 **Priority:** 7 · **LOE:** 7 · **Category:** ops, new-feature · **Status:** backlog
@@ -416,6 +392,14 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-13
 
+- **Automated source discovery (Reddit/HN + LLM agent)** — Pri 8, LOE 7,
+  ops/backend/new-feature. PR #38. New `candidate_sources` table; three
+  cron jobs (`discover_harvest` hourly, `discover_promote` nightly,
+  `discover_llm` weekly); `/admin/discovery` review queue with one-click
+  approve / reject / blacklist. Pure helpers in `app/discovery.py`.
+  Promotion gated behind admin review by default. Phase 3 (social
+  firehoses) backlogged separately. **Requires manual DB migration**
+  (`seed/migrations/2026-05-13-discovery.sql`) and three new cron entries.
 - **Article deduplication across sources** — Pri 8, LOE 7, algo/backend. PR #24.
   `articles.story_id` + `articles.simhash` columns; `fetch_feeds` computes
   64-bit SimHash on title+summary lead; `classify_pending` per-article cluster
