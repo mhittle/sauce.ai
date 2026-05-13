@@ -25,16 +25,24 @@ shipped.
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
+| 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | backlog |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
+| 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
+| 8 | 6 | backend, new-feature, ui | In-app reader view (body extraction + sauce.ai/read/<id>) | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
-| 7 | 4 | algo | Fold internal clicks into popularity | backlog |
+| 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
-| 6 | 5 | backend, new-feature | Full-text article extraction | backlog |
+| 7 | 4 | ui, algo | Thumbs up/down on cards | backlog |
+| 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
+| 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
+| 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
+| 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
+| 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
+| 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
 | 6 | 6 | new-feature, ui | Search across articles | backlog |
 | 6 | 7 | new-feature, infra | Daily personalized email digest | backlog |
-| 5 | 5 | new-feature, algo | Trending topics view | backlog |
 | 5 | 5 | infra | Test coverage expansion | backlog |
 | 5 | 3 | security | Email verification on signup | backlog |
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
@@ -66,6 +74,38 @@ Open questions:
 - Caching of computed scores to avoid running user code per article per
   request.
 
+### Story dossier
+**Priority:** 9 · **LOE:** 6 · **Category:** backend, ui, new-feature, algo · **Status:** backlog
+
+`sauce.ai/news/story/<story_id>` aggregates every article in a
+deduplicated story group and presents them across the political-lean
+spectrum — three columns (left / center / right) on desktop, vertical
+bands on mobile. Each column shows source headline, lead paragraph,
+and a small lean badge.
+
+Sticky element at top: a Claude-generated **framing summary** — *"Left-
+leaning sources emphasized the demographic impact; right-leaning
+emphasized the procedural concerns; AP and Reuters stuck to the
+announcement itself."* Cached per story group, recomputed only when
+new articles join.
+
+Optional power feature: word-level diff highlights between headlines
+and lead paragraphs so coverage divergence is *visible* ("the suspect"
+vs "the gunman" vs "the alleged shooter"). This is the screenshot
+that gets shared.
+
+This is the **killer demo**. No other aggregator does this — and it's
+the feature that requires our opinionated multi-source backend. Without
+it, sauce.ai is a slightly nicer Google News; with it, a category of
+one.
+
+Cost gating: only run framing summaries for story groups with 3+
+articles spanning 2+ lean buckets. Single-source stories don't get a
+dossier — their card just links to the source.
+
+Hard dependency on **Article deduplication** (Pri 8) — story_id must
+exist first.
+
 ### Article deduplication across sources
 **Priority:** 8 · **LOE:** 7 · **Category:** algo, backend · **Status:** backlog
 
@@ -81,6 +121,191 @@ copy with a "N other sources" affordance.
 Cost concern: embedding every article through Claude adds non-trivial
 spend. Cheaper alternatives: TF-IDF on titles + first-paragraph for a coarse
 first pass, only embed near-matches.
+
+### Signal Learning
+**Priority:** 8 · **LOE:** 7 · **Category:** algo, backend, new-feature · **Status:** backlog
+
+Capture every reader signal in a uniform `user_signals` table — `click`,
+`dwell_ms`, `scroll_pct`, `thumb_up`, `thumb_down`, `save`, `share`,
+`hide`, `return_click`. Nightly job in `maintenance.py` regresses signals
+against feature values per user, producing a hidden per-user adjustment
+vector that rides alongside the explicit `/algo` weights.
+
+Forward-compatibility (key design constraint): when a new ranking
+feature lands later, `maintenance.py` back-classifies historical
+articles within a rolling window so the user's accumulated signal
+history informs the new dimension immediately. Same pattern as the
+obscurity-score backfill, generalized via a `features.added_at` column
++ rescore queue. This means future features instantly benefit from
+months of past reader behavior instead of needing fresh data to be
+useful.
+
+Two UX modes, staged:
+- **Suggest (v1)** — "You read 3x more high-objectivity articles than
+  the median. Bump objectivity weight to 1.5? [accept / dismiss]". User
+  stays in control; learning is a recommender, not a silent rewriter.
+- **Auto-tune (v2)** — hidden adjustment applied silently to ranking,
+  exposed on `/algo` as a "Learned tweaks" panel the user can audit and
+  reset to zero.
+
+Absorbs the older Pri-7 "Fold internal clicks into popularity" item —
+click signal becomes one input among many in the unified signal table.
+
+Ship after Thumbs Up/Down so explicit signals are flowing first.
+
+### Thumbs up/down on cards
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, algo · **Status:** backlog
+
+Subtle up/down affordance on each card (hover-revealed, sized for the
+"discerning reader" aesthetic — not Reddit-chunky). Writes to
+`user_signals`. Cheapest explicit signal and bootstraps the Signal
+Learning model before enough implicit (dwell/scroll) data accumulates.
+
+Side effect: 3+ downs on the same source surfaces a one-tap "less from
+`nyt.com`?" prompt that sets a per-user-source weight. Plus a hard
+"hide this source" option as a separate, more committed action.
+
+Ship before Signal Learning — signal capture must be live first.
+
+### Reading diet meter
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature, algo · **Status:** backlog
+
+Personal-stats page at `/me/diet` showing the user a mirror of their
+own reading over rolling 7-day and 30-day windows. Metrics:
+
+- Political lean distribution ("68% center-left, 22% center, 10% right")
+- Source diversity (unique sources, unique categories)
+- Source reputation mix (mean / median)
+- Reading level + info density distribution
+- Paywall exposure ("47% of your reading was behind paywalls")
+- Category breakdown
+- Comparative deltas vs. the user's prior week
+
+v2: weekly in-app card or email *"Your reading week in numbers"* —
+Spotify-Wrapped energy, but truthful rather than gamified. v3:
+comparative ("vs. the median sauce.ai reader") if presentable without
+turning into a leaderboard.
+
+Why it's sticky: gives the user a literal feedback loop on whether
+their news diet matches their intent. Pairs naturally with Signal
+Learning — "we noticed you only read center-left this week; here are
+3 center-right pieces you might find worth your time".
+
+Depends on signal capture (user_clicks today; user_signals once Signal
+Learning lands).
+
+### Trending topics view
+**Priority:** 7 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** backlog
+
+`/trending` groups today's stories by topic/entity with source count.
+Big upgrade post-dedup: trending becomes "topics that hit N outlets"
+rather than "topics with N raw articles", so wire-syndicated noise
+stops dominating. A topic that 20 outlets cover ranks above one that
+one outlet covered 20 times.
+
+Topic/entity extraction piggybacks on the existing `classify_pending`
+LLM call (same body, additional output field — negligible incremental
+cost given the call is already batching). Store as
+`article_topics(article_id, topic)` many-to-many. `/trending` SQL
+aggregates by recent article count and unique-source count.
+
+Pairs with story dossier — each trending topic links to the
+dossier(s) under it. Pairs with diet meter — "trending in your top
+categories".
+
+Bumped from Pri 5 to Pri 7 because the dedup-enabled version is much
+stronger than the v1 version, and because it feeds the dossier theme.
+
+### Why This Article
+**Priority:** 7 · **LOE:** 3 · **Category:** ui · **Status:** backlog
+
+Small "i" icon on each card → popover showing the top 3 feature
+contributions to that article's score, plus learned-model influence
+when present: "high objectivity (+0.34), low paywall (+0.12), your
+reading history (+0.08)".
+
+Implementation: `/article/<id>/explain` endpoint fetches the article's
+feature row, computes weighted contributions against the user's algo,
+returns JSON. Frontend renders in a popover. Doubles as an admin debug
+tool for tuning the ranking function.
+
+Trust + transparency feature — also makes thumbs-down decisions more
+informed ("oh, it ranked high because of X, but I don't actually care
+about X").
+
+### Across-the-spectrum in-feed
+**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo · **Status:** backlog
+
+The lightweight everyday cousin of the story dossier. Every card on
+the main feed that's part of a multi-source story gets a small
+"+3 other angles" affordance under the headline. Click expands inline
+to show 2-3 alternative source perspectives without leaving the feed.
+A "Full dossier →" link inside the expansion takes the user to the
+dossier page for the deep dive.
+
+Why have both: dossier is *destination* content (you go there to
+research a story); in-feed compare is *ambient* (you encounter it
+while skimming and it nudges you to broaden one story at a time).
+The in-feed version has much more surface area — every multi-source
+card carries it.
+
+Shares all the infrastructure of story dossier (story_id, source
+clustering, source_lean), so essentially free once dossier exists.
+Could ship before the full dossier page as a faster wedge into the
+"multi-source view" idea.
+
+Depends on Article deduplication (story_id). Pairs with Story dossier.
+
+### In-app reader view (with body extraction)
+**Priority:** 8 · **LOE:** 6 · **Category:** backend, new-feature, ui · **Status:** backlog
+
+`sauce.ai/news/read/<article_id>` renders the article body inside our
+own typography and chrome. Pipeline change: `classify_pending` (or a
+sibling job) runs `trafilatura` on the article URL post-fetch, extracts
+main body text + author + lead image, stores in a new `article_bodies`
+table kept separate from the main row so `articles` stays lean. Card
+click is configurable per-user — go to source (today), or stay in the
+reader.
+
+Why it's foundational, not just another feature:
+- **Retention.** Reader stays on `sauce.ai` instead of bouncing to a
+  17-tracker NYT page. Biggest single retention lever in this theme.
+- **Body text unlocks downstream features.** Better classification
+  (Flesch-Kincaid is much more accurate on body than RSS summary),
+  better dedup, article summaries, TTS, full-text search — all chain
+  off having the body locally.
+- **Typography continuity.** The "discerning reader" aesthetic from
+  the PR-#13 wordmark extends into the actual reading moment.
+
+Tradeoffs:
+- Extraction success ~85-90% across the wild web. Paywalled bodies
+  aren't extractable; fall through to source link in that case.
+- Some sites' ToS technically disallow reformatting. Low practical
+  risk at our scale but worth noting.
+- Storage: ~5-30 KB/article × N articles/day adds up. Ship with a
+  30-day retention window on bodies and prune in `maintenance.py`;
+  bookmarked articles get longer retention (see Article save).
+
+Subsumes the older Pri-6 "Full-text article extraction" item.
+
+### Article summary
+**Priority:** 7 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
+
+3-bullet TL;DR per article, generated by Claude Haiku at classification
+time and cached on the row. Surfaces on card hover/expand (preview
+without commitment) and at the top of the reader view (decide whether
+to keep reading).
+
+Batches with the existing political_lean / objectivity LLM call — same
+body, one prompt, three judgments returned together. Cheaper than a
+separate call. Gate to control cost: only summarize articles passing a
+threshold (e.g. `source_reputation > 0.4` AND `paywall < 0.5`). At
+~$0.001-0.002 per article with Haiku, ~$1-3/day at expected volume.
+
+v2: "Summarize today's brief" — meta-summary across the day's 10
+articles for a 3-minute orientation read at the top of the home feed.
+
+Depends on reader view body extraction (RSS blurbs make poor input).
 
 ### CSRF tokens + auth rate limiting
 **Priority:** 7 · **LOE:** 4 · **Category:** security · **Status:** backlog
@@ -107,23 +332,53 @@ The card grid wraps OK on phone widths but the algo editor is a mess, the
 firehose table is a horror, and tap targets are small. Audit each page on
 375px width, fix.
 
-### Full-text article extraction
-**Priority:** 6 · **LOE:** 5 · **Category:** backend, new-feature · **Status:** backlog
-
-Today the app stores `summary` + `link` only. Full text would enable better
-classification (Flesch-Kincaid is much more accurate on body text than RSS
-summaries), better dedup (title-only is brittle), and an on-site reader
-view that keeps users out of paywalls/redirects.
-
-Cheap path: `trafilatura` or `readability-lxml` invoked after fetch.
-Storage: a new `article_body` column or table to avoid bloating the main
-row.
-
 ### Article save / bookmark
 **Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
 
-Star/bookmark button on each card, "Saved" view in the nav. Per-user list.
-Pure CRUD on a new `user_saves` table. Good first-feature for re-engagement.
+Star/bookmark button on each card, `/saved` page in the nav, optional
+folders (default "Read Later" + user-created). New table
+`user_saves(user_id, article_id, saved_at, folder, read_at)`.
+
+The real unlock is pairing with reader view: today, a bookmarked link
+can rot (article deleted, URL changed, paywall hardened a month
+later). With body extraction in place we already have the article body
+stored at save-time, so bookmarks become a durable personal archive —
+"owned by me" sticky, not a fragile URL list. Bookmarked articles get
+extended retention on `article_bodies` so the reader-view copy stays
+readable indefinitely.
+
+Power features for v2: keyboard shortcut to save (`s`), bulk move
+between folders, export saved as Markdown or OPML, "5 unread in your
+Read Later" prompt on home when the queue grows.
+
+Sequencing: ship after reader view + summaries so bookmarks are
+durable from day one, before TTS so Read-me-my-queue has content to
+play.
+
+### TTS audio mode
+**Priority:** 6 · **LOE:** 4 (v1) / 6 (v2) · **Category:** new-feature, ui · **Status:** backlog
+
+"Play" button on the reader page and on each card.
+
+- **v1:** browser `window.speechSynthesis` — free, zero infra. Decent
+  on Chrome/Safari, mediocre elsewhere. Ship first to validate the use
+  case before paying for quality.
+- **v2:** server-side TTS (ElevenLabs / OpenAI `gpt-4o-mini-tts` /
+  Google) generating MP3 cached per-article. High quality, ~$0.005-0.02
+  per article — gate behind a "premium" tier or "top-rated articles
+  only" before turning on broadly.
+
+The sticky pattern: a **"Read me my queue"** button on `/saved` that
+plays the Read Later queue back-to-back, podcast-style. Commute /
+exercise / dishes use case — earbuds in, sauce.ai becomes the source
+for 20 minutes. Podcast-mode listening is habit-forming in a way visual
+reading isn't.
+
+v2+ extras: per-article duration estimate ("~4 min read · ~5 min
+listen"), lock-screen media controls via Media Session API, skip-to-
+next, playback speed.
+
+Depends on reader view body extraction.
 
 ### User-added RSS feed subscriptions
 **Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
@@ -148,14 +403,6 @@ Once a day, send each user a 5–10 article digest ranked by their algorithm.
 Requires: outbound email (cPanel's SMTP works), digest template, opt-in
 toggle in settings, an unsubscribe link, and a new cron job. Watch
 deliverability — shared cPanel IPs are reputation-mixed.
-
-### Trending topics view
-**Priority:** 5 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** backlog
-
-After dedup exists, a "Trending" page that groups today's stories by
-entity/topic with a count of sources covering each. Topic extraction can
-piggyback on the existing classifier batch (cheap addition to the LLM
-call).
 
 ### Test coverage expansion
 **Priority:** 5 · **LOE:** 5 · **Category:** infra · **Status:** backlog
