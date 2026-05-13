@@ -92,4 +92,18 @@ Both should return one row.
 
 ## Completed
 
-(none yet)
+### 2026-05-13 — Cron entry: daily email digest
+**Status:** completed · **PR:** #23 · **Opened:** 2026-05-13 · **Completed:** 2026-05-13
+
+Noon-UTC cron line for `jobs/send_digest.py` added in cPanel. Will fire
+its first real run at the next noon UTC; until users opt in it exits as
+a no-op.
+
+---
+
+### 2026-05-13 — Migration: users digest columns
+**Status:** completed · **PR:** #23 · **Opened:** 2026-05-13 · **Completed:** 2026-05-13
+
+`users.digest_enabled`, `digest_unsub_token`, `digest_last_sent_at` plus
+`idx_users_digest` index added on prod (`lt1ih6uyy2z6_news`). Python App
+restarted. `/account/settings` toggle is now safe to use.

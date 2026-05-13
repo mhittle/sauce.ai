@@ -156,7 +156,7 @@ will consume next. Includes the roadmap-called-out side effects:
 
 ---
 
-## 2026-05-13 — Daily personalized email digest (PR TBD)
+## 2026-05-13 — Daily personalized email digest (PR #23)
 
 Roadmap item shipped: Daily personalized email digest (Pri 6, LOE 7).
 
@@ -231,7 +231,7 @@ Roadmap item shipped: Daily personalized email digest (Pri 6, LOE 7).
 
 ### PR
 
-- **#TBD** Daily email digest (draft).
+- **#23** Daily email digest (merged) — requires manual DB migration + new cron entry.
 
 ---
 
