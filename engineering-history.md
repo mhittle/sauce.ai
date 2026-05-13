@@ -84,7 +84,7 @@ age out of the feed window over ~7 days.
 
 ---
 
-## 2026-05-13 — Story dossier v1 at `/story/<id>` (draft PR)
+## 2026-05-13 — Story dossier v1 at `/story/<id>` (PR #43)
 
 ### Context
 
@@ -201,7 +201,8 @@ so the cluster set exists; this PR builds the user-facing destination.
 
 ### PR
 
-- **PR #TBD** — Story dossier (draft).
+- **PR #43** — Story dossier (merged). DB migration applied on prod
+  (`story_dossiers` table) and Python App restarted.
 
 ---
 

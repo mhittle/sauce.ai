@@ -35,20 +35,25 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+(none currently)
+
+---
+
+## Completed
+
 ### 2026-05-13 — Migration: story_dossiers (framing-summary cache)
-**Status:** open · **PR:** TBD (story dossier) · **Opened:** 2026-05-13 ·
+**Status:** completed · **PR:** #43 · **Opened:** 2026-05-13 ·
+**Completed:** 2026-05-13 ·
 **File reference:** `news/seed/migrations/2026-05-13-story-dossiers.sql`
 
-Adds the `story_dossiers` table that caches each story cluster's
+Added the `story_dossiers` table that caches each story cluster's
 LLM-generated framing summary keyed by canonical `articles.id` and
 invalidated by `member_signature` (sha1 of sorted member ids). The
 `/story/<id>` route writes to this table on the first uncached view per
-signature — without the table, the first dossier-with-framing view 500s.
-Run via phpMyAdmin against `lt1ih6uyy2z6_news` **before merging the
-dossier PR**. Python App restart required after merge so the new
-blueprint registers.
+signature. Ran via phpMyAdmin against `lt1ih6uyy2z6_news`; Python App
+restarted post-migration so the new `story_bp` blueprint registers.
 
-**SQL to run:**
+**SQL applied:**
 
 ```sql
 CREATE TABLE IF NOT EXISTS story_dossiers (
@@ -64,13 +69,7 @@ CREATE TABLE IF NOT EXISTS story_dossiers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-**Verify:** `SHOW TABLES LIKE 'story_dossiers';` should return one row.
-
 ---
-
----
-
-## Completed
 
 ### 2026-05-13 — Cron entries: three discover_* jobs
 **Status:** completed · **PR:** #38 · **Opened:** 2026-05-13 · **Completed:** 2026-05-13
