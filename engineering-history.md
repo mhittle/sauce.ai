@@ -156,6 +156,85 @@ will consume next. Includes the roadmap-called-out side effects:
 
 ---
 
+## 2026-05-13 — Daily personalized email digest (PR TBD)
+
+Roadmap item shipped: Daily personalized email digest (Pri 6, LOE 7).
+
+### What shipped
+
+- **Opt-in only.** New `users.digest_enabled` flag (default 0). Users
+  toggle on `/account/settings`. A 40-hex `digest_unsub_token` is
+  minted lazily on first opt-in and stored on the user row. Each
+  email's `List-Unsubscribe` header points at
+  `/account/unsubscribe/<token>` (one-click via
+  `List-Unsubscribe-Post`); the unsubscribe route flips
+  `digest_enabled=0` and rotates the token so the link can't be
+  replayed.
+- **Cron job `jobs/send_digest.py`** wrapped in `job_lock("send_digest")`.
+  Selects users with `digest_enabled=1` AND
+  (`digest_last_sent_at IS NULL` OR older than
+  `DIGEST_RESEND_GUARD_HOURS` (default 20h)). Per user: loads the active
+  `user_algorithms` row, reuses `app.ranking.build_score_sql` /
+  `build_filters_sql` so digest ranking matches the live feed,
+  scopes to `DIGEST_LOOKBACK_HOURS` (default 24h), caps to
+  `DIGEST_MAX_ARTICLES` (default 8). Skip-empty for users whose
+  ranking returns nothing in the window. Updates
+  `digest_last_sent_at` only on successful send; one user's failure
+  rolls back its transaction and continues the loop.
+- **SMTP via stdlib `smtplib`.** Defaults to `localhost:25` (cPanel's
+  local MTA). `SMTP_USE_TLS=1` enables STARTTLS; `SMTP_USER`/`SMTP_PASSWORD`
+  enable auth. `SMTP_FROM` defaults to `news@sauce.ai`. No new pip
+  dependency.
+- **Templates.** `digest_email.html` (inline-styled, serif wordmark
+  matching PR #13) + `digest_email.txt` (plaintext fallback). Both
+  rendered through a Jinja `Environment` built from
+  `app/templates/`; `render_digest` is decoupled from Flask so it's
+  unit-testable without spinning up the app.
+- **Account blueprint.** New `app/routes/account.py` mounted at
+  `/account`: `GET/POST /settings` (login-required toggle),
+  `GET/POST /unsubscribe/<token>` (token-gated, no login).
+  `base.html` gets a single "Settings" link in the logged-in nav.
+- **Tests.** `tests/test_digest.py` (6 cases): SQL shape +
+  lookback/limit/weight params, empty-weights still queries,
+  multipart HTML+text render with article fields and unsubscribe URL
+  in both parts, subject includes article count, SMTP STARTTLS
+  path, SMTP plain local-MTA path. Full suite 61 passing.
+
+### Code touched
+
+- `seed/schema.sql` — users gets `digest_enabled`,
+  `digest_unsub_token`, `digest_last_sent_at`, plus
+  `idx_users_digest`.
+- `seed/migrations/2026-05-13-digest.sql` (new).
+- `app/config.py` — SMTP_* + DIGEST_* + SITE_URL.
+- `app/__init__.py` — register account blueprint.
+- `app/routes/account.py` (new) — settings + unsubscribe.
+- `app/templates/account_settings.html`, `unsubscribed.html`,
+  `digest_email.html`, `digest_email.txt` (new).
+- `app/templates/base.html` — one-line Settings link.
+- `jobs/send_digest.py` (new) — cron entry, job_lock, render +
+  smtp_send + select_articles, batched per user.
+- `tests/test_digest.py` (new, 6 cases).
+- `INSTALL.txt` — env-vars block (optional SMTP_*), new cron line,
+  v1 limitation note re deliverability, troubleshooting §8H.
+
+### Server-side state touched
+
+- **Migration pending**: `seed/migrations/2026-05-13-digest.sql`
+  must run via phpMyAdmin before any user toggles digest on,
+  otherwise the `/account/settings` POST errors.
+- **New cron entry** (noon UTC daily) per INSTALL §4c. Safe to add
+  before anyone opts in — runs as a no-op until then.
+- **New env vars** (optional, see INSTALL §2b) only required if
+  relaying through a real SMTP provider rather than cPanel's local
+  MTA.
+
+### PR
+
+- **#TBD** Daily email digest (draft).
+
+---
+
 ## 2026-05-13 — Cron job hardening + PyMySQL timeouts (PR #15)
 
 Stabilization pass on the pipeline. Two roadmap items shipped together

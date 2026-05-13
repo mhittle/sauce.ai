@@ -41,7 +41,7 @@ shipped.
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | backlog |
 | 6 | 6 | new-feature, ui | Search across articles | backlog |
-| 6 | 7 | new-feature, infra | Daily personalized email digest | backlog |
+| 6 | 7 | new-feature, infra | Daily personalized email digest | in-progress |
 | 5 | 5 | infra | Test coverage expansion | backlog |
 | 5 | 3 | security | Email verification on signup | backlog |
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
@@ -382,7 +382,7 @@ MySQL FULLTEXT index works for v1; revisit if quality is poor (then SQLite
 FTS5 in-process, or Meilisearch on a VPS).
 
 ### Daily personalized email digest
-**Priority:** 6 · **LOE:** 7 · **Category:** new-feature, infra · **Status:** backlog
+**Priority:** 6 · **LOE:** 7 · **Category:** new-feature, infra · **Status:** in-progress
 
 Once a day, send each user a 5–10 article digest ranked by their algorithm.
 Requires: outbound email (cPanel's SMTP works), digest template, opt-in

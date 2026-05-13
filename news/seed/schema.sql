@@ -5,13 +5,17 @@ SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
 CREATE TABLE IF NOT EXISTS users (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  email         VARCHAR(255) NOT NULL,
-  password_hash VARBINARY(255) NOT NULL,
-  is_admin      TINYINT(1) NOT NULL DEFAULT 0,
-  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id                   INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  email                VARCHAR(255) NOT NULL,
+  password_hash        VARBINARY(255) NOT NULL,
+  is_admin             TINYINT(1) NOT NULL DEFAULT 0,
+  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  digest_enabled       TINYINT(1) NOT NULL DEFAULT 0,
+  digest_unsub_token   CHAR(40) NOT NULL DEFAULT '',
+  digest_last_sent_at  DATETIME DEFAULT NULL,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_users_email (email)
+  UNIQUE KEY uk_users_email (email),
+  KEY idx_users_digest (digest_enabled, digest_last_sent_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS sessions (

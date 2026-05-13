@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{% if ok %}Unsubscribed{% else %}Link not valid{% endif %}{% endblock %}
+{% block content %}
+<div class="auth-form">
+  {% if ok %}
+    <h1>You're unsubscribed.</h1>
+    <p>We've turned off the daily digest for {{ email }}. You can re-enable it any time from your <a href="{{ url_for('account.settings') }}">settings</a>.</p>
+  {% else %}
+    <h1>That link isn't valid.</h1>
+    <p class="muted">The unsubscribe token didn't match any account. It may have already been used, or the link may be malformed. You can manage email settings from your <a href="{{ url_for('account.settings') }}">settings</a> page after signing in.</p>
+  {% endif %}
+</div>
+{% endblock %}

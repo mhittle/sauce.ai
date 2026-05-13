@@ -78,6 +78,17 @@ If that prints the path, you're ready.
         ANTHROPIC_MODEL         claude-haiku-4-5-20251001
         ADMIN_EMAIL             your-email@example.com
 
+    Optional (only required if you enabled the daily email digest cron in §4):
+        SITE_URL                https://sauce.ai/news
+        SMTP_HOST               localhost      (cPanel's local MTA; or relay host)
+        SMTP_PORT               25             (use 587 with SMTP_USE_TLS=1 for a relay)
+        SMTP_USE_TLS            0              (1 for STARTTLS)
+        SMTP_USER               <blank for localhost>
+        SMTP_PASSWORD           <blank for localhost>
+        SMTP_FROM               news@sauce.ai
+        DIGEST_MAX_ARTICLES     8
+        DIGEST_LOOKBACK_HOURS   24
+
     Do NOT set APPLICATION_ROOT. LiteSpeed/Passenger already
     mounts the app at /news via the "Application URL" setting;
     setting APPLICATION_ROOT in env vars causes a double-prefix
@@ -172,9 +183,16 @@ itself before invoking python.
 # nightly 3:30am UTC: prune + reputation refresh
 30  3 * * *   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python maintenance.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
 
+# daily 12:00 UTC: personalized email digest (only adds value once users opt in)
+0   12 * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python send_digest.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
     Note: output is redirected to logs/cron.log (NOT /dev/null).
     If a cron job goes wrong you must be able to see the error.
     Tail with:  $ tail -100 ~/public_html/sauce.ai/news/logs/cron.log
+
+    The digest cron is harmless before anyone opts in (it simply
+    exits with `sent=0 candidates=0`). Add it now or after first
+    opt-ins -- your call.
 
 
 ------------------------------------------------------------------
@@ -298,6 +316,18 @@ G. Code from a fresh git push isn't visible:
    "Setup Python App" -> "Restart". Passenger caches imports
    until restart, even after CI/CD writes new files.
 
+H. Daily digest cron runs but no email arrives:
+
+   Tail logs/cron.log -- the job logs `sent=N skipped_empty=M
+   failed=K candidates=C`. If candidates=0, no users have opted
+   in yet (toggle on /account/settings). If failed>0, check the
+   exception trace for SMTP errors. cPanel's local MTA on port
+   25 is usually unauthenticated and silently drops messages
+   destined for inboxes that don't trust the shared IP -- if
+   deliverability is poor, set SMTP_HOST / SMTP_USE_TLS=1 /
+   SMTP_USER / SMTP_PASSWORD to a real relay (Postmark, SES,
+   Mailgun) instead.
+
 
 ------------------------------------------------------------------
 9. SECRETS HYGIENE
@@ -328,5 +358,9 @@ G. Code from a fresh git push isn't visible:
   are skipped; everything else gets a row with status ok/empty/blocked/
   error. Pruned nightly at BODY_RETENTION_DAYS (default 30).
 - Internal click signal is recorded but not folded into popularity.
+- Daily email digest sends from the configured SMTP_FROM with no
+  DKIM/SPF setup by default. Deliverability on shared cPanel IPs
+  is mixed; configure a relay (SMTP_HOST + SMTP_USE_TLS=1 + creds)
+  via cPanel env vars if first-send tests land in spam.
 
 You're done. Visit  https://sauce.ai/news .
