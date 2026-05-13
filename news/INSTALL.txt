@@ -186,6 +186,15 @@ itself before invoking python.
 # daily 12:00 UTC: personalized email digest (only adds value once users opt in)
 0   12 * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python send_digest.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
 
+# hourly: source discovery harvest (Reddit/HN domain mining)
+15  * * * *   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python discover_harvest.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# nightly 4:00am UTC: source discovery validation (RSS auto-discovery on pending candidates)
+0   4 * * *   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python discover_promote.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# weekly Monday 5:00am UTC: LLM-suggested source discovery (uses Anthropic API)
+0   5 * * 1   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python discover_llm.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
     Note: output is redirected to logs/cron.log (NOT /dev/null).
     If a cron job goes wrong you must be able to see the error.
     Tail with:  $ tail -100 ~/public_html/sauce.ai/news/logs/cron.log
@@ -193,6 +202,16 @@ itself before invoking python.
     The digest cron is harmless before anyone opts in (it simply
     exits with `sent=0 candidates=0`). Add it now or after first
     opt-ins -- your call.
+
+    The three discover_* jobs grow the source catalog automatically.
+    discover_harvest mines new domains from Reddit/HN every hour;
+    discover_promote runs RSS auto-discovery on the candidates with
+    enough hits; discover_llm asks Claude weekly for high-quality
+    feeds we don't yet have. Approve or reject candidates on
+    /admin/discovery. The whole pipeline is gated behind admin
+    review by default -- nothing lands in `sources` until you click
+    Approve. If ANTHROPIC_API_KEY is unset, discover_llm exits as
+    a no-op.
 
 
 ------------------------------------------------------------------
@@ -328,6 +347,23 @@ H. Daily digest cron runs but no email arrives:
    SMTP_USER / SMTP_PASSWORD to a real relay (Postmark, SES,
    Mailgun) instead.
 
+I. /admin/discovery is empty even though discover_harvest is running:
+
+   Three things to check.
+   1. The hourly harvest only logs candidates whose domains aren't
+      already in `sources`. With 768 seed sources already in the
+      table, most Reddit/HN URLs already map to a known domain.
+      Single-digit `candidates_upserted` per tick is normal.
+   2. The "Ready to review" section only shows rows after the
+      nightly `discover_promote` job runs RSS auto-discovery and
+      sets state='validated'. Pending rows below score
+      DISCOVER_PROMOTION_SCORE_MIN (default 3) won't be probed
+      until they hit the threshold.
+   3. discover_llm only runs on Mondays at 05:00 UTC and requires
+      ANTHROPIC_API_KEY. Tail logs/cron.log for the run output;
+      if it printed "ANTHROPIC_API_KEY not set; skipping" the
+      env var isn't reaching the cron environment.
+
 
 ------------------------------------------------------------------
 9. SECRETS HYGIENE
@@ -362,6 +398,13 @@ H. Daily digest cron runs but no email arrives:
   DKIM/SPF setup by default. Deliverability on shared cPanel IPs
   is mixed; configure a relay (SMTP_HOST + SMTP_USE_TLS=1 + creds)
   via cPanel env vars if first-send tests land in spam.
+- Automated source discovery (Reddit/HN + LLM agent) is gated
+  behind admin review on /admin/discovery. Approved candidates
+  land in `sources` with default source_lean=0,
+  source_reputation=0.6, country=US, region=national; tune those
+  on the row directly via the admin form before approval. Social-
+  firehose discovery (Mastodon, Bluesky, X/Twitter) is roadmapped
+  but not in v1.
 - Article deduplication clusters byte-identical reprints (via
   title_hash) and minor re-headlines of identical bodies (via
   64-bit SimHash, Hamming<=8). Heavy paraphrases of the same

@@ -206,3 +206,8 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .reader-original { font-weight: 500; }
 .card-meta .reader-link { color: var(--muted); margin-left: auto; font-size: 0.85em; }
 .card-meta .reader-link:hover { color: var(--accent); }
+
+/* admin > discovery */
+.discovery-actions { display: flex; flex-wrap: wrap; gap: 0.4em; align-items: center; }
+.discovery-actions form { display: inline-flex; gap: 0.3em; flex-wrap: wrap; align-items: center; }
+.discovery-actions input { padding: 0.25em 0.4em; border: 1px solid var(--line); border-radius: 4px; font-size: 0.9em; }

@@ -1,0 +1,141 @@
+{% extends "admin/_layout.html" %}
+{% block admin %}
+<h1>Source discovery</h1>
+
+<p class="muted">
+  Candidates are surfaced by the hourly Reddit/HN harvest and the weekly
+  Claude suggestion pass. Nightly validation runs RSS auto-discovery on
+  rows with score &ge; {{ score_min }} (or with an LLM-suggested
+  <code>feed_url</code>) and moves them into &ldquo;Ready to review&rdquo; below.
+</p>
+
+<p class="muted">
+  Pool sizes &mdash;
+  {% for state in ['pending', 'validated', 'approved', 'rejected', 'blacklisted'] %}
+    <strong>{{ state }}</strong>: {{ counts.get(state, 0) }}{% if not loop.last %} &middot; {% endif %}
+  {% endfor %}
+</p>
+
+<h2>Ready to review ({{ validated|length }})</h2>
+{% if not validated %}
+  <p class="muted">Nothing waiting. The nightly promotion job hasn't found a
+  feed for any pending candidate yet, or you've already cleared the queue.</p>
+{% else %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Domain</th>
+      <th>Suggested feed</th>
+      <th>Score</th>
+      <th>Via</th>
+      <th>Notes</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in validated %}
+    <tr>
+      <td>
+        <strong>{{ c.domain }}</strong>
+        {% if c.homepage_url %}
+          <br><a href="{{ c.homepage_url }}" target="_blank" rel="noopener noreferrer" class="muted">{{ c.homepage_url }}</a>
+        {% endif %}
+      </td>
+      <td>
+        <a href="{{ c.feed_url }}" target="_blank" rel="noopener noreferrer">{{ c.feed_url }}</a>
+        {% if c.name %}<br><span class="muted">{{ c.name }}</span>{% endif %}
+      </td>
+      <td>{{ c.score }}</td>
+      <td>
+        {{ c.last_seen_via }}
+        {% if c.first_seen_via != c.last_seen_via %}<br><span class="muted">first: {{ c.first_seen_via }}</span>{% endif %}
+      </td>
+      <td class="muted">{{ c.notes or '' }}</td>
+      <td class="discovery-actions">
+        <form method="post" action="{{ url_for('admin.discovery_approve', cid=c.id) }}">
+          <input type="text" name="name" value="{{ c.name or c.domain }}" placeholder="name" size="20" />
+          <input type="text" name="category" value="{{ c.category or 'general' }}" placeholder="category" size="10" />
+          <input type="text" name="country" value="US" size="3" />
+          <input type="text" name="region" value="national" size="9" />
+          <input type="number" name="source_lean" step="0.1" min="-1" max="1" value="0" title="-1..+1" />
+          <input type="number" name="source_reputation" step="0.05" min="0" max="1" value="0.6" title="0..1" />
+          <button type="submit">Approve</button>
+        </form>
+        <form method="post" action="{{ url_for('admin.discovery_reject', cid=c.id) }}" class="inline">
+          <button type="submit">Reject</button>
+        </form>
+        <form method="post" action="{{ url_for('admin.discovery_blacklist', cid=c.id) }}" class="inline"
+              onsubmit="return confirm('Blacklist {{ c.domain }} so it never reappears in candidates?')">
+          <button type="submit">Blacklist</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Pending validation ({{ pending|length }})</h2>
+{% if not pending %}
+  <p class="muted">No pending candidates. Try the hourly harvest cron, or wait for the next external news cycle.</p>
+{% else %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Domain</th>
+      <th>Score</th>
+      <th>Via</th>
+      <th>First seen</th>
+      <th>Last seen</th>
+      <th>Last error</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in pending %}
+    <tr class="{{ 'inactive' if c.score < score_min else '' }}">
+      <td>{{ c.domain }}</td>
+      <td>{{ c.score }}{% if c.score < score_min %} <span class="muted">(below {{ score_min }})</span>{% endif %}</td>
+      <td>{{ c.last_seen_via }}</td>
+      <td class="muted">{{ c.first_seen_at.strftime('%Y-%m-%d %H:%M') if c.first_seen_at else '' }}</td>
+      <td class="muted">{{ c.last_seen_at.strftime('%Y-%m-%d %H:%M') if c.last_seen_at else '' }}</td>
+      <td class="muted">{{ c.validation_error or '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Recent decisions (last 14d, {{ recent|length }})</h2>
+{% if not recent %}
+  <p class="muted">No decisions in the last 14 days.</p>
+{% else %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Domain</th>
+      <th>State</th>
+      <th>Feed</th>
+      <th>Decided</th>
+      <th>Reason</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in recent %}
+    <tr>
+      <td>{{ c.domain }}</td>
+      <td>{{ c.state }}</td>
+      <td>
+        {% if c.feed_url %}
+          <a href="{{ c.feed_url }}" target="_blank" rel="noopener noreferrer">{{ c.feed_url }}</a>
+        {% else %}
+          <span class="muted">&mdash;</span>
+        {% endif %}
+      </td>
+      <td class="muted">{{ (c.validation_attempted_at or c.last_seen_at).strftime('%Y-%m-%d %H:%M') if (c.validation_attempted_at or c.last_seen_at) else '' }}</td>
+      <td class="muted">{{ c.reject_reason or '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}
