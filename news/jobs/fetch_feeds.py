@@ -18,6 +18,7 @@ import requests
 
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
 from app.classifier import title_hash as compute_title_hash, article_simhash
+from app.language import is_english
 
 JOB = "fetch_feeds"
 logger = setup_logging(JOB)
@@ -74,7 +75,7 @@ def _extract_byline(entry):
 def fetch_one(conn, source, http):
     sid = source["id"]
     url = source["feed_url"]
-    fresh = stale = errors = 0
+    fresh = stale = errors = skipped_lang = 0
     # Each call has a 5-15s HTTP gap before the writes; reconnect transparently
     # if shared-host MySQL closed the socket since our last commit.
     conn.ping(reconnect=True)
@@ -104,7 +105,9 @@ def fetch_one(conn, source, http):
                 (sid,),
             )
         conn.commit()
-        return 0, 0, 1
+        return 0, 0, 1, 0
+
+    feed_language = getattr(parsed.feed, "language", None) if getattr(parsed, "feed", None) else None
 
     with conn.cursor() as cur:
         for entry in parsed.entries[:60]:
@@ -116,6 +119,9 @@ def fetch_one(conn, source, http):
             t_hash = compute_title_hash(title)
             summary_text = (entry.get("summary") if isinstance(entry, dict)
                             else getattr(entry, "summary", "")) or ""
+            if not is_english(title, summary_text, feed_language):
+                skipped_lang += 1
+                continue
             sim = article_simhash(title, summary_text)
             try:
                 cur.execute(
@@ -156,7 +162,7 @@ def fetch_one(conn, source, http):
             (sid,),
         )
     conn.commit()
-    return fresh, stale, errors
+    return fresh, stale, errors, skipped_lang
 
 
 def main():
@@ -184,14 +190,18 @@ def _run():
             )
             sources = cur.fetchall()
 
-        total_fresh = total_stale = total_err = 0
+        total_fresh = total_stale = total_err = total_skip_lang = 0
         for s in sources:
-            f, st, er = fetch_one(conn, s, http)
+            f, st, er, sl = fetch_one(conn, s, http)
             total_fresh += f
             total_stale += st
             total_err += er
+            total_skip_lang += sl
 
-        msg = f"fetched={len(sources)} fresh={total_fresh} stale={total_stale} errors={total_err}"
+        msg = (
+            f"fetched={len(sources)} fresh={total_fresh} stale={total_stale} "
+            f"errors={total_err} skipped_lang={total_skip_lang}"
+        )
         logger.info(msg)
         db_log(conn, JOB, "info", msg)
     finally:

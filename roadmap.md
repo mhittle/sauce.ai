@@ -385,6 +385,15 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-13
 
+- **English-only article filter at fetch time** — ad-hoc, ops/backend.
+  PR #42. New `app/language.py` with pure-Python `is_english()` that
+  trusts non-English RSS `<language>` tags and otherwise rejects on a
+  >25% non-Latin letter ratio in title+summary. Wired into
+  `fetch_feeds.py` before the INSERT; rejected entries surface as
+  `skipped_lang=N` in the per-tick summary. No DB migration, no new
+  dependency. Latin-script European content (FR/DE/ES/IT) still
+  slips through unless the feed self-declares — limit documented in
+  INSTALL.txt §10.
 - **Mobile / responsive polish** — Pri 7, LOE 4, ui. PR #40. Single
   additive `@media (max-width: 640px)` block in `app/static/style.css`
   plus a `.table-scroll` utility — desktop layout untouched. Collapses

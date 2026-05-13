@@ -7,6 +7,83 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — English-only article filter at fetch time (PR #42)
+
+### Context
+
+User reported non-English articles surfacing in the feed and asked to
+restrict to English "for now". The 768-source catalog mixes ~50-100
+non-English outlets (FR/DE/JP/HK/ES/NL/IT/KR plus unlabeled tail in
+the QA/IN buckets); some US-labeled outlets also syndicate occasional
+non-English wire content. Filter has to work per-article, not just
+per-source.
+
+### What shipped
+
+- **`app/language.py`** — pure-Python `is_english(title, summary,
+  feed_language)`. Two-stage: (1) if the RSS feed's `<language>` tag
+  declares a non-English code (e.g., `ja`, `de-DE`), trust it and
+  reject; (2) otherwise count letter characters in title+summary and
+  reject if the share outside the Latin script ranges (Basic Latin,
+  Latin-1, Latin Extended-A/B, Latin Extended Additional) exceeds
+  `NON_LATIN_THRESHOLD=0.25`. Permissive by default — empty/None
+  inputs accept. No new dependency.
+- **`jobs/fetch_feeds.py`** — filter runs before the
+  `INSERT IGNORE INTO articles`. Pulls `parsed.feed.language` once
+  per feed, checks each entry's title+summary. Rejected entries
+  don't insert and don't bump `fresh`/`stale`; instead a new
+  `skipped_lang` counter surfaces in the per-tick summary line
+  (`fetched=N fresh=N stale=N errors=N skipped_lang=N`) and in
+  `pipeline_log`.
+- **Per design call** (user-confirmed): existing non-English rows in
+  `articles` are left alone. They age out of the 7-day feed window
+  naturally and the multiplicative recency gate from BUG-011
+  crushes them within ~4 days regardless of static score. No
+  backfill purge.
+- **Known limitation, documented in INSTALL.txt §10**: Latin-script
+  European content (French, German, Spanish, Italian, Dutch, etc.)
+  reads as English by the script heuristic and slips through unless
+  the feed self-declares a non-English tag. If those leak in
+  meaningful volume, next step is either a curated source-language
+  column or adding `langdetect` as a dep.
+
+### Code touched
+
+- `news/app/language.py` — new, pure helpers.
+- `news/jobs/fetch_feeds.py` — import + per-entry filter + extended
+  `fetch_one` return tuple + summary line includes `skipped_lang`.
+- `news/tests/test_language.py` — new, 21 cases covering English /
+  CJK / Arabic / Cyrillic / Devanagari / Latin Extended accents /
+  Vietnamese diacritics / empty inputs / mistakenly-tagged feeds.
+- `news/INSTALL.txt` §10 — v1-limit note.
+- `roadmap.md` — new Done entry.
+
+### Server-side state touched
+
+None. No DB migration, no new cron entry, no new pip dep, no env-var
+change. `fetch_feeds` is a cron entry — it picks up the new module
+on its next tick automatically; no Passenger restart strictly
+required. Existing non-English `articles` rows stay in the DB and
+age out of the feed window over ~7 days.
+
+### PR
+
+- **PR #42** English-only filter at fetch time (draft).
+
+### Open items
+
+- Watch the next few `fetch_feeds` ticks on prod and confirm
+  `skipped_lang` is non-zero in cron.log. Sample a few rejected
+  domains to make sure we're not over-filtering legitimate English
+  content with heavy named-entity non-Latin (e.g., a US news story
+  whose title is "Tokyo's 東京 district reopens" should still pass —
+  the 0.25 ratio is tuned for that).
+- If French/German/Spanish content is the bulk of remaining
+  leakage, follow up with either source-level `language` tagging or
+  a `langdetect` dep.
+
+---
+
 ## 2026-05-13 — Story dossier v1 at `/story/<id>` (draft PR)
 
 ### Context
