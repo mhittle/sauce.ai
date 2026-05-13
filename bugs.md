@@ -86,6 +86,40 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-011 — Feed shows same articles on page reload; doesn't refresh by recency
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
+
+User reported that loading `/` kept showing yesterday's articles even
+after reloading. Pipeline was healthy (BUG-009's reconnect fix had
+caught up the pending backlog); the issue was in `app/ranking.py`.
+
+**Root cause:** ranking was purely additive. Quality features
+(`objectivity`, `info_density`, `source_reputation`, etc.) summed to
+~3.0 for a great article; recency was just one more additive term
+`recency_w * EXP(-hours/24)` capped at `recency_w` (0.7 in the default
+`balanced` preset). A 3-day-old high-quality article scored ~3.0 + 0.04
+≈ 3.04; a 1-hour-old medium-quality article scored ~1.5 + 0.7 ≈ 2.2.
+Static quality dominated forever; reloads returned the same top-30
+because the underlying score barely changed minute to minute.
+
+**Fix:** changed `recency` semantics from additive term to
+**multiplicative freshness gate**: `score = quality * EXP(-recency_w *
+hours / 24)`. The `recency` slider now controls decay strength rather
+than a small additive contribution. With the default `recency=0.7`,
+the multiplier is 1.0 at 0h, ~0.50 at 24h, ~0.25 at 48h, ~0.05 at 4d,
+~0.007 at 7d — a 4-day-old article is structurally crushed regardless
+of its static quality, while fresh quality articles still rank above
+fresh mediocre ones. `recency=0` opts out (legacy behavior).
+`weights_to_expression` updated so the `/algo` Code tab matches.
+
+**Side note:** `feed.py:93` keeps the 7-day window. With the
+multiplicative decay it's effectively self-narrowing — no need to
+tighten it.
+
+**Note on numbering:** originally logged as BUG-010 in this session;
+renumbered to BUG-011 on rebase because a parallel session's PR #35
+landed BUG-010 first (feature bars on cards).
+
 ### BUG-010 — Per-feature ranking bars on cards don't reflect feature values
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
 
@@ -111,7 +145,7 @@ No DB change, no migration. The fix is a template/CSS-contract
 correction and is picked up on the next FTP deploy + Python App
 restart (Jinja autoreloads templates, but a restart is cleaner).
 
-
+### BUG-009 — `classify_pending` died on every tick with `MySQL server has gone away`
 **Status:** resolved · **Reporter:** internal · **Opened:** 2026-05-13 · **Closed:** 2026-05-13 (PR #32)
 
 Cron stopped producing log output on prod at 2026-05-12 22:50 server-local.

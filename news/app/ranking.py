@@ -152,12 +152,17 @@ def default_weights():
 def build_score_sql(weights: dict):
     """Return (sql_expression, params_dict) computing a per-article score.
 
-    Per feature: score = weight * (1 - |value - direction| / scale_width).
-    For unsigned features this generalises the old `weight * value` (which
-    is the special case direction=1.0) and lets users explicitly target a
-    low or mid value as well.
+    Per feature: weight * (1 - |value - direction| / scale_width). The sum
+    of feature contributions is the article's "quality" score (in [0, sum
+    of weights]).
 
-    Recency uses an exponential decay on minutes since publish.
+    Recency is applied as a multiplicative freshness gate on top of the
+    quality score: `quality * EXP(-recency_w * hours_old / 24)`. Higher
+    `recency` = steeper decay; `recency=0` disables decay entirely
+    (legacy behavior). Multiplicative was chosen over additive because an
+    additive recency term can't outweigh a stack of high-quality static
+    features, so old high-quality articles dominated the feed forever
+    (BUG-011).
     """
     parts = []
     params = {}
@@ -178,15 +183,22 @@ def build_score_sql(weights: dict):
             f"(%({fk}_w)s * (1 - ABS(f.{fk} - %({fk}_d)s) / {scale}))"
         )
 
+    quality_expr = " + ".join(parts) if parts else "0"
+
     try:
         recency_w = float(weights.get("recency", 0) or 0)
     except (TypeError, ValueError):
         recency_w = 0.0
-    if recency_w != 0:
+    if recency_w > 0:
         params["recency_w"] = recency_w
-        parts.append("(%(recency_w)s * EXP(-TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP())/1440))")
+        expr = (
+            f"({quality_expr}) "
+            f"* EXP(-%(recency_w)s "
+            f"* TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()) / 1440)"
+        )
+    else:
+        expr = quality_expr
 
-    expr = " + ".join(parts) if parts else "0"
     return expr, params
 
 
@@ -248,8 +260,6 @@ def weights_to_expression(weights: dict) -> str:
         rec = float(weights.get("recency", 0) or 0)
     except (TypeError, ValueError):
         rec = 0.0
-    if rec != 0:
-        parts.append(f"    {rec:.2f} * exp(-article.hours_old / 24)")
 
     cat_filter = weights.get("category_filter") or []
     deny = weights.get("source_deny") or []
@@ -259,11 +269,18 @@ def weights_to_expression(weights: dict) -> str:
         lines.append("    if not (" + " and ".join(filters) + "):")
         lines.append("        return None  # filtered by threshold")
     if not parts:
-        lines.append("    return 0  # no weights set")
+        if rec > 0:
+            lines.append(f"    return 0 * exp(-{rec:.2f} * article.hours_old / 24)")
+        else:
+            lines.append("    return 0  # no weights set")
     else:
-        lines.append("    return (")
+        lines.append("    quality = (")
         lines.append("\n      + ".join(p.strip() for p in parts))
         lines.append("    )")
+        if rec > 0:
+            lines.append(f"    return quality * exp(-{rec:.2f} * article.hours_old / 24)")
+        else:
+            lines.append("    return quality")
     lines.append("")
     if cat_filter:
         lines.append(f"# only show categories: {cat_filter}")
