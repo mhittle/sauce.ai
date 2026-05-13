@@ -66,6 +66,7 @@ def classify_batch_llm(api_key: str, model: str, articles: List[Tuple]) -> dict:
                 }
             ],
             messages=[{"role": "user", "content": user_block}],
+            timeout=30.0,
         )
     except Exception as e:
         raise LLMUnavailable(f"Anthropic API error: {e}")

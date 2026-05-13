@@ -8,21 +8,23 @@ import hashlib
 import os
 import sys
 import time
-import socket
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import feedparser
+import requests
 
-from _bootstrap import Config, get_conn, setup_logging, db_log
+from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
 from app.classifier import title_hash as compute_title_hash
 
 JOB = "fetch_feeds"
 logger = setup_logging(JOB)
 
-socket.setdefaulttimeout(20)
+UA = "sauce.ai-news/1.0"
+FEED_CONNECT_TIMEOUT = 5
+FEED_READ_TIMEOUT = 15
 
 
 def _hash_url(u: str) -> str:
@@ -69,12 +71,19 @@ def _extract_byline(entry):
     return None
 
 
-def fetch_one(conn, source):
+def fetch_one(conn, source, http):
     sid = source["id"]
     url = source["feed_url"]
     fresh = stale = errors = 0
     try:
-        parsed = feedparser.parse(url, request_headers={"User-Agent": "sauce.ai-news/1.0"})
+        resp = http.get(
+            url,
+            headers={"User-Agent": UA, "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.5"},
+            timeout=(FEED_CONNECT_TIMEOUT, FEED_READ_TIMEOUT),
+            allow_redirects=True,
+        )
+        resp.raise_for_status()
+        parsed = feedparser.parse(resp.content)
         if parsed.bozo and not parsed.entries:
             raise RuntimeError(f"feedparser bozo: {parsed.bozo_exception}")
     except Exception as e:
@@ -137,8 +146,17 @@ def fetch_one(conn, source):
 
 
 def main():
+    try:
+        with job_lock(JOB):
+            _run()
+    except AlreadyRunning:
+        logger.info("%s lock held by another process; skipping this tick", JOB)
+
+
+def _run():
     cfg = Config
     conn = get_conn()
+    http = requests.Session()
     batch = cfg.FEED_FETCH_BATCH
     try:
         with conn.cursor() as cur:
@@ -154,7 +172,7 @@ def main():
 
         total_fresh = total_stale = total_err = 0
         for s in sources:
-            f, st, er = fetch_one(conn, s)
+            f, st, er = fetch_one(conn, s, http)
             total_fresh += f
             total_stale += st
             total_err += er
@@ -163,6 +181,7 @@ def main():
         logger.info(msg)
         db_log(conn, JOB, "info", msg)
     finally:
+        http.close()
         conn.close()
 
 

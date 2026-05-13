@@ -7,6 +7,69 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-12 — Paywall feature: active per-article detection (PR #14)
+
+New `paywall` ranking feature so users can down-weight or hard-filter
+articles behind subscription walls.
+
+Detection is active per-article during `classify_pending`: HTTP GET with
+an 8s timeout, check for JSON-LD `isAccessibleForFree: false`, NYT-style
+`<meta property="article:content_tier">`, and paywall phrases on short
+bodies. Scoring (0..1):
+- `1.0` — JSON-LD or `content_tier` locked/paid/subscriber
+- `0.8` — paywall phrase on body < 8 KB
+- `0.6` — `content_tier=metered`
+- `0.5` — blocked / 4xx / 5xx / timeout / short body, no phrase (suspected)
+- `0.0` — long body, no signals (assumed free)
+
+Product call: sites that won't let us in score 0.5 (suspected) rather
+than 0.0. A discerning reader who wants to avoid paywalls is better
+served by a conservative default than by letting unverified articles
+through.
+
+Catalog entry: unsigned, default direction 0.0 (prefer free), default
+weight 0.0 (opt-in — existing user algos unchanged). Threshold ~0.2 hides
+anything but fully free.
+
+Schema: new `article_features.paywall FLOAT` (default 0). Migration at
+`news/seed/migrations/2026-05-12-paywall.sql`. Score SQL + threshold
+filter pick up the new column automatically because both iterate over
+`FEATURES`. `algo.html` renders the new control via the same loop.
+
+`/admin/feeds` gains a Paywall column — rolling 7-day mean per source,
+color-coded green/amber/red.
+
+Pipeline cost: classify_pending now does one HTTP GET per article in
+addition to the rules + LLM batch work. The loop honours
+`CLASSIFY_BUDGET_SECONDS` so a stuck site can't blow a cron tick.
+Articles cut off by the budget get `paywall=0.5` (same as live blocks).
+Cron job hardening on the roadmap (Pri 8, LOE 3) would tighten this.
+
+### Code touched
+
+- `app/classifier/paywall.py` — new module, `detect_paywall(url)`.
+- `app/classifier/__init__.py` — export.
+- `jobs/classify_pending.py` — wired in detector, added `requests.Session`,
+  paywall column in INSERT.
+- `app/ranking.py` — `paywall` in `FEATURES`.
+- `app/routes/admin.py`, `templates/admin/feeds.html`, `static/style.css`
+  — admin paywall column + color coding.
+- `seed/schema.sql`, `seed/feature_catalog.sql`,
+  `seed/migrations/2026-05-12-paywall.sql`.
+- `tests/test_paywall.py` (12 cases), `tests/test_ranking.py` (3 new).
+
+### Server-side state touched
+
+- **Migration pending**: `seed/migrations/2026-05-12-paywall.sql` must
+  run on prod via phpMyAdmin before the next classify_pending cycle,
+  otherwise the INSERT errors. Followed by a Python App restart.
+
+### PR
+
+- **#14** Paywall feature (merged) — requires manual DB migration
+
+---
+
 ## 2026-05-12 — Editorial serif wordmark in topnav (PR #13)
 
 User wanted "a very, very subtle hint of personality" on the title/logo —

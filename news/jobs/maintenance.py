@@ -5,13 +5,21 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _bootstrap import Config, get_conn, setup_logging, db_log
+from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
 
 JOB = "maintenance"
 logger = setup_logging(JOB)
 
 
 def main():
+    try:
+        with job_lock(JOB):
+            _run()
+    except AlreadyRunning:
+        logger.info("%s lock held by another process; skipping this tick", JOB)
+
+
+def _run():
     cfg = Config
     conn = get_conn()
     try:

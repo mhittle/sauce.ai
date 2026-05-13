@@ -14,6 +14,9 @@ def get_conn():
             charset="utf8mb4",
             cursorclass=pymysql.cursors.DictCursor,
             autocommit=False,
+            connect_timeout=5,
+            read_timeout=15,
+            write_timeout=10,
         )
     return g.db
 
@@ -56,4 +59,7 @@ def connect_standalone(cfg):
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=False,
+        connect_timeout=5,
+        read_timeout=30,
+        write_timeout=15,
     )

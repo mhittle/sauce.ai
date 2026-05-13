@@ -13,7 +13,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _bootstrap import Config, get_conn, setup_logging, db_log
+from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
 from app.classifier import (
     compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline,
     source_obscurity_score, story_obscurity_score, detect_paywall,
@@ -37,6 +37,14 @@ def _ensure_journalist(cur, normalized, display):
 
 
 def main():
+    try:
+        with job_lock(JOB):
+            _run()
+    except AlreadyRunning:
+        logger.info("%s lock held by another process; skipping this tick", JOB)
+
+
+def _run():
     cfg = Config
     start = time.time()
     conn = get_conn()

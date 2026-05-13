@@ -4,20 +4,25 @@ Cron scripts source this via:
 
     import os, sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from _bootstrap import Config, get_conn, setup_logging, db_log
+    from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock
 
 so they work regardless of the caller's cwd.
 """
+import fcntl
 import os
 import sys
 import logging
+from contextlib import contextmanager
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 from app.config import Config  # noqa: E402
-from app.db import connect_standalone  # noqa: E402
+
+
+class AlreadyRunning(Exception):
+    """Raised by job_lock when another instance of the job already holds the lock."""
 
 
 def setup_logging(name):
@@ -48,4 +53,33 @@ def db_log(conn, job, level, message):
 
 
 def get_conn():
+    from app.db import connect_standalone
     return connect_standalone(Config)
+
+
+@contextmanager
+def job_lock(name):
+    """Per-job mutex backed by fcntl.flock. Wrap cron main() in this so a
+    slow run doesn't get re-launched on top of itself when the next cron
+    fires. Raises AlreadyRunning if the lock is held — the caller (cron
+    entrypoint) should treat that as a successful no-op."""
+    logs_dir = os.path.join(HERE, "logs")
+    try:
+        os.makedirs(logs_dir, exist_ok=True)
+    except OSError:
+        pass
+    lockpath = os.path.join(logs_dir, f"{name}.lock")
+    fh = open(lockpath, "w")
+    try:
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as e:
+            fh.close()
+            raise AlreadyRunning(name) from e
+        yield
+    finally:
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        fh.close()

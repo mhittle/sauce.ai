@@ -4,5 +4,6 @@ __pycache__/
 .env
 *.zip
 news/logs/*.log
+news/logs/*.lock
 .pytest_cache/
 .venv/
