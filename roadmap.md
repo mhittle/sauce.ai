@@ -28,7 +28,6 @@ shipped.
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | backlog |
 | 8 | 7 | algo, backend | Article deduplication across sources | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
-| 8 | 6 | backend, new-feature, ui | In-app reader view (body extraction + sauce.ai/read/<id>) | in-progress |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
@@ -240,38 +239,6 @@ Could ship before the full dossier page as a faster wedge into the
 
 Depends on Article deduplication (story_id). Pairs with Story dossier.
 
-### In-app reader view (with body extraction)
-**Priority:** 8 · **LOE:** 6 · **Category:** backend, new-feature, ui · **Status:** in-progress
-
-`sauce.ai/news/read/<article_id>` renders the article body inside our
-own typography and chrome. Pipeline change: `classify_pending` (or a
-sibling job) runs `trafilatura` on the article URL post-fetch, extracts
-main body text + author + lead image, stores in a new `article_bodies`
-table kept separate from the main row so `articles` stays lean. Card
-click is configurable per-user — go to source (today), or stay in the
-reader.
-
-Why it's foundational, not just another feature:
-- **Retention.** Reader stays on `sauce.ai` instead of bouncing to a
-  17-tracker NYT page. Biggest single retention lever in this theme.
-- **Body text unlocks downstream features.** Better classification
-  (Flesch-Kincaid is much more accurate on body than RSS summary),
-  better dedup, article summaries, TTS, full-text search — all chain
-  off having the body locally.
-- **Typography continuity.** The "discerning reader" aesthetic from
-  the PR-#13 wordmark extends into the actual reading moment.
-
-Tradeoffs:
-- Extraction success ~85-90% across the wild web. Paywalled bodies
-  aren't extractable; fall through to source link in that case.
-- Some sites' ToS technically disallow reformatting. Low practical
-  risk at our scale but worth noting.
-- Storage: ~5-30 KB/article × N articles/day adds up. Ship with a
-  30-day retention window on bodies and prune in `maintenance.py`;
-  bookmarked articles get longer retention (see Article save).
-
-Subsumes the older Pri-6 "Full-text article extraction" item.
-
 ### Article summary
 **Priority:** 7 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
 
@@ -428,6 +395,15 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-13
 
+- **In-app reader view (body extraction + `/read/<id>`)** — Pri 8, LOE 6,
+  backend/new-feature/ui. PR #21. New `article_bodies` table, trafilatura
+  extractor wired into `classify_pending` (paywall-aware, shares the
+  cron wallclock budget), `/read/<id>` blueprint + reader template,
+  nightly `BODY_RETENTION_DAYS` prune in `maintenance.py`, single `Read →`
+  link in `card-meta`. **Requires manual DB migration**
+  (`seed/migrations/2026-05-13-article-bodies.sql`) and `pip install -r
+  requirements.txt` (adds `trafilatura==1.12.2` + `lxml`) on cPanel,
+  then Python App restart.
 - **Daily personalized email digest** — Pri 6, LOE 7, new-feature/infra.
   PR #23. Opt-in toggle on `/account/settings`, `users.digest_enabled`
   + 40-hex unsub token, noon-UTC cron `jobs/send_digest.py` reusing the
