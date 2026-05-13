@@ -61,19 +61,33 @@ def index():
         pref_score_mult = " * COALESCE(usp.weight, 1.0)"
         pref_params["_pref_uid"] = u["id"]
 
+    # Dedup: `a.id = a.story_id` keeps only canonical members. Each cluster's
+    # canonical was chosen at classify time by max(source_reputation), tiebreak
+    # oldest published_at. `cluster_size` rides in the row for future UI use
+    # (Across-the-spectrum in-feed badge, story dossier).
     sql = f"""
       SELECT a.id, a.title, a.summary, a.url, a.thumbnail_url, a.byline,
-             a.published_at, s.name AS source_name, s.id AS source_id,
+             a.published_at, a.story_id,
+             s.name AS source_name, s.id AS source_id,
              f.political_lean, f.source_lean, f.objectivity, f.reading_level,
              f.info_density, f.journalist_reputation, f.source_reputation,
              f.popularity, f.category, f.country,
+             COALESCE(cs.cluster_size, 1) AS cluster_size,
              ({score_expr}){pref_score_mult} AS score
       FROM articles a
       JOIN sources s ON s.id = a.source_id
       JOIN article_features f ON f.article_id = a.id
+      LEFT JOIN (
+        SELECT story_id, COUNT(*) AS cluster_size
+        FROM articles
+        WHERE status = 'classified'
+          AND published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+        GROUP BY story_id
+      ) cs ON cs.story_id = a.story_id
       {pref_join_sql}
       WHERE a.status = 'classified'
         AND a.published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+        AND (a.story_id IS NULL OR a.id = a.story_id)
         {filter_sql}
         {cat_filter_sql}
         {pref_filter_sql}

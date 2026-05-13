@@ -26,6 +26,55 @@ def title_hash(title: str) -> str:
     return hashlib.sha1(normalize_title(title).encode("utf-8", "ignore")).hexdigest()
 
 
+_SIMHASH_STOPWORDS = {
+    "the", "a", "an", "of", "to", "in", "is", "on", "for", "and", "or",
+    "at", "by", "with", "from", "that", "this", "as", "it", "be", "are",
+    "was", "were", "has", "have", "had", "but", "not", "no", "into",
+    "after", "before", "over", "under", "out", "up", "down", "off",
+}
+_SIMHASH_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def simhash64(text: str) -> int:
+    """64-bit SimHash over tokenized text. Returns 0 for empty input.
+
+    Used for fuzzy article clustering: Hamming distance <= ~3 between two
+    simhashes implies near-duplicate content. Pure Python; no deps. Token
+    hash is md5 (not security-sensitive, just stable + well-distributed).
+    """
+    if not text:
+        return 0
+    tokens = [t for t in _SIMHASH_TOKEN_RE.findall(text.lower())
+              if t not in _SIMHASH_STOPWORDS and len(t) > 1]
+    if not tokens:
+        return 0
+    vec = [0] * 64
+    for tok in tokens:
+        h = int(hashlib.md5(tok.encode("utf-8", "ignore")).hexdigest()[:16], 16)
+        for i in range(64):
+            if (h >> i) & 1:
+                vec[i] += 1
+            else:
+                vec[i] -= 1
+    out = 0
+    for i in range(64):
+        if vec[i] >= 0:
+            out |= (1 << i)
+    return out
+
+
+def hamming64(a: int, b: int) -> int:
+    return bin((a ^ b) & ((1 << 64) - 1)).count("1")
+
+
+def article_simhash(title: str, summary: str = "") -> int:
+    """SimHash input is title + first ~200 chars of plaintext summary. The
+    summary lead disambiguates near-duplicate titles ('Trump signs bill')
+    that would otherwise over-cluster."""
+    body = _strip_html(summary or "")[:200]
+    return simhash64(f"{title or ''} {body}")
+
+
 def source_obscurity_score(article_count_30d: int) -> float:
     """Log-scale: tiny source = 1.0, ~1000 articles/30d source = 0.0.
     count=1 -> ~0.9, count=10 -> ~0.67, count=100 -> ~0.33, count>=1000 -> 0."""

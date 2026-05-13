@@ -92,6 +92,29 @@ Both should return one row.
 
 ## Completed
 
+### 2026-05-13 — Migration: article dedup (story_id + simhash)
+**Status:** completed · **PR:** #24 · **Opened:** 2026-05-13 ·
+**Completed:** 2026-05-13 ·
+**File reference:** `news/seed/migrations/2026-05-13-dedup.sql`
+
+Added `articles.simhash`, `articles.story_id`, and the
+`(story_id, published_at)` index; backfilled `story_id = id` for legacy
+rows. User ran the SQL via phpMyAdmin; Python App restart still required
+once the PR merges so the new code path picks up the columns.
+
+**SQL applied:**
+
+```sql
+ALTER TABLE articles
+  ADD COLUMN simhash  BIGINT UNSIGNED DEFAULT NULL AFTER title_hash,
+  ADD COLUMN story_id BIGINT UNSIGNED DEFAULT NULL AFTER simhash,
+  ADD KEY idx_articles_story (story_id, published_at);
+
+UPDATE articles SET story_id = id WHERE story_id IS NULL;
+```
+
+---
+
 ### 2026-05-13 — Cron entry: daily email digest
 **Status:** completed · **PR:** #23 · **Opened:** 2026-05-13 · **Completed:** 2026-05-13
 

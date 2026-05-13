@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS articles (
   url_hash      CHAR(40) NOT NULL,
   title         VARCHAR(500) NOT NULL,
   title_hash    CHAR(40) DEFAULT NULL,  -- sha1 of normalized title; null on legacy rows
+  simhash       BIGINT UNSIGNED DEFAULT NULL,  -- 64-bit simhash over title + summary lead
+  story_id      BIGINT UNSIGNED DEFAULT NULL,  -- cluster id = canonical member's articles.id
   summary       TEXT,
   thumbnail_url VARCHAR(1000) DEFAULT NULL,
   byline        VARCHAR(300) DEFAULT NULL,
@@ -66,6 +68,7 @@ CREATE TABLE IF NOT EXISTS articles (
   KEY idx_articles_status (status),
   KEY idx_articles_source_pub (source_id, published_at),
   KEY idx_articles_title_hash (title_hash, fetched_at),
+  KEY idx_articles_story (story_id, published_at),
   CONSTRAINT fk_articles_source FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

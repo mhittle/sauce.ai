@@ -17,7 +17,7 @@ import feedparser
 import requests
 
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
-from app.classifier import title_hash as compute_title_hash
+from app.classifier import title_hash as compute_title_hash, article_simhash
 
 JOB = "fetch_feeds"
 logger = setup_logging(JOB)
@@ -111,18 +111,23 @@ def fetch_one(conn, source, http):
                 continue
             url_hash = _hash_url(link)
             t_hash = compute_title_hash(title)
+            summary_text = (entry.get("summary") if isinstance(entry, dict)
+                            else getattr(entry, "summary", "")) or ""
+            sim = article_simhash(title, summary_text)
             try:
                 cur.execute(
                     """INSERT IGNORE INTO articles
-                       (source_id, url, url_hash, title, title_hash, summary, thumbnail_url, byline, published_at, status)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')""",
+                       (source_id, url, url_hash, title, title_hash, simhash, summary,
+                        thumbnail_url, byline, published_at, status)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')""",
                     (
                         sid,
                         link[:1000],
                         url_hash,
                         title[:500],
                         t_hash,
-                        (entry.get("summary") if isinstance(entry, dict) else getattr(entry, "summary", "")) or "",
+                        sim,
+                        summary_text,
                         _extract_thumbnail(entry),
                         _extract_byline(entry),
                         _parse_published(entry),
@@ -130,6 +135,12 @@ def fetch_one(conn, source, http):
                 )
                 if cur.rowcount > 0:
                     fresh += 1
+                    # New article starts as its own story; clustering in
+                    # classify_pending may merge it into an existing cluster.
+                    cur.execute(
+                        "UPDATE articles SET story_id=id WHERE id=%s",
+                        (cur.lastrowid,),
+                    )
                 else:
                     stale += 1
             except Exception as e:
