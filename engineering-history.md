@@ -88,7 +88,7 @@ dedup-on-body, and search work.
 
 ### PR
 
-- **#21** In-app reader view + body extraction (draft)
+- **#21** In-app reader view + body extraction (merged)
 
 ---
 
