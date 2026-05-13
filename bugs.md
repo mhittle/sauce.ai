@@ -26,7 +26,35 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-008 — Feed feels stale; not enough fresh content / new articles
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-13
+
+User reports `/` feed "feels stale already" — not seeing enough fresh
+content or new articles surfacing between visits.
+
+**Hypotheses to investigate (in order of likelihood):**
+1. `fetch_feeds` cron not actually ticking on prod (job_lock leftover,
+   cron entry malformed, venv shim regression).
+2. Large portion of the +633 source import (PR #11) is dead and
+   auto-deactivated at `error_count >= 10`, shrinking the active pool
+   below what the feed needs.
+3. `classify_pending` is wallclock-budget-starved (paywall HTTP +
+   trafilatura extraction + LLM all share `CLASSIFY_BUDGET_SECONDS`),
+   so newly-fetched rows sit in `status='pending'` and never reach the
+   feed.
+4. Dedup `WHERE a.story_id IS NULL OR a.id = a.story_id` (PR #24) is
+   collapsing too many cards into one canonical per cluster.
+5. Feed query has too tight a recency window or the ranking is
+   penalizing freshness.
+6. Per-user `user_source_prefs` hide/downweight rows from earlier
+   thumbs-down prompts are shrinking the visible pool.
+
+**Repro:** load `/` while signed in (and signed out for comparison),
+note whether top cards differ from the prior visit.
+
+**Next steps:** check `/admin/feeds` for active source count + recent
+fetch timestamps, `/admin/articles` (if it exists) for status
+breakdown, then add diagnostic SQL counts to the investigation.
 
 ---
 
