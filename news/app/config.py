@@ -37,3 +37,13 @@ class Config:
     DIGEST_MAX_ARTICLES = int(os.environ.get("DIGEST_MAX_ARTICLES", "8"))
     DIGEST_LOOKBACK_HOURS = int(os.environ.get("DIGEST_LOOKBACK_HOURS", "24"))
     DIGEST_RESEND_GUARD_HOURS = int(os.environ.get("DIGEST_RESEND_GUARD_HOURS", "20"))
+
+    DISCOVER_PROMOTION_SCORE_MIN = int(os.environ.get("DISCOVER_PROMOTION_SCORE_MIN", "3"))
+    DISCOVER_PROMOTE_BUDGET_SECONDS = int(os.environ.get("DISCOVER_PROMOTE_BUDGET_SECONDS", "1500"))
+    DISCOVER_PROMOTE_WORKERS = int(os.environ.get("DISCOVER_PROMOTE_WORKERS", "8"))
+    DISCOVER_PROMOTE_BATCH_LIMIT = int(os.environ.get("DISCOVER_PROMOTE_BATCH_LIMIT", "100"))
+    DISCOVER_PROMOTE_REVALIDATE_DAYS = int(os.environ.get("DISCOVER_PROMOTE_REVALIDATE_DAYS", "14"))
+    DISCOVER_LLM_CATEGORIES = os.environ.get(
+        "DISCOVER_LLM_CATEGORIES", "world,politics,tech,science,business,sports"
+    )
+    DISCOVER_LLM_PER_CATEGORY = int(os.environ.get("DISCOVER_LLM_PER_CATEGORY", "10"))

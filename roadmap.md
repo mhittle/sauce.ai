@@ -26,6 +26,8 @@ shipped.
 | --- | --- | --- | --- | --- |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | backlog |
+| 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | in-progress |
+| 7 | 7 | ops, new-feature | Automated source discovery — social firehoses (Mastodon, Bluesky, X/Twitter) | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
@@ -101,6 +103,51 @@ dossier — their card just links to the source.
 
 Hard dependency on **Article deduplication** (Pri 8) — story_id must
 exist first.
+
+### Automated source discovery (Reddit/HN + LLM agent)
+**Priority:** 8 · **LOE:** 7 · **Category:** ops, backend, new-feature · **Status:** in-progress
+
+Cron-driven loop that grows the source catalog without manual CSV imports.
+Three subjobs:
+
+- `jobs/discover_harvest.py` (hourly) — re-polls the same Reddit subs + HN
+  top-stories that `popularity_poll` already hits. For every submitted URL
+  whose domain isn't in `sources`, upserts a row in a new
+  `candidate_sources` table and increments its hit count.
+- `jobs/discover_llm.py` (weekly) — Claude Haiku call per category asking
+  for high-quality feed URLs we don't already have. Hallucinated URLs are
+  filtered by the same RSS validation that handles social-signal candidates.
+- `jobs/discover_promote.py` (nightly) — for candidates above the
+  promotion threshold, runs RSS auto-discovery (tries `/feed`, `/rss`,
+  `/feed.xml`, `/atom.xml`, parses `<link rel="alternate">` from homepage
+  HTML) and validates via `app/feed_validation.py`. Validated rows surface
+  on `/admin/discovery` for one-click approve / reject / blacklist.
+
+Promotion is gated behind admin review by default (BUG-008 hypothesis #2 —
+the +633 seed import already left a long tail of dead feeds). Once the
+score signal is trusted, a config flag can flip to auto-approve over a
+high threshold.
+
+### Automated source discovery — social firehoses
+**Priority:** 7 · **LOE:** 7 · **Category:** ops, new-feature · **Status:** backlog
+
+Phase 3 of source discovery. Adds three more signal sources to the
+candidate pipeline shipped in the Reddit/HN + LLM PR:
+
+- **Mastodon** — public timeline streaming per instance. Easiest, no
+  API key needed. Start with a curated list of journalism-heavy
+  instances (mastodon.social, journa.host, newsie.social).
+- **Bluesky** — the jetstream firehose is a public WebSocket and
+  doesn't fit the cron model cleanly; either a long-running worker
+  process (new infra pattern) or a periodic batch pull of recent
+  `app.bsky.feed.post` records with URLs.
+- **Twitter/X** — only viable with a paid API tier ($100/mo Basic
+  minimum for usable volume); gated on whether the catalog growth
+  justifies the spend.
+
+All three feed the same `candidate_sources` table; the only new code per
+platform is a poll/stream worker. Hard-depends on the candidate_sources
+schema landing first.
 
 ### Signal Learning
 **Priority:** 8 · **LOE:** 7 · **Category:** algo, backend, new-feature · **Status:** backlog

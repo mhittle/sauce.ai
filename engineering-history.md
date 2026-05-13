@@ -7,6 +7,140 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — Automated source discovery: Reddit/HN harvest + LLM agent + admin review (PR #TBD)
+
+### Context
+
+User asked for "an automated feature that discovers new feeds, blogs
+and news articles" running on cron. Existing `fetch_feeds` only polls
+known sources; the source catalog was previously grown via manual seed
+CSV imports (e.g. the +633 batch in PR #11). Goal: a self-driving loop
+that proposes new sources from external signals, validates them, and
+queues them for admin approval — so the catalog grows continuously
+without me hand-editing CSVs.
+
+User picked: Reddit/HN submitted URLs + LLM-agent suggestions as
+signals; admin review queue first; hourly harvest + nightly
+promotion. Social firehoses (Mastodon, Bluesky, X/Twitter) are
+roadmapped as a separate phase 3 PR.
+
+### What shipped this session
+
+- **New `candidate_sources` table.** Single row per unknown domain
+  with `score` (hit count), `state ∈ {pending, validated, approved,
+  rejected, blacklisted}`, `first_seen_via` / `last_seen_via`,
+  `feed_url` / `name` / `homepage_url` / `category` filled in once a
+  feed is discovered, and `promoted_source_id` back-linking the
+  `sources` row created on approval. UNIQUE on `domain` so signals
+  from different harvesters increment the same counter.
+- **`jobs/discover_harvest.py`** (hourly cron). Re-polls the same
+  Reddit subs + HN top stories that `popularity_poll` visits, then
+  upserts every URL whose domain isn't already in `sources` (or
+  already-decided in `candidate_sources`). Bumps score by hit count
+  per tick. Same `requests.Session` + `(5, 10)` timeouts pattern as
+  the rest of the cron stack; `conn.ping(reconnect=True)` after the
+  HTTP fan-out, before writes (BUG-009 lesson).
+- **`jobs/discover_llm.py`** (weekly cron, Mondays 05:00 UTC). For
+  each category in `DISCOVER_LLM_CATEGORIES` (default world / politics
+  / tech / science / business / sports), calls Claude Haiku with a
+  prompt asking for N high-quality RSS feed URLs we don't already
+  have, including a sample of 40 existing domains in the prompt as
+  negative context. Parses suggestions out of strict JSON with a
+  URL-fishing fallback for sloppy responses. Hallucinated URLs are
+  filtered downstream by the nightly validator. Tracks usage in
+  `llm_usage`. Safely no-ops if `ANTHROPIC_API_KEY` is absent.
+- **`jobs/discover_promote.py`** (nightly cron, 04:00 UTC). Pulls
+  pending candidates with `score >= DISCOVER_PROMOTION_SCORE_MIN` (3)
+  or an LLM-suggested `feed_url` already set, then runs
+  `app.discovery.discover_feed_url(domain)` over a
+  `ThreadPoolExecutor(max_workers=8)`. Auto-discovery tries
+  `/feed`, `/rss`, `/feed.xml`, `/rss.xml`, `/atom.xml`, `/feed/`,
+  `/feeds/posts/default`, `/index.xml` then falls back to parsing
+  `<link rel="alternate" type="application/rss+xml">` from the
+  homepage. Success → state='validated' with feed_url/name/homepage;
+  failure → state='rejected' with reject_reason. Wallclock-budgeted
+  at 1500s (cron is `0 4 * * *` so the budget can ride longer than a
+  5-min tick).
+- **`/admin/discovery`** review page. Three sections — "Ready to
+  review" (validated, with per-row Approve form taking name /
+  category / country / region / lean / reputation overrides),
+  "Pending validation" (still accumulating score), "Recent decisions"
+  (14-day audit trail). Approve writes to `sources` and links back
+  via `promoted_source_id`. Reject and Blacklist flip state; the
+  hourly harvest skips approved/rejected/blacklisted domains so
+  rejected-once stays out unless an admin manually re-pendings it.
+- **`app/discovery.py`** — pure Flask-free helpers
+  (`extract_domain`, `discover_feed_url`, `try_feed_url`,
+  `extract_urls`). Matches the convention of `feed_validation.py` and
+  `extractor.py` for testability. Includes a small `DOMAIN_BLOCKLIST`
+  for social/aggregator/marketplace domains that shouldn't be
+  candidates (youtube.com, twitter.com, github.com, amazon.com,
+  etc.).
+- **Tests.** 20 new (`test_discovery.py`): extract_domain
+  normalization × 6, extract_urls × 2, discover_feed_url scripted
+  flow × 5, count_new_domains pure dedup × 2,
+  parse_llm_response × 5. Full suite is 132 green on this branch
+  (was 112 before; the +20 are the new file).
+
+### Code touched
+
+- `news/seed/schema.sql` — `candidate_sources` table.
+- `news/seed/migrations/2026-05-13-discovery.sql` — new.
+- `news/app/discovery.py` — new, pure helpers.
+- `news/app/config.py` — DISCOVER_* env-var defaults.
+- `news/jobs/discover_harvest.py`, `discover_llm.py`,
+  `discover_promote.py` — new cron scripts.
+- `news/app/routes/admin.py` — `/admin/discovery` + three POST
+  routes (approve, reject, blacklist).
+- `news/app/templates/admin/discovery.html` — new.
+- `news/app/templates/admin/_layout.html` — Discovery nav link.
+- `news/app/static/style.css` — `.discovery-actions` rules.
+- `news/INSTALL.txt` — three cron lines in §4c, troubleshooting
+  entry §8I, v1-limit note in §10.
+- `news/tests/test_discovery.py` — new, 20 cases.
+
+### Server-side state touched
+
+- **Migration pending on prod**:
+  `seed/migrations/2026-05-13-discovery.sql`. Tracked in
+  `manual-actions.md` with full inline SQL. The three discover_*
+  cron jobs will error on every tick until this table exists.
+- **Three new cron entries pending**: discover_harvest hourly,
+  discover_promote nightly 04:00 UTC, discover_llm weekly Monday
+  05:00 UTC. All wrapped in `job_lock` so they no-op safely if the
+  previous tick is still running. Tracked in `manual-actions.md`.
+- No new pip dependencies — the LLM job reuses the existing
+  anthropic SDK, and the harvest job reuses requests + the stubbed
+  feedparser already pulled in by `app.feed_validation`.
+- Python App restart required after the migration so the
+  `/admin/discovery` route picks up the new table.
+
+### Open items
+
+- Watch the first hourly harvest tick on prod to confirm
+  `candidates_upserted` is reasonable (single-digit per tick is
+  expected — most Reddit/HN URLs already map to the 768 existing
+  sources).
+- The first weekly LLM tick will write a `discover_llm` row to
+  `pipeline_log` with the per-category suggested/inserted counts;
+  worth eyeballing before letting it run unattended.
+- BUG-008 hypothesis #2 ("a large portion of the +633 source import
+  is dead and auto-deactivated") still uninvestigated. The new
+  discovery loop will produce candidates faster than the dead-feed
+  cleanup happens; a separate `/admin/feeds` audit pass is worth
+  scheduling after the catalog stabilizes.
+- Phase 3 (social firehoses — Mastodon, Bluesky, X/Twitter) is in
+  the roadmap under "Automated source discovery — social
+  firehoses" (Pri 7, LOE 7).
+
+### PR
+
+- **#TBD** Automated source discovery (Reddit/HN + LLM agent) +
+  admin review queue (draft) — requires manual DB migration + three
+  new cron entries.
+
+---
+
 ## 2026-05-13 — BUG-011: feed staleness fixed via multiplicative recency gate
 
 ### Context

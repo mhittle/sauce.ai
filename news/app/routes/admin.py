@@ -300,6 +300,128 @@ def tests():
     return render_template("admin/tests.html", output=output, success=success)
 
 
+@bp.route("/discovery")
+@admin_required
+def discovery():
+    """Review queue for automated source discovery.
+
+    Three sections: validated (ready to approve), pending (still
+    accumulating score before nightly validation), recent decisions
+    (audit trail for last 14 days).
+    """
+    score_min = current_app.config.get("DISCOVER_PROMOTION_SCORE_MIN", 3)
+    validated = query(
+        """SELECT id, domain, feed_url, name, homepage_url, category, score,
+                  first_seen_via, last_seen_via, first_seen_at, last_seen_at,
+                  notes
+             FROM candidate_sources
+            WHERE state = 'validated'
+            ORDER BY score DESC, last_seen_at DESC
+            LIMIT 200"""
+    )
+    pending = query(
+        """SELECT id, domain, score, first_seen_via, last_seen_via,
+                  first_seen_at, last_seen_at, validation_error
+             FROM candidate_sources
+            WHERE state = 'pending'
+            ORDER BY score DESC, last_seen_at DESC
+            LIMIT 200"""
+    )
+    recent = query(
+        """SELECT id, domain, state, feed_url, name, category, score,
+                  promoted_source_id, reject_reason,
+                  last_seen_at, validation_attempted_at
+             FROM candidate_sources
+            WHERE state IN ('approved', 'rejected', 'blacklisted')
+              AND COALESCE(validation_attempted_at, last_seen_at)
+                  >= UTC_TIMESTAMP() - INTERVAL 14 DAY
+            ORDER BY COALESCE(validation_attempted_at, last_seen_at) DESC
+            LIMIT 200"""
+    )
+    counts = query(
+        """SELECT state, COUNT(*) AS n
+             FROM candidate_sources
+            GROUP BY state""",
+    )
+    counts_by_state = {row["state"]: row["n"] for row in counts}
+    return render_template(
+        "admin/discovery.html",
+        validated=validated, pending=pending, recent=recent,
+        score_min=score_min, counts=counts_by_state,
+    )
+
+
+@bp.route("/discovery/<int:cid>/approve", methods=["POST"])
+@admin_required
+def discovery_approve(cid):
+    cand = query(
+        "SELECT id, domain, feed_url, name, homepage_url, category FROM candidate_sources WHERE id = %s",
+        (cid,), one=True,
+    )
+    if not cand or not cand["feed_url"]:
+        return ("not validated", 400)
+    f = request.form
+    name = (f.get("name") or cand["name"] or cand["domain"])[:200]
+    homepage = (f.get("homepage") or cand["homepage_url"] or "")[:500]
+    category = (f.get("category") or cand["category"] or "general")[:64]
+    country = (f.get("country") or "US")[:8]
+    region = (f.get("region") or "national")[:64]
+    try:
+        source_lean = max(-1.0, min(1.0, float(f.get("source_lean", 0) or 0)))
+    except (TypeError, ValueError):
+        source_lean = 0.0
+    try:
+        source_reputation = max(0.0, min(1.0, float(f.get("source_reputation", 0.5) or 0.5)))
+    except (TypeError, ValueError):
+        source_reputation = 0.5
+    new_source_id = execute(
+        """INSERT INTO sources (name, feed_url, homepage, source_lean, source_reputation,
+                                category, country, region, is_active)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1)
+           ON DUPLICATE KEY UPDATE name = VALUES(name)""",
+        (name, cand["feed_url"][:500], homepage, source_lean, source_reputation,
+         category, country, region),
+    )
+    if not new_source_id:
+        existing = query("SELECT id FROM sources WHERE feed_url = %s",
+                         (cand["feed_url"][:500],), one=True)
+        new_source_id = existing["id"] if existing else None
+    execute(
+        """UPDATE candidate_sources
+              SET state = 'approved', promoted_source_id = %s
+            WHERE id = %s""",
+        (new_source_id, cid),
+    )
+    get_conn().commit()
+    return redirect(url_for("admin.discovery"))
+
+
+@bp.route("/discovery/<int:cid>/reject", methods=["POST"])
+@admin_required
+def discovery_reject(cid):
+    reason = (request.form.get("reason") or "manual reject")[:255]
+    execute(
+        "UPDATE candidate_sources SET state = 'rejected', reject_reason = %s WHERE id = %s",
+        (reason, cid),
+    )
+    get_conn().commit()
+    return redirect(url_for("admin.discovery"))
+
+
+@bp.route("/discovery/<int:cid>/blacklist", methods=["POST"])
+@admin_required
+def discovery_blacklist(cid):
+    reason = (request.form.get("reason") or "blacklisted")[:255]
+    execute(
+        """UPDATE candidate_sources
+              SET state = 'blacklisted', reject_reason = %s
+            WHERE id = %s""",
+        (reason, cid),
+    )
+    get_conn().commit()
+    return redirect(url_for("admin.discovery"))
+
+
 @bp.route("/logs")
 @admin_required
 def logs():

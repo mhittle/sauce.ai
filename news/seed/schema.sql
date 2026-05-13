@@ -201,6 +201,41 @@ CREATE TABLE IF NOT EXISTS user_source_prefs (
   CONSTRAINT fk_usp_source FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Automated source-discovery candidate pool. One row per unknown domain
+-- surfaced by `jobs/discover_harvest.py` (Reddit/HN), `discover_llm.py`
+-- (Claude suggestions), or future social-firehose jobs. `score` is the
+-- raw hit count; `state` advances pending → validated (after
+-- discover_promote attaches a feed_url) → approved/rejected/blacklisted
+-- by an admin on /admin/discovery. `promoted_source_id` back-links to
+-- the sources row created on approval. Blacklisted domains are sticky:
+-- discover_harvest skips them so a noisy outlet can't keep coming back.
+CREATE TABLE IF NOT EXISTS candidate_sources (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  domain        VARCHAR(255) NOT NULL,
+  feed_url      VARCHAR(1024) DEFAULT NULL,
+  name          VARCHAR(255) DEFAULT NULL,
+  homepage_url  VARCHAR(1024) DEFAULT NULL,
+  category      VARCHAR(64) DEFAULT NULL,
+  score         INT NOT NULL DEFAULT 0,
+  first_seen_via VARCHAR(32) NOT NULL,
+  last_seen_via  VARCHAR(32) NOT NULL,
+  first_seen_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  state         ENUM('pending','validated','approved','rejected','blacklisted')
+                NOT NULL DEFAULT 'pending',
+  reject_reason VARCHAR(255) DEFAULT NULL,
+  validation_attempted_at DATETIME DEFAULT NULL,
+  validation_error VARCHAR(255) DEFAULT NULL,
+  promoted_source_id INT UNSIGNED DEFAULT NULL,
+  notes         TEXT,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_candidate_domain (domain),
+  KEY idx_candidate_state_score (state, score),
+  KEY idx_candidate_last_seen (last_seen_at),
+  CONSTRAINT fk_candidate_source FOREIGN KEY (promoted_source_id)
+    REFERENCES sources (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS feature_catalog (
   feature_key VARCHAR(64) NOT NULL,
   label       VARCHAR(120) NOT NULL,

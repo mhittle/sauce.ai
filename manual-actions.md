@@ -35,7 +35,76 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
+### 2026-05-13 — Migration: candidate_sources (automated source discovery)
+**Status:** open · **PR:** TBD · **Opened:** 2026-05-13 ·
+**File reference:** `news/seed/migrations/2026-05-13-discovery.sql`
+
+Adds the `candidate_sources` table that backs the new hourly Reddit/HN
+harvest, weekly LLM-suggestion pass, and nightly RSS auto-discovery
+jobs. The three discover_* cron scripts will error on every tick until
+this table exists. Run in phpMyAdmin against `lt1ih6uyy2z6_news`.
+
+**SQL to run:**
+
+```sql
+CREATE TABLE IF NOT EXISTS candidate_sources (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  domain        VARCHAR(255) NOT NULL,
+  feed_url      VARCHAR(1024) DEFAULT NULL,
+  name          VARCHAR(255) DEFAULT NULL,
+  homepage_url  VARCHAR(1024) DEFAULT NULL,
+  category      VARCHAR(64) DEFAULT NULL,
+  score         INT NOT NULL DEFAULT 0,
+  first_seen_via VARCHAR(32) NOT NULL,
+  last_seen_via  VARCHAR(32) NOT NULL,
+  first_seen_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  state         ENUM('pending','validated','approved','rejected','blacklisted')
+                NOT NULL DEFAULT 'pending',
+  reject_reason VARCHAR(255) DEFAULT NULL,
+  validation_attempted_at DATETIME DEFAULT NULL,
+  validation_error VARCHAR(255) DEFAULT NULL,
+  promoted_source_id INT UNSIGNED DEFAULT NULL,
+  notes         TEXT,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_candidate_domain (domain),
+  KEY idx_candidate_state_score (state, score),
+  KEY idx_candidate_last_seen (last_seen_at),
+  CONSTRAINT fk_candidate_source FOREIGN KEY (promoted_source_id)
+    REFERENCES sources (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Post:** Python App restart via cPanel so the `/admin/discovery` route
+picks up the new table. The cron jobs are added in a separate manual-action
+entry below.
+
+---
+
+### 2026-05-13 — Cron entries: three discover_* jobs
+**Status:** open · **PR:** TBD · **Opened:** 2026-05-13
+
+Three new cron lines in cPanel -> "Cron Jobs". Replace `YOURACCOUNT` in
+each. These can be added immediately after the candidate_sources
+migration runs; the jobs are wrapped in `job_lock` and no-op safely on
+an empty queue.
+
+**Cron lines to add:**
+
+```cron
+# hourly (15 past): source discovery harvest (Reddit/HN domain mining)
+15  * * * *   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python discover_harvest.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# nightly 4:00am UTC: source discovery validation (RSS auto-discovery on pending candidates)
+0   4 * * *   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python discover_promote.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# weekly Monday 5:00am UTC: LLM-suggested source discovery (uses Anthropic API)
+0   5 * * 1   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python discover_llm.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+```
+
+**Verify:** after the first hourly tick lands, tail `logs/cron.log` for
+a `discover_harvest` summary line. Then visit `/admin/discovery` to see
+the pending pool growing.
 
 ---
 
