@@ -236,6 +236,22 @@ CREATE TABLE IF NOT EXISTS candidate_sources (
     REFERENCES sources (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Cached LLM-generated framing summary for a deduplicated story cluster.
+-- Keyed by canonical articles.id (= story_id). member_signature is sha1 of
+-- the sorted member-id list; when the cluster gains/loses members, the
+-- signature changes and the dossier route regenerates the summary lazily.
+CREATE TABLE IF NOT EXISTS story_dossiers (
+  story_id         BIGINT UNSIGNED NOT NULL,
+  member_signature CHAR(40) NOT NULL,
+  summary_text     TEXT NOT NULL,
+  article_count    INT UNSIGNED NOT NULL DEFAULT 0,
+  lean_buckets     VARCHAR(16) NOT NULL DEFAULT '',
+  model            VARCHAR(64) NOT NULL DEFAULT '',
+  generated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (story_id),
+  CONSTRAINT fk_dossier_story FOREIGN KEY (story_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS feature_catalog (
   feature_key VARCHAR(64) NOT NULL,
   label       VARCHAR(120) NOT NULL,

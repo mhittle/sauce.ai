@@ -5,6 +5,7 @@ from .rules import (
 )
 from .llm import classify_batch_llm, LLMUnavailable
 from .paywall import detect_paywall
+from .framing import generate_framing
 
 __all__ = [
     "compute_rules_features", "normalize_byline",
@@ -12,4 +13,5 @@ __all__ = [
     "source_obscurity_score", "story_obscurity_score",
     "classify_batch_llm", "LLMUnavailable",
     "detect_paywall",
+    "generate_framing",
 ]
