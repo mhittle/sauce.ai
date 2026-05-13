@@ -78,16 +78,15 @@ the dossier (Pri 9) and across-the-spectrum-in-feed (Pri 7) work.
 
 ### Server-side state touched
 
-- **Migration pending**: `seed/migrations/2026-05-13-dedup.sql` must run
-  on prod via phpMyAdmin before the next `fetch_feeds` / `classify_pending`
-  tick, otherwise inserts will error on the missing columns. Followed by
-  a Python App restart.
+- **Migration applied** (2026-05-13): `seed/migrations/2026-05-13-dedup.sql`
+  ran on prod via phpMyAdmin. Python App restart still required when the
+  PR merges so the new code path picks up the columns.
 - No new symlinks or load-bearing files.
 
 ### PR
 
-- **#24** Article deduplication across sources (draft) — requires manual
-  DB migration on prod.
+- **#24** Article deduplication across sources (draft, ready for review)
+  — DB migration applied on prod.
 
 ---
 
