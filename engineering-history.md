@@ -7,6 +7,80 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — Mobile / responsive polish (PR pending)
+
+### Context
+
+Roadmap Pri 7 / LOE 4. The roadmap note flagged that "the card grid
+wraps OK on phone widths but the algo editor is a mess, the firehose
+table is a horror, and tap targets are small." Audit pass at 375px
+width confirmed all three plus several smaller issues (top nav
+overflow, cramped `.feature-row`, fixed-width admin sidebar, small
+`.cat-tab` / `.thumb-btn` tap targets).
+
+### What shipped
+
+- **Single mobile media block** (`@media (max-width: 640px)`) appended
+  to `app/static/style.css`. Additive only — desktop layout is
+  untouched. Covers:
+  - `.topnav` wraps; the brand goes on its own row so the 6–8 nav
+    links don't overflow horizontally.
+  - `main` padding tightened (1.5em 1.2em → 1em 0.8em) to recover
+    horizontal pixels.
+  - `.cards` forced to `1fr` single column with a taller card thumb
+    (160 → 180px) since each card now spans full width.
+  - `.card-meta` items wrap so source / lean / category / time /
+    thumbs / reader-link don't fight for one row.
+  - `.algo` collapses `1fr 360px` to `1fr`; sticky preview goes
+    static so the editor isn't covered. `.feature-row` switches from
+    `12em 1fr 1fr 1fr` to a single stacked column (label → direction
+    → weight → threshold), which makes the sliders comfortably wide.
+  - `.firehose-header` wraps cleanly (no more `space-between`
+    blow-out with the long muted explainer). The table keeps all 10
+    columns at `min-width: 640px` and `#firehose-feed` gets
+    `overflow-x: auto`, so the table scrolls horizontally rather
+    than getting squashed.
+  - `.admin` stacks; `.admin-nav` becomes a horizontal wrap row;
+    `.feed-add` `repeat(4, 1fr)` → `1fr 1fr`; `.data-table` wrapped
+    in its own block scroll.
+  - Tap targets enlarged on `.cat-tab`, `.thumb-btn`, `.tabs button`.
+  - `.auth-form` / `.onboarding` margins tightened.
+  - `.preset-card` stacks instead of side-by-side.
+- **No template structural change.** All firehose scroll behavior is
+  driven by the CSS rules on `#firehose-feed` + `.firehose-table`,
+  so the htmx-swapped partial doesn't need a wrapper edit.
+- **`.table-scroll`** utility class added globally for any future
+  hand-wrapped scrollable table.
+
+### Code touched
+
+- `news/app/static/style.css` — `.table-scroll` utility + single
+  `@media (max-width: 640px)` block appended.
+- `roadmap.md` — Mobile / responsive polish flipped to `in-progress`.
+
+### Server-side state touched
+
+None. CSS-only deploy — no migration, no cron change, no env-var,
+no symlink, no pip dep. Python App restart not required (static
+files are served direct off disk by LiteSpeed); FTP/CI deploy is
+enough for the new CSS to land.
+
+### PR
+
+- **Pending** — draft PR opening from
+  `claude/onboard-news-aggregator-j4xIY` with this commit.
+
+### Open items
+
+- Spot-check on a real phone (or Chrome devtools at 375px / iPhone
+  SE preset) once deployed: `/`, `/algo`, `/firehose`, `/sources`,
+  `/account/settings`, `/admin/feeds`, `/admin/discovery`.
+- `.feature-row` jumps from stacked (mobile) to 4-col (desktop)
+  abruptly at exactly 641px. Acceptable for v1; revisit if a
+  tablet-width intermediate layout is needed.
+
+---
+
 ## 2026-05-13 — Automated source discovery: Reddit/HN harvest + LLM agent + admin review (PR #38)
 
 ### Context
