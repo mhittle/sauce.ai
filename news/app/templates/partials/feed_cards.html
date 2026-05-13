@@ -23,6 +23,7 @@
                     @click="vote('thumb_down')" aria-label="Thumbs down">&#x25BC;</button>
           </span>
         {% endif %}
+        <a class="reader-link" href="{{ url_for('reader.read', article_id=a.id) }}" title="Open in reader">Read &rarr;</a>
       </div>
       <h2 class="card-title">
         <a href="{{ a.url }}" target="_blank" rel="noopener"

@@ -19,6 +19,7 @@ from app.classifier import (
     source_obscurity_score, story_obscurity_score, detect_paywall,
 )
 from app.classifier.rules import split_bylines
+from app.extractor import extract_body
 
 JOB = "classify_pending"
 logger = setup_logging(JOB)
@@ -122,6 +123,17 @@ def _run():
                     break
                 paywall_by_id[art["id"]] = detect_paywall(art.get("url"), session=http)
 
+            # Step 2c: body extraction per article (for the in-app reader).
+            # Skip when paywall said "locked" — extraction would just record
+            # error rows and burn budget. Same wallclock gate.
+            bodies_by_id = {}
+            for art in batch:
+                if time.time() - start >= cfg.CLASSIFY_BUDGET_SECONDS:
+                    break
+                if paywall_by_id.get(art["id"], 0.0) >= 1.0:
+                    continue
+                bodies_by_id[art["id"]] = extract_body(art.get("url"), session=http)
+
             # Step 3: write features + bylines
             with conn.cursor() as cur:
                 for art in batch:
@@ -171,6 +183,30 @@ def _run():
                         cur.execute(
                             "INSERT IGNORE INTO article_journalists (article_id, journalist_id) VALUES (%s, %s)",
                             (aid, jid),
+                        )
+                    # body for the in-app reader (may be absent if budget ran out)
+                    body = bodies_by_id.get(aid)
+                    if body is not None:
+                        cur.execute(
+                            """INSERT INTO article_bodies
+                               (article_id, body_text, body_html, lead_image, author,
+                                word_count, extractor, status)
+                               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                               ON DUPLICATE KEY UPDATE
+                                  body_text=VALUES(body_text),
+                                  body_html=VALUES(body_html),
+                                  lead_image=VALUES(lead_image),
+                                  author=VALUES(author),
+                                  word_count=VALUES(word_count),
+                                  extractor=VALUES(extractor),
+                                  status=VALUES(status),
+                                  extracted_at=UTC_TIMESTAMP()""",
+                            (
+                                aid, body.get("body_text"), body.get("body_html"),
+                                body.get("lead_image"), body.get("author"),
+                                body.get("word_count", 0), "trafilatura",
+                                body.get("status", "error"),
+                            ),
                         )
                     cur.execute("UPDATE articles SET status='classified' WHERE id=%s", (aid,))
 

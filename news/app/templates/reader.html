@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }} — sauce.ai/news{% endblock %}
+{% block content %}
+<article class="reader">
+  <header class="reader-head">
+    <div class="reader-meta">
+      <a class="reader-source" href="{{ article.homepage or article.url }}" target="_blank" rel="noopener">{{ article.source_name }}</a>
+      {% if article.published_at %}<span class="muted">{{ article.published_at.strftime('%B %d, %Y') }}</span>{% endif %}
+      {% if article.category %}<span class="category">{{ article.category }}</span>{% endif %}
+    </div>
+    <h1 class="reader-title">{{ article.title }}</h1>
+    {% if article.byline or article.author %}
+      <div class="reader-byline muted">By {{ article.byline or article.author }}</div>
+    {% endif %}
+  </header>
+
+  {% set hero = article.lead_image or article.thumbnail_url %}
+  {% if hero %}
+    <figure class="reader-hero">
+      <img src="{{ hero }}" alt="" loading="lazy" />
+    </figure>
+  {% endif %}
+
+  {% if has_body %}
+    <div class="reader-body">
+      {% for p in paragraphs %}<p>{{ p }}</p>{% endfor %}
+    </div>
+    {% if article.word_count %}
+      <p class="reader-stat muted">~{{ (article.word_count / 230)|round|int }} min read · {{ article.word_count }} words</p>
+    {% endif %}
+  {% else %}
+    <div class="reader-fallback">
+      <p>We weren't able to bring this article into the reader.
+        {% if article.body_status == 'blocked' %}The source blocked our fetcher (often a paywall or bot check).
+        {% elif article.body_status == 'empty' %}There wasn't enough body text to extract — usually a short page or aggregator stub.
+        {% elif article.body_status == 'error' %}The fetch failed.
+        {% else %}Body extraction hasn't run yet — check back in a few minutes.{% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+  <footer class="reader-foot">
+    <a class="reader-original" href="{{ article.url }}" target="_blank" rel="noopener"
+       onclick="fetch('{{ url_for('feed.click', article_id=article.id) }}', {method:'POST', keepalive:true})">
+      Read at {{ article.source_name }} &rarr;
+    </a>
+  </footer>
+</article>
+{% endblock %}

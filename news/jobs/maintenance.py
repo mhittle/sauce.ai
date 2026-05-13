@@ -108,11 +108,21 @@ def _run():
                    WHERE a.fetched_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY"""
             )
 
+            # Prune old article bodies. Independent of article retention so
+            # the bodies window can be tightened (storage cost) without
+            # affecting feed history. Bookmarks override this once /saved
+            # ships (see roadmap).
+            cur.execute(
+                "DELETE FROM article_bodies WHERE extracted_at < UTC_TIMESTAMP() - INTERVAL %s DAY",
+                (cfg.BODY_RETENTION_DAYS,),
+            )
+            bodies_pruned = cur.rowcount
+
             # Trim old pipeline logs
             cur.execute("DELETE FROM pipeline_log WHERE ts < UTC_TIMESTAMP() - INTERVAL 14 DAY")
 
         conn.commit()
-        msg = f"pruned_articles={pruned} pruned_sessions={sess_pruned}"
+        msg = f"pruned_articles={pruned} pruned_sessions={sess_pruned} pruned_bodies={bodies_pruned}"
         logger.info(msg)
         db_log(conn, JOB, "info", msg)
     finally:

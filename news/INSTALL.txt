@@ -322,7 +322,11 @@ G. Code from a fresh git push isn't visible:
   Sandboxed exec deferred to v2.
 - No CSRF tokens beyond same-site cookies, no email verification,
   no rate limiting on auth endpoints.
-- Articles store summary + link only; no full-text extraction.
+- Body extraction (article_bodies) runs in classify_pending and is
+  wallclock-bounded, so deploys must apply the
+  2026-05-13-article-bodies.sql migration. Locked paywalls (score 1.0)
+  are skipped; everything else gets a row with status ok/empty/blocked/
+  error. Pruned nightly at BODY_RETENTION_DAYS (default 30).
 - Internal click signal is recorded but not folded into popularity.
 
 You're done. Visit  https://sauce.ai/news .

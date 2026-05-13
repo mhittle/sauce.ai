@@ -90,6 +90,21 @@ CREATE TABLE IF NOT EXISTS article_features (
   CONSTRAINT fk_features_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS article_bodies (
+  article_id   BIGINT UNSIGNED NOT NULL,
+  body_text    MEDIUMTEXT,
+  body_html    MEDIUMTEXT,
+  lead_image   VARCHAR(1000) DEFAULT NULL,
+  author       VARCHAR(300) DEFAULT NULL,
+  word_count   INT UNSIGNED NOT NULL DEFAULT 0,
+  extractor    VARCHAR(32) NOT NULL DEFAULT 'trafilatura',
+  status       ENUM('ok','empty','blocked','error') NOT NULL DEFAULT 'ok',
+  extracted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (article_id),
+  KEY idx_bodies_extracted (extracted_at),
+  CONSTRAINT fk_bodies_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS journalists (
   id                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
   normalized_name     VARCHAR(200) NOT NULL,
