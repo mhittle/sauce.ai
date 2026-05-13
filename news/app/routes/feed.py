@@ -47,25 +47,58 @@ def index():
         filter_params["category_tab"] = category
         cat_filter_sql = " AND f.category = %(category_tab)s"
 
+    u = getattr(g, "user", None)
+    pref_join_sql = ""
+    pref_filter_sql = ""
+    pref_score_mult = ""
+    pref_params = {}
+    if u:
+        pref_join_sql = (
+            " LEFT JOIN user_source_prefs usp "
+            "ON usp.user_id = %(_pref_uid)s AND usp.source_id = s.id"
+        )
+        pref_filter_sql = " AND COALESCE(usp.weight, 1.0) > 0"
+        pref_score_mult = " * COALESCE(usp.weight, 1.0)"
+        pref_params["_pref_uid"] = u["id"]
+
     sql = f"""
       SELECT a.id, a.title, a.summary, a.url, a.thumbnail_url, a.byline,
              a.published_at, s.name AS source_name, s.id AS source_id,
              f.political_lean, f.source_lean, f.objectivity, f.reading_level,
              f.info_density, f.journalist_reputation, f.source_reputation,
              f.popularity, f.category, f.country,
-             ({score_expr}) AS score
+             ({score_expr}){pref_score_mult} AS score
       FROM articles a
       JOIN sources s ON s.id = a.source_id
       JOIN article_features f ON f.article_id = a.id
+      {pref_join_sql}
       WHERE a.status = 'classified'
         AND a.published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
         {filter_sql}
         {cat_filter_sql}
+        {pref_filter_sql}
       ORDER BY score DESC, a.published_at DESC
       LIMIT %(limit)s OFFSET %(offset)s
     """
-    params = {**score_params, **filter_params, "limit": page_size, "offset": (page - 1) * page_size}
+    params = {**score_params, **filter_params, **pref_params,
+              "limit": page_size, "offset": (page - 1) * page_size}
     articles = query(sql, params)
+
+    if u and articles:
+        ids = [a["id"] for a in articles]
+        placeholders = ",".join(["%s"] * len(ids))
+        thumb_rows = query(
+            f"SELECT article_id, signal_type FROM user_signals "
+            f"WHERE user_id = %s AND signal_type IN ('thumb_up','thumb_down') "
+            f"AND article_id IN ({placeholders})",
+            (u["id"], *ids),
+        )
+        by_id = {r["article_id"]: r["signal_type"] for r in thumb_rows}
+        for a in articles:
+            a["thumb"] = by_id.get(a["id"])
+    else:
+        for a in articles:
+            a["thumb"] = None
 
     if request.headers.get("HX-Request"):
         return render_template(

@@ -23,4 +23,38 @@
 <div id="feed-cards" class="cards">
   {% include "partials/feed_cards.html" %}
 </div>
+
+{% if current_user %}
+<script>
+  window.cardSignals = function (articleId, sourceId, initial, sourceName) {
+    return {
+      state: initial,
+      prompt: null,
+      async vote(t) {
+        const r = await fetch("{{ url_for('signals.record', article_id=0, signal_type='X') }}"
+                    .replace("/0/X", "/" + articleId + "/" + t),
+                  { method: "POST", headers: { "Accept": "application/json" } });
+        if (!r.ok) return;
+        const data = await r.json();
+        this.state = data.state;
+        this.prompt = data.prompt
+          ? { source_id: data.prompt.source_id, source_name: data.prompt.source_name || sourceName }
+          : null;
+      },
+      async sourcePref(action) {
+        const fd = new FormData();
+        fd.append("action", action);
+        await fetch("{{ url_for('signals.source_pref', source_id=0) }}".replace("/0", "/" + sourceId),
+                    { method: "POST", body: fd });
+        this.prompt = null;
+      }
+    };
+  };
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (window.Alpine && e.detail && e.detail.target) {
+      window.Alpine.initTree(e.detail.target);
+    }
+  });
+</script>
+{% endif %}
 {% endblock %}

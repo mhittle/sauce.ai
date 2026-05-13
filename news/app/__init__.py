@@ -32,11 +32,13 @@ def create_app():
     from .routes.firehose import bp as firehose_bp
     from .routes.admin import bp as admin_bp
     from .routes.auth_routes import bp as auth_bp
+    from .routes.signals import bp as signals_bp
 
     app.register_blueprint(feed_bp)
     app.register_blueprint(algo_bp, url_prefix="/algo")
     app.register_blueprint(firehose_bp, url_prefix="/firehose")
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(auth_bp, url_prefix="/auth")
+    app.register_blueprint(signals_bp, url_prefix="/signal")
 
     return app

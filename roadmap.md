@@ -32,7 +32,7 @@ shipped.
 | 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | backlog |
-| 7 | 4 | ui, algo | Thumbs up/down on cards | backlog |
+| 7 | 4 | ui, algo | Thumbs up/down on cards | in-progress |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
@@ -154,7 +154,7 @@ click signal becomes one input among many in the unified signal table.
 Ship after Thumbs Up/Down so explicit signals are flowing first.
 
 ### Thumbs up/down on cards
-**Priority:** 7 · **LOE:** 4 · **Category:** ui, algo · **Status:** backlog
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, algo · **Status:** in-progress
 
 Subtle up/down affordance on each card (hover-revealed, sized for the
 "discerning reader" aesthetic — not Reddit-chunky). Writes to
