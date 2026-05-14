@@ -39,6 +39,7 @@ shipped.
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
+| 6 | 2 | ui, backend | Feed sort selector (Relevance / Newest / Popularity) | done |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | done |
 | 6 | 6 | new-feature, ui | Search across articles | backlog |
 | 5 | 5 | infra | Test coverage expansion | backlog |
@@ -387,6 +388,19 @@ Toggle in the user nav. CSS custom-property swap. Persist preference in
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-14
+
+- **Feed sort selector (Relevance / Newest / Popularity)** — Pri 6, LOE 2,
+  ui/backend. PR #TBD. Adds a `?sort=` query param to `/`: `relevance`
+  (default — score DESC, current algo-driven order), `newest`
+  (`a.published_at DESC, score DESC`), `popularity` (`f.popularity DESC,
+  a.published_at DESC`). Threshold filters and the user's algorithm
+  weights still apply to every sort — only the ORDER BY changes.
+  Pure URL-param persistence (no DB migration). Selector preserves the
+  active category and threads through HTMX "Load more". Unknown values
+  fall back to `relevance`. No new dependency. CSS-only template edits
+  (single `.feed-controls` flex row in `style.css`).
 
 ### 2026-05-13
 
