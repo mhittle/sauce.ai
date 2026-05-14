@@ -7,6 +7,78 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-13 — BUG-012: refresh-shuffle via score jitter
+
+### Context
+
+User reported: "When someone refreshes their page, the content
+presented should change as well." With BUG-011's multiplicative
+recency gate the feed is fresh in absolute terms, but ranking is
+purely arithmetic — `ORDER BY score DESC, a.published_at DESC` over
+a deterministic score gives the same top-30 on every reload until
+new articles land or recency decay reshuffles. Logged as BUG-012.
+
+### Root cause
+
+`app/ranking.py:build_score_sql` returns a pure SQL arithmetic
+expression with no random component. Identical inputs → identical
+outputs. Refresh feels static.
+
+### Fix
+
+Opt-in `jitter` kwarg on `build_score_sql(weights, *, jitter=0.0)`.
+When `jitter > 0` AND at least one quality feature is weighted, the
+final expression is wrapped in `* (1 + RAND() * %(jitter)s)`. Live
+feed route (`/`) passes `current_app.config["FEED_JITTER"]`
+(default `0.10`) so consecutive refreshes shuffle articles within
+~10% score bands. Other callers stay deterministic by default:
+
+- `jobs/send_digest.py` — daily digest must be stable per send.
+- `app/routes/firehose.py` — orders by `f.classified_at DESC`, score
+  is only there as a per-row tint, jitter wouldn't affect order.
+- `app/routes/algo.py` preview — tuning surface where randomness
+  would confuse the user.
+
+Env-var `FEED_JITTER=0` disables on prod if needed.
+
+### Known caveat
+
+Jitter is computed per query, so an article on the border between
+page N and N+1 could surface on both (or neither) when paginating
+via "Load more". Acceptable for v1 — the page-1 refresh experience
+is the primary win. A principled per-user "seen-recently downrank"
+(impression tracking + N-hour downweight) is now noted under the
+Signal Learning roadmap entry as the follow-on.
+
+### Code touched
+
+- `news/app/ranking.py` — `build_score_sql` gains `jitter` kwarg.
+- `news/app/config.py` — `FEED_JITTER` default `0.10`.
+- `news/app/routes/feed.py` — passes
+  `current_app.config["FEED_JITTER"]`.
+- `news/tests/test_ranking.py` — 4 new tests
+  (`test_jitter_off_by_default`,
+  `test_jitter_wraps_score_with_rand_multiplier`,
+  `test_jitter_zero_disables_wrap`,
+  `test_jitter_skipped_when_no_active_features`). Full suite 182
+  passing on this branch.
+- `bugs.md` — BUG-012 logged + resolved.
+- `roadmap.md` — Signal Learning entry annotated with the
+  seen-recently downrank follow-on.
+
+### Server-side state touched
+
+None. No DB change, no migration, no new cron, no new pip dep, no
+new symlink. `FEED_JITTER` is an env-var with a working default, so
+the default deploy works without touching cPanel env vars. Python
+App restart after FTP/CI deploy so the new code loads.
+
+### PR
+
+- **PR #TBD** — BUG-012: refresh shuffle via score jitter (draft).
+
+---
+
 ## 2026-05-13 — English-only article filter at fetch time (PR #42)
 
 ### Context
