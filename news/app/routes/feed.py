@@ -6,6 +6,26 @@ from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESE
 
 bp = Blueprint("feed", __name__)
 
+SORT_OPTIONS = ("relevance", "newest", "popularity")
+SORT_LABELS = {
+    "relevance": "Relevance",
+    "newest": "Newest",
+    "popularity": "Popularity",
+}
+
+
+def _normalize_sort(value):
+    v = (value or "").strip().lower()
+    return v if v in SORT_OPTIONS else "relevance"
+
+
+def _order_by_for_sort(sort):
+    if sort == "newest":
+        return "ORDER BY a.published_at DESC, score DESC"
+    if sort == "popularity":
+        return "ORDER BY f.popularity DESC, a.published_at DESC"
+    return "ORDER BY score DESC, a.published_at DESC"
+
 
 def _active_weights():
     """Return the active user's weights, or the balanced default for anon visitors."""
@@ -38,6 +58,8 @@ def index():
     page = max(1, int(request.args.get("page", 1)))
     page_size = 30
     category = (request.args.get("category") or "").strip() or None
+    sort = _normalize_sort(request.args.get("sort"))
+    order_by_sql = _order_by_for_sort(sort)
 
     jitter = float(current_app.config.get("FEED_JITTER", 0.0) or 0.0)
     score_expr, score_params = build_score_sql(weights, jitter=jitter)
@@ -97,7 +119,7 @@ def index():
         {filter_sql}
         {cat_filter_sql}
         {pref_filter_sql}
-      ORDER BY score DESC, a.published_at DESC
+      {order_by_sql}
       LIMIT %(limit)s OFFSET %(offset)s
     """
     params = {**score_params, **filter_params, **pref_params, **vis_params,
@@ -124,6 +146,7 @@ def index():
         return render_template(
             "partials/feed_cards.html",
             articles=articles, page=page, weights=weights, category=category,
+            sort=sort,
         )
 
     cat_rows = query(f"""
@@ -141,6 +164,7 @@ def index():
         "feed.html",
         articles=articles, page=page, weights=weights,
         categories=cat_rows, active_category=category,
+        sort=sort, sort_options=SORT_OPTIONS, sort_labels=SORT_LABELS,
     )
 
 

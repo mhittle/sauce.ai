@@ -9,16 +9,31 @@
   </p>
 </header>
 
-{% if categories %}
-<nav class="category-tabs" aria-label="Filter by category">
-  <a class="cat-tab {% if not active_category %}active{% endif %}"
-     href="{{ url_for('feed.index') }}">All</a>
-  {% for c in categories %}
-    <a class="cat-tab {% if active_category == c.category %}active{% endif %}"
-       href="{{ url_for('feed.index', category=c.category) }}">{{ c.category }}</a>
-  {% endfor %}
-</nav>
-{% endif %}
+{% set sort_arg = sort if sort and sort != 'relevance' else None %}
+
+<div class="feed-controls">
+  {% if categories %}
+  <nav class="category-tabs" aria-label="Filter by category">
+    <a class="cat-tab {% if not active_category %}active{% endif %}"
+       href="{{ url_for('feed.index', sort=sort_arg) }}">All</a>
+    {% for c in categories %}
+      <a class="cat-tab {% if active_category == c.category %}active{% endif %}"
+         href="{{ url_for('feed.index', category=c.category, sort=sort_arg) }}">{{ c.category }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+
+  <form class="sort-form" method="get" action="{{ url_for('feed.index') }}">
+    {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+    <label class="sort-label" for="feed-sort">Sort:</label>
+    <select id="feed-sort" name="sort" onchange="this.form.submit()">
+      {% for opt in sort_options %}
+        <option value="{{ opt }}" {% if sort == opt %}selected{% endif %}>{{ sort_labels[opt] }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit">Apply</button></noscript>
+  </form>
+</div>
 
 <div id="feed-cards" class="cards">
   {% include "partials/feed_cards.html" %}

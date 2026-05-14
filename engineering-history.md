@@ -7,6 +7,98 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-14 — Feed sort selector (Relevance / Newest / Popularity)
+
+### Context
+
+User asked for "the same sorts that Google has" on the feed. Google
+News parity = a small dropdown with Relevance (algorithmic, default)
+and Date. Added Popularity as a third option per the user's
+selection — raw `article_features.popularity` (Reddit/HN signal),
+useful for an "everyone's reading this" view that ignores the
+user's algorithm tuning.
+
+### What shipped
+
+- **`app/routes/feed.py`** — new module constants `SORT_OPTIONS =
+  ("relevance", "newest", "popularity")` and `SORT_LABELS`. Two pure
+  helpers: `_normalize_sort(value)` (case-insensitive, trims, falls
+  back to `relevance` on anything else — including SQL-injection
+  attempts) and `_order_by_for_sort(sort)` returning the literal
+  ORDER BY clause to inject. Route reads `request.args.get("sort")`,
+  normalizes, and substitutes `{order_by_sql}` into the SQL template
+  in place of the previous fixed `ORDER BY score DESC,
+  a.published_at DESC`. Threshold filters, source-pref weights, and
+  visibility filters all still apply — only the ordering changes.
+- **`app/templates/feed.html`** — wrapped category tabs in a new
+  `.feed-controls` flex row alongside a small `<form method="get">`
+  with a `<select name="sort">` that auto-submits on change. Category
+  tab `href`s thread `sort=` through `url_for` (omitting it when
+  it's `relevance`, so the default URL stays clean: `/`,
+  `/?category=tech`, `/?sort=newest`,
+  `/?sort=newest&category=tech`).
+- **`app/templates/partials/feed_cards.html`** — HTMX "Load more"
+  button preserves `sort` the same way.
+- **`app/static/style.css`** — single `.feed-controls` /
+  `.sort-form` rule block; mobile media block stacks the form below
+  the tabs at ≤640px.
+- **`tests/test_feed_sort.py`** — 8 cases covering: SORT_OPTIONS
+  shape; `_normalize_sort` passes through valid values; falls back
+  to `relevance` for None/empty/whitespace/unknown/SQL-injection
+  strings; case-insensitive + trim; ORDER BY for each sort puts the
+  right column first; popularity ties break on recency (not score);
+  unknown value defaults to relevance. Full suite: 190 passing (was
+  182).
+- Manual render smoke-test via test client: `/`, `/?sort=newest`,
+  `/?sort=popularity`, `/?sort=bogus`, `/?sort=newest&category=tech`
+  all return 200 with the correct option pre-selected.
+
+### Notes for next session
+
+- Behavior on `newest`: `recency` from the algorithm slider has no
+  practical effect on the ORDER BY (we sort by `published_at`
+  directly), but it's still computed in the score expression because
+  `score DESC` is the tiebreaker. Filter thresholds still apply, so
+  a paywall-hating user sorting by newest still won't see paywalled
+  articles. That's correct: sort is a re-order, not an opt-out.
+- `popularity` ties break on `published_at`, not on score.
+  Acceptable — popularity sort is a deliberately algorithm-agnostic
+  view.
+- Firehose intentionally untouched — it already orders by
+  `f.classified_at DESC` and is the see-everything stream.
+- `FEED_JITTER` still applies to the score expression, so the page-1
+  reload shuffle from BUG-012 keeps working under `relevance`.
+  Jitter is wasted CPU on `newest` / `popularity` sorts since
+  `score` is only a tiebreaker there; not worth conditionally
+  skipping at this scope.
+- Possible future polish: persist the last choice per-user (would
+  need a `users.feed_sort` column) — explicitly out of scope per
+  the user's "URL query param only" choice this session.
+
+### Code touched
+
+- `news/app/routes/feed.py` — sort helpers + route plumbing.
+- `news/app/templates/feed.html` — `.feed-controls` row with
+  category tabs + sort `<form>`; tabs preserve `sort=`.
+- `news/app/templates/partials/feed_cards.html` — Load more button
+  preserves `sort=`.
+- `news/app/static/style.css` — `.feed-controls` / `.sort-form`
+  rules + mobile media block stack.
+- `news/tests/test_feed_sort.py` — new, 8 cases.
+- `roadmap.md` — new Done entry; at-a-glance row added.
+
+### Server-side state touched
+
+None. No DB migration, no new cron entry, no env-var change, no new
+symlink, no new pip dep. Standard Python App restart on deploy so
+the new template + route load.
+
+### PR
+
+- **PR #TBD** — Feed sort selector (draft).
+
+---
+
 ## 2026-05-13 — BUG-012: refresh-shuffle via score jitter
 
 ### Context
