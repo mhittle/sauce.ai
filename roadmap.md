@@ -392,7 +392,7 @@ narrative lives in `engineering-history.md` under the same date.
 ### 2026-05-14
 
 - **Feed sort selector (Relevance / Newest / Popularity)** — Pri 6, LOE 2,
-  ui/backend. PR #TBD. Adds a `?sort=` query param to `/`: `relevance`
+  ui/backend. PR #48. Adds a `?sort=` query param to `/`: `relevance`
   (default — score DESC, current algo-driven order), `newest`
   (`a.published_at DESC, score DESC`), `popularity` (`f.popularity DESC,
   a.published_at DESC`). Threshold filters and the user's algorithm

@@ -95,7 +95,7 @@ the new template + route load.
 
 ### PR
 
-- **PR #TBD** — Feed sort selector (draft).
+- **PR #48** — Feed sort selector (merged 2026-05-14).
 
 ---
 
