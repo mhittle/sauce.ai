@@ -1,13 +1,14 @@
 import json
 from flask import (
     Blueprint, render_template, request, redirect, url_for, g, jsonify,
-    current_app,
+    current_app, make_response,
 )
 
 from ..auth import login_required
 from ..db import query, execute, get_conn
 from ..algo_nl import interpret_algorithm
 from ..classifier import LLMUnavailable
+from ..profiles import clean_profile_name, next_default_name, pick_promotion
 from ..ranking import (
     PRESETS, FEATURES, FEATURE_KEYS, SIGNED_FEATURES, CATEGORIES,
     default_weights, parse_weights_json, weights_to_expression,
@@ -25,6 +26,32 @@ def _get_active(user_id):
     if not row:
         return None, default_weights()
     return row["id"], parse_weights_json(row["weights_json"])
+
+
+def _list_profiles(user_id):
+    return query(
+        "SELECT id, name, is_active, updated_at FROM user_algorithms "
+        "WHERE user_id = %s ORDER BY is_active DESC, updated_at DESC",
+        (user_id,),
+    )
+
+
+def _activate(user_id, algo_id):
+    """Make `algo_id` the user's single active profile. Ownership-checked
+    and atomic: every other row is cleared, the target is set, one commit."""
+    owned = query(
+        "SELECT id FROM user_algorithms WHERE id = %s AND user_id = %s",
+        (algo_id, user_id), one=True,
+    )
+    if not owned:
+        return False
+    execute("UPDATE user_algorithms SET is_active = 0 WHERE user_id = %s", (user_id,))
+    execute(
+        "UPDATE user_algorithms SET is_active = 1 WHERE id = %s AND user_id = %s",
+        (algo_id, user_id),
+    )
+    get_conn().commit()
+    return True
 
 
 def _parse_form_weights(form):
@@ -65,6 +92,7 @@ def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None):
         categories=CATEGORIES,
         expression=weights_to_expression(weights),
         presets=PRESETS,
+        profiles=_list_profiles(g.user["id"]),
         nl_description=nl_description,
         nl_notes=nl_notes,
         nl_error=nl_error,
@@ -198,5 +226,84 @@ def use_preset(key):
             "INSERT INTO user_algorithms (user_id, name, weights_json, expression_text, is_active) VALUES (%s, %s, %s, %s, 1)",
             (g.user["id"], preset["label"], json.dumps(weights), weights_to_expression(weights)),
         )
+    get_conn().commit()
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/profiles/new", methods=["POST"])
+@login_required
+def profile_new():
+    """Save the current editor weights as a new named profile and make it
+    active. Reuses the slider fields from #algo-form."""
+    weights = _parse_form_weights(request.form)
+    existing = query(
+        "SELECT name FROM user_algorithms WHERE user_id = %s", (g.user["id"],))
+    name = clean_profile_name(
+        request.form.get("name"),
+        fallback=next_default_name([r["name"] for r in existing]),
+    )
+    execute("UPDATE user_algorithms SET is_active = 0 WHERE user_id = %s", (g.user["id"],))
+    execute(
+        "INSERT INTO user_algorithms (user_id, name, weights_json, expression_text, is_active) "
+        "VALUES (%s, %s, %s, %s, 1)",
+        (g.user["id"], name, json.dumps(weights), weights_to_expression(weights)),
+    )
+    get_conn().commit()
+    if request.headers.get("HX-Request"):
+        resp = make_response("", 204)
+        resp.headers["HX-Redirect"] = url_for("algo.index")
+        return resp
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/profiles/activate", methods=["POST"])
+@bp.route("/profiles/<int:aid>/activate", methods=["POST"])
+@login_required
+def profile_activate(aid=None):
+    if aid is None:
+        try:
+            aid = int(request.form.get("aid", ""))
+        except (TypeError, ValueError):
+            aid = None
+    if aid is not None:
+        _activate(g.user["id"], aid)
+    if request.form.get("next") == "feed":
+        return redirect(url_for("feed.index"))
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/profiles/<int:aid>/rename", methods=["POST"])
+@login_required
+def profile_rename(aid):
+    name = clean_profile_name(request.form.get("name"), fallback="Custom")
+    execute(
+        "UPDATE user_algorithms SET name = %s WHERE id = %s AND user_id = %s",
+        (name, aid, g.user["id"]),
+    )
+    get_conn().commit()
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/profiles/<int:aid>/delete", methods=["POST"])
+@login_required
+def profile_delete(aid):
+    profiles = _list_profiles(g.user["id"])
+    if len(profiles) <= 1:
+        return redirect(url_for("algo.index"))
+    target = next((p for p in profiles if p["id"] == aid), None)
+    if target is None:
+        return redirect(url_for("algo.index"))
+    execute(
+        "DELETE FROM user_algorithms WHERE id = %s AND user_id = %s",
+        (aid, g.user["id"]),
+    )
+    if target["is_active"]:
+        promote = pick_promotion(
+            [p for p in profiles if p["id"] != aid], aid)
+        if promote is not None:
+            execute(
+                "UPDATE user_algorithms SET is_active = 1 WHERE id = %s AND user_id = %s",
+                (promote, g.user["id"]),
+            )
     get_conn().commit()
     return redirect(url_for("algo.index"))

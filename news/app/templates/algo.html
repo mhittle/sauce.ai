@@ -11,6 +11,42 @@
     </nav>
   </header>
 
+  {% if profiles %}
+  <section class="profile-bar" aria-label="Algorithm profiles">
+    <span class="profile-bar-label">Profiles</span>
+    <ul class="profiles">
+      {% for p in profiles %}
+        <li class="profile {% if p.is_active %}active{% endif %}" x-data="{ renaming: false }">
+          <span class="profile-name" x-show="!renaming">
+            {{ p.name }}{% if p.is_active %} <em class="badge">active</em>{% endif %}
+          </span>
+          {% if not p.is_active %}
+            <form method="post" action="{{ url_for('algo.profile_activate', aid=p.id) }}" class="inline">
+              {{ csrf_field() }}
+              <button type="submit" class="linkbtn">Use</button>
+            </form>
+          {% endif %}
+          <button type="button" class="linkbtn" x-show="!renaming" @click="renaming = true">Rename</button>
+          <form method="post" action="{{ url_for('algo.profile_rename', aid=p.id) }}"
+                class="inline rename-form" x-show="renaming" x-cloak>
+            {{ csrf_field() }}
+            <input type="text" name="name" value="{{ p.name }}" maxlength="120" />
+            <button type="submit" class="linkbtn">Save</button>
+            <button type="button" class="linkbtn" @click="renaming = false">Cancel</button>
+          </form>
+          {% if profiles|length > 1 %}
+            <form method="post" action="{{ url_for('algo.profile_delete', aid=p.id) }}"
+                  class="inline" onsubmit="return confirm('Delete this algorithm profile?')">
+              {{ csrf_field() }}
+              <button type="submit" class="linkbtn danger">Delete</button>
+            </form>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <section x-show="tab==='ui'">
     <form class="nl-builder" method="post" action="{{ url_for('algo.describe') }}">
       {{ csrf_field() }}
@@ -92,6 +128,13 @@
                 hx-post="{{ url_for('algo.save') }}"
                 hx-include="#algo-form"
                 hx-target="#preview-pane">Save algorithm</button>
+        <span class="save-as-new">
+          <input type="text" name="name" class="new-profile-name"
+                 placeholder="New profile name" maxlength="120" />
+          <button type="button"
+                  hx-post="{{ url_for('algo.profile_new') }}"
+                  hx-include="#algo-form">Save as new profile</button>
+        </span>
         <a href="{{ url_for('feed.index') }}">View my feed →</a>
       </div>
     </form>

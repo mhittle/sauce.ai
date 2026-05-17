@@ -33,6 +33,21 @@
     </select>
     <noscript><button type="submit">Apply</button></noscript>
   </form>
+
+  {% if current_user and profiles and profiles|length >= 2 %}
+  <form class="sort-form profile-switch" method="post"
+        action="{{ url_for('algo.profile_activate') }}">
+    {{ csrf_field() }}
+    <input type="hidden" name="next" value="feed">
+    <label class="sort-label" for="feed-profile">Algorithm:</label>
+    <select id="feed-profile" name="aid" onchange="this.form.submit()">
+      {% for p in profiles %}
+        <option value="{{ p.id }}" {% if p.is_active %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit">Switch</button></noscript>
+  </form>
+  {% endif %}
 </div>
 
 <div id="feed-cards" class="cards">

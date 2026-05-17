@@ -336,3 +336,17 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .dossier-discussion .discussion-list li { font-size: 0.9em; }
 .dossier-discussion .discussion-list a { font-weight: 600; }
 .dossier-discussion .discussion-list .muted { font-size: 0.85em; margin-left: 0.3em; }
+
+/* Multiple saved algorithm profiles */
+.profile-bar { grid-column: 1/-1; display: flex; align-items: center; flex-wrap: wrap; gap: 0.6em 1em; margin: 0.4em 0 1em; padding-bottom: 0.6em; border-bottom: 1px solid var(--line); }
+.profile-bar-label { font-weight: 600; color: var(--muted, #777); font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.03em; }
+.profile-bar .profiles { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0; padding: 0; }
+.profile-bar .profile { display: flex; align-items: center; gap: 0.5em; border: 1px solid var(--line); border-radius: 6px; padding: 0.3em 0.6em; background: white; font-size: 0.9em; }
+.profile-bar .profile.active { border-color: var(--accent); background: #f7faff; }
+.profile-bar .profile-name { font-weight: 600; }
+.profile-bar .badge { font-style: normal; font-size: 0.75em; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; margin-left: 0.3em; }
+.profile-bar .rename-form input { font: inherit; padding: 0.2em 0.4em; border: 1px solid var(--line); border-radius: 4px; }
+.profile-bar .linkbtn.danger { color: var(--err); }
+.algo-actions .save-as-new { display: inline-flex; align-items: center; gap: 0.4em; }
+.algo-actions .new-profile-name { font: inherit; padding: 0.4em 0.6em; border: 1px solid var(--line); border-radius: 6px; }
+.feed-controls .profile-switch select { padding: 0.3em 0.5em; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--fg); font-size: 0.9em; }

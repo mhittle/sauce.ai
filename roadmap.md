@@ -51,7 +51,7 @@ shipped.
 | 3 | 2 | ui | Dark mode | backlog |
 | 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | backlog |
-| 7 | 4 | backend, ui | Multiple saved algorithms / profiles | backlog |
+| 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | backlog |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
@@ -431,7 +431,7 @@ matched against title + summary (+ body once extracted). v2: phrase /
 entity-aware matching once topic extraction (Trending) lands.
 
 ### Multiple saved algorithms / profiles
-**Priority:** 7 · **LOE:** 4 · **Category:** backend, ui · **Status:** backlog
+**Priority:** 7 · **LOE:** 4 · **Category:** backend, ui · **Status:** in-progress
 
 Named algorithm profiles ("Morning brief", "Weekend deep-dive", "Work
 mode") switchable from a dropdown on `/`. Today there is exactly one

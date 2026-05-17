@@ -92,6 +92,85 @@ overlapping tick no-ops.
 
 ---
 
+## 2026-05-17 — Multiple saved algorithm profiles (user-empowerment cluster, Theme A)
+
+### Context
+
+Roadmap "Multiple saved algorithms / profiles" (Pri 7, LOE 4) — the
+structural keystone of the user-empowerment cluster (Shareable gallery,
+A/B split, Onboarding all lean on it). Picked by the user this session.
+
+### What shipped (PR draft)
+
+- **No DB migration.** `user_algorithms` already has `name` +
+  `is_active` + `idx_ua_user(user_id, is_active)`; the work is purely
+  app logic. Every existing consumer (`feed.py`, `firehose.py`,
+  `send_digest.py`, `algo.py`) already selects
+  `WHERE is_active = 1 ... LIMIT 1`, so the only invariant to preserve
+  is **exactly one active row per user** — kept by an atomic
+  clear-all-then-set activate.
+- **`app/profiles.py`** (new, Flask-free, DB-free): `clean_profile_name`
+  (trim, 120-char cap matching the column, fallback), `next_default_name`
+  ("Custom", "Custom 2", … case/space-insensitive), `pick_promotion`
+  (which profile becomes active when the active one is deleted).
+- **`app/routes/algo.py`**: `_list_profiles`, atomic ownership-checked
+  `_activate`; `_render_editor` passes `profiles`. New routes:
+  `POST /algo/profiles/new` (saves current editor sliders as a new
+  active profile; HX returns 204 + `HX-Redirect` so the bar refreshes),
+  `POST /algo/profiles/[<id>/]activate` (path **or** form `aid`;
+  `next=feed` redirects back to `/`), `POST /algo/profiles/<id>/rename`,
+  `POST /algo/profiles/<id>/delete` (refuses the last one; promotes a
+  replacement if the active one is deleted). `save` / `use_preset` /
+  `describe` / `onboarding` unchanged — they still act on the active row.
+- **`algo.html`**: a profile-management bar (per-profile Use / inline
+  Rename / Delete + active badge) and a "Save as new profile" name
+  input next to "Save algorithm".
+- **`feed.py` / `feed.html`**: the full-page feed render loads the
+  user's profiles and renders an "Algorithm:" `<select>` switcher in
+  `.feed-controls` (shown only when signed-in with ≥2 profiles); posts
+  to the no-arg `profile_activate` with `next=feed`.
+- **`style.css`**: appended a `.profile-bar` / `.profile-switch` block.
+- **`tests/test_algo_profiles.py`**: 12 cases for the pure helpers
+  (anthropic/pymysql-free, sandbox-runnable). `pytest` local sandbox:
+  the 12 new pass; full collectible run 125 passed / 13 failed / 12
+  collection-errors — **all failures + errors are the known
+  environmental `ModuleNotFoundError` (no requests/pymysql/cryptography/
+  dotenv)**, none in profiles/algo/feed. Templates Jinja-parse clean;
+  changed `.py` `py_compile` clean.
+
+### Known follow-ups (not in scope this PR)
+
+- `use_preset` still overwrites the *active* profile's name+weights
+  with the preset (pre-existing behavior; mildly surprising once you
+  have named profiles). A "create preset as new profile" option is the
+  natural next polish.
+- Live Flask route + in-browser UX not verifiable in this sandbox
+  (`app.db`→pymysql); needs maintainer/CI exercise.
+
+### CSRF interplay (PR #58)
+
+Rebased on top of PR #58 (CSRF + auth rate limiting), which landed on
+`main` during this session. All four new plain POST forms (profile
+Use / Rename / Delete on `/algo`, switcher on `/`) carry
+`{{ csrf_field() }}`. "Save as new profile" is an `hx-post` button,
+covered automatically by `base.html`'s global `htmx:configRequest`
+`X-CSRF-Token` hook. No new CSRF-exempt endpoints (only
+`account.unsubscribe` stays exempt, unchanged).
+
+### Server-side state touched
+
+None. No DB migration, no cron, no env-var, no symlink, no pip dep.
+Standard Python App restart on deploy so the new routes/templates load.
+
+### PR
+
+- **PR (draft)** — Multiple saved algorithm profiles. Branch
+  `claude/onboard-news-aggregator-420r6`, rebased on `origin/main`
+  (`5c576e9`, includes PR #58 CSRF). roadmap.md / algo.html / feed.html
+  union-resolved cleanly; engineering-history.md ours-first.
+
+---
+
 ## 2026-05-17 — CSRF protection + auth rate limiting (PR #58)
 
 Roadmap Pri 7 / LOE 4 (security). v1 was same-site-cookie only —
