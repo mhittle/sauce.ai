@@ -50,13 +50,13 @@ Latin-script articles will keep leaking into the feed until then. Only
 The cPanel "Run Pip Install" button in Setup Python App has been greyed
 out historically — run from cPanel Terminal after activating the venv.
 
-**Commands run (substitute YOURACCOUNT):**
+**Commands (account `lt1ih6uyy2z6`):**
 
 ```bash
 # In cPanel Terminal, paste cPanel's "Enter to the virtual environment"
 # command for the news app, then:
-source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
-  && cd /home/YOURACCOUNT/public_html/sauce.ai/news
+source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+  && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news
 pip install -r requirements.txt
 ```
 
@@ -66,7 +66,7 @@ Restart) so any already-running workers pick up the new package.
 **Verify:**
 
 ```bash
-/home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/python \
+/home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/python \
   -c "import langdetect; print('langdetect', langdetect.__version__ if hasattr(langdetect,'__version__') else 'ok')"
 ```
 
