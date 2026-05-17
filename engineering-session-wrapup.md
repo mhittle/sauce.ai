@@ -64,6 +64,34 @@ Add a section at the top (under the heading row) with today's date. Cover:
 
 Follow the format of existing entries. Terse beats verbose.
 
+### 1b. Archive `engineering-history.md` if it's over its token budget
+
+After appending the new entry, check the live history size. It must stay
+ingestible in a single `Read` — onboarding reads it end-to-end.
+
+- **Budget: ~14K tokens.** Proxy: `wc -c < engineering-history.md` —
+  this file runs ~2.4 bytes/token, so **keep it under ~34 KB**
+  (`wc -w`: under ~4,500 words).
+- **If over budget, condense oldest-first into the archive:**
+  1. Move the **full verbatim text** of the oldest dated entries into
+     `engineering-history-archive.md` (create it if absent),
+     newest-first, same heading format.
+  2. Replace each moved entry in the live file with a 2–6 line summary
+     under "## Condensed history": date, title, PR#, one-sentence
+     what-shipped, and any **load-bearing server-side state as a
+     one-liner**. Summarize server state — never delete it.
+  3. **Never archive** the "Load-bearing production state" section or
+     "Original product spec" — they stay in the live file regardless of
+     age. If an archived entry carried not-in-repo server state, fold
+     that state into "Load-bearing production state" *before* condensing
+     the entry.
+  4. Keep condensing until the live file is comfortably under budget
+     (target ~10–12K tokens / ~26 KB for headroom).
+- The archive is **not** read during onboarding. It's consulted on
+  demand when troubleshooting a regression or needing the deep context
+  behind a condensed entry — grep it by PR# / BUG-ID / date and read
+  that section with `offset`/`limit`; don't read it whole.
+
 ### 2. Update `roadmap.md`
 
 For each item touched this session:
@@ -174,3 +202,10 @@ Don't:
 - Leave the user a wall-of-text summary. Three sentences is plenty.
 - Self-trigger wrap-up prematurely (before any real work has happened)
   — the prompt is for *stale* sessions, not short ones.
+- Condense or archive a history entry that carried not-in-repo server
+  state without first folding that state into the durable "Load-bearing
+  production state" section. The archive is on-demand only; onboarding
+  will never see it, so anything load-bearing must survive in the live
+  file.
+- Let `engineering-history.md` grow past ~34 KB. Once it exceeds the
+  single-`Read` ceiling the onboarding step silently breaks.
