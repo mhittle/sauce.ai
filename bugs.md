@@ -86,6 +86,52 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-015 — Popularity sort surfaces almost exclusively Hacker News
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #53)
+
+Sorting the feed by Popularity (`?sort=popularity`, added PR #48)
+returned a feed dominated by Hacker News links.
+
+**Root cause:** the sort was `ORDER BY f.popularity DESC`, where
+`article_features.popularity` is written *only* by `popularity_poll`
+matching article URLs against Reddit + HN. Per INSTALL.txt §8F that
+matches ~5-10% of articles, so the vast majority have `popularity=0`
+and the small non-zero set skews HN-heavy. The sort therefore
+collapsed into "the handful of links that hit HN" and discarded the
+user's algorithm entirely.
+
+**Fix (PR #53):** added an *external trending* signal independent of
+the Reddit/HN URL match.
+
+- New `app/trending.py` (pure, Flask-free): parses Google Trends
+  daily-trends RSS + Google News RSS (top stories + a few topic
+  sections) into weighted topics (token bag + 0..1 heat), and scores
+  an article by the fraction of a hot topic's vocabulary it contains
+  scaled by that topic's heat.
+- New `jobs/trending_poll.py` cron (every 30 min, `job_lock`,
+  ping-reconnect before writes per BUG-009). Recomputes
+  `article_features.trending` over the rolling `TRENDING_WINDOW_DAYS`
+  (default 2) window each tick, so stale topics decay out with no
+  separate reset job.
+- New `article_features.trending FLOAT` column + `trending` entry in
+  the `FEATURES` catalog / `feature_catalog` (opt-in, default weight 0
+  — existing user algorithms are unchanged).
+- The feed's `popularity` sort is renamed **Trending** and is now
+  `ORDER BY f.trending DESC, score DESC`: trending heat first, the
+  user's algo score as the within-trending tiebreak — relevance is
+  preserved, the feed is just re-ordered toward what's trending.
+  Legacy `?sort=popularity` is aliased to `trending` so old bookmarks
+  / digest links don't fall back to relevance.
+
+**Known limitation (documented INSTALL.txt §10):** matching is
+token-overlap, not entity/synonym aware — "Fed" won't match the
+"federal reserve" trend. Good enough for v1; improves when entity
+extraction lands (roadmap: Trending topics view / Signal Learning).
+
+**Note on numbering:** PR #50 (merged) landed BUG-013 and BUG-014
+first, so this is numbered BUG-015 (same convention as the
+BUG-010→BUG-011 renumber).
+
 ### BUG-014 — `ModuleNotFoundError: No module named 'langdetect'`
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #50)
 

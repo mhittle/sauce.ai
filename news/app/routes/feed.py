@@ -7,24 +7,34 @@ from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESE
 
 bp = Blueprint("feed", __name__)
 
-SORT_OPTIONS = ("relevance", "newest", "popularity")
+SORT_OPTIONS = ("relevance", "newest", "trending")
 SORT_LABELS = {
     "relevance": "Relevance",
     "newest": "Newest",
-    "popularity": "Popularity",
+    "trending": "Trending",
 }
+
+# `popularity` was this slot's value before BUG-015 (PR #48). Alias it so
+# old bookmarks, threaded category links, and the digest's URLs land on
+# the trending sort instead of silently falling back to relevance.
+_SORT_ALIASES = {"popularity": "trending"}
 
 
 def _normalize_sort(value):
     v = (value or "").strip().lower()
+    v = _SORT_ALIASES.get(v, v)
     return v if v in SORT_OPTIONS else "relevance"
 
 
 def _order_by_for_sort(sort):
     if sort == "newest":
         return "ORDER BY a.published_at DESC, score DESC"
-    if sort == "popularity":
-        return "ORDER BY f.popularity DESC, a.published_at DESC"
+    if sort == "trending":
+        # Trending heat first; the user's algo score breaks ties so within
+        # the hot topics they still get their best-by-algorithm articles
+        # (BUG-015). Non-trending rows tie at trending=0 and fall through
+        # to the normal algo order.
+        return "ORDER BY f.trending DESC, score DESC"
     return "ORDER BY score DESC, a.published_at DESC"
 
 
@@ -99,7 +109,7 @@ def index():
              s.name AS source_name, s.id AS source_id,
              f.political_lean, f.source_lean, f.objectivity, f.reading_level,
              f.info_density, f.journalist_reputation, f.source_reputation,
-             f.popularity, f.category, f.country,
+             f.popularity, f.trending, f.category, f.country,
              COALESCE(cs.cluster_size, 1) AS cluster_size,
              ({score_expr}){pref_score_mult} AS score
       FROM articles a

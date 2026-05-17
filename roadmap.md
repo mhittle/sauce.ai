@@ -35,6 +35,7 @@ shipped.
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
+| 7 | 4 | algo, backend, ui | External trending sort (Google News/Trends) — BUG-015 | done |
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | in-progress |
@@ -424,6 +425,20 @@ narrative lives in `engineering-history.md` under the same date.
   `engineering-session-wrapup.md` (Step 1b) and
   `new-engineering-session-instructions.md` (Step 1 + tl;dr). Docs-only;
   no DB/cron/symlink/env-var/pip change, no manual prod action.
+- **External trending sort (Google News/Trends)** — Pri 7, LOE 4,
+  algo/backend/ui. PR #53. Fixes BUG-015 (Popularity sort was
+  HN-only). New `app/trending.py` (pure helpers) + `jobs/trending_poll.py`
+  cron harvest Google Trends + Google News RSS into weighted topics and
+  write a 0..1 `article_features.trending` column. The feed's
+  `popularity` sort is renamed **Trending** and ordered
+  `f.trending DESC, score DESC` — trending topics surface but the
+  user's algorithm orders within them (relevance preserved). Opt-in
+  `trending` feature in the catalog (default weight 0; existing user
+  algos unchanged). Legacy `?sort=popularity` aliased to `trending`.
+  No new pip dependency. **Requires manual DB migration**
+  (`seed/migrations/2026-05-17-trending.sql`) + a new every-30-min
+  cron entry. Does **not** supersede the separate "Trending topics
+  view" item below (that's a dedicated `/trending` page).
 
 ### 2026-05-14
 

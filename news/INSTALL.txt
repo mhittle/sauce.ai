@@ -195,6 +195,9 @@ itself before invoking python.
 # weekly Monday 5:00am UTC: LLM-suggested source discovery (uses Anthropic API)
 0   5 * * 1   source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python discover_llm.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
 
+# every 30 min: external trending poll (Google Trends + Google News RSS)
+*/30 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python trending_poll.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
     Note: output is redirected to logs/cron.log (NOT /dev/null).
     If a cron job goes wrong you must be able to see the error.
     Tail with:  $ tail -100 ~/public_html/sauce.ai/news/logs/cron.log
@@ -365,6 +368,25 @@ I. /admin/discovery is empty even though discover_harvest is running:
       env var isn't reaching the cron environment.
 
 
+J. Trending sort is empty / still looks like the old HN-only feed:
+
+   1. The `trending` column migration
+      (2026-05-17-trending.sql) must be applied and the Python App
+      restarted. Until then `/?sort=trending` errors on the missing
+      column (other sorts are unaffected).
+   2. `trending_poll` must have run at least once. Tail
+      logs/cron.log for its line:
+      `topics=T gnews=G articles=N matched=M`. matched=0 with
+      topics>0 means nothing in the rolling window matched a hot
+      topic (possible briefly after deploy). topics=0 means Google
+      throttled the RSS this tick -- non-fatal, the job writes
+      trending=0 and the feed falls back to algo order; it
+      self-heals next tick.
+   3. trending decays: the job rescores only the last
+      TRENDING_WINDOW_DAYS (default 2) of articles each tick, so
+      older articles correctly drop out of the Trending sort.
+
+
 ------------------------------------------------------------------
 9. SECRETS HYGIENE
 ------------------------------------------------------------------
@@ -426,5 +448,15 @@ I. /admin/discovery is empty even though discover_harvest is running:
   langdetect 1.0.9 is sdist-only and fails to build on the cPanel
   venv. Per-tick rejection count surfaces in cron.log as
   `skipped_lang=N`.
+- The "Trending" feed sort (formerly "Popularity") is driven by
+  `article_features.trending`, filled by the trending_poll cron
+  from Google Trends + Google News RSS. Article-to-topic matching
+  is token-overlap only: it is NOT entity/synonym aware, so e.g.
+  "Fed" will not match a "federal reserve" trend, and paraphrased
+  headlines under-match. Good enough for v1 surfacing; the
+  entity-extraction upgrade is shared with the roadmapped Trending
+  topics view / Signal Learning work. The sort still applies the
+  user's algorithm as the within-trending tiebreak, and legacy
+  `?sort=popularity` URLs are aliased to it.
 
 You're done. Visit  https://sauce.ai/news .

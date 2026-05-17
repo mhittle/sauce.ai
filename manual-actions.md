@@ -76,6 +76,41 @@ should be non-zero.
 
 ---
 
+### 2026-05-17 — Migration + cron: external trending sort (BUG-015)
+**Status:** open · **PR:** #53 · **Opened:** 2026-05-17 ·
+**File reference:** `news/seed/migrations/2026-05-17-trending.sql`
+
+Adds `article_features.trending` (0..1, external trending-topic match)
+and a new `trending_poll` cron that fills it from Google Trends +
+Google News RSS. The renamed **Trending** feed sort orders by this
+column, so it 500s until the column exists; apply the migration
+**before merging PR #53**, then add the cron entry and restart the
+Python App. No new pip dependency, no new env var (all `TRENDING_*`
+have working defaults).
+
+**1. SQL — run in phpMyAdmin against `lt1ih6uyy2z6_news`:**
+
+```sql
+ALTER TABLE article_features
+  ADD COLUMN trending FLOAT NOT NULL DEFAULT 0 AFTER paywall;
+```
+
+**2. Cron — cPanel → "Cron Jobs", add (substitute YOURACCOUNT):**
+
+```cron
+# every 30 min: external trending poll (Google Trends + Google News RSS)
+*/30 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python trending_poll.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+```
+
+**3.** Restart the Python App (Setup Python App → Restart) so the
+renamed sort + new column load.
+
+**Verify:** `/?sort=trending` returns 200 and is no longer HN-only;
+`logs/cron.log` shows a `trending_poll` line like
+`topics=T gnews=G articles=N matched=M` within ~30 min.
+
+---
+
 ## Completed
 
 ### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)

@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS article_features (
   story_obscurity       FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = only-this-story
   source_obscurity      FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = tiny/unknown source
   paywall               FLOAT NOT NULL DEFAULT 0,   -- 0..1, 1 = subscription-required
+  trending              FLOAT NOT NULL DEFAULT 0,   -- 0..1, external trending-topic match (trending_poll)
   classifier_version    VARCHAR(32) NOT NULL DEFAULT 'v1',
   classified_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (article_id),
