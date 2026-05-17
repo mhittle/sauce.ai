@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{% if q %}Search: {{ q }}{% else %}Search{% endif %}{% endblock %}
+{% block content %}
+<header class="feed-header">
+  <h1>Search</h1>
+  <p class="muted">Full-text search across classified articles, ranked by relevance then recency.</p>
+</header>
+
+<form class="search-page-form" method="get" action="{{ url_for('search.index') }}" role="search">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search articles&hellip;"
+         autofocus aria-label="Search articles" />
+  <button type="submit">Search</button>
+</form>
+
+{% if searched %}
+<div id="search-results" class="cards">
+  {% include "partials/search_results.html" %}
+</div>
+{% else %}
+<p class="empty">Enter a word or phrase to search article titles and summaries.</p>
+{% endif %}
+{% endblock %}

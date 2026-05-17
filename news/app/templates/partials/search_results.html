@@ -1,0 +1,32 @@
+{% if articles %}
+{% for a in articles %}
+  <article class="card search-card">
+    <div class="card-body">
+      <div class="card-meta">
+        <span class="source">{{ a.source_name }}</span>
+        {% if a.political_lean is not none %}
+          <span class="lean-dot" style="--lean: {{ a.political_lean }}"
+                title="article lean {{ '%+.2f' % a.political_lean }}"></span>
+        {% endif %}
+        {% if a.category %}<span class="category">{{ a.category }}</span>{% endif %}
+        <span class="muted">{{ a.published_at.strftime('%b %d, %H:%M') if a.published_at else '' }}</span>
+        <a class="reader-link" href="{{ url_for('reader.read', article_id=a.id) }}" title="Open in reader">Read &rarr;</a>
+      </div>
+      <h2 class="card-title">
+        <a href="{{ a.url }}" target="_blank" rel="noopener"
+           onclick="fetch('{{ url_for('feed.click', article_id=a.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">{{ a.title }}</a>
+      </h2>
+      {% if a.summary %}<p class="summary">{{ a.summary|striptags|truncate(220) }}</p>{% endif %}
+      {% if a.byline %}<div class="byline muted">{{ a.byline }}</div>{% endif %}
+    </div>
+  </article>
+{% endfor %}
+{% if has_more %}
+  <div class="load-more">
+    <button hx-get="{{ url_for('search.index', q=q, page=page+1) }}"
+            hx-target="closest .load-more" hx-swap="outerHTML">Load more</button>
+  </div>
+{% endif %}
+{% else %}
+  <p class="empty">No articles match &ldquo;{{ q }}&rdquo;. Try fewer or more general words.</p>
+{% endif %}

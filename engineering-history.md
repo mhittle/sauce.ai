@@ -181,6 +181,72 @@ load. **No `manual-actions.md` entry.**
 
 ---
 
+## 2026-05-17 — Full-text article search (PR #70)
+
+Roadmap "Search across articles" (Pri 6, LOE 6). v1 = MySQL InnoDB
+FULLTEXT, no new dependency.
+
+### What shipped
+
+- **`app/routes/search.py`** (new blueprint, no url_prefix) —
+  `GET /search?q=&page=`. Pure helpers `clean_query`
+  (trim/collapse-ws/200-char cap) + `parse_page` (sandbox-testable
+  like feed.py's `_normalize_sort`). Query bound as a parameter into
+  `MATCH (a.title, a.summary) AGAINST (%(q)s)` (NATURAL LANGUAGE
+  MODE — boolean operators are literal, no injection surface).
+  Results deduped by story cluster and scoped by the exact
+  source-visibility (`owner_id`) + per-user mute
+  (`COALESCE(usp.weight,1.0)>0`) rules the feed uses; `ORDER BY
+  relevance DESC, a.published_at DESC`; fetches `PAGE_SIZE+1` to
+  drive Load-more without a COUNT.
+- **Schema** — `FULLTEXT KEY ft_articles_search (title, summary)`
+  in `seed/schema.sql` + migration
+  `seed/migrations/2026-05-17-search-fulltext.sql`.
+- **Templates** — `search.html` + `partials/search_results.html`
+  (lighter card than feed_cards, reuses `.card` CSS, self-replacing
+  HX Load-more, no `hx-select`); `base.html` nav gets a compact GET
+  search box (value persisted via `request.args.get('q')`).
+- **`app/static/style.css`** — appended `.nav-search` /
+  `.search-page-form` block at EOF (no existing rule touched).
+- **Tests/docs** — `tests/test_search.py` (pure helpers; same
+  Flask-less sandbox limit as test_feed_sort.py, run on CI);
+  INSTALL.txt §10 FULLTEXT limits.
+
+### Server-side state touched
+
+One **manual prod migration** (`manual-actions.md` Open, full
+inline SQL): `ALTER TABLE articles ADD FULLTEXT INDEX
+ft_articles_search (title, summary);`. `/search` 500s until applied;
+all other routes unaffected. No cron/env/symlink/pip change.
+Standard Python App restart on deploy.
+
+### Verification
+
+Helper assertions pass (stubbed import); `py_compile` +
+Jinja-parse clean. Route SQL / in-browser UX deferred to CI / real
+env (sandbox has no Flask/pymysql/pytest — documented limit, same
+as PR #50/#59). Rebased onto `origin/main` twice as parallel PRs
+landed (#56/#62/#64/#65, then #67/#68/#71 trending); conflicts
+resolved in `__init__.py` (all blueprints), `style.css` /
+`INSTALL.txt` (append both blocks), `manual-actions.md` (two Open
+entries), `engineering-history.md` (took main's base, re-inserted
+this entry).
+
+### PR
+
+- **PR #70** — Full-text article search (draft). Branch
+  `claude/onboard-news-aggregator-j0JdN`.
+
+### Open items
+
+- Maintainer: apply the FULLTEXT migration before merge, then click
+  through `/search` (nav box → results → Load more) and confirm
+  muted-source/visibility scoping.
+- v2: search extracted `article_bodies` text; blended
+  relevance×recency score; boolean/phrase mode.
+
+---
+
 ## 2026-05-17 — Trending topics view (/trending page, PR #71)
 
 Roadmap Pri 7 / LOE 5. New `/trending` page ranking topics by

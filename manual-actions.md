@@ -46,6 +46,29 @@ _None — all tracked migrations applied._
 
 ## Completed
 
+### 2026-05-17 — Migration: articles FULLTEXT index (article search)
+**Status:** completed · **PR:** #70 · **Opened:** 2026-05-17 ·
+**Completed:** 2026-05-17 ·
+**File reference:** `news/seed/migrations/2026-05-17-search-fulltext.sql`
+
+Added an InnoDB FULLTEXT index over `articles(title, summary)` backing
+the new `/search` route + nav search box. User confirmed the ALTER was
+run via phpMyAdmin against `lt1ih6uyy2z6_news` and the Python App
+restarted (2026-05-17). `/search` is now safe to merge (the BUG-007-class
+missing-index 500 is cleared). In the repo via `schema.sql` + the
+migration file so fresh installs replay it.
+
+**SQL applied:**
+
+```sql
+ALTER TABLE articles
+  ADD FULLTEXT INDEX ft_articles_search (title, summary);
+```
+
+**Verify:** `https://sauce.ai/news/search?q=election` returns 200 with
+ranked results (not a 500). `SHOW INDEX FROM articles WHERE Key_name =
+'ft_articles_search';` lists the FULLTEXT index.
+
 ### 2026-05-17 — Migration: trending-topics snapshot tables (/trending page)
 **Status:** completed · **PR:** #71 (Trending topics view, roadmap Pri 7) ·
 **Opened:** 2026-05-17 · **Completed:** 2026-05-17 ·
