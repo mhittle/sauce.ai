@@ -92,7 +92,7 @@ overlapping tick no-ops.
 
 ---
 
-## 2026-05-17 — Dark mode (PR #62)
+## 2026-05-17 — Dark mode (PR #63)
 
 Roadmap Pri 3 / LOE 2 (ui). Maintainer-picked. Client-only theme;
 no server state, no DB, no manual prod action.
@@ -153,7 +153,7 @@ restart is cleaner).
 
 ### PR
 
-- **PR #62** — Dark mode (draft).
+- **PR #63** — Dark mode (draft).
 
 ---
 
