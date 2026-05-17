@@ -92,6 +92,101 @@ overlapping tick no-ops.
 
 ---
 
+## 2026-05-17 — Natural-language algorithm builder (+ user-empowerment roadmap cluster)
+
+### Context
+
+Session opened as a brainstorm: "more features for the roadmap —
+empower the user to help build the perfect newsfeed." Added a 10-item
+cluster (themes A/B/C: direct algorithm expressiveness, closing the
+feedback loop, crowdsourcing the feed), then implemented the flagship
+A item.
+
+### What shipped
+
+- **Roadmap cluster** — 10 backlog entries (NL builder, keyword
+  mute/boost, multiple saved algos, A/B split feed, onboarding
+  cold-start, tune-from-article, feed check-in, shareable algo
+  gallery, community source-quality overlay, community add-a-source).
+  "Tune from this article" cross-references the Signal Learning item
+  so it isn't double-implemented.
+- **Natural-language algorithm builder** (roadmap Pri 8, LOE 5). User
+  describes the feed they want in plain English; one Haiku call maps
+  it onto the existing 3-axis `FEATURES` catalog and the `/algo`
+  editor is pre-filled for review. Nothing is saved until the user
+  hits Save (reuses the existing `/save` path — no new persistence,
+  **no DB migration**). Any LLM failure (no key, parse error, API
+  error, all-zero output) falls back to the editor unchanged with an
+  inline note — never 500s, no per-request LLM cost (fires only on
+  explicit submit).
+
+### Design notes
+
+- `app/algo_nl.py` is Flask-free and mirrors the
+  `classifier/framing.py` convention (lazy `anthropic` import,
+  `LLMUnavailable` on any failure, `_estimate_cost` reuse). The
+  system prompt's feature catalog is generated from `ranking.FEATURES`
+  at call time so it can never drift from the catalog.
+- `_normalize()` clamps every value into range (weight [0,2],
+  direction to the feature's signed/unsigned range, threshold to
+  [0, scale] or None, recency [0,2]), drops unknown feature keys and
+  unknown categories, and raises `LLMUnavailable` if the model
+  produced no usable weights. Output is the exact on-disk weights
+  shape, so `resolved_weights_for_view` / `weights_to_expression` /
+  `build_score_sql` consume it directly.
+- Editor entry point is a `method=post` form (full re-render of
+  `algo.html`), not HTMX — the whole slider grid changes, so a plain
+  POST is simpler and more robust than swapping the grid partial.
+
+### Code touched
+
+- `news/app/algo_nl.py` — new, pure helper + `interpret_algorithm`.
+- `news/app/routes/algo.py` — `POST /describe`; shared
+  `_render_editor()`; imports `interpret_algorithm` + `LLMUnavailable`.
+- `news/app/templates/algo.html` — "Describe your ideal feed" panel
+  on the UI tab; notes/error banners; echoes the description back.
+- `news/app/static/style.css` — `.nl-builder` rule block.
+- `news/tests/test_algo_nl.py` — new, 14 cases (anthropic stubbed via
+  `sys.modules`, same pattern as `test_framing.py`).
+- `roadmap.md` — user-empowerment cluster; NL builder `in-progress`.
+
+### Server-side state touched
+
+None. No DB migration, no cron entry, no env-var, no symlink, no new
+pip dependency (reuses the `anthropic` SDK + `ANTHROPIC_API_KEY`
+already used by classify/framing). Standard Python App restart on
+deploy so the new route + template load.
+
+### Verification
+
+- `tests/test_algo_nl.py` 14/14 pass; full runnable suite **179
+  passed** post-rebase. The 4 collection errors
+  (test_discussion/feed_sort/signals/story) are the known sandbox
+  `pymysql`→`cryptography` limit, unrelated to this change.
+- `algo.html` Jinja-parses; changed Python files `py_compile` clean.
+- **Not verified**: the live Flask `/describe` route and the in-browser
+  UX — `app.db` (pymysql) can't import in this sandbox, so route- and
+  browser-level testing is deferred to a real env / CI. Logic is
+  covered by the pure-helper unit tests.
+
+### PR
+
+- **PR (draft)** — Natural-language algorithm builder + roadmap
+  cluster. Rebased on `origin/main` after PRs #50–#55 (langdetect →
+  py3langid, discussion links, history archive) landed; roadmap.md +
+  style.css auto-merged cleanly.
+
+### Open items
+
+- Maintainer/CI: run `pytest` in an env with flask+pymysql to exercise
+  the `/describe` route, and click through `/algo` → "Build from
+  description" → review sliders → Save.
+- Possible polish: surface the model's per-feature rationale inline
+  next to each slider (currently a single summary line). Out of scope
+  this session.
+
+---
+
 ## 2026-05-17 — Engineering-history archive process
 
 ### Context
