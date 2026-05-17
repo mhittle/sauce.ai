@@ -34,7 +34,7 @@ shipped.
 | 7 | 4 | ui | Mobile / responsive polish | done |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
-| 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | in-progress |
+| 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | done |
 | 7 | 4 | algo, backend, ui | External trending sort (Google News/Trends) — BUG-015 | done |
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
@@ -202,7 +202,7 @@ Depends on signal capture (user_clicks today; user_signals once Signal
 Learning lands).
 
 ### Trending topics view
-**Priority:** 7 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** in-progress (PR pending)
+**Priority:** 7 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** done (v1, PR #71)
 
 > **Implementation note (2026-05-17):** the original plan piggybacked
 > topic extraction on the `classify_pending` LLM call. That file is being
@@ -504,6 +504,24 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Trending topics view** — Pri 7, LOE 5, new-feature/algo. PR #71
+  (merged 2026-05-17). New `/trending` page ranking topics by
+  distinct-outlet count ("20 outlets beat one outlet ×20"), each
+  linking to the story dossier(s) under it. Reuses the Google
+  Trends/News topic index `trending_poll` already builds (PR #53)
+  instead of the roadmap's `classify_pending` LLM plan — chosen to
+  avoid colliding with the in-flight `classify_pending` rewrite
+  (PR #56) and add zero LLM cost. `trending_poll` now also rebuilds a
+  `trending_topics` / `trending_topic_articles` snapshot each tick;
+  new pure helpers in `app/trending.py` (`topic_key`, `topic_matches`
+  — `score_article` refactored to its max, identical output —
+  `build_persist_rows`, `group_topic_stories`). New blueprint +
+  template + nav + additive CSS; env-defaulted `TRENDING_*` config.
+  **Required one DB migration** (`2026-05-17-trending-topics.sql`,
+  applied on prod 2026-05-17); **no new cron**. Limitation: only
+  surfaces topics also trending on Google — the internal LLM-entity
+  version is the documented follow-on (pairs with Signal Learning),
+  deferred until PR #56 lands.
 - **Article save / bookmark** — Pri 6, LOE 4, new-feature/ui. PR #64
   (merged 2026-05-17). Signed-in users star feed articles (☆/★ via
   the existing `cardSignals` Alpine component) into a new `/saved`
