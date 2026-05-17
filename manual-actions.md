@@ -44,37 +44,30 @@ _None — all tracked migrations applied._
 
 ---
 
+## Completed
+
 ### 2026-05-17 — Migration: articles FULLTEXT index (article search)
-**Status:** open · **PR:** #70 · **Opened:** 2026-05-17 ·
+**Status:** completed · **PR:** #70 · **Opened:** 2026-05-17 ·
+**Completed:** 2026-05-17 ·
 **File reference:** `news/seed/migrations/2026-05-17-search-fulltext.sql`
 
-Adds an InnoDB FULLTEXT index over `articles(title, summary)` backing the
-new `/search` route + nav search box. `/search` 500s on the missing index
-until this is applied; all other routes are unaffected (no code reads the
-index except the search route). Apply before merging the PR (same
-"run the migration before merging the code that needs it" rule that
-caused BUG-007). In the repo via `schema.sql` + the migration file so
-fresh installs replay it.
+Added an InnoDB FULLTEXT index over `articles(title, summary)` backing
+the new `/search` route + nav search box. User confirmed the ALTER was
+run via phpMyAdmin against `lt1ih6uyy2z6_news` and the Python App
+restarted (2026-05-17). `/search` is now safe to merge (the BUG-007-class
+missing-index 500 is cleared). In the repo via `schema.sql` + the
+migration file so fresh installs replay it.
 
-**SQL to run (phpMyAdmin against `lt1ih6uyy2z6_news`):**
+**SQL applied:**
 
 ```sql
 ALTER TABLE articles
   ADD FULLTEXT INDEX ft_articles_search (title, summary);
 ```
 
-On a large `articles` table the ALTER takes a little time (InnoDB builds
-the FULLTEXT index); it is a single online-capable DDL, no data change.
-Then restart the Python App (cPanel → Setup Python App → Restart) so the
-new `search` blueprint loads.
-
 **Verify:** `https://sauce.ai/news/search?q=election` returns 200 with
 ranked results (not a 500). `SHOW INDEX FROM articles WHERE Key_name =
 'ft_articles_search';` lists the FULLTEXT index.
-
----
-
-## Completed
 
 ### 2026-05-17 — Migration: trending-topics snapshot tables (/trending page)
 **Status:** completed · **PR:** #71 (Trending topics view, roadmap Pri 7) ·
