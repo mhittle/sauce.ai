@@ -61,6 +61,20 @@ def _needs_onboarding():
     return (row["n"] if row else 0) == 0
 
 
+def _switcher_profiles():
+    """Profiles for the feed-header switcher. Empty for anon visitors."""
+    u = getattr(g, "user", None)
+    if not u:
+        return [], None
+    rows = query(
+        "SELECT id, name, is_active FROM user_algorithms WHERE user_id = %s "
+        "ORDER BY is_active DESC, updated_at DESC",
+        (u["id"],),
+    ) or []
+    active = next((r["id"] for r in rows if r["is_active"]), None)
+    return rows, active
+
+
 @bp.route("/")
 def index():
     if _needs_onboarding():
@@ -186,11 +200,13 @@ def index():
           AND {vis_sql}
         GROUP BY f.category ORDER BY n DESC
     """, vis_params)
+    profiles, active_algo_id = _switcher_profiles()
     return render_template(
         "feed.html",
         articles=articles, page=page, weights=weights,
         categories=cat_rows, active_category=category,
         sort=sort, sort_options=SORT_OPTIONS, sort_labels=SORT_LABELS,
+        profiles=profiles, active_algo_id=active_algo_id,
     )
 
 

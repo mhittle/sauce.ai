@@ -92,6 +92,73 @@ overlapping tick no-ops.
 
 ---
 
+## 2026-05-17 — Multiple saved algorithms / profiles
+
+### Context
+
+Roadmap "User-empowerment cluster" Theme A item (Pri 7, LOE 4). Until
+now there was effectively one algorithm per user: every resolver
+(`feed.py`, `firehose.py`, `jobs/send_digest.py`, `algo.py`) reads
+`user_algorithms WHERE user_id=%s AND is_active=1 ORDER BY updated_at
+DESC LIMIT 1`, and the `/algo` route only ever upserted that single
+active row. The `user_algorithms` table **already** had `name` +
+`is_active` columns (schema since v1), so this is a pure
+application-layer change — **no DB migration, no manual prod action.**
+
+### What shipped
+
+- **`app/routes/algo.py`** — `_list_profiles`, `_set_active`
+  (deactivate-all-then-activate-one, the single-active invariant the
+  resolvers depend on), `_clean_name` (trim + 120-char cap to match
+  the column + "Custom" fallback), `_return_redirect` (whitelisted
+  feed/algo only — no open redirect). Four new login-required POST
+  endpoints: `/algo/profiles/create` (save current editor sliders as
+  a new named profile, made active — also the persistence path for
+  the NL builder's proposed weights), `/profiles/activate`,
+  `/profiles/rename`, `/profiles/delete`. Delete refuses the last
+  profile (a zero-row user gets bounced into onboarding) and promotes
+  a survivor if the active one is removed. Ownership enforced in SQL
+  (`WHERE id=%s AND user_id=%s`) or an explicit owned-row check.
+  `execute()` already returns `cur.lastrowid`, so create uses that
+  directly (no `LAST_INSERT_ID()` round-trip).
+- **`app/templates/algo.html`** — new "Profiles (N)" tab listing
+  saved profiles with active badge + Use/Rename/Delete; a "Save as
+  new profile" name field + native submit (`formaction`) inside
+  `#algo-form` so all slider values post along with it (the form's
+  explicit `hx-trigger` excludes `submit`, so htmx doesn't hijack it).
+- **`app/routes/feed.py` + `feed.html`** — `_switcher_profiles`;
+  feed-header `<select>` switcher (shown only with ≥2 profiles) posting
+  to `algo.activate_profile` with `return_to=feed`.
+- **`app/static/style.css`** — appended `.profile-*` / `.save-as` /
+  `.profile-switch` block (no edits to existing rules; conflict-safe).
+- **`tests/test_algo_profiles.py`** — 10 cases over an in-memory
+  `user_algorithms` store (test_signals pattern): create activates &
+  deactivates others, blank-name default, activate single-active +
+  return_to, foreign-id no-op, rename, delete-when-multiple,
+  delete-last refused, delete-active promotes survivor, login
+  required. Runs on a real env; environmental ModuleNotFoundError in
+  this sandbox (no flask) exactly like `test_signals`/`test_story`.
+  Runnable suite unaffected: 113 pure-logic tests still pass.
+
+### Existing behavior preserved
+
+`save()` still edits the active row in place; `use_preset()` still
+replaces the active row's name+weights; `onboarding()` still inserts
+the first row active. None of these can produce >1 active row given
+the new `_set_active` is the only multi-row creator.
+
+### Server-side state touched
+
+None. No DB migration (columns pre-existed), no cron, no env-var, no
+new pip dep, no symlink. Standard Python App restart on deploy so the
+new routes/templates load.
+
+### PR
+
+- **PR #TBD** — Multiple saved algorithms / profiles (draft).
+
+---
+
 ## 2026-05-17 — Article save / bookmark (roadmap Pri 6)
 
 Roadmap "Article save / bookmark" (Pri 6, LOE 4, new-feature/ui).

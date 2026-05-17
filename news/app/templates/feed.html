@@ -23,6 +23,20 @@
   </nav>
   {% endif %}
 
+  {% if profiles and profiles|length > 1 %}
+  <form class="profile-switch" method="post" action="{{ url_for('algo.activate_profile') }}">
+    {{ csrf_field() }}
+    <input type="hidden" name="return_to" value="feed">
+    <label class="sort-label" for="feed-profile">Algorithm:</label>
+    <select id="feed-profile" name="algo_id" onchange="this.form.submit()">
+      {% for p in profiles %}
+        <option value="{{ p.id }}" {% if p.id == active_algo_id %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit">Switch</button></noscript>
+  </form>
+  {% endif %}
+
   <form class="sort-form" method="get" action="{{ url_for('feed.index') }}">
     {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
     <label class="sort-label" for="feed-sort">Sort:</label>

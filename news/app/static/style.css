@@ -369,3 +369,17 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .card:hover .save-btn { opacity: 0.75; }
 .save-btn:hover { background: #f0efeb; color: var(--fg); opacity: 1; }
 .save-btn.active { color: var(--accent); opacity: 1; }
+/* multiple saved algorithm profiles */
+.profile-switch { display: flex; align-items: center; gap: 0.5em; font-size: 0.9em; flex: 0 0 auto; }
+.profile-switch .sort-label { color: var(--muted, #777); }
+.profile-switch select { padding: 0.3em 0.5em; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--fg); font-size: 0.9em; }
+.algo-actions .save-as { display: flex; align-items: center; gap: 0.4em; }
+.algo-actions .save-as input { padding: 0.35em 0.5em; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.profile-list { list-style: none; margin: 0.5em 0 0; padding: 0; }
+.profile-row { display: flex; align-items: center; justify-content: space-between; gap: 1em; flex-wrap: wrap; padding: 0.6em 0; border-bottom: 1px solid var(--line); }
+.profile-row.active { font-weight: 600; }
+.profile-name .badge { font-style: normal; font-weight: 600; font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin-left: 0.5em; }
+.profile-actions { display: flex; align-items: center; gap: 0.6em; flex-wrap: wrap; }
+.profile-actions form.inline { display: flex; align-items: center; gap: 0.3em; }
+.profile-actions input[type=text] { padding: 0.3em 0.5em; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 0.9em; }
+.profile-actions .linkbtn.danger { color: #b3261e; }

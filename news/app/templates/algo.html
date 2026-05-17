@@ -8,6 +8,7 @@
       <button :class="tab==='ui' && 'active'" @click="tab='ui'">UI</button>
       <button :class="tab==='code' && 'active'" @click="tab='code'">Code</button>
       <button :class="tab==='presets' && 'active'" @click="tab='presets'">Presets</button>
+      <button :class="tab==='profiles' && 'active'" @click="tab='profiles'">Profiles{% if profiles %} ({{ profiles|length }}){% endif %}</button>
     </nav>
   </header>
 
@@ -27,6 +28,7 @@
           hx-post="{{ url_for('algo.preview') }}"
           hx-trigger="input changed delay:300ms from:form, change delay:50ms from:form"
           hx-target="#preview-pane">
+      {{ csrf_field() }}
       <div class="features">
         {% for feat in features %}
           {% set d_val = weights[feat.key + '_direction'] %}
@@ -92,6 +94,13 @@
                 hx-post="{{ url_for('algo.save') }}"
                 hx-include="#algo-form"
                 hx-target="#preview-pane">Save algorithm</button>
+        <span class="save-as">
+          <input type="text" name="profile_name" maxlength="120"
+                 placeholder="New profile name" />
+          <button type="submit"
+                  formaction="{{ url_for('algo.create_profile') }}"
+                  formmethod="post">Save as new profile</button>
+        </span>
         <a href="{{ url_for('feed.index') }}">View my feed →</a>
       </div>
     </form>
@@ -116,6 +125,47 @@
         </form>
       {% endfor %}
     </div>
+  </section>
+
+  <section x-show="tab==='profiles'">
+    <p class="muted">Save several named algorithms and switch between them
+    here or from the feed. The active profile scores your feed, firehose,
+    and daily digest.</p>
+    {% if profiles %}
+    <ul class="profile-list">
+      {% for p in profiles %}
+      <li class="profile-row {% if p.is_active %}active{% endif %}">
+        <span class="profile-name">{{ p.name }}{% if p.is_active %} <em class="badge">active</em>{% endif %}</span>
+        <span class="profile-actions">
+          {% if not p.is_active %}
+          <form method="post" action="{{ url_for('algo.activate_profile') }}" class="inline">
+            {{ csrf_field() }}
+            <input type="hidden" name="algo_id" value="{{ p.id }}" />
+            <button type="submit">Use</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('algo.rename_profile') }}" class="inline">
+            {{ csrf_field() }}
+            <input type="hidden" name="algo_id" value="{{ p.id }}" />
+            <input type="text" name="profile_name" value="{{ p.name }}" maxlength="120" />
+            <button type="submit">Rename</button>
+          </form>
+          {% if profiles|length > 1 %}
+          <form method="post" action="{{ url_for('algo.delete_profile') }}" class="inline"
+                onsubmit="return confirm('Delete this profile?');">
+            {{ csrf_field() }}
+            <input type="hidden" name="algo_id" value="{{ p.id }}" />
+            <button type="submit" class="linkbtn danger">Delete</button>
+          </form>
+          {% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No saved profiles yet. Tune the sliders on the UI tab,
+    then use &ldquo;Save as new profile&rdquo;.</p>
+    {% endif %}
   </section>
 
   <aside id="preview-pane" class="preview">

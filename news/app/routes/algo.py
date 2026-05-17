@@ -31,6 +31,38 @@ def _get_active(user_id):
     return row["id"], parse_weights_json(row["weights_json"])
 
 
+def _list_profiles(user_id):
+    return query(
+        "SELECT id, name, is_active FROM user_algorithms WHERE user_id = %s "
+        "ORDER BY is_active DESC, updated_at DESC",
+        (user_id,),
+    ) or []
+
+
+def _set_active(user_id, algo_id):
+    """Promote one profile to active and demote the rest. The feed / firehose /
+    digest resolvers all read `is_active = 1 ... LIMIT 1`, so exactly one row
+    per user must carry the flag — enforce that here atomically."""
+    execute("UPDATE user_algorithms SET is_active = 0 WHERE user_id = %s", (user_id,))
+    execute(
+        "UPDATE user_algorithms SET is_active = 1 WHERE id = %s AND user_id = %s",
+        (algo_id, user_id),
+    )
+    get_conn().commit()
+
+
+def _clean_name(raw, fallback="Custom"):
+    return ((raw or "").strip()[:120]) or fallback
+
+
+def _return_redirect():
+    """The feed switcher posts here too; send it back where it came from.
+    Whitelisted targets only — never reflect a caller-supplied URL."""
+    if request.form.get("return_to") == "feed":
+        return redirect(url_for("feed.index"))
+    return redirect(url_for("algo.index"))
+
+
 def _parse_form_weights(form):
     """Pull direction + weight + threshold per feature from the algo form."""
     weights = {}
@@ -60,6 +92,8 @@ def _parse_form_weights(form):
 
 
 def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None):
+    profiles = _list_profiles(g.user["id"])
+    active_id = next((p["id"] for p in profiles if p["is_active"]), None)
     return render_template(
         "algo.html",
         weights=resolved_weights_for_view(weights),
@@ -69,6 +103,8 @@ def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None):
         categories=CATEGORIES,
         expression=weights_to_expression(weights),
         presets=PRESETS,
+        profiles=profiles,
+        active_algo_id=active_id,
         nl_description=nl_description,
         nl_notes=nl_notes,
         nl_error=nl_error,
@@ -201,6 +237,79 @@ def save():
 
     if request.headers.get("HX-Request"):
         return _preview_partial(weights)
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/profiles/create", methods=["POST"])
+@login_required
+def create_profile():
+    """Save the current editor sliders as a brand-new named profile and make
+    it active. This is the multi-profile entry point and the place the NL
+    builder's proposed weights get persisted (the form carries them)."""
+    weights = _parse_form_weights(request.form)
+    name = _clean_name(request.form.get("profile_name"))
+    new_id = execute(
+        "INSERT INTO user_algorithms (user_id, name, weights_json, expression_text, is_active) "
+        "VALUES (%s, %s, %s, %s, 0)",
+        (g.user["id"], name, json.dumps(weights), weights_to_expression(weights)),
+    )
+    _set_active(g.user["id"], new_id)
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/profiles/activate", methods=["POST"])
+@login_required
+def activate_profile():
+    try:
+        algo_id = int(request.form.get("algo_id", 0))
+    except (TypeError, ValueError):
+        algo_id = 0
+    owned = query(
+        "SELECT id FROM user_algorithms WHERE id = %s AND user_id = %s",
+        (algo_id, g.user["id"]), one=True,
+    )
+    if owned:
+        _set_active(g.user["id"], algo_id)
+    return _return_redirect()
+
+
+@bp.route("/profiles/rename", methods=["POST"])
+@login_required
+def rename_profile():
+    try:
+        algo_id = int(request.form.get("algo_id", 0))
+    except (TypeError, ValueError):
+        algo_id = 0
+    name = _clean_name(request.form.get("profile_name"))
+    execute(
+        "UPDATE user_algorithms SET name = %s WHERE id = %s AND user_id = %s",
+        (name, algo_id, g.user["id"]),
+    )
+    get_conn().commit()
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/profiles/delete", methods=["POST"])
+@login_required
+def delete_profile():
+    try:
+        algo_id = int(request.form.get("algo_id", 0))
+    except (TypeError, ValueError):
+        algo_id = 0
+    profiles = _list_profiles(g.user["id"])
+    # Refuse to delete the last profile: a user with zero rows gets bounced
+    # back into onboarding by feed._needs_onboarding(), losing their tuning.
+    if len(profiles) <= 1 or algo_id not in {p["id"] for p in profiles}:
+        return redirect(url_for("algo.index"))
+    was_active = any(p["id"] == algo_id and p["is_active"] for p in profiles)
+    execute(
+        "DELETE FROM user_algorithms WHERE id = %s AND user_id = %s",
+        (algo_id, g.user["id"]),
+    )
+    get_conn().commit()
+    if was_active:
+        survivor = next(p["id"] for p in profiles if p["id"] != algo_id)
+        _set_active(g.user["id"], survivor)
     return redirect(url_for("algo.index"))
 
 
