@@ -84,11 +84,17 @@ this section + `INSTALL.txt` win.
 **Cron (in the cPanel crontab, not in the repo)**
 
 `fetch_feeds` 15m · `classify_pending` 5m · `popularity_poll` 30m ·
-`maintenance` nightly 03:30 UTC · `send_digest` 12:00 UTC ·
-`discover_harvest` hourly :15 · `discover_promote` 04:00 UTC ·
-`discover_llm` Mon 05:00 UTC. Each line `source`s the venv `activate`
-and appends to `logs/cron.log`; all wrapped in `job_lock` (fcntl) so an
-overlapping tick no-ops.
+`trending_poll` 30m · `maintenance` nightly 03:30 UTC ·
+`send_digest` 12:00 UTC · `discover_harvest` hourly :15 ·
+`discover_promote` 04:00 UTC · `discover_llm` Mon 05:00 UTC. Each line
+`source`s the venv `activate` and appends to `logs/cron.log`; all
+wrapped in `job_lock` (fcntl) so an overlapping tick no-ops.
+
+**Applied prod schema migrations (not re-run automatically)** — see
+`manual-actions.md` Completed for copy-paste SQL: `popularity_signals`
+gained `permalink`/`subreddit` (PR #52, discussion links);
+`article_features` gained `trending FLOAT` (PR #53, external trending
+sort). A DB rebuild from `seed/schema.sql` already includes these.
 
 ---
 
@@ -230,7 +236,7 @@ poor performance. Read the full classifier/feature/ranking surface
 end-to-end. 11 findings (4 high, 4 medium, 3 low); user chose to fix
 the four high-severity ones. M/L items deferred (listed under Open).
 
-### What shipped (PR #56, draft)
+### What shipped (PR #56, merged 2026-05-17)
 
 - **BUG-016 — popularity chronically under-counted.** First feature
   INSERT hard-wrote `popularity=0.0`; `popularity_poll` only UPDATEs
@@ -288,7 +294,8 @@ ignored by clustering and age out.
 
 ### PRs
 
-- **PR #56** — Classifier/feature review fixes (BUG-016..019). Draft.
+- **PR #56** — Classifier/feature review fixes (BUG-016..019). Merged
+  2026-05-17.
 
 ### Open items (remaining review findings, not yet actioned)
 
