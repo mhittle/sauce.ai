@@ -142,6 +142,11 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .preview-meta { display: flex; gap: 0.5em; font-size: 0.8em; color: var(--muted); align-items: center; }
 .preview-meta .score { margin-left: auto; font-variant-numeric: tabular-nums; }
 .algo section { background: transparent; }
+.nl-builder { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 1em 1.2em; margin-bottom: 1.2em; }
+.nl-builder p.muted { margin: 0.3em 0 0.6em; }
+.nl-builder textarea { width: 100%; box-sizing: border-box; margin-bottom: 0.6em; padding: 0.6em; border: 1px solid var(--line); border-radius: 6px; font: inherit; resize: vertical; }
+.nl-builder .nl-notes { color: var(--ok); margin: 0.7em 0 0; font-size: 0.92em; }
+.nl-builder .nl-error { color: var(--err); margin: 0.7em 0 0; font-size: 0.92em; }
 
 /* firehose */
 .firehose-header { display: flex; justify-content: space-between; align-items: center; gap: 1em; }

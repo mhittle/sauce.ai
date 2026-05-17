@@ -49,6 +49,16 @@ shipped.
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
 | 4 | 7 | infra, skunkworks | Migrate to VPS (gunicorn + nginx) | backlog |
 | 3 | 2 | ui | Dark mode | backlog |
+| 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | in-progress |
+| 8 | 4 | algo, ui | Keyword / topic mute & boost | backlog |
+| 7 | 4 | backend, ui | Multiple saved algorithms / profiles | backlog |
+| 6 | 5 | ui, algo | A/B split feed | backlog |
+| 7 | 4 | ui, new-feature | Onboarding interview / cold-start | backlog |
+| 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
+| 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
+| 8 | 6 | new-feature, ui | Shareable algorithm gallery | backlog |
+| 7 | 5 | algo, backend | Community source-quality overlay | backlog |
+| 6 | 5 | new-feature | Community "add a source" on dossiers | backlog |
 
 ---
 
@@ -404,6 +414,137 @@ Defer until shared hosting actively breaks something the customer notices.
 
 Toggle in the user nav. CSS custom-property swap. Persist preference in
 `localStorage`.
+
+---
+
+## User-empowerment cluster (added 2026-05-17)
+
+Themes A/B/C from the "empower the user to help us build the perfect
+newsfeed" brainstorm. A = direct algorithm expressiveness; B = closing
+the feedback loop; C = crowdsourcing the feed for everyone.
+
+### Natural-language algorithm builder
+**Priority:** 8 · **LOE:** 5 · **Category:** ui, algo, new-feature · **Status:** in-progress
+
+User describes the feed they want in plain English ("more local tech and
+science, less political outrage, prefer long objective reads, hide
+paywalls"); a single Claude Haiku call maps that onto the existing
+`FEATURES` catalog (direction / weight / threshold per feature, plus
+recency) and the `/algo` UI is pre-filled with the proposed settings for
+the user to review, tweak, and apply — never applied silently.
+
+Reuses the Haiku client already wired for `political_lean` /
+`objectivity` classification and dossier framing. The model returns
+strict JSON constrained to the known feature names and the 3-axis
+schema; out-of-range values are clamped, unknown keys dropped, and a
+parse failure falls back to "couldn't parse that — editor unchanged"
+rather than erroring. No per-request LLM cost (fires only on explicit
+submit).
+
+Biggest single unlock for non-technical users: turns the core "build
+your own algorithm" thesis from a slider grid into a sentence. Pairs
+with the read-only Code tab and is a natural precursor to Sandboxed
+Python exec (Pri 9).
+
+### Keyword / topic mute & boost
+**Priority:** 8 · **LOE:** 4 · **Category:** algo, ui · **Status:** backlog
+
+Per-user mute and boost term lists ("mute: crypto, royal family; boost:
+climate policy, local elections") applied at the feed-query layer as a
+hard filter (mute) and a score multiplier (boost). Distinct from
+`user_source_prefs` (which weight whole sources) — this is
+content/topic-level and the highest-perceived-control lever users ask
+for first. New `user_term_prefs(user_id, term, mode, weight)` table;
+matched against title + summary (+ body once extracted). v2: phrase /
+entity-aware matching once topic extraction (Trending) lands.
+
+### Multiple saved algorithms / profiles
+**Priority:** 7 · **LOE:** 4 · **Category:** backend, ui · **Status:** backlog
+
+Named algorithm profiles ("Morning brief", "Weekend deep-dive", "Work
+mode") switchable from a dropdown on `/`. Today there is exactly one
+active `user_algorithms` row per user; this generalizes to many with an
+`is_active` flag + `name` and a profile switcher. Pairs with the NL
+builder (each generated algo can be saved as a profile) and time-of-day
+auto-switching as a v2 follow-on.
+
+### A/B split feed
+**Priority:** 6 · **LOE:** 5 · **Category:** ui, algo · **Status:** backlog
+
+Two algorithms rendered side by side over the same article pool so the
+user can see concretely which tuning surfaces a better feed and promote
+the winner to active in one click. Makes algorithm tuning empirical
+instead of guesswork. Depends on Multiple saved algorithms for the
+"promote winner" half; the compare view itself can ship first against
+"current vs. a scratch algo".
+
+### Onboarding interview / cold-start
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature · **Status:** backlog
+
+First-run flow: pick a handful of trusted sources, a few topics, and a
+political-balance slider → seeds a real `user_algorithms` row instead of
+dropping the user into the default `balanced` preset with an
+undifferentiated feed. Fixes the empty/generic first impression.
+Composes with the NL builder ("describe your ideal feed" as the
+free-text step) and Multiple saved algorithms (the result is the user's
+first named profile).
+
+### Tune from this article
+**Priority:** 7 · **LOE:** 4 · **Category:** algo, ui · **Status:** backlog
+
+Inline "more like this / less like this" on any feed card that, instead
+of silently learning, *shows which feature weights it would nudge and by
+how much* with accept / undo. Effectively the "Suggest" mode of the
+larger **Signal Learning** item (Pri 8) but article-anchored and
+immediate — can ship as the cheap standalone wedge for that theme and
+later be absorbed into the full Signal Learning regression. Keep the two
+in sync; don't double-implement the adjustment-vector storage.
+
+### Periodic "is your feed working?" check-in
+**Priority:** 6 · **LOE:** 3 · **Category:** ui, ops · **Status:** backlog
+
+Lightweight in-feed card surfaced every N days: a 1–5 rating plus an
+optional "what's missing / what's too much?" free-text box. Per-user it
+feeds tuning suggestions; in aggregate it's the cheapest product-quality
+signal (trend the mean, read the free-text for themes). Dismissible,
+rate-limited per user so it never nags. New
+`feed_feedback(user_id, score, note, created_at)` table.
+
+### Shareable algorithm gallery
+**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui · **Status:** backlog
+
+Users publish an algorithm with a name + short description; others
+browse a gallery and one-click **adopt** or **fork** it. Network effect
+(good feeds spread), a viral/marketing surface, and a corpus of what
+users consider a good feed that can inform future default presets. The
+code already has internal `PRESETS`; this exposes user-authored ones.
+Needs a `shared_algorithms` table, a moderation/abuse story (report +
+admin takedown), and adopt = clone into the user's own `user_algorithms`
+(pairs with Multiple saved algorithms, which it depends on for clean
+adopt/fork semantics).
+
+### Community source-quality overlay
+**Priority:** 7 · **LOE:** 5 · **Category:** algo, backend · **Status:** backlog
+
+Aggregate the per-user trust/distrust + thumb signals already captured
+in `user_signals` / `user_source_prefs` into a community bias /
+reputation badge shown on cards, and (opt-in) fold it into the default
+ranking so individual signal becomes a collective good. Main risk is
+brigading: weight contributions by account age / activity, cap per-user
+influence, and keep the community overlay separate from the editorial
+`source_reputation` so it can be audited and disabled. Absorbs part of
+the "Fold internal clicks into popularity" intent at the source level.
+
+### Community "add a source" on dossiers
+**Priority:** 6 · **LOE:** 5 · **Category:** new-feature · **Status:** backlog
+
+On the story dossier (the killer-demo page), signed-in users can submit
+a missing source/article URL for that story. Submissions flow into the
+existing `candidate_sources` admin review queue (and, if the domain is
+already a known source, just attach the article to the cluster).
+Crowdsources coverage breadth exactly where missing perspectives are
+most visible. Depends on Story dossier (done) and the discovery
+pipeline's `candidate_sources` table (done).
 
 ---
 

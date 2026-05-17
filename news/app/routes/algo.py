@@ -1,8 +1,13 @@
 import json
-from flask import Blueprint, render_template, request, redirect, url_for, g, jsonify
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, g, jsonify,
+    current_app,
+)
 
 from ..auth import login_required
 from ..db import query, execute, get_conn
+from ..algo_nl import interpret_algorithm
+from ..classifier import LLMUnavailable
 from ..ranking import (
     PRESETS, FEATURES, FEATURE_KEYS, SIGNED_FEATURES, CATEGORIES,
     default_weights, parse_weights_json, weights_to_expression,
@@ -50,11 +55,7 @@ def _parse_form_weights(form):
     return weights
 
 
-@bp.route("/")
-@login_required
-def index():
-    aid, weights = _get_active(g.user["id"])
-    expression = weights_to_expression(weights)
+def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None):
     return render_template(
         "algo.html",
         weights=resolved_weights_for_view(weights),
@@ -62,9 +63,51 @@ def index():
         feature_keys=FEATURE_KEYS,
         signed_features=SIGNED_FEATURES,
         categories=CATEGORIES,
-        expression=expression,
+        expression=weights_to_expression(weights),
         presets=PRESETS,
+        nl_description=nl_description,
+        nl_notes=nl_notes,
+        nl_error=nl_error,
     )
+
+
+@bp.route("/")
+@login_required
+def index():
+    aid, weights = _get_active(g.user["id"])
+    return _render_editor(weights)
+
+
+@bp.route("/describe", methods=["POST"])
+@login_required
+def describe():
+    """Map a plain-English description onto the weight vector and re-render
+    the editor pre-filled for review. Never saves; never 500s — on any LLM
+    failure the editor comes back with the user's current weights and an
+    inline note to adjust the sliders directly."""
+    description = (request.form.get("description") or "").strip()
+    aid, current = _get_active(g.user["id"])
+    if not description:
+        return _render_editor(
+            current, nl_error="Describe the feed you want in a sentence or two.")
+    cfg = current_app.config
+    try:
+        result = interpret_algorithm(
+            description,
+            api_key=cfg.get("ANTHROPIC_API_KEY", ""),
+            model=cfg.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+        )
+    except LLMUnavailable:
+        return _render_editor(
+            current,
+            nl_description=description,
+            nl_error="Couldn't turn that into an algorithm right now. "
+                     "Adjust the sliders directly, or try rephrasing.",
+        )
+    notes = result["notes"] or (
+        "Here's a starting point based on your description.")
+    return _render_editor(
+        result["weights"], nl_description=description, nl_notes=notes)
 
 
 @bp.route("/onboarding", methods=["GET", "POST"])
