@@ -81,42 +81,65 @@ should be non-zero.
 
 ---
 
+## Completed
+
 ### 2026-05-17 — Migration + cron: external trending sort (BUG-015)
-**Status:** open · **PR:** #53 · **Opened:** 2026-05-17 ·
+**Status:** completed · **PR:** #53 · **Opened:** 2026-05-17 ·
+**Completed:** 2026-05-17 ·
 **File reference:** `news/seed/migrations/2026-05-17-trending.sql`
 
-Adds `article_features.trending` (0..1, external trending-topic match)
-and a new `trending_poll` cron that fills it from Google Trends +
+Added `article_features.trending` (0..1, external trending-topic match)
+and the new `trending_poll` cron that fills it from Google Trends +
 Google News RSS. The renamed **Trending** feed sort orders by this
-column, so it 500s until the column exists; apply the migration
-**before merging PR #53**, then add the cron entry and restart the
-Python App. No new pip dependency, no new env var (all `TRENDING_*`
-have working defaults).
+column. User confirmed the migration was applied, the every-30-min
+cron added, and the Python App restarted.
 
-**1. SQL — run in phpMyAdmin against `lt1ih6uyy2z6_news`:**
+**SQL applied (phpMyAdmin against `lt1ih6uyy2z6_news`):**
 
 ```sql
 ALTER TABLE article_features
   ADD COLUMN trending FLOAT NOT NULL DEFAULT 0 AFTER paywall;
 ```
 
-**2. Cron — cPanel → "Cron Jobs", add (account already filled in):**
+**Cron added (cPanel → "Cron Jobs"):**
 
 ```cron
 # every 30 min: external trending poll (Google Trends + Google News RSS)
 */30 * * * *  source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news/jobs && python trending_poll.py >> /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/cron.log 2>&1
 ```
 
-**3.** Restart the Python App (Setup Python App → Restart) so the
-renamed sort + new column load.
-
-**Verify:** `/?sort=trending` returns 200 and is no longer HN-only;
+Python App restarted so the renamed sort + new column load. Verify on
+prod: `/?sort=trending` returns 200 and is no longer HN-only;
 `logs/cron.log` shows a `trending_poll` line like
 `topics=T gnews=G articles=N matched=M` within ~30 min.
 
 ---
 
-## Completed
+### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)
+**Status:** completed · **PR:** #50 (BUG-013, BUG-014) · **Opened:** 2026-05-17 · **Completed:** 2026-05-17
+
+BUG-013 fix added a language-detector stage 3 to the English-only
+filter (catches Latin-script European content — German/Spanish/
+Finnish — that the non-Latin script heuristic can't). The dependency
+is `py3langid==0.3.0` (pulls `numpy>=2.0.0`); it replaced the original
+`langdetect==1.0.9` (BUG-014: sdist-only, fails to build under modern
+PEP 517/setuptools on the cPanel venv). User confirmed the install +
+Python App restart were done.
+
+**Commands run (cPanel Terminal, account `lt1ih6uyy2z6`):**
+
+```bash
+source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+  && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news
+pip install -r requirements.txt
+```
+
+Python App restarted afterward. Verify: `skipped_lang=N` rises in
+`logs/cron.log` as European feeds get rejected; German/Spanish/Finnish
+content clears from the feed over ~7 days as pre-existing rows age out
+(the filter is fetch-time only; it does not purge existing rows).
+
+---
 
 ### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)
 **Status:** completed · **PR:** #50 (BUG-013, BUG-014) · **Opened:** 2026-05-17 · **Completed:** 2026-05-17
