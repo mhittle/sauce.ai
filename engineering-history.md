@@ -7,6 +7,100 @@ section whenever something meaningful happens — see
 
 ---
 
+## 2026-05-17 — BUG-013: Latin-script non-English articles still leaking
+
+### Context
+
+User reported still seeing non-English articles in the feed —
+specifically German, Spanish, and Finnish (the hs.fi report was a
+Finnish sports headline), all *fresh* (last day or two). The
+English-only filter from PR #42 (`app/language.py`) was working as
+designed; this is the limitation it explicitly documented: stages 1
+(feed `<language>` tag) and 2 (non-Latin script ratio) cannot tell
+English from German/Spanish/Finnish — they all use Latin letters, so
+`_non_latin_letter_ratio` ≈ 0 and the article passes. The feeds in
+question don't self-declare a non-English tag, so stage 1 misses them
+too.
+
+### What shipped
+
+- **`app/language.py`** — added **stage 3** to `is_english`: when text
+  survives stages 1+2 and has at least `MIN_DETECT_LETTERS=24` Latin
+  letters, run `langdetect` and reject only on a *confident*
+  non-English call where English is an unlikely alternative
+  (`top_prob >= 0.85` AND `english_prob < 0.10`). Deliberately biased
+  toward keeping English — dropping a real English article is a more
+  visible regression than an occasional foreign one slipping through.
+  `langdetect.DetectorFactory.seed = 0` set once for determinism.
+  `_detect_lang_probs` lazy-imports langdetect and catches broadly:
+  any failure / missing model / absent package → return None →
+  permissive accept, so the fetch loop never breaks.
+- **`requirements.txt`** — `langdetect==1.0.9` (user-chosen approach
+  over a pure-Python word-profile heuristic or a per-source language
+  column). Pure-Python package, no native build.
+- **`tests/test_language.py`** — langdetect stubbed via
+  `sys.modules` (same pattern as the trafilatura/anthropic stubs) so
+  the suite is deterministic and passes without the package
+  installed. 21 → 30 cases: German/Spanish/Finnish rejection,
+  English still accepted, short-text skips detector, low-confidence
+  keeps, English-plausible keeps, detector-raises and
+  detector-unavailable both fall through to accept.
+- **`news/INSTALL.txt` §10** — rewrote the English-filter limitation
+  note to describe the three-stage filter and the conservative
+  stage-3 behavior.
+
+### Why langdetect over the alternatives
+
+The PR #42 entry pre-scoped the follow-up as "source-language column
+or langdetect dep". A third option (a zero-dependency function-word
+heuristic, matching `language.py`'s existing no-deps philosophy) was
+offered; user chose langdetect for robustness. Tradeoff accepted: it
+adds a manual cPanel pip-install prod action (the recurring pain
+point), but the import fails soft so it is **not** a site-down risk —
+the filter is simply inert until the package lands.
+
+### Code touched
+
+- `news/app/language.py` — stage-3 langdetect detection + helpers
+  (`_latin_letter_count`, `_detect_lang_probs`), module tuning
+  constants.
+- `news/requirements.txt` — `langdetect==1.0.9`.
+- `news/tests/test_language.py` — sys.modules stub fixture + 9 new
+  cases (30 total).
+- `news/INSTALL.txt` §10 — updated limitation note.
+- `bugs.md` — BUG-013 logged (open → in-progress → resolved).
+- `manual-actions.md` — Open entry for the pip install.
+
+### Server-side state touched
+
+- **Manual prod action pending**: `pip install -r requirements.txt`
+  on cPanel (Terminal, venv activated — the "Run Pip Install" button
+  is greyed out) + Python App restart. Tracked in `manual-actions.md`
+  with full inline commands and pasted into chat. **Not** a site-down
+  risk: the langdetect import is lazy and fails soft, so the site and
+  fetch pipeline keep running; the European-language filtering is just
+  inert until the package is installed. No DB migration, no cron
+  change, no env var, no symlink.
+- The filter is fetch-time only — it does not purge non-English rows
+  already in `articles`; those age out of the 7-day window
+  (multiplicative recency gate from BUG-011 crushes them well before
+  that).
+
+### Tests
+
+`tests/test_language.py` 30/30 pass. Full local suite: 141 passed of
+the runnable set (the sandbox can't build `cryptography`/`requests`/
+`dotenv` so 5 collection-erroring + 13 missing-module test files are
+environmental, unrelated to this change — confirmed the failures are
+all `ModuleNotFoundError`).
+
+### PR
+
+- **PR #TBD** — BUG-013: langdetect stage-3 for Latin-script European
+  filtering (draft).
+
+---
+
 ## 2026-05-14 — Feed sort selector (Relevance / Newest / Popularity)
 
 ### Context

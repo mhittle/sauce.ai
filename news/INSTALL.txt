@@ -410,13 +410,18 @@ I. /admin/discovery is empty even though discover_harvest is running:
   64-bit SimHash, Hamming<=8). Heavy paraphrases of the same
   story do not cluster; an embedding-based v2 pass is on the
   roadmap. Firehose is intentionally NOT deduped.
-- English-only article filter runs in fetch_feeds. Trusts an RSS
-  feed's <language> tag when it declares non-English (e.g., ja,
-  de-DE) and otherwise rejects on >25% non-Latin letter ratio in
-  title+summary. Catches CJK, Arabic, Cyrillic, Hebrew,
-  Devanagari, Thai, etc. Does NOT catch Latin-script European
-  content (French, German, Spanish, Italian, Dutch) unless the
-  feed self-declares — those slip through. Per-tick rejection
+- English-only article filter runs in fetch_feeds, three stages:
+  (1) trusts an RSS feed's <language> tag when it declares
+  non-English (e.g., ja, de-DE); (2) rejects on >25% non-Latin
+  letter ratio in title+summary (CJK, Arabic, Cyrillic, Hebrew,
+  Devanagari, Thai, etc.); (3) langdetect on the remaining
+  Latin-script text catches French/German/Spanish/Italian/
+  Dutch/Finnish/etc. that stage 1+2 miss (BUG-013). Stage 3 is
+  deliberately conservative: text under 24 Latin letters, or a
+  low-confidence / English-plausible call, is kept — dropping a
+  real English article is a worse regression than an occasional
+  foreign one slipping through. langdetect failures fall through
+  to accept (never breaks the fetch loop). Per-tick rejection
   count surfaces in cron.log as `skipped_lang=N`.
 
 You're done. Visit  https://sauce.ai/news .

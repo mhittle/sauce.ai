@@ -35,7 +35,47 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
+### 2026-05-17 — pip install -r requirements.txt (langdetect for BUG-013)
+**Status:** open · **PR:** #TBD (BUG-013) · **Opened:** 2026-05-17
+
+BUG-013 fix adds `langdetect==1.0.9` to `requirements.txt` as stage 3
+of the English-only filter (catches Latin-script European content —
+German/Spanish/Finnish — that the non-Latin script heuristic can't).
+The import is lazy and fails soft: **the site does NOT 500 without
+this** and the fetch pipeline keeps running, but the new European-
+language filtering is inert until langdetect is installed — non-English
+Latin-script articles will keep leaking into the feed until then. Only
+`jobs/fetch_feeds.py` (cron) consumes it; web routes are unaffected.
+
+The cPanel "Run Pip Install" button in Setup Python App has been greyed
+out historically — run from cPanel Terminal after activating the venv.
+
+**Commands run (substitute YOURACCOUNT):**
+
+```bash
+# In cPanel Terminal, paste cPanel's "Enter to the virtual environment"
+# command for the news app, then:
+source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+  && cd /home/YOURACCOUNT/public_html/sauce.ai/news
+pip install -r requirements.txt
+```
+
+**Then:** restart the Python App via cPanel (Setup Python App ->
+Restart) so any already-running workers pick up the new package.
+
+**Verify:**
+
+```bash
+/home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/python \
+  -c "import langdetect; print('langdetect', langdetect.__version__ if hasattr(langdetect,'__version__') else 'ok')"
+```
+
+Then watch the next few `fetch_feeds` ticks in `logs/cron.log`:
+`skipped_lang=N` should rise once European feeds start getting
+rejected. Spot-check the feed for German/Spanish/Finnish content
+clearing out over the following ~7 days as pre-existing rows age out
+of the window (the filter is fetch-time only; it does not purge rows
+already in `articles`).
 
 ---
 

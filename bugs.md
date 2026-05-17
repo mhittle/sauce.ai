@@ -86,6 +86,41 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-013 — Non-English articles still appearing in the feed
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #TBD)
+
+User reported still seeing fresh non-English articles — German,
+Spanish, and Finnish (the reported hs.fi link is a Finnish sports
+headline) — despite the English-only fetch-time filter from PR #42.
+
+**Root cause:** not a defect — the documented v1 limitation of
+`app/language.py`. The filter's two stages were (1) trust a
+non-English RSS `<language>` tag, (2) reject on >25% non-Latin letter
+ratio. German/Spanish/Finnish are Latin-script, so stage 2's ratio is
+≈ 0 and they pass; the offending feeds also don't self-declare a
+non-English tag, so stage 1 misses them. Heuristic could not
+distinguish English from other Latin-script languages.
+
+**Fix (PR #TBD):** added a third stage to `is_english` — `langdetect`
+(new dep `langdetect==1.0.9`) on the surviving Latin-script text when
+it has ≥24 Latin letters. Rejects only on a confident non-English
+call with English an unlikely alternative (`top_prob >= 0.85` AND
+`english_prob < 0.10`), biased toward keeping English so short/edge
+headlines aren't over-filtered. Detector is lazy-imported and every
+failure path (raise, no features, package absent) falls through to
+accept — the fetch loop never breaks. `DetectorFactory.seed = 0` for
+determinism. 9 new unit tests (30 total in `test_language.py`, all
+green); langdetect stubbed via `sys.modules` so the suite is
+deterministic.
+
+**Prod note:** verified by unit tests; end-to-end prod effect depends
+on the pending `pip install -r requirements.txt` + Python App restart
+(tracked in `manual-actions.md` Open). The import fails soft, so this
+is **not** a site-down risk — the filter is simply inert until
+langdetect is installed. Pre-existing non-English rows are not purged;
+they age out of the 7-day window (BUG-011 recency gate crushes them
+well before that).
+
 ### BUG-012 — Refreshing the feed page returns the same content
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13
 
