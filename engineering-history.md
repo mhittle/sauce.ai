@@ -89,12 +89,57 @@ this section + `INSTALL.txt` win.
 `discover_promote` 04:00 UTC · `discover_llm` Mon 05:00 UTC. Each line
 `source`s the venv `activate` and appends to `logs/cron.log`; all
 wrapped in `job_lock` (fcntl) so an overlapping tick no-ops.
+`trending_poll` now also rebuilds the `trending_topics` /
+`trending_topic_articles` snapshot (the /trending page) each tick in
+addition to the `article_features.trending` scalar — same single
+30-min cron, no new entry.
 
 **Applied prod schema migrations (not re-run automatically)** — see
 `manual-actions.md` Completed for copy-paste SQL: `popularity_signals`
 gained `permalink`/`subreddit` (PR #52, discussion links);
 `article_features` gained `trending FLOAT` (PR #53, external trending
 sort). A DB rebuild from `seed/schema.sql` already includes these.
+
+---
+
+## 2026-05-17 — Trending topics view (/trending page, PR #71)
+
+Roadmap Pri 7 / LOE 5. New `/trending` page ranking topics by
+**distinct-outlet count** ("20 outlets beat one outlet ×20"), each
+linking to the dossier(s) under it. The roadmap's plan put topic
+extraction in the `classify_pending` Haiku call; PR #56 was rewriting
+that file, so the user chose (AskUserQuestion) the conflict-free route:
+**reuse the Google Trends/News topic index `trending_poll` already
+builds every 30 min** (PR #53) — no LLM, no `classify_pending` edit.
+
+- `trending_poll` now also rebuilds `trending_topics` /
+  `trending_topic_articles` in full each tick, in the same transaction
+  as the existing `article_features.trending` scalar (unchanged).
+- Pure helpers in `app/trending.py`: `topic_key` (sha1 of sorted
+  tokens — collapses near-dup headlines), `topic_matches`
+  (`score_article` refactored to its max, identical output, covered by
+  the existing suite), `build_persist_rows`, `group_topic_stories`;
+  `build_topic_index` tags `origin`. +14 `test_trending.py` cases.
+- New blueprint + template + nav + additive CSS; env-defaulted
+  `TRENDING_*`. Fragmentation handled by `topic_key` +
+  `TRENDING_MIN_SOURCES` (default 2) floor (no clustering). Visibility
+  mirrors feed/dossier. Limit (INSTALL §8K/§10): only surfaces topics
+  also trending on Google — internal LLM-entity version is the
+  follow-on (pairs with Signal Learning), deferred until PR #56 lands.
+
+**Server state:** migration `CREATE TABLE trending_topics` +
+`trending_topic_articles` **applied on prod 2026-05-17** (user-
+confirmed; `manual-actions.md` → Completed; in `schema.sql` + a
+migration file for fresh installs). **No new cron** — existing
+`trending_poll` fills them next tick (folded into the durable Cron
+list). No pip/env/symlink. Python App restart on deploy.
+
+**Verification:** pure helpers verified in-sandbox (ad-hoc harness;
+pytest/flask/pymysql unavailable — same limit as PR #50/53);
+`score_article == max(topic_matches)` confirmed; templates Jinja-parse;
+changed Python `py_compile`s clean. Live route/browser UX deferred to a
+real env. **Open:** confirm `logs/cron.log` `topics_persisted=T
+topic_matches=M` after a tick; LLM-entity follow-on once PR #56 lands.
 
 ---
 

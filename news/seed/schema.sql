@@ -273,6 +273,33 @@ CREATE TABLE IF NOT EXISTS story_dossiers (
   CONSTRAINT fk_dossier_story FOREIGN KEY (story_id) REFERENCES articles (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Trending topics snapshot for the /trending page. `trending_poll`
+-- rebuilds both tables in full every tick from the Google Trends/News
+-- topic index (the same index that drives the feed's Trending sort);
+-- stale topics simply don't reappear, so no separate decay job is
+-- needed. topic_key = sha1 of the topic's sorted significant tokens, so
+-- near-duplicate headlines collapse into one row. No FK on topic_key
+-- (the writer owns both tables and replaces them atomically each tick);
+-- the article FK cascades so pruned articles drop their match rows.
+CREATE TABLE IF NOT EXISTS trending_topics (
+  topic_key   CHAR(40) NOT NULL,
+  label       VARCHAR(255) NOT NULL,
+  origin      VARCHAR(16) NOT NULL DEFAULT '',   -- 'trends' | 'gnews'
+  heat        FLOAT NOT NULL DEFAULT 0,          -- 0..1 latest snapshot heat
+  captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (topic_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS trending_topic_articles (
+  topic_key   CHAR(40) NOT NULL,
+  article_id  BIGINT UNSIGNED NOT NULL,
+  match_score FLOAT NOT NULL DEFAULT 0,          -- 0..1 per-topic match
+  PRIMARY KEY (topic_key, article_id),
+  KEY idx_tta_article (article_id),
+  CONSTRAINT fk_tta_article FOREIGN KEY (article_id)
+    REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS feature_catalog (
   feature_key VARCHAR(64) NOT NULL,
   label       VARCHAR(120) NOT NULL,

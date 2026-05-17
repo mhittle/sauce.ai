@@ -23,6 +23,15 @@ class Config:
 
     FEED_JITTER = float(os.environ.get("FEED_JITTER", "0.10"))
 
+    # /trending page. WINDOW_DAYS mirrors trending_poll's default (the
+    # cron only persists matches for in-window articles). MIN_SOURCES is
+    # the "topics that hit N outlets" floor that filters out
+    # one-headline noise.
+    TRENDING_WINDOW_DAYS = int(os.environ.get("TRENDING_WINDOW_DAYS", "2"))
+    TRENDING_MIN_SOURCES = int(os.environ.get("TRENDING_MIN_SOURCES", "2"))
+    TRENDING_PAGE_LIMIT = int(os.environ.get("TRENDING_PAGE_LIMIT", "40"))
+    TRENDING_STORIES_PER_TOPIC = int(os.environ.get("TRENDING_STORIES_PER_TOPIC", "3"))
+
     CSRF_ENABLED = os.environ.get("CSRF_ENABLED", "1") not in ("0", "false", "False")
     AUTH_RATELIMIT_MAX = int(os.environ.get("AUTH_RATELIMIT_MAX", "10"))
     AUTH_RATELIMIT_WINDOW_SECONDS = int(os.environ.get("AUTH_RATELIMIT_WINDOW_SECONDS", "300"))

@@ -13,6 +13,7 @@
 <nav class="topnav">
   <a class="brand" href="{{ url_for('feed.index') }}">sauce.ai<span class="brand-slash">/</span><em>news</em></a>
   <a href="{{ url_for('feed.index') }}">Feed</a>
+  <a href="{{ url_for('trending.index') }}">Trending</a>
   <a href="{{ url_for('firehose.index') }}">Firehose</a>
   {% if current_user %}
     <a href="{{ url_for('algo.index') }}">Your Algo</a>

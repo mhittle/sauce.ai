@@ -46,6 +46,44 @@ _None — all tracked migrations applied._
 
 ## Completed
 
+### 2026-05-17 — Migration: trending-topics snapshot tables (/trending page)
+**Status:** completed · **PR:** #71 (Trending topics view, roadmap Pri 7) ·
+**Opened:** 2026-05-17 · **Completed:** 2026-05-17 ·
+**File reference:** `news/seed/migrations/2026-05-17-trending-topics.sql`
+
+Added `trending_topics` + `trending_topic_articles`, the snapshot the
+`/trending` page reads. The existing every-30-min `trending_poll` cron
+fills both tables on its next tick — no new cron, no backfill. User
+confirmed the SQL was run via phpMyAdmin against `lt1ih6uyy2z6_news`
+and the Python App restarted (2026-05-17). The feed's Trending *sort*
+(`article_features.trending`, a different column) was unaffected
+throughout.
+
+**SQL applied:**
+
+```sql
+CREATE TABLE IF NOT EXISTS trending_topics (
+  topic_key   CHAR(40) NOT NULL,
+  label       VARCHAR(255) NOT NULL,
+  origin      VARCHAR(16) NOT NULL DEFAULT '',
+  heat        FLOAT NOT NULL DEFAULT 0,
+  captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (topic_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS trending_topic_articles (
+  topic_key   CHAR(40) NOT NULL,
+  article_id  BIGINT UNSIGNED NOT NULL,
+  match_score FLOAT NOT NULL DEFAULT 0,
+  PRIMARY KEY (topic_key, article_id),
+  KEY idx_tta_article (article_id),
+  CONSTRAINT fk_tta_article FOREIGN KEY (article_id)
+    REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
 ### 2026-05-17 — Migration: user_saves (article save / bookmark)
 **Status:** completed · **PR:** #64 (merged 2026-05-17) ·
 **Opened:** 2026-05-17 · **Completed:** 2026-05-17 ·
