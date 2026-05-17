@@ -20,6 +20,158 @@ for current prod state.
 
 ---
 
+## 2026-05-17 — Dark mode (PR #63)
+
+Roadmap Pri 3 / LOE 2 (ui). Maintainer-picked. Client-only theme;
+no server state, no DB, no manual prod action.
+
+### What shipped
+
+- **`style.css`** — `:root` gains semantic surface vars
+  (`--surface`/`--surface-2`/`--surface-3`/`--notice-bg`/
+  `--notice-border`/`--err-bg`/`--warn-bg`) with the *current* light
+  values, so light mode is byte-for-byte unchanged. A new
+  `:root[data-theme="dark"]` block overrides all palette vars (incl.
+  brighter `--accent`/`--left`/`--right`/`--ok`/`--warn`/`--err` for
+  legibility on dark). ~30 hardcoded literals (`background: white`,
+  the `#f0efeb`/`#f7f6f0`/etc. fill family, `#333` lead, `#e3e3df`
+  feature-bar track) repointed at the vars — without this the panels
+  stayed white on a dark page. `color-scheme` per theme so native
+  controls/scrollbars follow. `color: white` on accent buttons left
+  literal (correct).
+- **`base.html`** — synchronous head script (before the stylesheet
+  link) sets `<html data-theme>` from `localStorage.theme`, falling
+  back to `prefers-color-scheme` — no FOUC. A `linkbtn`-styled
+  `#theme-toggle` button is the last nav item (signed-in or out);
+  end-of-body script toggles the attribute, persists to
+  `localStorage`, and relabels Dark/Light + `aria-pressed`. Pure
+  client-side (no POST) so no CSRF/route/DB involvement.
+
+### Code touched
+
+- `news/app/static/style.css` — theme vars + literal→var repointing.
+- `news/app/templates/base.html` — head theme-init, nav toggle,
+  toggle wiring.
+- `roadmap.md` — Dark mode → in-progress (→ Done on merge).
+
+### Server-side state touched
+
+None. CSS/template only; zero Python. Standard Python App restart on
+deploy so the new template/CSS load (Jinja autoreloads templates;
+restart is cleaner).
+
+### Verification
+
+- `base.html` Jinja-parses clean; no `.py` touched (suite unaffected;
+  sandbox has no pytest/Flask — same documented env limit as PR #50).
+- All hardcoded surface literals confirmed mapped (only `color:
+  white` on accent + the `:root` var *definitions* remain by design).
+- **Not verified**: in-browser toggle/persistence/no-FOUC and the
+  dark palette's per-page contrast — deferred to a real env / CI
+  (no Flask in sandbox).
+
+### Open items
+
+- Maintainer/CI: load `/`, `/algo`, `/firehose`, `/admin`, `/read`,
+  `/story` in dark; toggle; hard-reload (confirm no light flash);
+  cross-tab persistence. Tune any dark palette value that reads poorly.
+- `engineering-history.md` is at its ~34 KB budget — archive oldest
+  entries at the next wrap-up (deliberately not done here to keep this
+  low-risk UI PR off the high-conflict archive path).
+
+### PR
+
+- **PR #63** — Dark mode (draft).
+
+---
+
+## 2026-05-17 — Article save / bookmark (roadmap Pri 6)
+
+Roadmap "Article save / bookmark" (Pri 6, LOE 4, new-feature/ui).
+Maintainer-picked. Reader view (PR #21 body extraction) is already
+live, so the headline value — a **durable personal archive** — is
+realizable now; article summaries (a soft pairing) are still backlog
+and explicitly out of scope here.
+
+### What shipped
+
+- **Schema** — new `user_saves(user_id, article_id, folder DEFAULT
+  'Read Later', saved_at, read_at)` (PK `(user_id, article_id)`, FKs
+  cascade). Migration `seed/migrations/2026-05-17-user-saves.sql` +
+  `schema.sql`.
+- **`app/routes/saves.py`** (new blueprint, no url_prefix; mirrors the
+  signals blueprint's INSERT/DELETE+JSON convention). `POST
+  /save/<id>` toggles (returns `{saved: bool}`); `POST /save/<id>/read`
+  sets `read_at` once (keepalive fetch on click-through); `GET /saved`
+  (`login_required`) lists newest-first.
+- **Durable archive** — `jobs/maintenance.py` now exempts saved
+  articles from BOTH retention prunes (`articles` and
+  `article_bodies`) via `NOT EXISTS (SELECT 1 FROM user_saves …)`, so
+  a bookmark keeps its reader-view copy readable indefinitely. (The
+  pre-existing maintenance comment anticipated exactly this.) Old
+  saved articles don't pollute the feed — the feed query is windowed
+  to `published_at >= now-7d`, so they only live on `/saved` + `/read`.
+- **UI** — ☆/★ save button on every signed-in feed card, wired
+  through the existing `cardSignals` Alpine component (new `saved`
+  state + `toggleSave()`; `a.saved` batch-attached in `feed.py`
+  exactly like `a.thumb`). New `/saved` page (scoped-style, Alpine
+  per-row remove, "archived" vs "link only" badge keyed on
+  `article_bodies.status`). "Saved" nav link in `base.html`.
+  CSRF: ☆ uses `X-CSRF-Token` header (fetch); remove/mark-read same.
+- **Tests** — `tests/test_saves.py` (11 cases: toggle/untoggle, auth
+  401, folder passthrough/fallback, mark-read, anon redirect, list +
+  empty state), same monkeypatch-DB pattern as `test_signals.py`.
+
+### Server-side state touched
+
+One DB migration (`user_saves`). **Load-bearing PRE-MERGE** (BUG-007
+class): merged code reads `user_saves` on every signed-in feed load
+and in `maintenance`. Logged in `manual-actions.md` → Open with full
+inline SQL + pasted in chat; apply before merge, then Python App
+restart. No new cron, env var, pip dep, or symlink.
+
+### Verification
+
+`py_compile` clean; all touched templates Jinja-parse. Flask
+route/browser testing deferred to CI — sandbox has no Flask/pytest
+(same documented limit as PRs #50/#56/#59). Logic reviewed.
+
+### Parallel-session notes
+
+Touches `feed.py`/`feed.html` (in-flight **PR #61** profiles),
+`style.css` (PR #61 appends a different block), `base.html`,
+`maintenance.py` (in-flight **PR #56** popularity/journalist —
+different statements). All edits localized/append-style; rebased on
+`origin/main` before opening the PR. Expect to rebase again behind
+#61/#56 if they land first.
+
+### PR
+
+- **PR #64** — Article save / bookmark (merged 2026-05-17). Rebased
+  twice (behind PR #56 classifier fixes, then PR #62 onboarding);
+  `maintenance.py` / `style.css` / `engineering-history.md` conflicts
+  resolved each time. Follow-up tracking-doc cleanup landed separately.
+
+### Open items
+
+- **Migration applied post-merge (2026-05-17).**
+  `2026-05-17-user-saves.sql` was NOT confirmed applied before PR #64
+  merged — signed-in `/` 500'd + nightly `maintenance` would have
+  errored in the deploy→migration gap. User ran the `CREATE TABLE` +
+  Python App restart same day; `manual-actions.md` → Completed.
+  **Process learning (BUG-007 recurrence):** a load-bearing migration
+  must gate the PR merge, not trail it — when `manual-actions.md` has
+  an Open load-bearing entry tied to a PR, don't merge that PR until
+  the user confirms the migration ran.
+- v2 (roadmap): folder management UI, "N unread in Read Later" home
+  prompt, keyboard `s` to save, export OPML/Markdown, extended
+  retention pairing with summaries/TTS.
+- Signal Learning (Pri 8): saves live in `user_saves`, not
+  `user_signals` — that session should read from `user_saves` (or add
+  a `save` signal then) rather than double-implement.
+
+---
+
 ## 2026-05-17 — Onboarding interview / cold-start (PR #62)
 
 ### Context
