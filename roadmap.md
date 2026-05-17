@@ -389,6 +389,20 @@ Toggle in the user nav. CSS custom-property swap. Persist preference in
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
 
+### 2026-05-17
+
+- **Engineering-history archive process** — ad-hoc, docs/infra. PR #51.
+  `engineering-history.md` had grown to ~34.8K tokens, past the 25K
+  single-`Read` ceiling, breaking the "read it end-to-end" onboarding
+  step. Split into a condensed live file (~11K tokens: 3 newest entries
+  full + a "Condensed history" digest + a durable "Load-bearing
+  production state" section that never ages out) plus a byte-exact
+  `engineering-history-archive.md` consulted on demand only. ~14K-token
+  budget + the archive procedure documented in
+  `engineering-session-wrapup.md` (Step 1b) and
+  `new-engineering-session-instructions.md` (Step 1 + tl;dr). Docs-only;
+  no DB/cron/symlink/env-var/pip change, no manual prod action.
+
 ### 2026-05-14
 
 - **Feed sort selector (Relevance / Newest / Popularity)** — Pri 6, LOE 2,
