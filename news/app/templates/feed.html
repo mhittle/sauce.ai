@@ -41,10 +41,18 @@
 
 {% if current_user %}
 <script>
-  window.cardSignals = function (articleId, sourceId, initial, sourceName) {
+  window.cardSignals = function (articleId, sourceId, initial, sourceName, initialSaved) {
     return {
       state: initial,
       prompt: null,
+      saved: !!initialSaved,
+      async toggleSave() {
+        const r = await fetch("{{ url_for('saves.toggle', article_id=0) }}".replace("/0", "/" + articleId),
+                  { method: "POST", headers: { "Accept": "application/json", "X-CSRF-Token": window.csrfToken } });
+        if (!r.ok) return;
+        const data = await r.json();
+        this.saved = data.saved;
+      },
       async vote(t) {
         const r = await fetch("{{ url_for('signals.record', article_id=0, signal_type='X') }}"
                     .replace("/0/X", "/" + articleId + "/" + t),

@@ -350,3 +350,22 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
   .onboarding-interview .ob-grid, .onboarding-interview .ob-lean { flex-direction: column; }
   .onboarding-interview .ob-chip { border-radius: 8px; }
 }
+
+/* save / bookmark (roadmap Pri 6) — matches the thumb-btn visual language */
+.save-btn {
+  background: none; border: none; padding: 0 0.25em;
+  font-size: 0.95em; line-height: 1; color: var(--muted); cursor: pointer;
+  border-radius: 3px; opacity: 0.35; transition: opacity 0.15s ease, color 0.15s ease;
+}
+.card:hover .save-btn { opacity: 0.75; }
+.save-btn:hover { background: #f0efeb; color: var(--fg); opacity: 1; }
+.save-btn.active { color: var(--accent); opacity: 1; }
+/* save / bookmark (roadmap Pri 6) — matches the thumb-btn visual language */
+.save-btn {
+  background: none; border: none; padding: 0 0.25em;
+  font-size: 0.95em; line-height: 1; color: var(--muted); cursor: pointer;
+  border-radius: 3px; opacity: 0.35; transition: opacity 0.15s ease, color 0.15s ease;
+}
+.card:hover .save-btn { opacity: 0.75; }
+.save-btn:hover { background: #f0efeb; color: var(--fg); opacity: 1; }
+.save-btn.active { color: var(--accent); opacity: 1; }

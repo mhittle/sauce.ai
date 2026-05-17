@@ -204,6 +204,24 @@ CREATE TABLE IF NOT EXISTS user_source_prefs (
   CONSTRAINT fk_usp_source FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Per-user saved articles (bookmarks). folder defaults to 'Read Later'
+-- (no folder-management UI in v1; column is forward-compat for v2).
+-- read_at is set on click-through from /saved. Durability: maintenance.py
+-- excludes saved articles (and their article_bodies) from the retention
+-- prune, so a saved article's reader-view copy stays readable indefinitely.
+CREATE TABLE IF NOT EXISTS user_saves (
+  user_id    INT UNSIGNED NOT NULL,
+  article_id BIGINT UNSIGNED NOT NULL,
+  folder     VARCHAR(64) NOT NULL DEFAULT 'Read Later',
+  saved_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  read_at    DATETIME DEFAULT NULL,
+  PRIMARY KEY (user_id, article_id),
+  KEY idx_saves_user_saved (user_id, saved_at),
+  KEY idx_saves_article (article_id),
+  CONSTRAINT fk_saves_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_saves_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Automated source-discovery candidate pool. One row per unknown domain
 -- surfaced by `jobs/discover_harvest.py` (Reddit/HN), `discover_llm.py`
 -- (Claude suggestions), or future social-firehose jobs. `score` is the

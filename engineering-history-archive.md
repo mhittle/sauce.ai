@@ -20,6 +20,372 @@ for current prod state.
 
 ---
 
+## 2026-05-17 — CSRF protection + auth rate limiting (PR #58)
+
+Roadmap Pri 7 / LOE 4 (security). v1 was same-site-cookie only —
+every POST forgeable. User chose **hand-rolled zero-dep CSRF** +
+**in-memory rate limit** (avoids another cPanel `pip install`, a
+`requirements.txt` conflict with parallel work, and any manual prod
+action).
+
+### What shipped
+
+- **`app/security.py`** (new) — signed double-submit-cookie CSRF.
+  Token `nonce.HMAC-SHA256(SECRET_KEY,nonce)` (stdlib only). Pure
+  helpers (`make_csrf_token`/`csrf_token_valid`/`tokens_match`,
+  no Flask import — testable like `app/language.py`). `init_csrf`
+  registers: `before_request` resolving the `news_csrf` cookie
+  (mints if missing/invalid) and rejecting unsafe-method requests
+  400 unless `_csrf` form field **or** `X-CSRF-Token` header
+  matches; `after_request` setting the cookie (httponly, Lax,
+  Secure when `request.is_secure`, 30-day) only when freshly
+  minted; context processor exposing `csrf_token` +
+  `csrf_field()` (`markupsafe.Markup`, not removed `flask.Markup`).
+  Registered before `_load_user` so forgeries die before the
+  session lookup. Only exempt endpoint: `account.unsubscribe`
+  (RFC 8058 one-click POST is tokenless + URL-token authenticated).
+- **`app/ratelimit.py`** (new) — thread-safe `SlidingWindowLimiter`
+  + `client_ip()` (XFF first hop → remote_addr). Limiter on
+  `app.extensions` per `create_app()`. `/auth/login` + `/auth/
+  signup` POST → 429 over limit. Default 10 / 300 s, env-tunable.
+- **`CSRF_ENABLED`** config (default on). Mirrors Flask-WTF's
+  test convention: `conftest.py` sets it `0` suite-wide (keeps the
+  existing `test_signals.py` POSTs green untouched);
+  `test_csrf.py` re-enables on its own app.
+- **Templates** — `{{ csrf_field() }}` in all POST `<form>`s
+  (incl. the PR #59 NL-builder `algo.describe` form picked up on
+  rebase); `base.html` `<meta csrf-token>` + end-of-body script
+  (`window.csrfToken` + `htmx:configRequest` header hook covering
+  algo `hx-post` preview/save); `X-CSRF-Token` header added to the
+  5 plain `fetch()` POST sites (signals + click tracking).
+- **Tests** — `test_ratelimit.py` (pure, run in-sandbox) +
+  `test_csrf.py` (pure helpers + Flask-integration). Pure logic
+  verified locally; Flask cases run on CI (sandbox has no
+  Flask/pytest — same env limit as PR #50).
+- **Docs** — INSTALL.txt §2b (optional `CSRF_ENABLED`/
+  `AUTH_RATELIMIT_*` + SECRET_KEY-must-be-real) and §10
+  (CSRF + rate limit shipped; per-worker caveat).
+
+### Server-side state touched
+
+None — no DB/cron/symlink/pip change. New env vars have working
+defaults. **Standard Python App restart on deploy** (Passenger
+import cache). CSRF HMAC uses the existing real `SECRET_KEY` cPanel
+env var — no action needed.
+
+### Notes for next session
+
+- Rate-limit counters are per Passenger worker; DB-backed
+  cross-worker upgrade noted in INSTALL §10 (only if distributed
+  credential-stuffing shows up).
+- CSRF cookie refreshes only when missing/invalid (stable across
+  tabs); helper supports per-form rotation if ever needed.
+- Email verification on signup (Pri 5) pairs with this + digest
+  SMTP.
+
+### PR
+
+- **PR #58** — CSRF protection + auth rate limiting (draft).
+
+---
+
+## 2026-05-17 — Natural-language algorithm builder (+ user-empowerment roadmap cluster)
+
+### Context
+
+Session opened as a brainstorm: "more features for the roadmap —
+empower the user to help build the perfect newsfeed." Added a 10-item
+cluster (themes A/B/C: direct algorithm expressiveness, closing the
+feedback loop, crowdsourcing the feed), then implemented the flagship
+A item.
+
+### What shipped
+
+- **Roadmap cluster** — 10 backlog entries (NL builder, keyword
+  mute/boost, multiple saved algos, A/B split feed, onboarding
+  cold-start, tune-from-article, feed check-in, shareable algo
+  gallery, community source-quality overlay, community add-a-source).
+  "Tune from this article" cross-references the Signal Learning item
+  so it isn't double-implemented.
+- **Natural-language algorithm builder** (roadmap Pri 8, LOE 5). User
+  describes the feed they want in plain English; one Haiku call maps
+  it onto the existing 3-axis `FEATURES` catalog and the `/algo`
+  editor is pre-filled for review. Nothing is saved until the user
+  hits Save (reuses the existing `/save` path — no new persistence,
+  **no DB migration**). Any LLM failure (no key, parse error, API
+  error, all-zero output) falls back to the editor unchanged with an
+  inline note — never 500s, no per-request LLM cost (fires only on
+  explicit submit).
+
+### Design notes
+
+- `app/algo_nl.py` is Flask-free and mirrors the
+  `classifier/framing.py` convention (lazy `anthropic` import,
+  `LLMUnavailable` on any failure, `_estimate_cost` reuse). The
+  system prompt's feature catalog is generated from `ranking.FEATURES`
+  at call time so it can never drift from the catalog.
+- `_normalize()` clamps every value into range (weight [0,2],
+  direction to the feature's signed/unsigned range, threshold to
+  [0, scale] or None, recency [0,2]), drops unknown feature keys and
+  unknown categories, and raises `LLMUnavailable` if the model
+  produced no usable weights. Output is the exact on-disk weights
+  shape, so `resolved_weights_for_view` / `weights_to_expression` /
+  `build_score_sql` consume it directly.
+- Editor entry point is a `method=post` form (full re-render of
+  `algo.html`), not HTMX — the whole slider grid changes, so a plain
+  POST is simpler and more robust than swapping the grid partial.
+
+### Code touched
+
+- `news/app/algo_nl.py` — new, pure helper + `interpret_algorithm`.
+- `news/app/routes/algo.py` — `POST /describe`; shared
+  `_render_editor()`; imports `interpret_algorithm` + `LLMUnavailable`.
+- `news/app/templates/algo.html` — "Describe your ideal feed" panel
+  on the UI tab; notes/error banners; echoes the description back.
+- `news/app/static/style.css` — `.nl-builder` rule block.
+- `news/tests/test_algo_nl.py` — new, 14 cases (anthropic stubbed via
+  `sys.modules`, same pattern as `test_framing.py`).
+- `roadmap.md` — user-empowerment cluster; NL builder `in-progress`.
+
+### Server-side state touched
+
+None. No DB migration, no cron entry, no env-var, no symlink, no new
+pip dependency (reuses the `anthropic` SDK + `ANTHROPIC_API_KEY`
+already used by classify/framing). Standard Python App restart on
+deploy so the new route + template load.
+
+### Verification
+
+- `tests/test_algo_nl.py` 14/14 pass; full runnable suite **179
+  passed** post-rebase. The 4 collection errors
+  (test_discussion/feed_sort/signals/story) are the known sandbox
+  `pymysql`→`cryptography` limit, unrelated to this change.
+- `algo.html` Jinja-parses; changed Python files `py_compile` clean.
+- **Not verified**: the live Flask `/describe` route and the in-browser
+  UX — `app.db` (pymysql) can't import in this sandbox, so route- and
+  browser-level testing is deferred to a real env / CI. Logic is
+  covered by the pure-helper unit tests.
+
+### PR
+
+- **PR #59** — Natural-language algorithm builder + roadmap cluster
+  (merged 2026-05-17). Rebased on `origin/main` after PRs #50–#55
+  (langdetect → py3langid, discussion links, history archive) landed;
+  roadmap.md + style.css auto-merged cleanly. Tracking-doc cleanup
+  (roadmap → Done, this PR line) landed in a follow-up PR.
+
+### Open items
+
+- Maintainer/CI: run `pytest` in an env with flask+pymysql to exercise
+  the `/describe` route, and click through `/algo` → "Build from
+  description" → review sliders → Save.
+- Possible polish: surface the model's per-feature rationale inline
+  next to each slider (currently a single summary line). Out of scope
+  this session.
+
+---
+
+## 2026-05-17 — BUG-015: external trending sort (Google Trends + Google News)
+
+### Context
+
+User reported that the Popularity sort (added PR #48) returned an
+almost-all-Hacker-News feed. Logged as BUG-015. The sort was
+`ORDER BY f.popularity DESC`, and `article_features.popularity` is
+written only by `popularity_poll` from Reddit/HN *URL* matches (~5-10%
+match rate, HN-skewed), so it degenerated into "links that hit HN" and
+dropped the user's algorithm entirely. User wants an *external* broad
+trending signal (à la Google News) that re-ranks toward trending topics
+*without* abandoning algo relevance — "choose the best articles that
+match the popular topics". Chosen via AskUserQuestion: Google
+News + Trends RSS as the source; rename the sort to "Trending" composed
+with the algo.
+
+### What shipped
+
+- **`app/trending.py`** (new, pure/Flask-free, mirrors
+  `app.discovery`/`app.language`). Parses Google Trends daily-trends
+  RSS (`parse_trends_rss`, reads `<ht:approx_traffic>` when present)
+  and Google News RSS (`parse_gnews_rss`, strips the trailing
+  " - Publisher"). `build_topic_index` reduces both to weighted topics
+  (token bag + 0..1 heat: traffic-log or positional rank; Trends
+  weighted 1.0, GNews 0.8). `score_article` = max over topics of
+  (fraction of the topic's tokens present in title+summary lead) ×
+  topic heat, clamped 0..1. No URL matching — Google News RSS links
+  are opaque redirects; topic/keyword overlap is the honest signal.
+  No new pip dependency (lazy `feedparser`, already stubbed in tests).
+- **`jobs/trending_poll.py`** (new cron, every 30 min). `job_lock`,
+  bounded HTTP (~6 small GETs, `TRENDING_BUDGET_SECONDS=60`),
+  `conn.ping(reconnect=True)` after the RSS fan-out before writes
+  (BUG-009 lesson). Recomputes `article_features.trending` for the
+  whole rolling `TRENDING_WINDOW_DAYS` (default 2) window every tick
+  via `executemany`, so yesterday's hot topics decay to 0 on their own
+  — no separate reset job.
+- **Schema**: `article_features.trending FLOAT NOT NULL DEFAULT 0`
+  (migration `seed/migrations/2026-05-17-trending.sql`). New `trending`
+  entry in `app/ranking.py` FEATURES + `seed/feature_catalog.sql`,
+  opt-in (`default_weight 0`) so existing user algorithms are
+  unchanged and `build_score_sql` skips it until a user opts in.
+- **`app/routes/feed.py`**: `SORT_OPTIONS` `popularity` → `trending`
+  (label "Trending"); `_SORT_ALIASES` maps legacy `popularity` →
+  `trending` so old bookmarks / threaded category links / digest URLs
+  don't silently fall back to relevance; `_order_by_for_sort` for
+  trending is `ORDER BY f.trending DESC, score DESC` (trending heat
+  first, user algo score as the within-trending tiebreak). `f.trending`
+  added to the SELECT. Templates need no change — they iterate
+  `sort_options`/`sort_labels`.
+- **Tests**: `tests/test_trending.py` (new, 18 cases — tokenize,
+  RSS parse w/ stubbed feedparser, topic-index heat, scoring incl.
+  partial/zero/clamped/summary-fallback). `tests/test_feed_sort.py`
+  updated for the rename + legacy alias + new ORDER BY.
+  `test_trending` + `test_ranking` = 45 passing locally; full suite
+  unrunnable in the sandbox (no Flask/pymysql — same documented
+  environmental limitation as PR #50), feed.py logic validated via
+  a stubbed-import harness.
+
+### Code touched
+
+- `news/app/trending.py` — new pure helpers.
+- `news/jobs/trending_poll.py` — new cron.
+- `news/app/ranking.py` — `trending` FEATURES entry.
+- `news/app/routes/feed.py` — sort rename + alias + ORDER BY + SELECT.
+- `news/seed/schema.sql`, `news/seed/feature_catalog.sql`,
+  `news/seed/migrations/2026-05-17-trending.sql`.
+- `news/tests/test_trending.py` (new), `news/tests/test_feed_sort.py`.
+- `news/INSTALL.txt` — cron line §4c, troubleshooting §8J, §10 limit.
+- `bugs.md`, `roadmap.md`, `manual-actions.md`.
+### Server-side state touched
+
+- **Migration pending on prod**:
+  `seed/migrations/2026-05-17-trending.sql` (one `ALTER TABLE
+  article_features ADD COLUMN trending`). The Trending sort and the
+  `trending_poll` job error until the column exists. Tracked in
+  `manual-actions.md` Open with full inline SQL; the other sorts
+  (relevance/newest) are unaffected, but the Trending sort itself 500s
+  on the missing column until applied — apply before merge.
+- **New cron entry pending**: `trending_poll.py` every 30 min. Inert
+  (writes nothing meaningful) until the migration is applied; wrapped
+  in `job_lock` so it no-ops safely on overlap.
+- No new pip dependency, no new env var required (all `TRENDING_*`
+  have working defaults), no new symlink. Python App restart after the
+  migration so the renamed sort + new column load.
+
+### Open items
+
+- Watch the first few `trending_poll` ticks in `cron.log`:
+  `topics=T gnews=G articles=N matched=M`. `matched` in the low
+  hundreds is expected; if `topics=0`, Google may be rate-limiting the
+  RSS — non-fatal (job writes trending=0, feed falls back to algo).
+- Token-overlap matching misses entity synonyms ("Fed" vs "federal
+  reserve"). The principled upgrade is entity extraction shared with
+  the roadmapped Trending-topics-view / Signal-Learning work.
+
+### PR
+
+- **PR #53** — BUG-015: external trending sort (merged 2026-05-17;
+  DB migration + trending cron applied on prod same day).
+
+---
+
+## 2026-05-17 — Techmeme-style discussion links (Reddit/HN)
+
+### Context
+
+User asked for "a feature like what Techmeme does where they list
+relevant tweets regarding the article/topic" — i.e. Techmeme's
+"Discussion:" line. Literal X/Twitter needs the paid API (~$100/mo,
+already flagged on the roadmap social-firehose item); the user picked
+**Reddit + HN only** for v1 and **feed card + story dossier** as the
+surfaces. This is mostly wiring up data we already fetch:
+`popularity_poll` matches Reddit/HN threads to our articles every
+30 min for the popularity score but previously discarded the thread
+permalink.
+
+### What shipped
+
+- **Schema** — `popularity_signals` gains `permalink VARCHAR(1024)`
+  and `subreddit VARCHAR(64)` (NULL for HN). Migration
+  `seed/migrations/2026-05-17-discussion-links.sql`. Existing rows get
+  NULL permalink and simply render no discussion line until
+  `popularity_poll` refreshes them on its next tick.
+- **`jobs/popularity_poll.py`** — Reddit posts now capture the full
+  thread permalink (`https://www.reddit.com` + `data.permalink`) and
+  `data.subreddit`; HN posts capture
+  `https://news.ycombinator.com/item?id=<id>`. INSERT/ON DUPLICATE KEY
+  UPDATE extended with the two new columns. No behavior change to the
+  popularity score itself.
+- **`app/discussion.py`** (new) — pure `discussion_label(source,
+  subreddit)` ("Hacker News" / "r/<sub>" / "Reddit") plus
+  `discussions_for_articles(ids)` (per-article map, comments desc) and
+  `discussions_for_story(ids)` (one merged list across a cluster's
+  members, deduped by thread URL keeping max comment count). Mirrors
+  the Flask-free-helper convention of `discovery.py` / `feed_validation.py`.
+- **`app/routes/feed.py`** — after the existing thumb attach, one
+  batched `discussions_for_articles` call over the page's article ids;
+  `a["discussions"]` rides into both the full and HX "Load more"
+  renders.
+- **`app/routes/story.py`** — `discussions_for_story` over the cluster
+  members, passed to the dossier template.
+- **Templates** — `feed_cards.html` gets a compact
+  `Discussion: Hacker News (142) · r/technology (89)` line under the
+  byline; `story.html` gets a `.dossier-discussion` panel above the
+  lean columns. `style.css` gains additive `.discussion` /
+  `.dossier-discussion` rules (muted, matches the framing panel
+  palette).
+- **Tests** — `tests/test_discussion.py` (11 cases): label variants,
+  empty-input short-circuits the query, grouping + comments-desc sort,
+  missing-id absent, `_merge` dedupe-by-url-keep-max + sort, story
+  merge across cluster. `tests/test_story.py` `store` fixture also
+  stubs `app.discussion.query` (the route now does one extra DB read).
+  Full runnable suite: 177 passing (4 files need
+  trafilatura/anthropic/lxml and are environmental, same sandbox
+  limit noted on PR #50).
+
+### Code touched
+
+- `news/seed/schema.sql` — two columns on `popularity_signals`.
+- `news/seed/migrations/2026-05-17-discussion-links.sql` — new.
+- `news/jobs/popularity_poll.py` — capture permalink + subreddit.
+- `news/app/discussion.py` — new helper module.
+- `news/app/routes/feed.py`, `news/app/routes/story.py` — attach
+  discussions.
+- `news/app/templates/partials/feed_cards.html`,
+  `news/app/templates/story.html`,
+  `news/app/static/style.css` — UI.
+- `news/tests/test_discussion.py` (new),
+  `news/tests/test_story.py` (fixture stub).
+- `roadmap.md`, `manual-actions.md` — new entries.
+
+### Server-side state touched
+
+- **Migration applied on prod (2026-05-17)**:
+  `seed/migrations/2026-05-17-discussion-links.sql` —
+  `popularity_signals` gained nullable `permalink` + `subreddit`.
+  User confirmed the ALTER was run and the Python App restarted;
+  entry moved to `manual-actions.md` → Completed. Both columns are
+  nullable and only `popularity_poll` writes them, so it is not
+  load-bearing beyond "the ALTER must precede the deployed code"
+  (which it did). In the repo via `schema.sql` + the migration file,
+  so fresh installs replay it.
+- No new cron, env var, dependency, or symlink. Python App restarted
+  post-deploy so the new blueprint code + templates loaded.
+
+### PR
+
+- **PR #52** — Techmeme-style discussion links (merged 2026-05-17).
+
+### Open items
+
+- After a couple of `popularity_poll` ticks, confirm on prod that
+  discussion lines appear on cards whose URLs hit Reddit/HN (match
+  rate is the usual ~5-10%, so most cards won't have one — that's
+  expected, same as the popularity score).
+- Natural follow-ons if the user wants more coverage: free Bluesky
+  `searchPosts` harvest (no key, no new dep) feeding the same
+  surface; paid X/Twitter is still gated on spend.
+
+---
+
 ## 2026-05-17 — Engineering-history archive process
 
 ### Context

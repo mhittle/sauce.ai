@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Saved{% endblock %}
+{% block content %}
+<style>
+  .saved-page { max-width: 880px; margin: 0 auto; }
+  .saved-page h1 { font-family: ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, serif; font-weight: 500; }
+  .saved-page .lede { color: #555; margin-bottom: 1.5rem; }
+  .saved-list { list-style: none; padding: 0; margin: 0; }
+  .saved-item { padding: .9rem 0; border-bottom: 1px solid #eee; }
+  .saved-item.is-read .saved-title a { color: #777; }
+  .saved-title { margin: 0 0 .25rem; font-size: 1.05rem; font-weight: 600; }
+  .saved-title a { color: #1a1a1a; text-decoration: none; }
+  .saved-title a:hover { text-decoration: underline; }
+  .saved-meta { font-size: .82rem; color: #888; display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+  .saved-meta .archived { color: #2e7d32; }
+  .saved-meta .not-archived { color: #b06a00; }
+  .saved-actions { margin-top: .35rem; display: flex; gap: .9rem; font-size: .85rem; }
+  .saved-actions a { color: #1a4fb0; text-decoration: none; }
+  .saved-actions a:hover { text-decoration: underline; }
+  .saved-actions button.linkbtn { background: none; border: 0; color: #b71c1c; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+  .saved-empty { color: #888; font-style: italic; padding: 1.5rem 0; }
+</style>
+
+<div class="saved-page">
+  <h1>Saved</h1>
+  <p class="lede">
+    Your bookmarked articles. Saved articles are kept as a durable
+    personal archive — the in-app reader copy stays readable even after
+    the article ages out of the main feed.
+  </p>
+
+  {% if articles %}
+    <ul class="saved-list">
+      {% for a in articles %}
+      <li class="saved-item {% if a.read_at %}is-read{% endif %}"
+          x-data="{ removed: false }" x-show="!removed" x-cloak>
+        <h2 class="saved-title">
+          <a href="{{ a.url }}" target="_blank" rel="noopener"
+             onclick="fetch('{{ url_for('saves.mark_read', article_id=a.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">{{ a.title }}</a>
+        </h2>
+        <div class="saved-meta">
+          <span>{{ a.source_name }}</span>
+          {% if a.political_lean is not none %}
+            <span class="lean-dot" style="--lean: {{ a.political_lean }}"
+                  title="article lean {{ '%+.2f' % a.political_lean }}"></span>
+          {% endif %}
+          {% if a.category %}<span>{{ a.category }}</span>{% endif %}
+          <span>saved {{ a.saved_at.strftime('%b %d, %Y') if a.saved_at else '' }}</span>
+          {% if a.body_status == 'ok' %}
+            <span class="archived" title="Reader copy stored — readable even after the article ages out">archived</span>
+          {% else %}
+            <span class="not-archived" title="No reader copy stored; the original link may rot over time">link only</span>
+          {% endif %}
+        </div>
+        <div class="saved-actions">
+          <a href="{{ url_for('reader.read', article_id=a.id) }}"
+             onclick="fetch('{{ url_for('saves.mark_read', article_id=a.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">Read &rarr;</a>
+          <button type="button" class="linkbtn"
+                  @click="fetch('{{ url_for('saves.toggle', article_id=a.id) }}', {method:'POST', headers:{'X-CSRF-Token':window.csrfToken}}).then(r => { if (r.ok) removed = true; })">Remove</button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="saved-empty">
+      Nothing saved yet. Tap the ☆ on any article in your feed to save it here.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

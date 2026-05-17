@@ -25,9 +25,13 @@ def _run():
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            # Prune old articles (cascades to features, popularity, article_journalists)
+            # Prune old articles (cascades to features, popularity,
+            # article_journalists, article_bodies). Saved/bookmarked
+            # articles are exempt so a user's /saved archive stays durable
+            # (reader-view copy readable indefinitely) — roadmap Pri 6.
             cur.execute(
-                "DELETE FROM articles WHERE fetched_at < UTC_TIMESTAMP() - INTERVAL %s DAY",
+                "DELETE FROM articles WHERE fetched_at < UTC_TIMESTAMP() - INTERVAL %s DAY "
+                "AND NOT EXISTS (SELECT 1 FROM user_saves us WHERE us.article_id = articles.id)",
                 (cfg.ARTICLE_RETENTION_DAYS,),
             )
             pruned = cur.rowcount
@@ -141,10 +145,12 @@ def _run():
 
             # Prune old article bodies. Independent of article retention so
             # the bodies window can be tightened (storage cost) without
-            # affecting feed history. Bookmarks override this once /saved
-            # ships (see roadmap).
+            # affecting feed history. Saved/bookmarked articles are exempt
+            # so their reader-view copy stays readable indefinitely
+            # (roadmap Pri 6).
             cur.execute(
-                "DELETE FROM article_bodies WHERE extracted_at < UTC_TIMESTAMP() - INTERVAL %s DAY",
+                "DELETE FROM article_bodies WHERE extracted_at < UTC_TIMESTAMP() - INTERVAL %s DAY "
+                "AND NOT EXISTS (SELECT 1 FROM user_saves us WHERE us.article_id = article_bodies.article_id)",
                 (cfg.BODY_RETENTION_DAYS,),
             )
             bodies_pruned = cur.rowcount
