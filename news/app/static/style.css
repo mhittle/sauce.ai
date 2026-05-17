@@ -317,3 +317,17 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 @media (max-width: 800px) {
   .dossier-columns { grid-template-columns: 1fr; }
 }
+
+/* discussion links (Techmeme-style) — feed card */
+.discussion { font-size: 0.82em; color: var(--muted); margin-top: 0.4em; line-height: 1.5; }
+.discussion-label { font-weight: 600; margin-right: 0.3em; }
+.discussion a { color: var(--muted); }
+.discussion a:hover { color: var(--accent); }
+.discussion-sep { color: var(--line); }
+
+/* discussion panel — story dossier */
+.dossier-discussion { background: #f7f6f0; border-left: 3px solid var(--line); padding: 0.8em 1.2em; margin: 0 0 1.5em; border-radius: 0 6px 6px 0; }
+.dossier-discussion .discussion-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4em 1.2em; }
+.dossier-discussion .discussion-list li { font-size: 0.9em; }
+.dossier-discussion .discussion-list a { font-weight: 600; }
+.dossier-discussion .discussion-list .muted { font-size: 0.85em; margin-left: 0.3em; }

@@ -16,8 +16,10 @@ JOB = "popularity_poll"
 logger = setup_logging(JOB)
 
 REDDIT_SUBS = ["news", "worldnews", "politics", "technology", "science", "business"]
+REDDIT_BASE = "https://www.reddit.com"
 HN_TOP = "https://hacker-news.firebaseio.com/v0/topstories.json"
 HN_ITEM = "https://hacker-news.firebaseio.com/v0/item/{}.json"
+HN_THREAD = "https://news.ycombinator.com/item?id={}"
 
 HTTP_TIMEOUT = (5, 10)
 HN_BUDGET_SECONDS = 60  # cap the per-item HN walk so it can't pile up
@@ -63,9 +65,12 @@ def _fetch_reddit(http):
                 d = child.get("data", {})
                 u = d.get("url_overridden_by_dest") or d.get("url")
                 if u and not u.startswith("https://www.reddit.com"):
+                    perma = d.get("permalink")
                     posts.append({
                         "url": u, "score": int(d.get("score", 0)),
                         "comments": int(d.get("num_comments", 0)),
+                        "permalink": (REDDIT_BASE + perma) if perma else None,
+                        "subreddit": d.get("subreddit") or sub,
                     })
             time.sleep(1)  # be polite
         except Exception as e:
@@ -94,6 +99,8 @@ def _fetch_hn(http):
                 posts.append({
                     "url": u, "score": int(item.get("score", 0)),
                     "comments": int(item.get("descendants", 0)),
+                    "permalink": HN_THREAD.format(hid),
+                    "subreddit": None,
                 })
         except Exception:
             continue
@@ -142,11 +149,14 @@ def _run():
                 aid = url_to_id[n]
                 pop = _popularity_score(p["score"], p["comments"])
                 cur.execute(
-                    """INSERT INTO popularity_signals (article_id, source, score, comments)
-                       VALUES (%s, %s, %s, %s)
+                    """INSERT INTO popularity_signals
+                         (article_id, source, score, comments, permalink, subreddit)
+                       VALUES (%s, %s, %s, %s, %s, %s)
                        ON DUPLICATE KEY UPDATE score=VALUES(score), comments=VALUES(comments),
+                       permalink=VALUES(permalink), subreddit=VALUES(subreddit),
                        fetched_at=UTC_TIMESTAMP()""",
-                    (aid, p["source"], p["score"], p["comments"]),
+                    (aid, p["source"], p["score"], p["comments"],
+                     p.get("permalink"), p.get("subreddit")),
                 )
                 if pop > best_for_article.get(aid, 0):
                     best_for_article[aid] = pop

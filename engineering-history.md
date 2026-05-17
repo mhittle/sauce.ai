@@ -256,6 +256,107 @@ environmental, unrelated to this change — confirmed all
 
 ---
 
+## 2026-05-17 — Techmeme-style discussion links (Reddit/HN)
+
+### Context
+
+User asked for "a feature like what Techmeme does where they list
+relevant tweets regarding the article/topic" — i.e. Techmeme's
+"Discussion:" line. Literal X/Twitter needs the paid API (~$100/mo,
+already flagged on the roadmap social-firehose item); the user picked
+**Reddit + HN only** for v1 and **feed card + story dossier** as the
+surfaces. This is mostly wiring up data we already fetch:
+`popularity_poll` matches Reddit/HN threads to our articles every
+30 min for the popularity score but previously discarded the thread
+permalink.
+
+### What shipped
+
+- **Schema** — `popularity_signals` gains `permalink VARCHAR(1024)`
+  and `subreddit VARCHAR(64)` (NULL for HN). Migration
+  `seed/migrations/2026-05-17-discussion-links.sql`. Existing rows get
+  NULL permalink and simply render no discussion line until
+  `popularity_poll` refreshes them on its next tick.
+- **`jobs/popularity_poll.py`** — Reddit posts now capture the full
+  thread permalink (`https://www.reddit.com` + `data.permalink`) and
+  `data.subreddit`; HN posts capture
+  `https://news.ycombinator.com/item?id=<id>`. INSERT/ON DUPLICATE KEY
+  UPDATE extended with the two new columns. No behavior change to the
+  popularity score itself.
+- **`app/discussion.py`** (new) — pure `discussion_label(source,
+  subreddit)` ("Hacker News" / "r/<sub>" / "Reddit") plus
+  `discussions_for_articles(ids)` (per-article map, comments desc) and
+  `discussions_for_story(ids)` (one merged list across a cluster's
+  members, deduped by thread URL keeping max comment count). Mirrors
+  the Flask-free-helper convention of `discovery.py` / `feed_validation.py`.
+- **`app/routes/feed.py`** — after the existing thumb attach, one
+  batched `discussions_for_articles` call over the page's article ids;
+  `a["discussions"]` rides into both the full and HX "Load more"
+  renders.
+- **`app/routes/story.py`** — `discussions_for_story` over the cluster
+  members, passed to the dossier template.
+- **Templates** — `feed_cards.html` gets a compact
+  `Discussion: Hacker News (142) · r/technology (89)` line under the
+  byline; `story.html` gets a `.dossier-discussion` panel above the
+  lean columns. `style.css` gains additive `.discussion` /
+  `.dossier-discussion` rules (muted, matches the framing panel
+  palette).
+- **Tests** — `tests/test_discussion.py` (11 cases): label variants,
+  empty-input short-circuits the query, grouping + comments-desc sort,
+  missing-id absent, `_merge` dedupe-by-url-keep-max + sort, story
+  merge across cluster. `tests/test_story.py` `store` fixture also
+  stubs `app.discussion.query` (the route now does one extra DB read).
+  Full runnable suite: 177 passing (4 files need
+  trafilatura/anthropic/lxml and are environmental, same sandbox
+  limit noted on PR #50).
+
+### Code touched
+
+- `news/seed/schema.sql` — two columns on `popularity_signals`.
+- `news/seed/migrations/2026-05-17-discussion-links.sql` — new.
+- `news/jobs/popularity_poll.py` — capture permalink + subreddit.
+- `news/app/discussion.py` — new helper module.
+- `news/app/routes/feed.py`, `news/app/routes/story.py` — attach
+  discussions.
+- `news/app/templates/partials/feed_cards.html`,
+  `news/app/templates/story.html`,
+  `news/app/static/style.css` — UI.
+- `news/tests/test_discussion.py` (new),
+  `news/tests/test_story.py` (fixture stub).
+- `roadmap.md`, `manual-actions.md` — new entries.
+
+### Server-side state touched
+
+- **Migration pending on prod**:
+  `seed/migrations/2026-05-17-discussion-links.sql`. Tracked in
+  `manual-actions.md` Open with full inline SQL. **Not a site-down
+  risk** — both new columns are nullable and only
+  `popularity_poll` writes them / the new read tolerates their
+  absence only *after* the ALTER; until the ALTER runs, the
+  `popularity_poll` INSERT will error on the new column list, so run
+  it before the next 30-min tick. The web routes `SELECT permalink,
+  subreddit` so they 500 on the feed/dossier until the columns exist
+  — treat as a pre-merge migration like prior schema changes.
+- No new cron, env var, dependency, or symlink. Python App restart
+  after deploy so the new blueprint code + templates load.
+
+### PR
+
+- **PR #TBD** — Techmeme-style discussion links (draft). Requires the
+  one DB migration above before merge.
+
+### Open items
+
+- After the migration + a couple of `popularity_poll` ticks, confirm
+  on prod that discussion lines appear on cards whose URLs hit
+  Reddit/HN (match rate is the usual ~5-10%, so most cards won't have
+  one — that's expected, same as the popularity score).
+- Natural follow-ons if the user wants more coverage: free Bluesky
+  `searchPosts` harvest (no key, no new dep) feeding the same
+  surface; paid X/Twitter is still gated on spend.
+
+---
+
 ## 2026-05-14 — Feed sort selector (Relevance / Newest / Popularity)
 
 ### Context

@@ -2,6 +2,7 @@ import json
 from flask import Blueprint, render_template, request, g, redirect, url_for, jsonify, current_app
 
 from ..db import query, execute, get_conn
+from ..discussion import discussions_for_articles
 from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
 
 bp = Blueprint("feed", __name__)
@@ -141,6 +142,11 @@ def index():
     else:
         for a in articles:
             a["thumb"] = None
+
+    if articles:
+        disc = discussions_for_articles([a["id"] for a in articles])
+        for a in articles:
+            a["discussions"] = disc.get(a["id"], [])
 
     if request.headers.get("HX-Request"):
         return render_template(

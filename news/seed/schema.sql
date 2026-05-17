@@ -140,6 +140,8 @@ CREATE TABLE IF NOT EXISTS popularity_signals (
   source     VARCHAR(16) NOT NULL,         -- 'reddit' | 'hn'
   score      INT NOT NULL DEFAULT 0,
   comments   INT NOT NULL DEFAULT 0,
+  permalink  VARCHAR(1024) DEFAULT NULL,   -- discussion thread URL (Techmeme-style)
+  subreddit  VARCHAR(64) DEFAULT NULL,     -- e.g. 'technology'; NULL for hn
   fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (article_id, source),
   CONSTRAINT fk_pop_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE

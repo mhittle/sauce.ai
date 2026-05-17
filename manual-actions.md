@@ -86,6 +86,47 @@ already in `articles`).
 
 ---
 
+### 2026-05-17 — Migration: popularity_signals discussion columns
+**Status:** open · **PR:** (Techmeme-style discussion links, draft) ·
+**Opened:** 2026-05-17 ·
+**File reference:** `news/seed/migrations/2026-05-17-discussion-links.sql`
+
+Adds `permalink` + `subreddit` to `popularity_signals` so the feed card
+and story dossier can show a Techmeme-style "Discussion:" line linking
+to the Reddit/HN thread. `popularity_poll` already matched these
+threads for the popularity score; it now also writes the permalink.
+
+**Run before merging the PR** (and before the next `popularity_poll`
+tick): the web feed/dossier `SELECT permalink, subreddit` and the
+`popularity_poll` INSERT lists the new columns, so both error until the
+ALTER runs. Run via phpMyAdmin against `lt1ih6uyy2z6_news`, then
+restart the Python App from cPanel.
+
+**SQL to apply:**
+
+```sql
+ALTER TABLE popularity_signals
+  ADD COLUMN permalink VARCHAR(1024) DEFAULT NULL AFTER comments,
+  ADD COLUMN subreddit  VARCHAR(64) DEFAULT NULL AFTER permalink;
+```
+
+**Verify:**
+
+```sql
+SHOW COLUMNS FROM popularity_signals LIKE 'permalink';
+SHOW COLUMNS FROM popularity_signals LIKE 'subreddit';
+```
+
+Then after one `popularity_poll` tick (~30 min):
+
+```sql
+SELECT COUNT(*) FROM popularity_signals WHERE permalink IS NOT NULL;
+```
+
+should be non-zero.
+
+---
+
 ## Completed
 
 ### 2026-05-13 — Migration: story_dossiers (framing-summary cache)
