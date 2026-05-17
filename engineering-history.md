@@ -155,7 +155,7 @@ new routes/templates load.
 
 ### PR
 
-- **PR #TBD** — Multiple saved algorithms / profiles (draft).
+- **PR #65** — Multiple saved algorithms / profiles (draft).
 
 ---
 
