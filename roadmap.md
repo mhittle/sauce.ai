@@ -37,7 +37,7 @@ shipped.
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | done |
 | 7 | 4 | algo, backend, ui | External trending sort (Google News/Trends) — BUG-015 | done |
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
-| 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | in-progress |
+| 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | done |
 | 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | done |
 | 6 | 4 | new-feature, ui | Article save / bookmark | done |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
@@ -250,29 +250,6 @@ tool for tuning the ranking function.
 Trust + transparency feature — also makes thumbs-down decisions more
 informed ("oh, it ranked high because of X, but I don't actually care
 about X").
-
-### Across-the-spectrum in-feed
-**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo · **Status:** in-progress (PR #69)
-
-The lightweight everyday cousin of the story dossier. Every card on
-the main feed that's part of a multi-source story gets a small
-"+3 other angles" affordance under the headline. Click expands inline
-to show 2-3 alternative source perspectives without leaving the feed.
-A "Full dossier →" link inside the expansion takes the user to the
-dossier page for the deep dive.
-
-Why have both: dossier is *destination* content (you go there to
-research a story); in-feed compare is *ambient* (you encounter it
-while skimming and it nudges you to broaden one story at a time).
-The in-feed version has much more surface area — every multi-source
-card carries it.
-
-Shares all the infrastructure of story dossier (story_id, source
-clustering, source_lean), so essentially free once dossier exists.
-Could ship before the full dossier page as a faster wedge into the
-"multi-source view" idea.
-
-Depends on Article deduplication (story_id). Pairs with Story dossier.
 
 ### Article summary
 **Priority:** 7 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
@@ -505,6 +482,17 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Across-the-spectrum in-feed** — Pri 7, LOE 3, ui/algo. PR #69
+  (merged 2026-05-17). The `+N angles` pill on multi-source feed cards
+  (shipped with the dossier, PR #43) now **expands inline** to a
+  mini-dossier of a few sibling outlets' coverage (round-robined across
+  the lean spectrum, one per source) with a "Full dossier →" deep-dive
+  link, instead of navigating away. New pure `app/spectrum.py`
+  (`pick_spectrum_sample`); new `GET /story/<id>/peek` partial reusing
+  the dossier's canonical + visibility cluster fetch (extracted to
+  `_fetch_cluster`); pill progressively enhanced (keeps its `href` so
+  no-JS/no-HTMX falls back to the full dossier page). No DB migration,
+  no LLM call, no new dependency, no manual prod action.
 - **Dark mode** — Pri 3, LOE 2, ui. PR #63 (merged 2026-05-17).
   Client-only theme: a nav toggle persisted in `localStorage` with a
   FOUC-free `<head>` init (falls back to `prefers-color-scheme`).
