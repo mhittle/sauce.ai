@@ -1,5 +1,60 @@
-"""Unit tests for the English-only article filter."""
+"""Unit tests for the English-only article filter.
+
+`py3langid` is stubbed via sys.modules (same pattern as the
+trafilatura/anthropic stubs elsewhere in the suite) so detection is
+fully scripted and the tests pass whether or not the package is
+installed in the environment.
+"""
+import sys
+import types
+
+import pytest
+
+import app.language as language
 from app.language import is_english, _non_latin_letter_ratio, _normalize_lang
+
+
+@pytest.fixture(autouse=True)
+def fake_detector(monkeypatch):
+    """Install a scripted fake `py3langid`.
+
+    Default: everything that reaches the detector reads as confident
+    English, so the permissive/English-accept cases stay deterministic.
+    Tests opt into other outcomes via `.set(...)` or `.raise_on_detect()`.
+    """
+    state = {"default": [("en", 0.99)], "map": {}, "raise": False}
+
+    class _Identifier:
+        def rank(self, text):
+            if state["raise"]:
+                raise RuntimeError("degenerate input")
+            for needle, langs in state["map"].items():
+                if needle in text:
+                    return list(langs)
+            return list(state["default"])
+
+    class LanguageIdentifier:
+        @classmethod
+        def from_pickled_model(cls, model_file, norm_probs=True):
+            return _Identifier()
+
+    langid_mod = types.ModuleType("py3langid.langid")
+    langid_mod.LanguageIdentifier = LanguageIdentifier
+    langid_mod.MODEL_FILE = "model"
+    pkg = types.ModuleType("py3langid")
+    pkg.langid = langid_mod
+    monkeypatch.setitem(sys.modules, "py3langid", pkg)
+    monkeypatch.setitem(sys.modules, "py3langid.langid", langid_mod)
+    monkeypatch.setattr(language, "_identifier", None)
+
+    class Control:
+        def set(self, needle, langs):
+            state["map"][needle] = langs
+
+        def raise_on_detect(self):
+            state["raise"] = True
+
+    return Control()
 
 
 def test_plain_english_title_accepts():
@@ -61,7 +116,7 @@ def test_latin_extended_accents_accept():
 
 def test_vietnamese_diacritics_accept():
     # Vietnamese uses Latin Extended Additional (0x1E00-0x1EFF). Script
-    # check accepts; only feed_language tag could reject (none here).
+    # check accepts; detector (stubbed English by default) also accepts.
     assert is_english("Phở restaurant chain expands to Hà Nội suburbs") is True
 
 
@@ -77,6 +132,79 @@ def test_none_title_does_not_crash():
 def test_summary_fills_in_when_title_short():
     # Short ASCII title plus a CJK-heavy summary should still reject.
     assert is_english("Update", summary="アジア株式市場は本日大幅に下落しました") is False
+
+
+# --- BUG-013 / BUG-014: Latin-script European leakage via py3langid ---
+
+
+def test_german_latin_text_rejected_by_detector(fake_detector):
+    fake_detector.set("Bundesregierung", [("de", 0.99)])
+    assert is_english(
+        "Bundesregierung beschliesst neues Gesetz zur Energiewende"
+    ) is False
+
+
+def test_spanish_latin_text_rejected_by_detector(fake_detector):
+    fake_detector.set("Gobierno", [("es", 0.99)])
+    assert is_english(
+        "El Gobierno anuncia nuevas medidas economicas para el proximo ano"
+    ) is False
+
+
+def test_finnish_latin_text_rejected_by_detector(fake_detector):
+    # The hs.fi case from the bug report (Finnish sports headline).
+    fake_detector.set("jalkapallo", [("fi", 0.99)])
+    assert is_english(
+        "Suomen jalkapallomaajoukkue voitti tarkean ottelun eilen illalla"
+    ) is False
+
+
+def test_english_still_accepted_when_detector_says_english(fake_detector):
+    fake_detector.set("Federal Reserve", [("en", 0.99)])
+    assert is_english(
+        "Federal Reserve signals it may hold interest rates steady next quarter"
+    ) is True
+
+
+def test_short_latin_text_skips_detector_and_accepts(fake_detector):
+    # Below MIN_DETECT_LETTERS the detector is never consulted even if it
+    # would flag the text — too little signal to risk over-filtering.
+    fake_detector.set("Bonn", [("de", 0.99)])
+    assert is_english("Bonn vote") is True
+
+
+def test_low_confidence_foreign_call_accepts(fake_detector):
+    # Detector leans German but below DETECT_MIN_CONFIDENCE — keep it.
+    fake_detector.set("Berlin", [("de", 0.70), ("en", 0.20)])
+    assert is_english(
+        "Berlin summit produces a joint statement on regional security"
+    ) is True
+
+
+def test_foreign_top_but_english_plausible_accepts(fake_detector):
+    # Confident-ish Spanish, but English is a real alternative (>= floor):
+    # bias toward keeping English rather than dropping a real article.
+    fake_detector.set("Barcelona", [("es", 0.86), ("en", 0.13)])
+    assert is_english(
+        "Barcelona club statement addresses the financial fair play review"
+    ) is True
+
+
+def test_detector_exception_falls_through_to_accept(fake_detector):
+    # The detector raising (degenerate text, model issue) must never
+    # break the fetch loop — permissive accept.
+    fake_detector.raise_on_detect()
+    assert is_english(
+        "Some otherwise unremarkable English headline about local sports"
+    ) is True
+
+
+def test_detector_unavailable_falls_through_to_accept(monkeypatch):
+    # If py3langid isn't importable at all, accept (don't break fetch).
+    monkeypatch.setitem(sys.modules, "py3langid.langid", None)
+    assert is_english(
+        "Another perfectly ordinary English news headline goes here today"
+    ) is True
 
 
 def test_normalize_lang_strips_region_and_case():
