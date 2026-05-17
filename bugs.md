@@ -142,13 +142,13 @@ prod). 9 new unit tests (30 total in `test_language.py`, all green);
 the detector is stubbed via `sys.modules` so the suite is
 deterministic.
 
-**Prod note:** verified by unit tests; end-to-end prod effect depends
-on the pending `pip install -r requirements.txt` + Python App restart
-(tracked in `manual-actions.md` Open). The import fails soft, so this
-is **not** a site-down risk — the filter is simply inert until
-langdetect is installed. Pre-existing non-English rows are not purged;
-they age out of the 7-day window (BUG-011 recency gate crushes them
-well before that).
+**Prod note:** verified by unit tests and end-to-end against the real
+py3langid. The prod `pip install -r requirements.txt` (py3langid +
+numpy) was applied 2026-05-17 (user-confirmed; manual-actions.md
+Completed), so the stage-3 filter is now live on `fetch_feeds`. The
+import fails soft so this was never a site-down risk. Pre-existing
+non-English rows are not purged; they age out of the 7-day window
+(BUG-011 recency gate crushes them well before that).
 
 ### BUG-012 — Refreshing the feed page returns the same content
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-13 · **Closed:** 2026-05-13

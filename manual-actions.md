@@ -35,57 +35,6 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)
-**Status:** open · **PR:** #50 (BUG-013, BUG-014) · **Opened:** 2026-05-17
-
-BUG-013 fix adds a language-detector stage 3 to the English-only
-filter (catches Latin-script European content — German/Spanish/
-Finnish — that the non-Latin script heuristic can't). The dependency
-is `py3langid==0.3.0` (pulls `numpy>=2.0.0`). It replaces the original
-`langdetect==1.0.9`, which was BUG-014: langdetect is sdist-only and
-its old setup.py fails to build under modern PEP 517/setuptools on the
-cPanel venv. py3langid ships a prebuilt wheel and numpy ships
-manylinux cp311 wheels, so `pip install` is a plain download — no
-build step, so the BUG-014 failure class cannot recur.
-
-The import is lazy and fails soft: **the site does NOT 500 without
-this** and the fetch pipeline keeps running, but the new European-
-language filtering is inert until py3langid is installed — non-English
-Latin-script articles will keep leaking into the feed until then. Only
-`jobs/fetch_feeds.py` (cron) consumes it; web routes are unaffected.
-
-The cPanel "Run Pip Install" button in Setup Python App has been greyed
-out historically — run from cPanel Terminal after activating the venv.
-
-**Commands (account `lt1ih6uyy2z6`):**
-
-```bash
-# In cPanel Terminal, paste cPanel's "Enter to the virtual environment"
-# command for the news app, then:
-source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
-  && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news
-pip install -r requirements.txt
-```
-
-**Then:** restart the Python App via cPanel (Setup Python App ->
-Restart) so any already-running workers pick up the new package.
-
-**Verify:**
-
-```bash
-/home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/python \
-  -c "from py3langid.langid import LanguageIdentifier, MODEL_FILE; LanguageIdentifier.from_pickled_model(MODEL_FILE, norm_probs=True); import numpy; print('py3langid ok, numpy', numpy.__version__)"
-```
-
-Then watch the next few `fetch_feeds` ticks in `logs/cron.log`:
-`skipped_lang=N` should rise once European feeds start getting
-rejected. Spot-check the feed for German/Spanish/Finnish content
-clearing out over the following ~7 days as pre-existing rows age out
-of the window (the filter is fetch-time only; it does not purge rows
-already in `articles`).
-
----
-
 ### 2026-05-17 — Migration: popularity_signals discussion columns
 **Status:** open · **PR:** (Techmeme-style discussion links, draft) ·
 **Opened:** 2026-05-17 ·
@@ -128,6 +77,41 @@ should be non-zero.
 ---
 
 ## Completed
+
+### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)
+**Status:** completed · **PR:** #50 (BUG-013, BUG-014) · **Opened:** 2026-05-17 · **Completed:** 2026-05-17
+
+User confirmed `pip install -r requirements.txt` was run on prod
+(2026-05-17), installing `py3langid==0.3.0` (+ wheel-distributed
+`numpy`). The European-language filter (stage 3 of `is_english`) is
+now live: `jobs/fetch_feeds.py` is a fresh per-tick cron process so it
+picks up py3langid on its next tick regardless of a Passenger restart
+(web routes don't use the detector, so no site-facing restart was
+strictly required). BUG-013/BUG-014 are now effective in production.
+
+Expect `skipped_lang=N` to rise in `logs/cron.log` over the next few
+`fetch_feeds` ticks, and German/Spanish/Finnish content to clear out
+of the feed over ~7 days as pre-existing rows age out (the filter is
+fetch-time only; it does not purge rows already in `articles`).
+
+**Commands run (account `lt1ih6uyy2z6`):**
+
+```bash
+# In cPanel Terminal, paste cPanel's "Enter to the virtual environment"
+# command for the news app, then:
+source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+  && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news
+pip install -r requirements.txt
+```
+
+**Verify:**
+
+```bash
+/home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/python \
+  -c "from py3langid.langid import LanguageIdentifier, MODEL_FILE; LanguageIdentifier.from_pickled_model(MODEL_FILE, norm_probs=True); import numpy; print('py3langid ok, numpy', numpy.__version__)"
+```
+
+---
 
 ### 2026-05-13 — Migration: story_dossiers (framing-summary cache)
 **Status:** completed · **PR:** #43 · **Opened:** 2026-05-13 ·
