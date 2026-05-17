@@ -4,21 +4,72 @@
 <div class="firehose" x-data="{ paused: false }">
   <header class="firehose-header">
     <h1>Firehose</h1>
-    <p class="muted">Every classified article as it lands. Bars show this feature's value;
-       intensity reflects how much your algorithm cares.</p>
+    <p class="muted">Every classified article as it lands, newest on top.
+       New rows stream in above; "Load more" walks back through everything
+       that came before. Bars show this feature's value; intensity reflects
+       how much your algorithm cares.</p>
     <button @click="paused = !paused" x-text="paused ? 'Resume' : 'Pause'"></button>
   </header>
 
+  <table class="firehose-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Source</th>
+        <th>Title</th>
+        <th>Score</th>
+        <th>Lean</th>
+        <th>Obj</th>
+        <th>Dens</th>
+        <th>Read</th>
+        <th>Rep</th>
+        <th>Pop</th>
+      </tr>
+    </thead>
+    <tbody id="firehose-rows"></tbody>
+  </table>
+
+  <p id="firehose-empty" class="muted">Loading the latest…</p>
+
   <template x-if="!paused">
-    <div id="firehose-feed"
+    <div id="firehose-poller"
          hx-get="{{ url_for('firehose.stream') }}"
          hx-trigger="load, every 4s"
-         hx-swap="innerHTML">
-      <p class="muted">Loading the latest…</p>
-    </div>
+         hx-target="#firehose-rows"
+         hx-swap="afterbegin"
+         hx-vals="js:{...window.firehoseAfter()}"></div>
   </template>
-  <template x-if="paused">
-    <div id="firehose-feed-paused" class="muted">Paused — click Resume to keep streaming.</div>
-  </template>
+  <p class="muted" x-show="paused" x-cloak>Paused — click Resume to keep streaming.</p>
+
+  <div class="load-more">
+    <button hx-get="{{ url_for('firehose.stream') }}"
+            hx-target="#firehose-rows"
+            hx-swap="beforeend"
+            hx-vals="js:{...window.firehoseBefore()}">Load more</button>
+  </div>
 </div>
+
+<script>
+  // Cursors are read live from the DOM at request time (rows stay ordered
+  // classified_at DESC, so first = newest, last = oldest). No cursor on the
+  // first poll -> the route returns the newest page.
+  window.firehoseAfter = function () {
+    var r = document.querySelector("#firehose-rows tr[data-aid]");
+    return r ? { after_ts: r.dataset.ts, after_id: r.dataset.aid, limit: 100 } : {};
+  };
+  window.firehoseBefore = function () {
+    var rows = document.querySelectorAll("#firehose-rows tr[data-aid]");
+    if (!rows.length) return {};
+    var r = rows[rows.length - 1];
+    return { before_ts: r.dataset.ts, before_id: r.dataset.aid };
+  };
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (!e.detail || !e.detail.target || e.detail.target.id !== "firehose-rows") return;
+    var empty = document.getElementById("firehose-empty");
+    if (empty) {
+      empty.style.display =
+        document.querySelector("#firehose-rows tr[data-aid]") ? "none" : "";
+    }
+  });
+</script>
 {% endblock %}

@@ -7,6 +7,7 @@ Polling at 4s gives an acceptable "live" feel and is robust on cheap hosts.
 from flask import Blueprint, render_template, request, g
 
 from ..db import query
+from ..firehose_cursor import firehose_cursor_clause
 from ..ranking import build_score_sql, default_weights, parse_weights_json
 
 bp = Blueprint("firehose", __name__)
@@ -33,17 +34,27 @@ def index():
 
 @bp.route("/stream")
 def stream():
-    """Returns the N newest classified articles, optionally newer than `since`."""
+    """Newest classified articles, ordered by ``(classified_at, id)`` DESC.
+
+    Three keyset modes (see ``firehose_cursor_clause``): no cursor →
+    newest page (initial load); ``after_ts``+``after_id`` → rows strictly
+    newer, prepended by the 4s poll (the live tail); ``before_ts``+
+    ``before_id`` → rows strictly older, appended by "Load more". The id
+    tiebreak is what makes this BUG-020-correct: ``classified_at`` is
+    second-granularity and ``classify_pending`` writes same-second bursts,
+    so a timestamp-only cursor silently skips rows.
+    """
     weights = _active_weights()
-    since = request.args.get("since")
     limit = max(1, min(int(request.args.get("limit", 25)), 100))
 
     score_expr, score_params = build_score_sql(weights)
-    where_extra = ""
     params = {**score_params, "limit": limit}
-    if since:
-        where_extra = "AND f.classified_at > %(since)s"
-        params["since"] = since
+
+    cursor_sql, cursor_params = firehose_cursor_clause(
+        request.args.get("after_ts"), request.args.get("after_id"),
+        request.args.get("before_ts"), request.args.get("before_id"),
+    )
+    params.update(cursor_params)
 
     uid = (getattr(g, "user", None) or {}).get("id")
     vis_sql = "(s.owner_id IS NULL OR s.owner_id = %(_vis_owner)s)" if uid else "s.owner_id IS NULL"
@@ -53,7 +64,7 @@ def stream():
     sql = f"""
       SELECT a.id, a.title, a.url, s.name AS source_name,
              a.published_at,
-             DATE_FORMAT(f.classified_at, '%%Y-%%m-%%dT%%H:%%i:%%s') AS classified_at_iso,
+             DATE_FORMAT(f.classified_at, '%%Y-%%m-%%d %%H:%%i:%%s') AS classified_at_iso,
              f.classified_at,
              f.political_lean, f.objectivity, f.info_density,
              f.reading_level, f.source_reputation, f.popularity, f.category,
@@ -61,8 +72,8 @@ def stream():
       FROM articles a
       JOIN sources s ON s.id = a.source_id
       JOIN article_features f ON f.article_id = a.id
-      WHERE a.status = 'classified' AND {vis_sql} {where_extra}
-      ORDER BY f.classified_at DESC
+      WHERE a.status = 'classified' AND {vis_sql} {cursor_sql}
+      ORDER BY f.classified_at DESC, a.id DESC
       LIMIT %(limit)s
     """
     rows = query(sql, params)

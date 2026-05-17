@@ -106,6 +106,56 @@ rebuild from `seed/schema.sql` already includes these.
 
 ---
 
+## 2026-05-17 — BUG-020: firehose accumulates instead of churning (PR #<n>)
+
+### Context
+
+User: "firehose doesn't actually show everything." `/firehose` polled
+`/stream` every 4s with `hx-swap="innerHTML"`, replacing the table
+with only the newest ≤25 classified rows each tick (no "Load more";
+the route's `since` cursor was never sent). Everything past the newest
+25 was dropped on every poll. User chose **"make it accumulate"**
+(keep classified-only; stop the churn).
+
+### What shipped
+
+- **`app/firehose_cursor.py`** (new, pure/Flask-free/DB-free, mirrors
+  `app/trending.py`): `firehose_cursor_clause()` builds a **keyset
+  `(classified_at, id)`** WHERE fragment. Timestamp-only skips rows —
+  `classified_at` is second-granularity and `classify_pending` writes
+  same-second bursts (the real data-loss mechanism). Malformed id →
+  no-cursor (never 500s).
+- **`app/routes/firehose.py`** `stream()`: drops the unused `since`;
+  three modes (no cursor → newest page; `after_*` → strictly newer,
+  prepend; `before_*` → strictly older, "Load more"). `ORDER BY
+  f.classified_at DESC, a.id DESC`; `classified_at_iso` space-form for
+  an unambiguous string→DATETIME compare.
+- **`firehose.html`**: stable `<tbody>`; poll prepends
+  (`afterbegin`, `limit=100`), "Load more" appends (`beforeend`);
+  cursors read live from DOM. Reuses the existing `.load-more` class —
+  **no `style.css` change** (avoids the in-flight profiles PR).
+  `firehose_rows.html` emits `<tr>`s only.
+- **`tests/test_firehose_cursor.py`** — 9 sandbox-run cases.
+
+### Server-side state touched
+
+None. No DB/cron/env/symlink/pip change. Python App restart on deploy.
+
+### Verification
+
+Helper 9/9 in-sandbox; templates Jinja-parse; changed Python
+`py_compile` clean. Route/browser (prepend, Load-more, pause/resume)
+deferred to a real env / CI (no Flask/PyMySQL/browser in sandbox).
+Caveats in `bugs.md` BUG-020: >100 classifications inside one 4s tick
+leaves a gap until "Load more" (not reachable at the real write rate);
+a later-reclassified row can re-appear at top (a dup, not a loss).
+
+### PR
+
+- **PR #<n>** — BUG-020 firehose accumulation (draft).
+
+---
+
 ## 2026-05-17 — Across-the-spectrum in-feed (PR #69)
 
 Roadmap Pri 7 / LOE 3 (ui, algo). The "+N angles" pill (added with the
@@ -291,73 +341,6 @@ topic_matches=M` after a tick; LLM-entity follow-on once PR #56 lands.
 
 ---
 
-## 2026-05-17 — Multiple saved algorithms / profiles
-
-### Context
-
-Roadmap "User-empowerment cluster" Theme A item (Pri 7, LOE 4). Until
-now there was effectively one algorithm per user: every resolver
-(`feed.py`, `firehose.py`, `jobs/send_digest.py`, `algo.py`) reads
-`user_algorithms WHERE user_id=%s AND is_active=1 ORDER BY updated_at
-DESC LIMIT 1`, and the `/algo` route only ever upserted that single
-active row. The `user_algorithms` table **already** had `name` +
-`is_active` columns (schema since v1), so this is a pure
-application-layer change — **no DB migration, no manual prod action.**
-
-### What shipped
-
-- **`app/routes/algo.py`** — `_list_profiles`, `_set_active`
-  (deactivate-all-then-activate-one, the single-active invariant the
-  resolvers depend on), `_clean_name` (trim + 120-char cap to match
-  the column + "Custom" fallback), `_return_redirect` (whitelisted
-  feed/algo only — no open redirect). Four new login-required POST
-  endpoints: `/algo/profiles/create` (save current editor sliders as
-  a new named profile, made active — also the persistence path for
-  the NL builder's proposed weights), `/profiles/activate`,
-  `/profiles/rename`, `/profiles/delete`. Delete refuses the last
-  profile (a zero-row user gets bounced into onboarding) and promotes
-  a survivor if the active one is removed. Ownership enforced in SQL
-  (`WHERE id=%s AND user_id=%s`) or an explicit owned-row check.
-  `execute()` already returns `cur.lastrowid`, so create uses that
-  directly (no `LAST_INSERT_ID()` round-trip).
-- **`app/templates/algo.html`** — new "Profiles (N)" tab listing
-  saved profiles with active badge + Use/Rename/Delete; a "Save as
-  new profile" name field + native submit (`formaction`) inside
-  `#algo-form` so all slider values post along with it (the form's
-  explicit `hx-trigger` excludes `submit`, so htmx doesn't hijack it).
-- **`app/routes/feed.py` + `feed.html`** — `_switcher_profiles`;
-  feed-header `<select>` switcher (shown only with ≥2 profiles) posting
-  to `algo.activate_profile` with `return_to=feed`.
-- **`app/static/style.css`** — appended `.profile-*` / `.save-as` /
-  `.profile-switch` block (no edits to existing rules; conflict-safe).
-- **`tests/test_algo_profiles.py`** — 10 cases over an in-memory
-  `user_algorithms` store (test_signals pattern): create activates &
-  deactivates others, blank-name default, activate single-active +
-  return_to, foreign-id no-op, rename, delete-when-multiple,
-  delete-last refused, delete-active promotes survivor, login
-  required. Runs on a real env; environmental ModuleNotFoundError in
-  this sandbox (no flask) exactly like `test_signals`/`test_story`.
-  Runnable suite unaffected: 113 pure-logic tests still pass.
-
-### Existing behavior preserved
-
-`save()` still edits the active row in place; `use_preset()` still
-replaces the active row's name+weights; `onboarding()` still inserts
-the first row active. None of these can produce >1 active row given
-the new `_set_active` is the only multi-row creator.
-
-### Server-side state touched
-
-None. No DB migration (columns pre-existed), no cron, no env-var, no
-new pip dep, no symlink. Standard Python App restart on deploy so the
-new routes/templates load.
-
-### PR
-
-- **PR #65** — Multiple saved algorithms / profiles (draft).
-
----
-
 ## Condensed history
 
 Older entries, summarized. **Full verbatim text is in
@@ -368,6 +351,16 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-17
 
+- **Multiple saved algorithms / profiles (PR #65).** User-empowerment
+  Theme A (Pri 7). `user_algorithms` already had `name`/`is_active`,
+  so app-layer only (**no migration**): `app/routes/algo.py` gains
+  `_list_profiles`/`_set_active` (deactivate-all-then-activate-one —
+  the single-active invariant every resolver depends on)/`_clean_name`
+  + create/activate/rename/delete POSTs (delete refuses the last,
+  promotes a survivor); `/algo` Profiles tab; feed-header `<select>`
+  switcher at ≥2 profiles; appended `.profile-*` CSS.
+  `save`/`use_preset`/`onboarding` behavior preserved. *Server:* none.
+  Full detail: archive.
 - **Dark mode (PR #63).** Client-only theme: `style.css` `:root`
   semantic surface vars (light values unchanged byte-for-byte) + a
   `:root[data-theme="dark"]` palette override with ~30 hardcoded

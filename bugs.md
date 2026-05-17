@@ -86,6 +86,52 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-020 — Firehose view doesn't show all articles
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #<n>, draft)
+
+User reported the `/firehose` view "doesn't actually show everything" —
+articles that should be in the live stream were missing.
+
+**Root cause (`app/routes/firehose.py` `stream()` + `templates/
+firehose.html`):** the firehose was a *refreshing snapshot*, not a
+stream. It polled `/stream` every 4s with `hx-swap="innerHTML"`, so each
+tick **replaced** the whole table with only the newest ≤25 classified
+rows (`LIMIT` default 25, no "Load more"; the route's `since` cursor was
+never sent by the template). Anything past the newest 25 was dropped on
+every poll. (The `WHERE a.status='classified'` gate also hides
+not-yet-classified rows — that is the by-design "as they're classified"
+behavior the page advertises and was explicitly out of scope per the
+user's "make it accumulate" choice; this fix keeps classified-only.)
+
+**Fix (PR #<n>):** the page now *accumulates*. A stable
+`<tbody id="firehose-rows">` is rendered once; the 4s poll prepends only
+rows newer than the current top (`hx-swap="afterbegin"`) and a "Load
+more" button appends older rows (`hx-swap="beforeend"`), so nothing is
+discarded. Pagination is a **keyset on `(classified_at, id)`**, not a
+timestamp-only cursor: `classified_at` is second-granularity and
+`classify_pending` writes same-second bursts, so a timestamp-only cursor
+would skip rows on the boundary second (the actual data-loss mechanism).
+The keyset clause is built by a new pure `app/firehose_cursor.py`
+(Flask/DB-free, mirrors `app/trending.py`/`app/profiles.py`); 9
+sandbox-run unit tests in `tests/test_firehose_cursor.py` (incl.
+malformed-id → no-cursor, so a bad client request can't 500 the stream).
+Reuses the existing `.load-more` CSS class — no `style.css` change.
+
+**Verification:** pure-helper logic 9/9 green in-sandbox; templates
+Jinja-parse, changed Python `py_compile` clean. Route- and browser-level
+behavior (live prepend, Load-more append, pause/resume) deferred to a
+real env / CI — the sandbox has no Flask/PyMySQL/browser (same
+documented limitation as PR #53/#59).
+
+**Known minor caveats (acceptable for v1):** (a) the live-tail poll
+fetches up to `limit=100` newer rows per 4s tick; a burst of >100
+classifications inside a single 4s window would leave a gap until "Load
+more" — not reachable at the real `classify_pending` write rate
+(~180/tick spread over the cron wallclock budget, well under 100/4s).
+(b) If a row is later *reclassified* (its `classified_at` moves forward,
+e.g. PR #56's `_reclassify_nollm`) it can re-appear at the top while its
+old position remains — a duplicate, not a loss.
+
 ### BUG-019 — LLM-fallback classifications are permanent and unmarked
 **Status:** resolved · **Reporter:** internal (classifier review) · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #56)
 
