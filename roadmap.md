@@ -38,7 +38,7 @@ shipped.
 | 7 | 4 | algo, backend, ui | External trending sort (Google News/Trends) — BUG-015 | done |
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
-| 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | in-progress |
+| 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | done |
 | 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 2 | ui, backend | Feed sort selector (Relevance / Newest / Popularity) | done |
@@ -262,27 +262,6 @@ Could ship before the full dossier page as a faster wedge into the
 "multi-source view" idea.
 
 Depends on Article deduplication (story_id). Pairs with Story dossier.
-
-### Discussion links (Techmeme-style)
-**Priority:** 7 · **LOE:** 3 · **Category:** new-feature, ui, algo · **Status:** in-progress (PR pending)
-
-Techmeme's "Discussion:" line — under a headline, links to where the
-story is being talked about. `popularity_poll` already matches
-Reddit/HN threads to our articles every 30 min; v1 just persists the
-thread permalink + subreddit (previously discarded) and surfaces a
-compact `Discussion: Hacker News (142) · r/technology (89)` line on
-feed cards plus a panel on the story dossier. Zero new API cost, no
-new dependency — one migration on `popularity_signals`.
-
-Follow-ons (not in v1, user-gated):
-- **Bluesky** — free public `app.bsky.feed.searchPosts` XRPC endpoint
-  (no key, no new dep): a harvest that finds posts linking an
-  article URL, feeding the same surface. Closest free substitute for
-  literal "tweets".
-- **X/Twitter** — real tweets, but the API is paid (~$100/mo Basic
-  minimum). Gated on whether the user wants to spend.
-- Could later roll into the Signal Learning / popularity blend
-  (discussion volume as an additional engagement input).
 
 ### Article summary
 **Priority:** 7 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
@@ -555,6 +534,16 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Discussion links (Techmeme-style Reddit/HN)** — Pri 7, LOE 3,
+  new-feature/ui/algo. PR #52. `popularity_poll` already matched
+  Reddit/HN threads per article for the popularity score but
+  discarded the permalink; now persists `permalink` + `subreddit` on
+  `popularity_signals` and surfaces a compact
+  `Discussion: Hacker News (142) · r/technology (89)` line on feed
+  cards plus a panel on the story dossier (pure `app/discussion.py`
+  helpers). Zero new API cost / no new dep; one nullable-column
+  migration applied on prod. Follow-ons (user-gated): free Bluesky
+  `searchPosts` harvest into the same surface; paid X/Twitter.
 - **Engineering-history archive process** — ad-hoc, docs/infra. PR #51.
   `engineering-history.md` had grown to ~34.8K tokens, past the 25K
   single-`Read` ceiling, breaking the "read it end-to-end" onboarding

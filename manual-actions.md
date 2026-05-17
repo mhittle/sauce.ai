@@ -40,23 +40,25 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+(none currently)
+
+---
+
+## Completed
+
 ### 2026-05-17 — Migration: popularity_signals discussion columns
-**Status:** open · **PR:** (Techmeme-style discussion links, draft) ·
-**Opened:** 2026-05-17 ·
+**Status:** completed · **PR:** #52 · **Opened:** 2026-05-17 ·
+**Completed:** 2026-05-17 ·
 **File reference:** `news/seed/migrations/2026-05-17-discussion-links.sql`
 
-Adds `permalink` + `subreddit` to `popularity_signals` so the feed card
-and story dossier can show a Techmeme-style "Discussion:" line linking
-to the Reddit/HN thread. `popularity_poll` already matched these
-threads for the popularity score; it now also writes the permalink.
+Added nullable `permalink` + `subreddit` to `popularity_signals` so the
+feed card and story dossier can render a Techmeme-style "Discussion:"
+line linking to the Reddit/HN thread (`popularity_poll` already matched
+those threads for the popularity score; it now also writes the
+permalink). User confirmed the ALTER was run via phpMyAdmin against
+`lt1ih6uyy2z6_news` and the Python App restarted (2026-05-17).
 
-**Run before merging the PR** (and before the next `popularity_poll`
-tick): the web feed/dossier `SELECT permalink, subreddit` and the
-`popularity_poll` INSERT lists the new columns, so both error until the
-ALTER runs. Run via phpMyAdmin against `lt1ih6uyy2z6_news`, then
-restart the Python App from cPanel.
-
-**SQL to apply:**
+**SQL applied:**
 
 ```sql
 ALTER TABLE popularity_signals
@@ -64,24 +66,7 @@ ALTER TABLE popularity_signals
   ADD COLUMN subreddit  VARCHAR(64) DEFAULT NULL AFTER permalink;
 ```
 
-**Verify:**
-
-```sql
-SHOW COLUMNS FROM popularity_signals LIKE 'permalink';
-SHOW COLUMNS FROM popularity_signals LIKE 'subreddit';
-```
-
-Then after one `popularity_poll` tick (~30 min):
-
-```sql
-SELECT COUNT(*) FROM popularity_signals WHERE permalink IS NOT NULL;
-```
-
-should be non-zero.
-
 ---
-
-## Completed
 
 ### 2026-05-17 — Migration + cron: external trending sort (BUG-015)
 **Status:** completed · **PR:** #53 · **Opened:** 2026-05-17 ·
