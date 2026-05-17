@@ -39,7 +39,7 @@ def signup():
         uid = execute("INSERT INTO users (email, password_hash) VALUES (%s, %s)", (email, hash_password(pw)))
         get_conn().commit()
         sid = create_session(uid)
-        resp = make_response(redirect(url_for("algo.index")))
+        resp = make_response(redirect(url_for("algo.onboarding")))
         resp.set_cookie(SESSION_COOKIE, sid, max_age=SESSION_TTL_DAYS * 86400, httponly=True, samesite="Lax")
         return resp
     return render_template("signup.html")

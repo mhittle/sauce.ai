@@ -336,3 +336,17 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .dossier-discussion .discussion-list li { font-size: 0.9em; }
 .dossier-discussion .discussion-list a { font-weight: 600; }
 .dossier-discussion .discussion-list .muted { font-size: 0.85em; margin-left: 0.3em; }
+
+/* onboarding interview (cold-start) */
+.onboarding-interview .ob-step { margin: 1.6em 0; padding-bottom: 1.4em; border-bottom: 1px solid var(--line); }
+.onboarding-interview .ob-step:last-of-type { border-bottom: 0; }
+.onboarding-interview h2 { font-size: 1.05em; margin: 0 0 0.2em; }
+.onboarding-interview .ob-grid, .onboarding-interview .ob-lean { display: flex; flex-wrap: wrap; gap: 0.6em; margin-top: 0.8em; }
+.onboarding-interview .ob-chip { display: flex; align-items: center; gap: 0.5em; padding: 0.55em 0.9em; background: white; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+.onboarding-interview .ob-chip:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.onboarding-interview .ob-chip.ob-source { border-radius: 8px; }
+.onboarding-interview .ob-actions { display: flex; align-items: center; gap: 1em; margin-top: 1.6em; }
+@media (max-width: 640px) {
+  .onboarding-interview .ob-grid, .onboarding-interview .ob-lean { flex-direction: column; }
+  .onboarding-interview .ob-chip { border-radius: 8px; }
+}

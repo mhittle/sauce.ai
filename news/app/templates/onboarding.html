@@ -1,21 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Pick your algorithm{% endblock %}
+{% block title %}Set up your feed{% endblock %}
 {% block content %}
-<div class="onboarding">
-  <h1>Pick a starting algorithm</h1>
-  <p class="muted">You can fully customize this later on the Your Algo page. Pick whichever sounds closest.</p>
-  <form method="post" class="presets">
+<div class="onboarding onboarding-interview">
+  <h1>Let's set up your feed</h1>
+  <p class="muted">A few quick choices so your first feed isn't generic.
+    Everything here is optional and fully editable later on the
+    <strong>Your Algo</strong> page.</p>
+
+  <form method="post">
     {{ csrf_field() }}
-    {% for key, p in presets.items() %}
-      <label class="preset-card">
-        <input type="radio" name="preset" value="{{ key }}" {% if key == 'balanced' %}checked{% endif %} />
-        <div>
-          <h3>{{ p.label }}</h3>
-          <p class="muted">{{ p.description }}</p>
-        </div>
-      </label>
-    {% endfor %}
-    <button type="submit" class="primary">Use this algorithm</button>
+    <section class="ob-step">
+      <h2>1. What do you want to read about?</h2>
+      <p class="muted">Pick the topics you care about, or leave them all
+        unchecked for a bit of everything.</p>
+      <div class="ob-grid">
+        {% for c in categories %}
+          <label class="ob-chip">
+            <input type="checkbox" name="categories" value="{{ c }}" />
+            <span>{{ c|capitalize }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="ob-step">
+      <h2>2. Where should the balance sit?</h2>
+      <p class="muted">This is a soft lean — you'll still see strong
+        reporting from across the spectrum.</p>
+      <div class="ob-lean">
+        {% for choice in lean_choices %}
+          <label class="ob-chip">
+            <input type="radio" name="lean" value="{{ choice.key }}"
+                   {% if choice.key == default_lean %}checked{% endif %} />
+            <span>{{ choice.label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="ob-step">
+      <h2>3. Any outlets you especially trust?</h2>
+      <p class="muted">We'll give the ones you pick a gentle boost. Skip
+        this if you'd rather discover sources as you go.</p>
+      <div class="ob-grid">
+        {% for s in sources %}
+          <label class="ob-chip ob-source">
+            <input type="checkbox" name="sources" value="{{ s.id }}" />
+            <span>{{ s.name }}<small class="muted"> · {{ s.category }}</small></span>
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+
+    <div class="ob-actions">
+      <button type="submit" class="primary">Build my feed</button>
+      <span class="muted">You can change all of this anytime.</span>
+    </div>
   </form>
 </div>
 {% endblock %}
