@@ -11,7 +11,12 @@ symlink, env-var change), the session that ships the feature must:
 
 1. Append a new entry to the **Open** section below, with the **full
    command/SQL inline** (not just a path to a file), so it's
-   copy-paste-ready straight from this doc.
+   copy-paste-ready straight from this doc. **Substitute the real prod
+   account `lt1ih6uyy2z6` into every path** — do NOT leave `YOURACCOUNT`
+   placeholders in this doc or in the chat paste. (`INSTALL.txt` keeps
+   `YOURACCOUNT` because it's a generic fresh-install template; this
+   tracker and the chat paste are operational and must be runnable
+   verbatim.)
 2. Also paste the same command/SQL into chat so the user can act on it
    immediately without opening any files.
 3. After the user confirms completion, move the entry to **Completed**
@@ -77,6 +82,38 @@ should be non-zero.
 ---
 
 ## Completed
+
+### 2026-05-17 — Migration + cron: external trending sort (BUG-015)
+**Status:** completed · **PR:** #53 · **Opened:** 2026-05-17 ·
+**Completed:** 2026-05-17 ·
+**File reference:** `news/seed/migrations/2026-05-17-trending.sql`
+
+Added `article_features.trending` (0..1, external trending-topic match)
+and the new `trending_poll` cron that fills it from Google Trends +
+Google News RSS. The renamed **Trending** feed sort orders by this
+column. User confirmed the migration was applied, the every-30-min
+cron added, and the Python App restarted.
+
+**SQL applied (phpMyAdmin against `lt1ih6uyy2z6_news`):**
+
+```sql
+ALTER TABLE article_features
+  ADD COLUMN trending FLOAT NOT NULL DEFAULT 0 AFTER paywall;
+```
+
+**Cron added (cPanel → "Cron Jobs"):**
+
+```cron
+# every 30 min: external trending poll (Google Trends + Google News RSS)
+*/30 * * * *  source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news/jobs && python trending_poll.py >> /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/cron.log 2>&1
+```
+
+Python App restarted so the renamed sort + new column load. Verify on
+prod: `/?sort=trending` returns 200 and is no longer HN-only;
+`logs/cron.log` shows a `trending_poll` line like
+`topics=T gnews=G articles=N matched=M` within ~30 min.
+
+---
 
 ### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)
 **Status:** completed · **PR:** #50 (BUG-013, BUG-014) · **Opened:** 2026-05-17 · **Completed:** 2026-05-17

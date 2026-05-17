@@ -1,0 +1,183 @@
+"""Unit tests for the external-trending helpers (BUG-015).
+
+Exercises the pure functions in `app.trending`:
+- `tokenize` / `normalize_text` — significant-token extraction
+- `parse_trends_rss` / `parse_gnews_rss` — RSS shaping against a stubbed
+  feedparser (the CI sandbox can't build feedparser/sgmllib3k)
+- `build_topic_index` — heat assignment + stopword-only topic drop
+- `score_article` — topic-overlap scoring, heat scaling, clamping
+
+The `trending_poll` cron entrypoint is not exercised here; its behavior
+is covered indirectly via these pure helpers (same convention as
+test_discovery.py).
+"""
+import sys
+import types
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _stub_feedparser(monkeypatch):
+    """Stub feedparser so the lazy import in app.trending resolves.
+    Tests drive parsing by setting state["entries"]."""
+    stub = types.ModuleType("feedparser")
+    state = {"entries": []}
+
+    def _parse(_content):
+        return types.SimpleNamespace(entries=list(state["entries"]))
+
+    stub.parse = _parse
+    monkeypatch.setitem(sys.modules, "feedparser", stub)
+    return state
+
+
+from app.trending import (  # noqa: E402
+    tokenize,
+    normalize_text,
+    parse_trends_rss,
+    parse_gnews_rss,
+    build_topic_index,
+    score_article,
+)
+
+
+# ---------------------------------------------------------------------------
+# tokenize / normalize_text
+# ---------------------------------------------------------------------------
+
+def test_tokenize_drops_short_and_stopwords_and_lowercases():
+    toks = tokenize("The NEW Solar Eclipse over Texas")
+    assert "solar" in toks and "eclipse" in toks and "texas" in toks
+    assert "the" not in toks and "new" not in toks  # stopwords
+    assert "of" not in toks
+
+
+def test_tokenize_handles_punctuation_and_empty():
+    assert tokenize(None) == frozenset()
+    assert tokenize("   ") == frozenset()
+    assert tokenize("U.S.-China trade-war!") == frozenset({"china", "trade", "war"})
+
+
+def test_normalize_text_trims_and_lowercases():
+    assert normalize_text("  HeLLo  ") == "hello"
+    assert normalize_text(None) == ""
+
+
+# ---------------------------------------------------------------------------
+# parse_trends_rss
+# ---------------------------------------------------------------------------
+
+def test_parse_trends_rss_extracts_term_and_traffic(_stub_feedparser):
+    _stub_feedparser["entries"] = [
+        {"title": "solar eclipse", "ht_approx_traffic": "500,000+"},
+        {"title": "election results"},  # no traffic key
+    ]
+    out = parse_trends_rss(b"<rss/>")
+    assert out[0]["term"] == "solar eclipse"
+    assert out[0]["traffic"] == 500000
+    assert out[0]["rank"] == 0
+    assert out[1]["traffic"] is None
+    assert out[1]["rank"] == 1
+
+
+def test_parse_trends_rss_skips_blank_titles(_stub_feedparser):
+    _stub_feedparser["entries"] = [{"title": "  "}, {"title": "mars rover"}]
+    out = parse_trends_rss(b"x")
+    assert len(out) == 1 and out[0]["term"] == "mars rover"
+
+
+# ---------------------------------------------------------------------------
+# parse_gnews_rss
+# ---------------------------------------------------------------------------
+
+def test_parse_gnews_rss_strips_publisher_suffix(_stub_feedparser):
+    _stub_feedparser["entries"] = [
+        {"title": "Fed holds interest rates steady - Reuters"},
+        {"title": "No dash headline"},
+    ]
+    out = parse_gnews_rss(b"x")
+    assert out[0]["headline"] == "Fed holds interest rates steady"
+    assert out[0]["rank"] == 0
+    assert out[1]["headline"] == "No dash headline"
+
+
+def test_parse_gnews_rss_keeps_headline_when_only_suffix(_stub_feedparser):
+    # " - X" with empty head must not collapse to empty.
+    _stub_feedparser["entries"] = [{"title": " - JustASource"}]
+    out = parse_gnews_rss(b"x")
+    assert out[0]["headline"] == "- JustASource"
+
+
+# ---------------------------------------------------------------------------
+# build_topic_index
+# ---------------------------------------------------------------------------
+
+def test_build_topic_index_assigns_heat_and_keeps_labels():
+    trends = [{"term": "solar eclipse", "traffic": 2_000_000, "rank": 0}]
+    gnews = [{"headline": "Federal Reserve holds rates", "rank": 0}]
+    topics = build_topic_index(trends, gnews)
+    assert len(topics) == 2
+    by_label = {t["label"]: t for t in topics}
+    assert "solar" in by_label["solar eclipse"]["tokens"]
+    for t in topics:
+        assert 0.0 <= t["heat"] <= 1.0
+    # High-traffic trend should be hotter than a mid-rank gnews headline.
+    assert by_label["solar eclipse"]["heat"] > by_label["Federal Reserve holds rates"]["heat"]
+
+
+def test_build_topic_index_drops_stopword_only_topics():
+    trends = [{"term": "the of and", "traffic": None, "rank": 0}]
+    gnews = [{"headline": "is it new", "rank": 0}]
+    assert build_topic_index(trends, gnews) == []
+
+
+def test_build_topic_index_traffic_beats_rank_for_low_rank_trend():
+    trends = [{"term": "alpha beta", "traffic": 1_500_000, "rank": 9}]
+    topics = build_topic_index(trends, [])
+    assert topics[0]["heat"] > 0.5  # traffic-driven, not crushed by rank 9
+
+
+# ---------------------------------------------------------------------------
+# score_article
+# ---------------------------------------------------------------------------
+
+def _topics():
+    return build_topic_index(
+        [{"term": "solar eclipse", "traffic": 2_000_000, "rank": 0}],
+        [{"headline": "Federal Reserve interest rate decision", "rank": 0}],
+    )
+
+
+def test_score_article_full_match_scores_high():
+    s = score_article("Total solar eclipse wows millions", "", _topics())
+    assert s > 0.8
+
+
+def test_score_article_no_overlap_scores_zero():
+    s = score_article("Local bakery wins award", "A small shop in Maine", _topics())
+    assert s == 0.0
+
+
+def test_score_article_partial_topic_match_is_scaled_down():
+    full = score_article("Federal Reserve interest rate decision today", "", _topics())
+    partial = score_article("Reserve players join the squad", "", _topics())
+    assert partial < full
+    assert 0.0 < partial < 1.0
+
+
+def test_score_article_uses_summary_lead_when_title_misses():
+    s = score_article("Sky watchers gather", "Crowds turned out for the solar eclipse",
+                       _topics())
+    assert s > 0.0
+
+
+def test_score_article_empty_inputs_safe():
+    assert score_article("", "", _topics()) == 0.0
+    assert score_article(None, None, _topics()) == 0.0
+    assert score_article("anything", "", []) == 0.0
+
+
+def test_score_article_clamped_0_1():
+    s = score_article("solar eclipse solar eclipse", "solar eclipse", _topics())
+    assert 0.0 <= s <= 1.0

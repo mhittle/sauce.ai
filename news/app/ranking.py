@@ -35,6 +35,8 @@ FEATURES = [
      "low": "Lower",        "high": "Higher",    "default_direction": 1.0, "default_weight": 0.9},
     {"key": "popularity",            "scale": "unsigned", "label": "Popularity",
      "low": "Niche",        "high": "Viral",     "default_direction": 0.5, "default_weight": 0.3},
+    {"key": "trending",              "scale": "unsigned", "label": "Trending",
+     "low": "Off-topic",    "high": "Trending",  "default_direction": 1.0, "default_weight": 0.0},
     {"key": "story_obscurity",       "scale": "unsigned", "label": "Story obscurity",
      "low": "Everywhere",   "high": "Rare",      "default_direction": 0.5, "default_weight": 0.0},
     {"key": "source_obscurity",      "scale": "unsigned", "label": "Source obscurity",

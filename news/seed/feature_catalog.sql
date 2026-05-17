@@ -11,7 +11,8 @@ INSERT INTO feature_catalog (feature_key, label, type, range_min, range_max, des
   ('popularity',           'Popularity',             'scale',         0, 1, 'External signal from Reddit + HN today.', 1, 80),
   ('category',             'Category',               'categorical',   0, 0, 'politics / world / tech / business / science / sports / local / general', 1, 90),
   ('geography',            'Geography',              'categorical',   0, 0, 'Country and region of the source.', 1, 100),
-  ('paywall',              'Paywall',                'scale',         0, 1, 'Per-article paywall score detected at classify time. 0 = free, 1 = subscription required, 0.5 = blocked/unknown.', 1, 110);
+  ('paywall',              'Paywall',                'scale',         0, 1, 'Per-article paywall score detected at classify time. 0 = free, 1 = subscription required, 0.5 = blocked/unknown.', 1, 110),
+  ('trending',             'Trending',               'scale',         0, 1, 'How strongly the article matches a topic trending in the news at large (Google Trends + Google News RSS), refreshed by trending_poll. Opt-in (default weight 0); drives the Trending sort.', 1, 115);
 
 -- Default presets used by the onboarding picker. Stored as JSON in a user_algorithms-like row template;
 -- the app reads these constants from app/ranking.py PRESETS; no DB row needed.

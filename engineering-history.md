@@ -344,8 +344,8 @@ permalink.
 
 ### PR
 
-- **PR #TBD** — Techmeme-style discussion links (draft). Requires the
-  one DB migration above before merge.
+- **PR #52** — Techmeme-style discussion links (merged 2026-05-17).
+  Required the one DB migration above before merge.
 
 ### Open items
 
@@ -356,6 +356,108 @@ permalink.
 - Natural follow-ons if the user wants more coverage: free Bluesky
   `searchPosts` harvest (no key, no new dep) feeding the same
   surface; paid X/Twitter is still gated on spend.
+
+---
+
+## 2026-05-17 — BUG-015: external trending sort (Google Trends + Google News)
+
+### Context
+
+User reported that the Popularity sort (added PR #48) returned an
+almost-all-Hacker-News feed. Logged as BUG-015. The sort was
+`ORDER BY f.popularity DESC`, and `article_features.popularity` is
+written only by `popularity_poll` from Reddit/HN *URL* matches (~5-10%
+match rate, HN-skewed), so it degenerated into "links that hit HN" and
+dropped the user's algorithm entirely. User wants an *external* broad
+trending signal (à la Google News) that re-ranks toward trending topics
+*without* abandoning algo relevance — "choose the best articles that
+match the popular topics". Chosen via AskUserQuestion: Google
+News + Trends RSS as the source; rename the sort to "Trending" composed
+with the algo.
+
+### What shipped
+
+- **`app/trending.py`** (new, pure/Flask-free, mirrors
+  `app.discovery`/`app.language`). Parses Google Trends daily-trends
+  RSS (`parse_trends_rss`, reads `<ht:approx_traffic>` when present)
+  and Google News RSS (`parse_gnews_rss`, strips the trailing
+  " - Publisher"). `build_topic_index` reduces both to weighted topics
+  (token bag + 0..1 heat: traffic-log or positional rank; Trends
+  weighted 1.0, GNews 0.8). `score_article` = max over topics of
+  (fraction of the topic's tokens present in title+summary lead) ×
+  topic heat, clamped 0..1. No URL matching — Google News RSS links
+  are opaque redirects; topic/keyword overlap is the honest signal.
+  No new pip dependency (lazy `feedparser`, already stubbed in tests).
+- **`jobs/trending_poll.py`** (new cron, every 30 min). `job_lock`,
+  bounded HTTP (~6 small GETs, `TRENDING_BUDGET_SECONDS=60`),
+  `conn.ping(reconnect=True)` after the RSS fan-out before writes
+  (BUG-009 lesson). Recomputes `article_features.trending` for the
+  whole rolling `TRENDING_WINDOW_DAYS` (default 2) window every tick
+  via `executemany`, so yesterday's hot topics decay to 0 on their own
+  — no separate reset job.
+- **Schema**: `article_features.trending FLOAT NOT NULL DEFAULT 0`
+  (migration `seed/migrations/2026-05-17-trending.sql`). New `trending`
+  entry in `app/ranking.py` FEATURES + `seed/feature_catalog.sql`,
+  opt-in (`default_weight 0`) so existing user algorithms are
+  unchanged and `build_score_sql` skips it until a user opts in.
+- **`app/routes/feed.py`**: `SORT_OPTIONS` `popularity` → `trending`
+  (label "Trending"); `_SORT_ALIASES` maps legacy `popularity` →
+  `trending` so old bookmarks / threaded category links / digest URLs
+  don't silently fall back to relevance; `_order_by_for_sort` for
+  trending is `ORDER BY f.trending DESC, score DESC` (trending heat
+  first, user algo score as the within-trending tiebreak). `f.trending`
+  added to the SELECT. Templates need no change — they iterate
+  `sort_options`/`sort_labels`.
+- **Tests**: `tests/test_trending.py` (new, 18 cases — tokenize,
+  RSS parse w/ stubbed feedparser, topic-index heat, scoring incl.
+  partial/zero/clamped/summary-fallback). `tests/test_feed_sort.py`
+  updated for the rename + legacy alias + new ORDER BY.
+  `test_trending` + `test_ranking` = 45 passing locally; full suite
+  unrunnable in the sandbox (no Flask/pymysql — same documented
+  environmental limitation as PR #50), feed.py logic validated via
+  a stubbed-import harness.
+
+### Code touched
+
+- `news/app/trending.py` — new pure helpers.
+- `news/jobs/trending_poll.py` — new cron.
+- `news/app/ranking.py` — `trending` FEATURES entry.
+- `news/app/routes/feed.py` — sort rename + alias + ORDER BY + SELECT.
+- `news/seed/schema.sql`, `news/seed/feature_catalog.sql`,
+  `news/seed/migrations/2026-05-17-trending.sql`.
+- `news/tests/test_trending.py` (new), `news/tests/test_feed_sort.py`.
+- `news/INSTALL.txt` — cron line §4c, troubleshooting §8J, §10 limit.
+- `bugs.md`, `roadmap.md`, `manual-actions.md`.
+### Server-side state touched
+
+- **Migration pending on prod**:
+  `seed/migrations/2026-05-17-trending.sql` (one `ALTER TABLE
+  article_features ADD COLUMN trending`). The Trending sort and the
+  `trending_poll` job error until the column exists. Tracked in
+  `manual-actions.md` Open with full inline SQL; the other sorts
+  (relevance/newest) are unaffected, but the Trending sort itself 500s
+  on the missing column until applied — apply before merge.
+- **New cron entry pending**: `trending_poll.py` every 30 min. Inert
+  (writes nothing meaningful) until the migration is applied; wrapped
+  in `job_lock` so it no-ops safely on overlap.
+- No new pip dependency, no new env var required (all `TRENDING_*`
+  have working defaults), no new symlink. Python App restart after the
+  migration so the renamed sort + new column load.
+
+### Open items
+
+- Watch the first few `trending_poll` ticks in `cron.log`:
+  `topics=T gnews=G articles=N matched=M`. `matched` in the low
+  hundreds is expected; if `topics=0`, Google may be rate-limiting the
+  RSS — non-fatal (job writes trending=0, feed falls back to algo).
+- Token-overlap matching misses entity synonyms ("Fed" vs "federal
+  reserve"). The principled upgrade is entity extraction shared with
+  the roadmapped Trending-topics-view / Signal-Learning work.
+
+### PR
+
+- **PR #53** — BUG-015: external trending sort (draft). Requires the
+  DB migration + new cron entry on prod before merge.
 
 ---
 

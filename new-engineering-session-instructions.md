@@ -244,6 +244,13 @@ These are the foot-guns we've already hit. Don't re-discover them.
   Chat transcripts are logged. If you suspect a secret was exposed, rotate
   immediately — Anthropic console for API keys, cPanel MySQL for DB
   passwords.
+- **The prod account is `lt1ih6uyy2z6`** (not a secret — it's the cPanel
+  user, paths are `/home/lt1ih6uyy2z6/...`). When you ship a manual prod
+  action, substitute it into every command in the `manual-actions.md`
+  entry **and** the chat paste — never leave `YOURACCOUNT` placeholders
+  in operational commands; they must run verbatim. Only `INSTALL.txt`
+  (a generic fresh-install template) keeps `YOURACCOUNT`. See
+  `engineering-session-wrapup.md` Step 6.
 
 ## Step 11 — Coding conventions
 
