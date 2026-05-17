@@ -440,6 +440,19 @@ that the migrations didn't get *run* between merges. For high-PR
 sessions, run the migrations before each merge (or batch them and
 restart once at the end) instead of letting the queue grow.
 
+**Recurrence — 2026-05-17 (PR #64, article save / bookmark):** the
+`user_saves` migration was logged Open with full inline SQL, but PR
+#64 was merged before the user confirmed it ran. The merged code
+`SELECT`s `user_saves` on every signed-in feed load and the nightly
+`maintenance` job DELETEs against it, so signed-in `/` 500'd (anon
+unaffected) for the few-minute gap until the user ran the `CREATE
+TABLE` + restarted the Python App; entry then moved to Completed
+(same day). Same root cause as the original: the Open load-bearing
+entry didn't *gate* the merge. Reinforced learning: when a PR has an
+Open load-bearing `manual-actions.md` entry, do not merge it until
+the user confirms the migration ran. Recurrence resolved same day;
+overall status stays `resolved`.
+
 ### BUG-006 — Article links in feed do nothing on click
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-12 · **Closed:** 2026-05-12
 
