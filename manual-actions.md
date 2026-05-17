@@ -11,7 +11,12 @@ symlink, env-var change), the session that ships the feature must:
 
 1. Append a new entry to the **Open** section below, with the **full
    command/SQL inline** (not just a path to a file), so it's
-   copy-paste-ready straight from this doc.
+   copy-paste-ready straight from this doc. **Substitute the real prod
+   account `lt1ih6uyy2z6` into every path** — do NOT leave `YOURACCOUNT`
+   placeholders in this doc or in the chat paste. (`INSTALL.txt` keeps
+   `YOURACCOUNT` because it's a generic fresh-install template; this
+   tracker and the chat paste are operational and must be runnable
+   verbatim.)
 2. Also paste the same command/SQL into chat so the user can act on it
    immediately without opening any files.
 3. After the user confirms completion, move the entry to **Completed**
@@ -95,11 +100,11 @@ ALTER TABLE article_features
   ADD COLUMN trending FLOAT NOT NULL DEFAULT 0 AFTER paywall;
 ```
 
-**2. Cron — cPanel → "Cron Jobs", add (substitute YOURACCOUNT):**
+**2. Cron — cPanel → "Cron Jobs", add (account already filled in):**
 
 ```cron
 # every 30 min: external trending poll (Google Trends + Google News RSS)
-*/30 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python trending_poll.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+*/30 * * * *  source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news/jobs && python trending_poll.py >> /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/cron.log 2>&1
 ```
 
 **3.** Restart the Python App (Setup Python App → Restart) so the

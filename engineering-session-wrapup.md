@@ -164,6 +164,11 @@ If this session produced any new prod action the user must run manually
   is the canonical, copy-paste-ready source of truth.
 - Also paste the exact same command/SQL into the chat in this session,
   so the user can act on it immediately without opening any files.
+- **Substitute the real prod account `lt1ih6uyy2z6` into every path**
+  in both the tracker entry and the chat paste. Never leave
+  `YOURACCOUNT` placeholders in operational commands — they must be
+  runnable verbatim. (Only `INSTALL.txt`, a generic fresh-install
+  template, keeps `YOURACCOUNT`.)
 - Reference the migration filename (if any) in the entry, but do not
   rely on the file alone — entries with only a path are not acceptable.
 
@@ -199,6 +204,9 @@ Don't:
   `manual-actions.md` with full inline SQL/commands and (b) pasting
   the exact same SQL/commands into chat. A file path alone is not
   enough.
+- Leave `YOURACCOUNT` placeholders in a `manual-actions.md` entry or
+  its chat paste. Operational commands use the real account
+  `lt1ih6uyy2z6` and must run verbatim.
 - Leave the user a wall-of-text summary. Three sentences is plenty.
 - Self-trigger wrap-up prematurely (before any real work has happened)
   — the prompt is for *stale* sessions, not short ones.
