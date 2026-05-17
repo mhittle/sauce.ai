@@ -86,8 +86,36 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-014 — `ModuleNotFoundError: No module named 'langdetect'`
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #50)
+
+User hit `ModuleNotFoundError: No module named 'langdetect'` after the
+first BUG-013 commit added `langdetect==1.0.9` to `requirements.txt`.
+
+**Root cause:** langdetect 1.0.9 is sdist-only (no wheel) and its old
+`setup.py` fails to build under modern PEP 517 / setuptools — `pip
+install -r requirements.txt` errors with `Failed building wheel for
+langdetect`, so the package never installs and the import then fails.
+Reproduced locally. Same operational class as the feedparser/sgmllib3k
+build note in INSTALL.txt §2c. Runtime path was already safe
+(`_detect_lang_probs` lazy-imports inside `except Exception` → missing
+package degrades to permissive accept, never a crash); the error was
+purely install-time / the verify step.
+
+**Fix (PR #50):** swapped the dependency to `py3langid==0.3.0`, which
+ships a prebuilt wheel (and pulls `numpy>=2.0.0`, also wheel-distributed
+manylinux cp311) — `pip install` is now a plain download with no build
+step, so this failure class cannot recur. `app/language.py` stage 3
+now uses `py3langid`'s `LanguageIdentifier` with `norm_probs=True` and
+`rank()`; the conservative guard (≥24 Latin letters, `top_prob >=
+0.85` AND `english_prob < 0.10`) is unchanged. py3langid is
+deterministic so no seeding is needed. Verified end-to-end against the
+real library: German/Spanish/Finnish rejected, English (incl. short
+and accented) kept. 30/30 `test_language.py` green (detector stubbed
+via `sys.modules` so the suite stays deterministic and install-free).
+
 ### BUG-013 — Non-English articles still appearing in the feed
-**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #TBD)
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #50)
 
 User reported still seeing fresh non-English articles — German,
 Spanish, and Finnish (the reported hs.fi link is a Finnish sports
@@ -101,16 +129,17 @@ ratio. German/Spanish/Finnish are Latin-script, so stage 2's ratio is
 non-English tag, so stage 1 misses them. Heuristic could not
 distinguish English from other Latin-script languages.
 
-**Fix (PR #TBD):** added a third stage to `is_english` — `langdetect`
-(new dep `langdetect==1.0.9`) on the surviving Latin-script text when
-it has ≥24 Latin letters. Rejects only on a confident non-English
-call with English an unlikely alternative (`top_prob >= 0.85` AND
-`english_prob < 0.10`), biased toward keeping English so short/edge
-headlines aren't over-filtered. Detector is lazy-imported and every
-failure path (raise, no features, package absent) falls through to
-accept — the fetch loop never breaks. `DetectorFactory.seed = 0` for
-determinism. 9 new unit tests (30 total in `test_language.py`, all
-green); langdetect stubbed via `sys.modules` so the suite is
+**Fix (PR #50):** added a third stage to `is_english` — a language
+detector on the surviving Latin-script text when it has ≥24 Latin
+letters. Rejects only on a confident non-English call with English an
+unlikely alternative (`top_prob >= 0.85` AND `english_prob < 0.10`),
+biased toward keeping English so short/edge headlines aren't
+over-filtered. Detector is lazy-imported and every failure path
+(raise, degenerate input, package absent) falls through to accept —
+the fetch loop never breaks. Detector dependency is `py3langid==0.3.0`
+(see BUG-014 — the initially-chosen `langdetect` wouldn't build on
+prod). 9 new unit tests (30 total in `test_language.py`, all green);
+the detector is stubbed via `sys.modules` so the suite is
 deterministic.
 
 **Prod note:** verified by unit tests; end-to-end prod effect depends

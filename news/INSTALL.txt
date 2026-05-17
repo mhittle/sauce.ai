@@ -414,14 +414,17 @@ I. /admin/discovery is empty even though discover_harvest is running:
   (1) trusts an RSS feed's <language> tag when it declares
   non-English (e.g., ja, de-DE); (2) rejects on >25% non-Latin
   letter ratio in title+summary (CJK, Arabic, Cyrillic, Hebrew,
-  Devanagari, Thai, etc.); (3) langdetect on the remaining
+  Devanagari, Thai, etc.); (3) py3langid on the remaining
   Latin-script text catches French/German/Spanish/Italian/
   Dutch/Finnish/etc. that stage 1+2 miss (BUG-013). Stage 3 is
   deliberately conservative: text under 24 Latin letters, or a
   low-confidence / English-plausible call, is kept — dropping a
   real English article is a worse regression than an occasional
-  foreign one slipping through. langdetect failures fall through
-  to accept (never breaks the fetch loop). Per-tick rejection
-  count surfaces in cron.log as `skipped_lang=N`.
+  foreign one slipping through. Detector failures fall through
+  to accept (never breaks the fetch loop). py3langid was chosen
+  over langdetect (BUG-014) because it ships a prebuilt wheel —
+  langdetect 1.0.9 is sdist-only and fails to build on the cPanel
+  venv. Per-tick rejection count surfaces in cron.log as
+  `skipped_lang=N`.
 
 You're done. Visit  https://sauce.ai/news .

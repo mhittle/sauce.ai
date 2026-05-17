@@ -14,29 +14,35 @@ Strategy (first positive non-English signal wins; permissive otherwise):
    Devanagari, Thai, etc. without invoking the language detector.
 3. Latin-script language detection (BUG-013): the script check cannot
    tell English from German/Spanish/Finnish/etc. — they all use Latin
-   letters. When there's enough text, run `langdetect` and reject only
+   letters. When there's enough text, run `py3langid` and reject only
    when it is *confident* the text is a non-English language and
    English is an unlikely alternative. Deliberately biased toward
    keeping English: a dropped real English article is a more visible
    regression than an occasional foreign one slipping through.
 
-Detector calls never raise into the fetch loop — any langdetect
-failure, missing model features, or import problem falls through to
-accept (permissive by default).
+py3langid (BUG-014): chosen over langdetect because it ships as a
+prebuilt wheel — langdetect 1.0.9 is an sdist-only package whose old
+setup.py fails to build under modern PEP 517/setuptools on the cPanel
+venv. py3langid is deterministic (no seed needed) and exposes
+normalized 0..1 probabilities via `rank()`.
+
+Detector calls never raise into the fetch loop — any detector
+failure, missing model, or import problem falls through to accept
+(permissive by default).
 """
 
 NON_LATIN_THRESHOLD = 0.25
 _ENGLISH_LANG_TAGS = {"en", "english"}
 
-# langdetect stage tuning. Only run the detector when there's enough
+# Detector stage tuning. Only run the detector when there's enough
 # signal, and only reject on a confident non-English call with English
 # a poor alternative — short headlines are noisy and over-filtering
 # English is worse than under-filtering foreign content.
 MIN_DETECT_LETTERS = 24
-LANGDETECT_MIN_CONFIDENCE = 0.85
-LANGDETECT_ENGLISH_FLOOR = 0.10
+DETECT_MIN_CONFIDENCE = 0.85
+DETECT_ENGLISH_FLOOR = 0.10
 
-_detector_seeded = False
+_identifier = None
 
 
 def _normalize_lang(tag):
@@ -78,21 +84,23 @@ def _non_latin_letter_ratio(text):
 
 
 def _detect_lang_probs(text):
-    """Return {lang_code: probability} from langdetect, or None.
+    """Return {lang_code: probability} from py3langid, or None.
 
     Broad except is intentional: this runs inside the per-entry fetch
-    loop. langdetect raises on featureless input and the import may be
-    absent in some environments; in every failure case the caller must
-    fall through to accept rather than break the pipeline.
+    loop. The detector can raise on degenerate input and the import may
+    be absent until the prod pip install lands; in every failure case
+    the caller must fall through to accept rather than break the
+    pipeline. The identifier is built once and reused across calls.
     """
-    global _detector_seeded
+    global _identifier
     try:
-        from langdetect import detect_langs, DetectorFactory
+        if _identifier is None:
+            from py3langid.langid import LanguageIdentifier, MODEL_FILE
 
-        if not _detector_seeded:
-            DetectorFactory.seed = 0
-            _detector_seeded = True
-        return {item.lang: item.prob for item in detect_langs(text)}
+            _identifier = LanguageIdentifier.from_pickled_model(
+                MODEL_FILE, norm_probs=True
+            )
+        return {lang: float(prob) for lang, prob in _identifier.rank(text)}
     except Exception:
         return None
 
@@ -103,7 +111,7 @@ def is_english(title, summary="", feed_language=None):
     Permissive by default: empty / unknown / weird / too-short inputs
     accept. The filter only rejects on a clear positive non-English
     signal (a non-English feed declaration, a meaningful share of
-    non-Latin letters, or a confident non-English langdetect call).
+    non-Latin letters, or a confident non-English detector call).
     """
     norm = _normalize_lang(feed_language)
     if norm and norm not in _ENGLISH_LANG_TAGS:
@@ -125,8 +133,8 @@ def is_english(title, summary="", feed_language=None):
     top_prob = probs[top_lang]
     if (
         top_lang != "en"
-        and top_prob >= LANGDETECT_MIN_CONFIDENCE
-        and english_prob < LANGDETECT_ENGLISH_FLOOR
+        and top_prob >= DETECT_MIN_CONFIDENCE
+        and english_prob < DETECT_ENGLISH_FLOOR
     ):
         return False
     return True

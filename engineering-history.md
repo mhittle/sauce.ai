@@ -7,7 +7,7 @@ section whenever something meaningful happens — see
 
 ---
 
-## 2026-05-17 — BUG-013: Latin-script non-English articles still leaking
+## 2026-05-17 — BUG-013 + BUG-014: Latin-script filter via py3langid
 
 ### Context
 
@@ -22,54 +22,66 @@ English from German/Spanish/Finnish — they all use Latin letters, so
 question don't self-declare a non-English tag, so stage 1 misses them
 too.
 
+The first cut shipped `langdetect==1.0.9` (user's chosen approach over
+a zero-dep heuristic or a per-source language column). That triggered
+**BUG-014**: langdetect 1.0.9 is sdist-only and its old setup.py
+fails to build under modern PEP 517/setuptools — `pip install` errors
+with `Failed building wheel for langdetect`, so the package never
+installs (reproduced locally and on the user's cPanel venv). User
+chose to swap to **py3langid**, which ships a prebuilt wheel.
+
 ### What shipped
 
 - **`app/language.py`** — added **stage 3** to `is_english`: when text
   survives stages 1+2 and has at least `MIN_DETECT_LETTERS=24` Latin
-  letters, run `langdetect` and reject only on a *confident*
+  letters, run the detector and reject only on a *confident*
   non-English call where English is an unlikely alternative
   (`top_prob >= 0.85` AND `english_prob < 0.10`). Deliberately biased
   toward keeping English — dropping a real English article is a more
   visible regression than an occasional foreign one slipping through.
-  `langdetect.DetectorFactory.seed = 0` set once for determinism.
-  `_detect_lang_probs` lazy-imports langdetect and catches broadly:
-  any failure / missing model / absent package → return None →
-  permissive accept, so the fetch loop never breaks.
-- **`requirements.txt`** — `langdetect==1.0.9` (user-chosen approach
-  over a pure-Python word-profile heuristic or a per-source language
-  column). Pure-Python package, no native build.
-- **`tests/test_language.py`** — langdetect stubbed via
-  `sys.modules` (same pattern as the trafilatura/anthropic stubs) so
-  the suite is deterministic and passes without the package
-  installed. 21 → 30 cases: German/Spanish/Finnish rejection,
-  English still accepted, short-text skips detector, low-confidence
-  keeps, English-plausible keeps, detector-raises and
-  detector-unavailable both fall through to accept.
+  `_detect_lang_probs` builds a cached `py3langid` `LanguageIdentifier`
+  (`norm_probs=True`) and reads `rank()`; py3langid is deterministic
+  so no seeding. Lazy-imported inside a broad `except`: any failure /
+  degenerate input / absent package → None → permissive accept, so
+  the fetch loop never breaks.
+- **`requirements.txt`** — `py3langid==0.3.0` (pulls `numpy>=2.0.0`,
+  also wheel-distributed). Replaced the broken `langdetect==1.0.9`.
+- **`tests/test_language.py`** — detector stubbed via `sys.modules`
+  (fake `py3langid.langid`, same pattern as the trafilatura/anthropic
+  stubs) so the suite is deterministic and passes without the package.
+  21 → 30 cases: German/Spanish/Finnish rejection, English still
+  accepted, short-text skips detector, low-confidence keeps,
+  English-plausible keeps, detector-raises and detector-unavailable
+  both fall through to accept. Also verified end-to-end against the
+  real py3langid.
 - **`news/INSTALL.txt` §10** — rewrote the English-filter limitation
-  note to describe the three-stage filter and the conservative
-  stage-3 behavior.
+  note to describe the three-stage filter, the conservative stage-3
+  behavior, and the langdetect→py3langid rationale.
 
-### Why langdetect over the alternatives
+### Why py3langid
 
-The PR #42 entry pre-scoped the follow-up as "source-language column
-or langdetect dep". A third option (a zero-dependency function-word
-heuristic, matching `language.py`'s existing no-deps philosophy) was
-offered; user chose langdetect for robustness. Tradeoff accepted: it
-adds a manual cPanel pip-install prod action (the recurring pain
-point), but the import fails soft so it is **not** a site-down risk —
-the filter is simply inert until the package lands.
+User picked langdetect for robustness over a zero-dep word-profile
+heuristic; BUG-014 then proved langdetect operationally broken on the
+target env (no wheel, fragile setup.py — the recurring install-pain
+class this project keeps hitting). py3langid is a maintained
+wheel-distributed langid fork: no build step (so BUG-014's failure
+class cannot recur), deterministic, normalized 0..1 probabilities via
+`rank()`, accurate on the reported samples incl. short headlines.
+Still a manual pip-install prod action, but one that actually
+installs; and the import fails soft so it is **not** a site-down risk.
 
 ### Code touched
 
-- `news/app/language.py` — stage-3 langdetect detection + helpers
-  (`_latin_letter_count`, `_detect_lang_probs`), module tuning
-  constants.
-- `news/requirements.txt` — `langdetect==1.0.9`.
+- `news/app/language.py` — stage-3 py3langid detection + helpers
+  (`_latin_letter_count`, `_detect_lang_probs`), tuning constants
+  (`DETECT_MIN_CONFIDENCE`, `DETECT_ENGLISH_FLOOR`).
+- `news/requirements.txt` — `py3langid==0.3.0` (was the
+  briefly-shipped `langdetect==1.0.9`).
 - `news/tests/test_language.py` — sys.modules stub fixture + 9 new
   cases (30 total).
 - `news/INSTALL.txt` §10 — updated limitation note.
-- `bugs.md` — BUG-013 logged (open → in-progress → resolved).
-- `manual-actions.md` — Open entry for the pip install.
+- `bugs.md` — BUG-013 logged + resolved; BUG-014 logged + resolved.
+- `manual-actions.md` — Open entry for the pip install (py3langid).
 
 ### Server-side state touched
 
@@ -77,10 +89,12 @@ the filter is simply inert until the package lands.
   on cPanel (Terminal, venv activated — the "Run Pip Install" button
   is greyed out) + Python App restart. Tracked in `manual-actions.md`
   with full inline commands and pasted into chat. **Not** a site-down
-  risk: the langdetect import is lazy and fails soft, so the site and
+  risk: the detector import is lazy and fails soft, so the site and
   fetch pipeline keep running; the European-language filtering is just
-  inert until the package is installed. No DB migration, no cron
-  change, no env var, no symlink.
+  inert until py3langid is installed. py3langid + numpy are both
+  wheel-distributed so the install is a plain download (no build step
+  — this is what fixes BUG-014). No DB migration, no cron change, no
+  env var, no symlink.
 - The filter is fetch-time only — it does not purge non-English rows
   already in `articles`; those age out of the 7-day window
   (multiplicative recency gate from BUG-011 crushes them well before
@@ -88,16 +102,18 @@ the filter is simply inert until the package lands.
 
 ### Tests
 
-`tests/test_language.py` 30/30 pass. Full local suite: 141 passed of
-the runnable set (the sandbox can't build `cryptography`/`requests`/
+`tests/test_language.py` 30/30 pass (stubbed) and verified end-to-end
+against the real py3langid (German/Spanish/Finnish rejected; English
+incl. short + accented kept). Full local suite: 141 passed of the
+runnable set (the sandbox can't build `cryptography`/`requests`/
 `dotenv` so 5 collection-erroring + 13 missing-module test files are
-environmental, unrelated to this change — confirmed the failures are
-all `ModuleNotFoundError`).
+environmental, unrelated to this change — confirmed all
+`ModuleNotFoundError`).
 
 ### PR
 
-- **PR #TBD** — BUG-013: langdetect stage-3 for Latin-script European
-  filtering (draft).
+- **PR #50** — BUG-013 + BUG-014: py3langid stage-3 for Latin-script
+  European filtering (draft).
 
 ---
 
