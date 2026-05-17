@@ -92,6 +92,59 @@ overlapping tick no-ops.
 
 ---
 
+## 2026-05-17 — Onboarding interview / cold-start (PR pending)
+
+### Context
+
+Roadmap Pri 7 / LOE 4, Theme A of the user-empowerment cluster. A basic
+`/algo/onboarding` already existed (a 4-preset radio picker). Upgraded it
+into a real cold-start interview so a new reader's first feed isn't the
+generic `balanced` preset.
+
+### What shipped
+
+- **`app/onboarding.py`** (new, Flask-free — mirrors `algo_nl.py` /
+  `language.py`). Pure helpers: `normalize_categories` (intersect with
+  the `CATEGORIES` catalog, dedupe, catalog order), `lean_direction`
+  (5-point balance key → signed `political_lean` direction; unknown →
+  center), `build_onboarding_weights` (copy the `balanced` preset, layer
+  on `category_filter` + `political_lean_direction`; never mutates
+  `PRESETS`), `top_trusted_sources` (dedupe candidate source rows by
+  name keeping the best reputation, sort, cap).
+- **`app/routes/algo.py`** — only the `onboarding()` route changed
+  (PR #59's editor surface left untouched). Now idempotent: if the user
+  already has an algorithm it redirects to the editor instead of
+  stacking a second active row. GET renders the interview (topics,
+  political balance, top-reputation trusted sources). POST builds the
+  tailored weights, inserts one `user_algorithms` row ("My starting
+  feed"), and boosts each picked source via `user_source_prefs`
+  (weight 1.5, reusing the PR #19 feed multiplier). Source ids are
+  validated against the global active pool before any write.
+- **`app/routes/auth_routes.py`** — signup now redirects to
+  `algo.onboarding` (was `algo.index`), so the interview is the actual
+  first-run screen.
+- **`onboarding.html`** rewritten (3 sections, carries `csrf_field()`
+  per the now-merged CSRF PR #58); single appended
+  `.onboarding-interview` CSS block + a mobile rule.
+- **`tests/test_onboarding.py`** (new) — 10 pure-helper cases (verified
+  green via direct import; sandbox has no pytest/Flask, same documented
+  limit as PR #50/#58) + 4 route cases (create_app + stubbed
+  query/execute, mirrors `test_signals.py`) for the maintainer's full
+  Flask run.
+
+### Server-side state touched
+
+None. No DB migration (`user_algorithms` / `user_source_prefs` already
+on prod; `category_filter` lives inside `weights_json`), no new cron, no
+new dependency, no env var. Standard Python App restart on deploy so the
+new route/template load — not a tracked manual action.
+
+### PR
+
+- Draft PR pending on `claude/onboard-news-aggregator-pTXRY`.
+
+---
+
 ## 2026-05-17 — Classifier/feature review: fixed BUG-016..019
 
 ### Context

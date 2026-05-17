@@ -53,7 +53,7 @@ shipped.
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | backlog |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | backlog |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
-| 7 | 4 | ui, new-feature | Onboarding interview / cold-start | backlog |
+| 7 | 4 | ui, new-feature | Onboarding interview / cold-start | in-progress |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
 | 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
 | 8 | 6 | new-feature, ui | Shareable algorithm gallery | backlog |
@@ -451,7 +451,7 @@ instead of guesswork. Depends on Multiple saved algorithms for the
 "current vs. a scratch algo".
 
 ### Onboarding interview / cold-start
-**Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature · **Status:** backlog
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature · **Status:** in-progress
 
 First-run flow: pick a handful of trusted sources, a few topics, and a
 political-balance slider → seeds a real `user_algorithms` row instead of

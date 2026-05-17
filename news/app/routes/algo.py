@@ -8,6 +8,10 @@ from ..auth import login_required
 from ..db import query, execute, get_conn
 from ..algo_nl import interpret_algorithm
 from ..classifier import LLMUnavailable
+from ..onboarding import (
+    LEAN_CHOICES, DEFAULT_LEAN_KEY, TRUSTED_SOURCE_WEIGHT,
+    build_onboarding_weights, top_trusted_sources,
+)
 from ..ranking import (
     PRESETS, FEATURES, FEATURE_KEYS, SIGNED_FEATURES, CATEGORIES,
     default_weights, parse_weights_json, weights_to_expression,
@@ -110,23 +114,72 @@ def describe():
         result["weights"], nl_description=description, nl_notes=notes)
 
 
+def _has_algorithm(user_id):
+    row = query(
+        "SELECT COUNT(*) AS n FROM user_algorithms WHERE user_id = %s",
+        (user_id,), one=True,
+    )
+    return bool(row and row["n"])
+
+
+def _trusted_source_pool():
+    rows = query(
+        "SELECT id, name, source_reputation, source_lean, category "
+        "FROM sources WHERE owner_id IS NULL AND is_active = 1 "
+        "ORDER BY source_reputation DESC, name ASC LIMIT 60"
+    )
+    return top_trusted_sources(rows or [], limit=12)
+
+
 @bp.route("/onboarding", methods=["GET", "POST"])
 @login_required
 def onboarding():
+    # Idempotent: once the reader has an algorithm, don't re-interview or
+    # stack a second active row — send them to the editor.
+    if _has_algorithm(g.user["id"]):
+        return redirect(url_for("algo.index"))
+
     if request.method == "POST":
-        preset_key = request.form.get("preset", "balanced")
-        if preset_key not in PRESETS:
-            preset_key = "balanced"
-        preset = PRESETS[preset_key]
-        weights = preset["weights"].copy()
-        weights["category_filter"] = preset.get("category_filter", [])
+        weights = build_onboarding_weights(
+            categories=request.form.getlist("categories"),
+            lean_key=request.form.get("lean", DEFAULT_LEAN_KEY),
+        )
         execute(
             "INSERT INTO user_algorithms (user_id, name, weights_json, expression_text, is_active) VALUES (%s, %s, %s, %s, 1)",
-            (g.user["id"], preset["label"], json.dumps(weights), weights_to_expression(weights)),
+            (g.user["id"], "My starting feed", json.dumps(weights), weights_to_expression(weights)),
         )
+
+        requested = []
+        for v in request.form.getlist("sources"):
+            try:
+                requested.append(int(v))
+            except (TypeError, ValueError):
+                pass
+        if requested:
+            placeholders = ",".join(["%s"] * len(requested))
+            valid = query(
+                f"SELECT id FROM sources WHERE id IN ({placeholders}) "
+                f"AND owner_id IS NULL AND is_active = 1",
+                tuple(requested),
+            )
+            for r in valid or []:
+                execute(
+                    "INSERT INTO user_source_prefs (user_id, source_id, weight) "
+                    "VALUES (%s, %s, %s) "
+                    "ON DUPLICATE KEY UPDATE weight = VALUES(weight)",
+                    (g.user["id"], r["id"], TRUSTED_SOURCE_WEIGHT),
+                )
+
         get_conn().commit()
         return redirect(url_for("feed.index"))
-    return render_template("onboarding.html", presets=PRESETS)
+
+    return render_template(
+        "onboarding.html",
+        categories=CATEGORIES,
+        lean_choices=LEAN_CHOICES,
+        default_lean=DEFAULT_LEAN_KEY,
+        sources=_trusted_source_pool(),
+    )
 
 
 @bp.route("/save", methods=["POST"])
