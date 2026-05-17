@@ -234,11 +234,15 @@ different statements). All edits localized/append-style; rebased on
 
 ### Open items
 
-- **Migration outstanding at merge time.** `2026-05-17-user-saves.sql`
-  was NOT confirmed applied before PR #64 merged (BUG-007-class
-  exposure: signed-in `/` 500s + nightly `maintenance` errors until
-  the table exists). Tracked `manual-actions.md` → Open as urgent;
-  apply immediately + Python App restart, then move to Completed.
+- **Migration applied post-merge (2026-05-17).**
+  `2026-05-17-user-saves.sql` was NOT confirmed applied before PR #64
+  merged — signed-in `/` 500'd + nightly `maintenance` would have
+  errored in the deploy→migration gap. User ran the `CREATE TABLE` +
+  Python App restart same day; `manual-actions.md` → Completed.
+  **Process learning (BUG-007 recurrence):** a load-bearing migration
+  must gate the PR merge, not trail it — when `manual-actions.md` has
+  an Open load-bearing entry tied to a PR, don't merge that PR until
+  the user confirms the migration ran.
 - v2 (roadmap): folder management UI, "N unread in Read Later" home
   prompt, keyboard `s` to save, export OPML/Markdown, extended
   retention pairing with summaries/TTS.
