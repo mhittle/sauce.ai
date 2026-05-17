@@ -149,9 +149,19 @@ def index():
         by_id = {r["article_id"]: r["signal_type"] for r in thumb_rows}
         for a in articles:
             a["thumb"] = by_id.get(a["id"])
+
+        saved_rows = query(
+            f"SELECT article_id FROM user_saves "
+            f"WHERE user_id = %s AND article_id IN ({placeholders})",
+            (u["id"], *ids),
+        )
+        saved_ids = {r["article_id"] for r in saved_rows}
+        for a in articles:
+            a["saved"] = a["id"] in saved_ids
     else:
         for a in articles:
             a["thumb"] = None
+            a["saved"] = False
 
     if articles:
         disc = discussions_for_articles([a["id"] for a in articles])

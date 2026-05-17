@@ -45,6 +45,7 @@ def create_app():
     from .routes.reader import bp as reader_bp
     from .routes.sources import bp as sources_bp
     from .routes.story import bp as story_bp
+    from .routes.saves import bp as saves_bp
 
     app.register_blueprint(feed_bp)
     app.register_blueprint(algo_bp, url_prefix="/algo")
@@ -56,5 +57,6 @@ def create_app():
     app.register_blueprint(reader_bp)
     app.register_blueprint(sources_bp, url_prefix="/sources")
     app.register_blueprint(story_bp)
+    app.register_blueprint(saves_bp)
 
     return app

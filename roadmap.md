@@ -39,7 +39,7 @@ shipped.
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | done |
-| 6 | 4 | new-feature, ui | Article save / bookmark | backlog |
+| 6 | 4 | new-feature, ui | Article save / bookmark | in-progress |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 2 | ui, backend | Feed sort selector (Relevance / Newest / Popularity) | done |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | done |
@@ -294,7 +294,7 @@ normalized to 0..1, max'd with the external signal so unpopular-on-Reddit-but-
 popular-here articles still rank.
 
 ### Article save / bookmark
-**Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** backlog
+**Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** in-progress
 
 Star/bookmark button on each card, `/saved` page in the nav, optional
 folders (default "Read Later" + user-created). New table

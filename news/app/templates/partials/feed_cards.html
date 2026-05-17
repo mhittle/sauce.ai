@@ -1,7 +1,7 @@
 {% if articles %}
 {% for a in articles %}
   <article class="card"
-           {% if current_user %}x-data='cardSignals({{ a.id }}, {{ a.source_id }}, {{ a.thumb|tojson if a.thumb else "null" }}, {{ a.source_name|tojson }})'{% endif %}>
+           {% if current_user %}x-data='cardSignals({{ a.id }}, {{ a.source_id }}, {{ a.thumb|tojson if a.thumb else "null" }}, {{ a.source_name|tojson }}, {{ a.saved|tojson }})'{% endif %}>
     {% if a.thumbnail_url %}
       <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener"
          onclick="fetch('{{ url_for('feed.click', article_id=a.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">
@@ -22,6 +22,10 @@
             <button type="button" class="thumb-btn down" :class="{ active: state === 'thumb_down' }"
                     @click="vote('thumb_down')" aria-label="Thumbs down">&#x25BC;</button>
           </span>
+          <button type="button" class="save-btn" :class="{ active: saved }"
+                  @click="toggleSave()" :aria-pressed="saved ? 'true' : 'false'"
+                  :title="saved ? 'Saved — click to remove' : 'Save for later'"
+                  x-text="saved ? '★' : '☆'">&#x2606;</button>
         {% endif %}
         <a class="reader-link" href="{{ url_for('reader.read', article_id=a.id) }}" title="Open in reader">Read &rarr;</a>
         {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}

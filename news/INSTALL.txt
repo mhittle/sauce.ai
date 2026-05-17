@@ -435,6 +435,15 @@ J. Trending sort is empty / still looks like the old HN-only feed:
   2026-05-13-article-bodies.sql migration. Locked paywalls (score 1.0)
   are skipped; everything else gets a row with status ok/empty/blocked/
   error. Pruned nightly at BODY_RETENTION_DAYS (default 30).
+- Article save / bookmark: signed-in users star articles (the
+  ☆ on feed cards) into /saved. Requires the
+  2026-05-17-user-saves.sql migration (creates user_saves). Saved
+  articles are a DURABLE archive: jobs/maintenance.py exempts them
+  (and their article_bodies) from the nightly retention prune, so
+  the in-app reader copy stays readable indefinitely even after
+  the article ages out of the main feed. v1 has a single implicit
+  "Read Later" folder (the folder column exists for a v2 folder
+  UI); the "N unread" prompt and bulk/folder management are v2.
 - Internal click signal is recorded but not folded into popularity.
 - Daily email digest sends from the configured SMTP_FROM with no
   DKIM/SPF setup by default. Deliverability on shared cPanel IPs
