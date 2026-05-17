@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Trending — sauce.ai/news{% endblock %}
+{% block content %}
+<section class="trending">
+  <header class="trending-head">
+    <h1>Trending</h1>
+    <p class="muted">
+      What's trending in the news right now, ranked by how many different
+      outlets are covering each topic (min {{ min_sources }}) over the last
+      {{ window_days }} day{{ '' if window_days == 1 else 's' }} — so a topic
+      twenty outlets cover beats one a single outlet covered twenty times.
+    </p>
+  </header>
+
+  {% if not topics %}
+    <p class="trending-empty muted">
+      Nothing trending yet — the trending poll runs every ~30 minutes and
+      needs at least {{ min_sources }} outlets on a topic. Check back shortly.
+    </p>
+  {% else %}
+    <ol class="trending-list">
+      {% for t in topics %}
+        <li class="trending-topic">
+          <div class="trending-topic-head">
+            <span class="trending-rank">{{ loop.index }}</span>
+            <span class="trending-label">{{ t.label }}</span>
+            <span class="trending-heat" style="--w: {{ (t.heat * 100)|round|int }}%"
+                  title="trending heat {{ '%.2f' % t.heat }} · {{ 'Google Trends' if t.origin == 'trends' else 'Google News' }}"></span>
+          </div>
+          <div class="trending-stats muted">
+            {{ t.source_count }} outlet{{ '' if t.source_count == 1 else 's' }}
+            · {{ t.story_count }} stor{{ 'y' if t.story_count == 1 else 'ies' }}
+            · {{ t.article_count }} article{{ '' if t.article_count == 1 else 's' }}
+          </div>
+          {% set stories = stories_by_topic.get(t.topic_key, []) %}
+          {% if stories %}
+            <ul class="trending-stories">
+              {% for s in stories %}
+                <li>
+                  {% if s.story_sources and s.story_sources > 1 %}
+                    <a href="{{ url_for('story.view', story_id=s.story_id) }}">{{ s.story_title or 'Untitled story' }}</a>
+                    <span class="muted">{{ s.story_sources }} sources · dossier &rarr;</span>
+                  {% elif s.story_url %}
+                    <a href="{{ s.story_url }}" target="_blank" rel="noopener"
+                       onclick="fetch('{{ url_for('feed.click', article_id=s.story_id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">{{ s.story_title or 'Untitled story' }}</a>
+                    <span class="muted">single source</span>
+                  {% else %}
+                    <span class="muted">{{ s.story_title or 'Untitled story' }}</span>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ol>
+  {% endif %}
+</section>
+{% endblock %}

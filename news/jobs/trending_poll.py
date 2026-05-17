@@ -19,7 +19,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import requests
 
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
-from app.trending import parse_trends_rss, parse_gnews_rss, build_topic_index, score_article
+from app.trending import (
+    parse_trends_rss,
+    parse_gnews_rss,
+    build_topic_index,
+    score_article,
+    build_persist_rows,
+)
 
 JOB = "trending_poll"
 logger = setup_logging(JOB)
@@ -133,15 +139,38 @@ def _run():
                 matched += 1
             updates.append((s, r["id"]))
 
+        # Snapshot the topic index + per-topic article matches for the
+        # /trending page. Both tables are replaced in full every tick
+        # (same "recompute the whole window, stale decays out"
+        # philosophy as the scalar score) inside one transaction.
+        topic_rows, match_rows = (
+            build_persist_rows(topics, rows) if topics else ([], [])
+        )
+
         with conn.cursor() as cur:
             cur.executemany(
                 "UPDATE article_features SET trending=%s WHERE article_id=%s",
                 updates,
             )
+            cur.execute("DELETE FROM trending_topic_articles")
+            cur.execute("DELETE FROM trending_topics")
+            if topic_rows:
+                cur.executemany(
+                    "INSERT INTO trending_topics (topic_key, label, origin, heat) "
+                    "VALUES (%s, %s, %s, %s)",
+                    topic_rows,
+                )
+            if match_rows:
+                cur.executemany(
+                    "INSERT INTO trending_topic_articles "
+                    "(topic_key, article_id, match_score) VALUES (%s, %s, %s)",
+                    match_rows,
+                )
         conn.commit()
 
         msg = (
             f"topics={len(topics)} articles={len(rows)} matched={matched} "
+            f"topics_persisted={len(topic_rows)} topic_matches={len(match_rows)} "
             f"window_days={TRENDING_WINDOW_DAYS}"
         )
         logger.info(msg)

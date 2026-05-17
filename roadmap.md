@@ -34,7 +34,7 @@ shipped.
 | 7 | 4 | ui | Mobile / responsive polish | done |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
-| 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | backlog |
+| 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | in-progress |
 | 7 | 4 | algo, backend, ui | External trending sort (Google News/Trends) — BUG-015 | done |
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
@@ -202,7 +202,18 @@ Depends on signal capture (user_clicks today; user_signals once Signal
 Learning lands).
 
 ### Trending topics view
-**Priority:** 7 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** backlog
+**Priority:** 7 · **LOE:** 5 · **Category:** new-feature, algo · **Status:** in-progress (PR pending)
+
+> **Implementation note (2026-05-17):** the original plan piggybacked
+> topic extraction on the `classify_pending` LLM call. That file is being
+> rewritten by a parallel session (PR #56, BUG-016..019), so this session
+> took the conflict-free route: reuse the Google Trends/News topic index
+> `trending_poll` already builds every 30 min (PR #53), persist topic →
+> article matches, and rank topics by distinct-outlet count. No
+> `classify_pending` edit, no added LLM cost. Trade-off: only surfaces
+> topics that are also externally trending (Google), not purely-internal
+> ones — the LLM-entity upgrade remains the documented follow-on (pairs
+> with Signal Learning entity extraction).
 
 `/trending` groups today's stories by topic/entity with source count.
 Big upgrade post-dedup: trending becomes "topics that hit N outlets"

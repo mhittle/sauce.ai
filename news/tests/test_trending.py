@@ -39,6 +39,10 @@ from app.trending import (  # noqa: E402
     parse_gnews_rss,
     build_topic_index,
     score_article,
+    topic_key,
+    topic_matches,
+    build_persist_rows,
+    group_topic_stories,
 )
 
 
@@ -181,3 +185,138 @@ def test_score_article_empty_inputs_safe():
 def test_score_article_clamped_0_1():
     s = score_article("solar eclipse solar eclipse", "solar eclipse", _topics())
     assert 0.0 <= s <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# build_topic_index now tags origin
+# ---------------------------------------------------------------------------
+
+def test_build_topic_index_tags_origin():
+    topics = build_topic_index(
+        [{"term": "solar eclipse", "traffic": 2_000_000, "rank": 0}],
+        [{"headline": "Federal Reserve holds rates", "rank": 0}],
+    )
+    by_label = {t["label"]: t for t in topics}
+    assert by_label["solar eclipse"]["origin"] == "trends"
+    assert by_label["Federal Reserve holds rates"]["origin"] == "gnews"
+
+
+# ---------------------------------------------------------------------------
+# topic_key
+# ---------------------------------------------------------------------------
+
+def test_topic_key_is_order_independent_and_stable():
+    k1 = topic_key(tokenize("Fed holds rates steady"))
+    k2 = topic_key(tokenize("steady rates holds Fed"))
+    assert k1 == k2
+    assert len(k1) == 40  # sha1 hex
+
+
+def test_topic_key_differs_for_different_vocab():
+    assert topic_key(frozenset({"solar", "eclipse"})) != topic_key(
+        frozenset({"federal", "reserve"})
+    )
+
+
+def test_topic_key_collapses_near_duplicate_headlines():
+    # The two GNews headlines share the same significant tokens once
+    # stopwords/short tokens are dropped -> one trending topic.
+    a = topic_key(tokenize("The Fed holds rates"))
+    b = topic_key(tokenize("Fed holds rates"))
+    assert a == b
+
+
+# ---------------------------------------------------------------------------
+# topic_matches
+# ---------------------------------------------------------------------------
+
+def test_topic_matches_max_equals_score_article():
+    topics = _topics()
+    title = "Federal Reserve interest rate decision and solar eclipse"
+    matches = topic_matches(title, "", topics)
+    assert matches  # overlaps both topics
+    assert max(s for _, s in matches) == score_article(title, "", topics)
+
+
+def test_topic_matches_empty_when_no_overlap_or_no_tokens():
+    assert topic_matches("Local bakery wins award", "", _topics()) == []
+    assert topic_matches("", "", _topics()) == []
+    assert topic_matches("anything here", "", []) == []
+
+
+def test_topic_matches_only_returns_positive_scores():
+    for _, s in topic_matches("solar eclipse over Texas", "", _topics()):
+        assert s > 0.0
+
+
+# ---------------------------------------------------------------------------
+# build_persist_rows
+# ---------------------------------------------------------------------------
+
+def test_build_persist_rows_basic_shaping():
+    topics = build_topic_index(
+        [{"term": "solar eclipse", "traffic": 2_000_000, "rank": 0}],
+        [{"headline": "Federal Reserve interest rate decision", "rank": 0}],
+    )
+    articles = [
+        {"id": 1, "title": "Total solar eclipse wows millions", "summary": ""},
+        {"id": 2, "title": "Federal Reserve interest rate decision today", "summary": ""},
+        {"id": 3, "title": "Local bakery wins award", "summary": ""},
+    ]
+    topic_rows, match_rows = build_persist_rows(topics, articles)
+
+    assert len(topic_rows) == 2
+    for k, label, origin, heat in topic_rows:
+        assert len(k) == 40
+        assert origin in ("trends", "gnews")
+        assert 0.0 <= heat <= 1.0
+
+    matched_articles = {aid for _, aid, _ in match_rows}
+    assert matched_articles == {1, 2}  # article 3 matches nothing
+    for _, _, s in match_rows:
+        assert s > 0.0
+
+
+def test_build_persist_rows_collapses_duplicate_topic_keeping_max_heat():
+    # Same vocabulary from a hot Trends term and a cooler GNews headline:
+    # one persisted topic row, the higher heat wins.
+    topics = build_topic_index(
+        [{"term": "mars rover", "traffic": 2_000_000, "rank": 0}],
+        [{"headline": "Mars rover", "rank": 30}],
+    )
+    articles = [{"id": 9, "title": "NASA Mars rover finds water", "summary": ""}]
+    topic_rows, match_rows = build_persist_rows(topics, articles)
+
+    assert len(topic_rows) == 1
+    # one match row for the single (collapsed key, article) pair
+    assert len(match_rows) == 1
+    assert match_rows[0][1] == 9
+
+
+def test_build_persist_rows_empty_inputs():
+    assert build_persist_rows([], []) == ([], [])
+    # Topics but no articles: every topic row, zero match rows.
+    topic_rows, match_rows = build_persist_rows(_topics(), [])
+    assert match_rows == []
+    assert len(topic_rows) == 2
+
+
+# ---------------------------------------------------------------------------
+# group_topic_stories
+# ---------------------------------------------------------------------------
+
+def test_group_topic_stories_buckets_and_caps_per_topic():
+    rows = [
+        {"topic_key": "a", "story_id": 1},
+        {"topic_key": "a", "story_id": 2},
+        {"topic_key": "a", "story_id": 3},
+        {"topic_key": "a", "story_id": 4},
+        {"topic_key": "b", "story_id": 5},
+    ]
+    out = group_topic_stories(rows, per_topic=3)
+    assert [r["story_id"] for r in out["a"]] == [1, 2, 3]  # 4 dropped (cap)
+    assert [r["story_id"] for r in out["b"]] == [5]
+
+
+def test_group_topic_stories_empty():
+    assert group_topic_stories([]) == {}

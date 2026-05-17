@@ -23,6 +23,7 @@ limitation — improves once entity extraction lands (see roadmap).
 """
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from typing import Optional
@@ -158,7 +159,7 @@ def build_topic_index(trends: list, gnews: list, *, min_tokens: int = 1) -> list
         else:
             heat = _rank_heat(t["rank"], n_tr)
         topics.append({"tokens": toks, "heat": min(1.0, heat * _TRENDS_WEIGHT),
-                        "label": t["term"]})
+                        "label": t["term"], "origin": "trends"})
 
     n_gn = len(gnews)
     for gentry in gnews:
@@ -167,24 +168,31 @@ def build_topic_index(trends: list, gnews: list, *, min_tokens: int = 1) -> list
             continue
         heat = _rank_heat(gentry["rank"], n_gn) * _GNEWS_WEIGHT
         topics.append({"tokens": toks, "heat": min(1.0, heat),
-                       "label": gentry["headline"]})
+                       "label": gentry["headline"], "origin": "gnews"})
     return topics
 
 
-def score_article(title, summary, topic_index, *, summary_chars: int = 240) -> float:
-    """0..1: strength of this article's best match to any hot topic.
+def topic_key(tokens) -> str:
+    """Stable 40-char key for a topic's significant-token set.
 
-    For each topic: fraction of the topic's tokens present in the
-    article (title + summary lead), scaled by the topic's heat. The
-    article's score is the max over all topics. Fraction-of-topic
-    (rather than raw overlap count) means a fully-covered short topic
-    ("solar eclipse") beats a partially-covered long one, and a single
-    shared generic word can't fully light up a multi-word topic.
+    Order-independent (sorted) so the same vocabulary always maps to the
+    same key. This is what collapses near-duplicate Google News headlines
+    ("Fed holds rates" / "Fed holds rates steady") into a single trending
+    topic on the /trending page, which is the whole point of the
+    "topics that hit N outlets" framing.
+    """
+    return hashlib.sha1(" ".join(sorted(tokens)).encode("utf-8")).hexdigest()
+
+
+def topic_matches(title, summary, topic_index, *, summary_chars: int = 240) -> list:
+    """Per-topic match scores for one article: [(topic, score), ...] for
+    every topic it overlaps (score > 0), using the same fraction-of-topic
+    × heat math as `score_article` (which is just the max of these).
     """
     art_tokens = tokenize(title) | tokenize((summary or "")[:summary_chars])
     if not art_tokens:
-        return 0.0
-    best = 0.0
+        return []
+    out = []
     for topic in topic_index:
         ttoks = topic["tokens"]
         if not ttoks:
@@ -192,8 +200,69 @@ def score_article(title, summary, topic_index, *, summary_chars: int = 240) -> f
         overlap = len(art_tokens & ttoks)
         if overlap == 0:
             continue
-        frac = overlap / len(ttoks)
-        s = frac * topic["heat"]
-        if s > best:
-            best = s
-    return round(max(0.0, min(1.0, best)), 4)
+        s = round(max(0.0, min(1.0, (overlap / len(ttoks)) * topic["heat"])), 4)
+        if s > 0:
+            out.append((topic, s))
+    return out
+
+
+def score_article(title, summary, topic_index, *, summary_chars: int = 240) -> float:
+    """0..1: strength of this article's best match to any hot topic.
+
+    The max over `topic_matches`. Fraction-of-topic (rather than raw
+    overlap count) means a fully-covered short topic ("solar eclipse")
+    beats a partially-covered long one, and a single shared generic word
+    can't fully light up a multi-word topic.
+    """
+    matches = topic_matches(title, summary, topic_index, summary_chars=summary_chars)
+    return max((s for _, s in matches), default=0.0)
+
+
+def build_persist_rows(topics, articles):
+    """Shape the topic index + in-window articles into rows the
+    `/trending` page reads back: `(topic_rows, match_rows)`.
+
+    - `topic_rows`: `(topic_key, label, origin, heat)`, deduped by key
+      (near-duplicate headlines collapse) keeping the highest-heat
+      label/origin.
+    - `match_rows`: `(topic_key, article_id, match_score)` for every
+      article that overlaps a topic, keeping the best score when an
+      article matches two topics that collapse to the same key.
+
+    Pure: `articles` is any iterable of mappings with `id`/`title`/
+    `summary`. Kept Flask-/DB-free so `trending_poll` and the unit tests
+    share it.
+    """
+    keyed = {}
+    for t in topics:
+        k = topic_key(t["tokens"])
+        heat = round(max(0.0, min(1.0, t["heat"])), 4)
+        prev = keyed.get(k)
+        if prev is None or heat > prev[2]:
+            keyed[k] = (t["label"], t.get("origin", ""), heat)
+
+    best = {}
+    for a in articles:
+        for topic, s in topic_matches(a["title"], a["summary"], topics):
+            ka = (topic_key(topic["tokens"]), a["id"])
+            if s > best.get(ka, 0.0):
+                best[ka] = s
+
+    topic_rows = [(k, lbl, origin, heat) for k, (lbl, origin, heat) in keyed.items()]
+    match_rows = [(k, aid, s) for (k, aid), s in best.items()]
+    return topic_rows, match_rows
+
+
+def group_topic_stories(rows, *, per_topic: int = 3):
+    """Bucket flat `(topic_key, story...)` rows into
+    `{topic_key: [story, ...]}`, keeping the first `per_topic` per topic.
+
+    Relies on the caller's SQL `ORDER BY` (broadest-coverage story first)
+    — pure so the bucketing is unit-tested without a DB.
+    """
+    out = {}
+    for r in rows:
+        lst = out.setdefault(r["topic_key"], [])
+        if len(lst) < per_topic:
+            lst.append(r)
+    return out

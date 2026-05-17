@@ -395,6 +395,24 @@ J. Trending sort is empty / still looks like the old HN-only feed:
       TRENDING_WINDOW_DAYS (default 2) of articles each tick, so
       older articles correctly drop out of the Trending sort.
 
+K. /trending page is empty or 500s:
+
+   1. The trending-topics tables migration
+      (2026-05-17-trending-topics.sql: trending_topics +
+      trending_topic_articles) must be applied. Until then /trending
+      500s on the missing tables. The feed's Trending *sort*
+      (article_features.trending) is a different column and is
+      unaffected. No new cron is needed -- the existing every-30-min
+      trending_poll cron fills both tables on its next tick.
+   2. trending_poll must have run once after the migration. Tail
+      logs/cron.log for `topics_persisted=T topic_matches=M` on its
+      line. topics_persisted=0 means Google throttled the RSS this
+      tick (self-heals next tick).
+   3. The page only lists topics covered by >= TRENDING_MIN_SOURCES
+      distinct outlets (default 2) within TRENDING_WINDOW_DAYS
+      (default 2). A fresh install with few sources/articles can show
+      "Nothing trending yet" legitimately until the corpus fills.
+
 
 ------------------------------------------------------------------
 9. SECRETS HYGIENE
@@ -487,5 +505,17 @@ J. Trending sort is empty / still looks like the old HN-only feed:
   topics view / Signal Learning work. The sort still applies the
   user's algorithm as the within-trending tiebreak, and legacy
   `?sort=popularity` URLs are aliased to it.
+- The /trending page reuses that same Google Trends/News topic
+  index (trending_poll now also persists the topic snapshot +
+  per-topic article matches into trending_topics /
+  trending_topic_articles, rebuilt in full every tick) and ranks
+  topics by distinct-outlet count. Consequence: it only surfaces
+  topics that are *also* trending on Google — a story that is hot
+  inside our corpus but absent from Google Trends/News won't get a
+  topic row. The internal LLM-entity-extraction version (topic
+  extraction folded into classify_pending) is the documented
+  roadmap upgrade; it pairs with Signal Learning entity work and
+  was deferred here to avoid colliding with the in-flight
+  classify_pending rewrite.
 
 You're done. Visit  https://sauce.ai/news .
