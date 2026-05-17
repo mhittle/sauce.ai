@@ -12,12 +12,20 @@ def create_app():
     from .config import Config
     from .db import close_conn
     from .auth import load_user
+    from .security import init_csrf
+    from .ratelimit import SlidingWindowLimiter
 
     app = Flask(__name__, instance_relative_config=False)
     app.config.from_object(Config)
     app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
 
     app.teardown_appcontext(close_conn)
+
+    init_csrf(app)
+    app.extensions["auth_limiter"] = SlidingWindowLimiter(
+        app.config["AUTH_RATELIMIT_MAX"],
+        app.config["AUTH_RATELIMIT_WINDOW_SECONDS"],
+    )
 
     @app.before_request
     def _load_user():

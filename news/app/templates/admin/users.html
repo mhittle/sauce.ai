@@ -15,10 +15,12 @@
       <td class="muted">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
       <td>
         <form method="post" action="{{ url_for('admin.users_toggle_admin', uid=u.id) }}" class="inline">
+          {{ csrf_field() }}
           <button type="submit">{{ 'Demote' if u.is_admin else 'Promote' }}</button>
         </form>
         <form method="post" action="{{ url_for('admin.users_delete', uid=u.id) }}" class="inline"
               onsubmit="return confirm('Delete this user?')">
+          {{ csrf_field() }}
           <button type="submit">Delete</button>
         </form>
       </td>

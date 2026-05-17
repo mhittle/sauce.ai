@@ -51,14 +51,14 @@
             <article class="dossier-card">
               <div class="dossier-card-meta">
                 <a class="source" href="{{ m.url }}" target="_blank" rel="noopener"
-                   onclick="fetch('{{ url_for('feed.click', article_id=m.id) }}', {method:'POST', keepalive:true})">{{ m.source_name }}</a>
+                   onclick="fetch('{{ url_for('feed.click', article_id=m.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">{{ m.source_name }}</a>
                 <span class="lean-dot" style="--lean: {{ m.political_lean or 0.0 }}"
                       title="article lean {{ '%+.2f' % (m.political_lean or 0.0) }} · outlet lean {{ '%+.2f' % (m.source_lean or 0.0) }}"></span>
                 <span class="muted">{{ m.published_at.strftime('%b %d, %H:%M') if m.published_at else '' }}</span>
               </div>
               <h4 class="dossier-card-title">
                 <a href="{{ m.url }}" target="_blank" rel="noopener"
-                   onclick="fetch('{{ url_for('feed.click', article_id=m.id) }}', {method:'POST', keepalive:true})">{{ m.title }}</a>
+                   onclick="fetch('{{ url_for('feed.click', article_id=m.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">{{ m.title }}</a>
               </h4>
               {% if m.lead %}<p class="dossier-card-lead">{{ m.lead|truncate(360) }}</p>{% endif %}
               <div class="dossier-card-foot">

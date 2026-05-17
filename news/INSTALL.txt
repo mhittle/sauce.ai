@@ -78,6 +78,15 @@ If that prints the path, you're ready.
         ANTHROPIC_MODEL         claude-haiku-4-5-20251001
         ADMIN_EMAIL             your-email@example.com
 
+    Optional (security tuning; sane defaults, only set to override):
+        CSRF_ENABLED            1              (0 disables CSRF; leave at 1 in prod)
+        AUTH_RATELIMIT_MAX      10             (max /auth/login + /auth/signup POSTs per IP per window)
+        AUTH_RATELIMIT_WINDOW_SECONDS  300     (the sliding window, seconds)
+
+    CSRF protection signs tokens with SECRET_KEY, so a real
+    SECRET_KEY (step above) is required for it to be meaningful --
+    do not run prod on the placeholder value.
+
     Optional (only required if you enabled the daily email digest cron in §4):
         SITE_URL                https://sauce.ai/news
         SMTP_HOST               localhost      (cPanel's local MTA; or relay host)
@@ -408,8 +417,19 @@ J. Trending sort is empty / still looks like the old HN-only feed:
 - "Your Algo" Code tab renders the Python equivalent of the
   UI-chosen weights but does not execute user-supplied code.
   Sandboxed exec deferred to v2.
-- No CSRF tokens beyond same-site cookies, no email verification,
-  no rate limiting on auth endpoints.
+- CSRF protection is active on all POST routes (signed double-
+  submit cookie, hand-rolled, no dependency). The RFC 8058 one-
+  click List-Unsubscribe POST (/account/unsubscribe/<token>) is
+  intentionally exempt -- it's authenticated by the unguessable
+  token in the URL. Disable globally with CSRF_ENABLED=0 if it
+  ever needs to be turned off in a hurry.
+- /auth/login and /auth/signup are rate-limited per client IP
+  (sliding window, default 10 POSTs / 5 min, env-tunable). v1
+  caveat: counters live in the worker process, so under a multi-
+  worker Passenger spawn the effective limit is per-worker, not
+  global. A single script hammering one endpoint from one IP is
+  still throttled. A DB-backed limiter is the v2 upgrade.
+- No email verification on signup (still backlog).
 - Body extraction (article_bodies) runs in classify_pending and is
   wallclock-bounded, so deploys must apply the
   2026-05-13-article-bodies.sql migration. Locked paywalls (score 1.0)

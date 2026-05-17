@@ -3,6 +3,7 @@
 <h1>Unit tests</h1>
 <p class="muted">Runs the bundled <code>pytest</code> suite from <code>tests/</code> using this app's Python interpreter.</p>
 <form method="post">
+  {{ csrf_field() }}
   <button type="submit" class="primary">Run tests</button>
 </form>
 {% if output is not none %}

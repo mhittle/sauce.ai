@@ -41,7 +41,7 @@
 
   <footer class="reader-foot">
     <a class="reader-original" href="{{ article.url }}" target="_blank" rel="noopener"
-       onclick="fetch('{{ url_for('feed.click', article_id=article.id) }}', {method:'POST', keepalive:true})">
+       onclick="fetch('{{ url_for('feed.click', article_id=article.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">
       Read at {{ article.source_name }} &rarr;
     </a>
   </footer>
