@@ -7,12 +7,22 @@ end-to-end before touching anything.
 
 ## Step 1 — Read `engineering-history.md` end-to-end
 
-This is **non-optional**. The history file is short and chronological. The
-most recent entries describe the current state of the world; older entries
-explain how we got there. Several load-bearing pieces of server-side state
-(symlinks, manually-overwritten files, hostile cPanel scaffolds) are **not**
-visible in the repo and will reintroduce bugs we already fixed if you don't
-know they exist.
+This is **non-optional**. The history file is the **condensed working
+history** — kept under a ~14K-token budget so you can ingest it in a
+single read. It is chronological: the most recent entries are in full,
+older ones are compressed into a "Condensed history" section, and the
+durable "Load-bearing production state" section at the top captures the
+server-side state (symlinks, manually-overwritten files, hostile cPanel
+scaffolds) that is **not** in the repo and will reintroduce already-fixed
+bugs if you don't know it exists. Read that section especially carefully.
+
+`engineering-history-archive.md` holds the full verbatim text of every
+condensed entry. **Do not read it during onboarding.** Consult it on
+demand — grep by PR# / BUG-ID / date — only when troubleshooting a
+regression or when you need the deep context behind a condensed summary.
+If `engineering-history.md` is ever over budget at session start, run the
+archive procedure (`engineering-session-wrapup.md` → Step 1b) before
+other work.
 
 After reading you'll know:
 
@@ -274,7 +284,8 @@ Don't assume; let them decide.
 ## tl;dr for the impatient
 
 1. `cat engineering-history.md`, `cat roadmap.md`, `cat bugs.md`,
-   `cat manual-actions.md` (entirely).
+   `cat manual-actions.md` (entirely). `engineering-history-archive.md`
+   is on-demand only — read it when troubleshooting, not at onboarding.
 2. Ask the user: "Pick from the roadmap, or something else?" AND
    "Are the items in `manual-actions.md` Open section done yet?"
 3. Log any user-reported bugs into `bugs.md` immediately, before fixing.
