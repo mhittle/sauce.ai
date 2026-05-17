@@ -40,51 +40,26 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-17 — Migration: user_saves (article save / bookmark)
-**Status:** open · **PR:** (Article save / bookmark, roadmap Pri 6) ·
-**Opened:** 2026-05-17 ·
-**File reference:** `news/seed/migrations/2026-05-17-user-saves.sql`
-
-Creates `user_saves`, backing the star/bookmark button on feed cards
-and the new `/saved` page. **Load-bearing PRE-MERGE** (BUG-007 class):
-once the PR merges, every signed-in feed load runs a `SELECT ... FROM
-user_saves` and the nightly `jobs/maintenance.py` references it in both
-retention-prune DELETEs — a missing table 500s signed-in `/` and breaks
-`maintenance`. **Apply this migration before merging the PR**, then
-restart the Python App.
-
-**SQL to run (phpMyAdmin against `lt1ih6uyy2z6_news`):**
-
-```sql
-CREATE TABLE IF NOT EXISTS user_saves (
-  user_id    INT UNSIGNED NOT NULL,
-  article_id BIGINT UNSIGNED NOT NULL,
-  folder     VARCHAR(64) NOT NULL DEFAULT 'Read Later',
-  saved_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  read_at    DATETIME DEFAULT NULL,
-  PRIMARY KEY (user_id, article_id),
-  KEY idx_saves_user_saved (user_id, saved_at),
-  KEY idx_saves_article (article_id),
-  CONSTRAINT fk_saves_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT fk_saves_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
-
-Then in cPanel → "Setup Python App" → **Restart** (Passenger import
-cache; the new `saves` blueprint + feed.py change load on restart).
-
-**Verify:** `/saved` returns 200 for a signed-in user; the ☆ on a
-feed card toggles to ★ and the article appears on `/saved`; after a
-nightly `maintenance` run, a saved article older than
-`ARTICLE_RETENTION_DAYS` is still present (durable archive) — its
-`logs/cron.log` line still reports `pruned_articles=N pruned_bodies=M`
-without error.
-
-No new cron, env var, pip dependency, or symlink.
+_None — all tracked migrations applied._
 
 ---
 
 ## Completed
+
+### 2026-05-17 — Migration: user_saves (article save / bookmark)
+**Status:** completed · **PR:** #64 (merged 2026-05-17) ·
+**Opened:** 2026-05-17 · **Completed:** 2026-05-17 ·
+**File reference:** `news/seed/migrations/2026-05-17-user-saves.sql`
+
+Created `user_saves`, backing the star/bookmark button on feed cards
+and the `/saved` page. Load-bearing (BUG-007 class): the table was NOT
+confirmed applied before PR #64 merged, so signed-in `/` 500'd and the
+nightly `maintenance` job would have errored in the interval between
+deploy and migration. User ran the `CREATE TABLE user_saves` SQL via
+phpMyAdmin against `lt1ih6uyy2z6_news` and restarted the Python App
+(2026-05-17) — signed-in feed recovered. **Process note:** recurrence
+of the BUG-007 pattern (load-bearing migration not applied pre-merge);
+the migration should have gated the PR merge, not trailed it.
 
 ### 2026-05-17 — Migration: popularity_signals discussion columns
 **Status:** completed · **PR:** #52 · **Opened:** 2026-05-17 ·

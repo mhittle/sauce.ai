@@ -39,7 +39,7 @@ shipped.
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
 | 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | done |
-| 6 | 4 | new-feature, ui | Article save / bookmark | in-progress |
+| 6 | 4 | new-feature, ui | Article save / bookmark | done |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 2 | ui, backend | Feed sort selector (Relevance / Newest / Popularity) | done |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | done |
@@ -293,29 +293,6 @@ Approach: per-article click-rate (clicks per impression over rolling 24h)
 normalized to 0..1, max'd with the external signal so unpopular-on-Reddit-but-
 popular-here articles still rank.
 
-### Article save / bookmark
-**Priority:** 6 · **LOE:** 4 · **Category:** new-feature, ui · **Status:** in-progress
-
-Star/bookmark button on each card, `/saved` page in the nav, optional
-folders (default "Read Later" + user-created). New table
-`user_saves(user_id, article_id, saved_at, folder, read_at)`.
-
-The real unlock is pairing with reader view: today, a bookmarked link
-can rot (article deleted, URL changed, paywall hardened a month
-later). With body extraction in place we already have the article body
-stored at save-time, so bookmarks become a durable personal archive —
-"owned by me" sticky, not a fragile URL list. Bookmarked articles get
-extended retention on `article_bodies` so the reader-view copy stays
-readable indefinitely.
-
-Power features for v2: keyboard shortcut to save (`s`), bulk move
-between folders, export saved as Markdown or OPML, "5 unread in your
-Read Later" prompt on home when the queue grows.
-
-Sequencing: ship after reader view + summaries so bookmarks are
-durable from day one, before TTS so Read-me-my-queue has content to
-play.
-
 ### TTS audio mode
 **Priority:** 6 · **LOE:** 4 (v1) / 6 (v2) · **Category:** new-feature, ui · **Status:** backlog
 
@@ -516,6 +493,18 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Article save / bookmark** — Pri 6, LOE 4, new-feature/ui. PR #64
+  (merged 2026-05-17). Signed-in users star feed articles (☆/★ via
+  the existing `cardSignals` Alpine component) into a new `/saved`
+  page; new `saves` blueprint (`POST /save/<id>` toggle,
+  `/save/<id>/read`, `GET /saved`). New `user_saves` table
+  (`folder` default "Read Later"; `read_at` set on click-through).
+  **Durable archive:** `jobs/maintenance.py` exempts saved articles
+  (and their `article_bodies`) from both retention prunes, so the
+  in-app reader copy stays readable indefinitely. v1 is a single
+  implicit folder; folder UI / "N unread" prompt / export are v2.
+  **Required a manual DB migration** (`2026-05-17-user-saves.sql`,
+  load-bearing — see `manual-actions.md`).
 - **Onboarding interview / cold-start** — Pri 7, LOE 4,
   ui/new-feature. PR #62. Theme A. Upgraded the bare `/algo/onboarding`
   preset picker into a real interview: topic categories (hard

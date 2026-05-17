@@ -227,11 +227,22 @@ different statements). All edits localized/append-style; rebased on
 
 ### PR
 
-- Article save / bookmark (draft) — branch
-  `claude/onboard-news-aggregator-Fx2d4`.
+- **PR #64** — Article save / bookmark (merged 2026-05-17). Rebased
+  twice (behind PR #56 classifier fixes, then PR #62 onboarding);
+  `maintenance.py` / `style.css` / `engineering-history.md` conflicts
+  resolved each time. Follow-up tracking-doc cleanup landed separately.
 
 ### Open items
 
+- **Migration applied post-merge (2026-05-17).**
+  `2026-05-17-user-saves.sql` was NOT confirmed applied before PR #64
+  merged — signed-in `/` 500'd + nightly `maintenance` would have
+  errored in the deploy→migration gap. User ran the `CREATE TABLE` +
+  Python App restart same day; `manual-actions.md` → Completed.
+  **Process learning (BUG-007 recurrence):** a load-bearing migration
+  must gate the PR merge, not trail it — when `manual-actions.md` has
+  an Open load-bearing entry tied to a PR, don't merge that PR until
+  the user confirms the migration ran.
 - v2 (roadmap): folder management UI, "N unread in Read Later" home
   prompt, keyboard `s` to save, export OPML/Markdown, extended
   retention pairing with summaries/TTS.
