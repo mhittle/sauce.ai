@@ -102,6 +102,82 @@ sort). A DB rebuild from `seed/schema.sql` already includes these.
 
 ---
 
+## 2026-05-17 — Across-the-spectrum in-feed (PR #__)
+
+Roadmap Pri 7 / LOE 3 (ui, algo). The "+N angles" pill (added with the
+story dossier, PR #43) previously navigated to `/story/<id>`. It now
+**expands inline** on the feed card to show a few sibling outlets'
+coverage of the same deduped story, with a "Full dossier →" link for
+the deep dive — the ambient everyday cousin of the dossier. Reuses
+existing dossier infra (story_id clustering, visibility rules); no new
+data, no DB migration, no LLM call.
+
+### What shipped
+
+- **`app/spectrum.py`** (new, pure/Flask-free, mirrors
+  `discussion.py`/`trending.py`): `pick_spectrum_sample(members,
+  exclude_id, limit=3)` — drops the card's own article, round-robins
+  across left/center/right so the sample spans the spectrum even when
+  one side dominates, one article per source, newest-first,
+  deterministic. `lean_bucket` thresholds mirror `story.py` (commented).
+- **`app/routes/story.py`**: extracted the canonical-guard +
+  visibility-scoped member query into `_fetch_cluster()` (shared,
+  behavior-identical to the old inline `view()` code); new
+  `GET /story/<id>/peek` renders a partial via the shared fetch +
+  `pick_spectrum_sample`.
+- **`partials/spectrum_peek.html`** (new): compact sibling list (lean
+  dot, source, title w/ click-tracking, short lead) + "Full dossier →"
+  + framework-free "Hide" (`onclick` clears the container, matches the
+  existing inline-onclick convention).
+- **`partials/feed_cards.html`**: the pill is now progressively
+  enhanced — keeps its `href` to the full dossier (no-JS / no-HTMX
+  fallback = today's exact behavior) and adds `hx-get`/`hx-target`/
+  `hx-swap` to load the peek into a per-card `#spectrum-<id>`
+  container. GET = no CSRF needed.
+- **`style.css`**: append-only `.spectrum-*` block (palette matches
+  `.dossier-discussion`); `.spectrum-peek:empty { display:none }` so
+  the container is invisible until expanded.
+- **Tests**: `tests/test_spectrum.py` (new, 10 pure cases — run green
+  in-sandbox) + 5 `tests/test_story.py` peek-route cases (404 guards,
+  sibling render excludes the card article, partial has no base
+  chrome).
+
+### Code touched
+
+- `news/app/spectrum.py` (new), `news/app/routes/story.py`,
+  `news/app/templates/partials/spectrum_peek.html` (new),
+  `news/app/templates/partials/feed_cards.html`,
+  `news/app/static/style.css`,
+  `news/tests/test_spectrum.py` (new), `news/tests/test_story.py`,
+  `roadmap.md`.
+
+### Server-side state touched
+
+None. No DB migration, cron, env-var, symlink, or pip dep. Standard
+Python App restart on deploy so the new `story.peek` route + templates
+load. **No `manual-actions.md` entry.**
+
+### Verification
+
+- `test_spectrum.py` 10/10 pass in-sandbox; `app/spectrum.py` +
+  `app/routes/story.py` `py_compile` clean; all touched templates
+  Jinja-parse. Route/browser testing of `/story/<id>/peek` and the
+  in-feed expansion is deferred to CI / a real env (sandbox has no
+  Flask/pymysql/pytest — same documented limit as PR #50/#53/#59).
+
+### PR / Open items
+
+- Draft PR (number filled in once opened). `feed.py` deliberately
+  untouched (zero overlap with in-flight PR #61); `style.css` is
+  append-only; `story.py` not in any other in-flight PR's scope.
+- `engineering-history.md` is at its ~34 KB budget — run the archive
+  procedure (`engineering-session-wrapup.md` §1b) at the next wrap-up.
+- Maintainer/CI: click a multi-source card's "+N angles", confirm the
+  inline panel loads sibling angles + "Full dossier →", Hide clears
+  it, and no-JS still navigates to `/story/<id>`.
+
+---
+
 ## 2026-05-17 — Trending topics view (/trending page, PR #71)
 
 Roadmap Pri 7 / LOE 5. New `/trending` page ranking topics by

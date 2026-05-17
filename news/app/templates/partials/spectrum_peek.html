@@ -1,0 +1,30 @@
+{# In-feed mini-dossier loaded by the "+N angles" pill (story.peek). #}
+<div class="spectrum-box">
+  <div class="spectrum-head">
+    <span class="spectrum-label">Across the spectrum</span>
+    <button type="button" class="linkbtn muted spectrum-hide"
+            onclick="this.closest('.spectrum-peek').innerHTML=''">Hide</button>
+  </div>
+  {% if sample %}
+    <ul class="spectrum-list">
+      {% for m in sample %}
+        <li class="spectrum-item spectrum-{{ m.bucket }}">
+          <div class="spectrum-item-meta">
+            <span class="lean-dot" style="--lean: {{ m.political_lean or 0.0 }}"
+                  title="article lean {{ '%+.2f' % (m.political_lean or 0.0) }} · outlet lean {{ '%+.2f' % (m.source_lean or 0.0) }}"></span>
+            <span class="source">{{ m.source_name }}</span>
+            <span class="muted">{{ m.published_at.strftime('%b %d, %H:%M') if m.published_at else '' }}</span>
+          </div>
+          <a class="spectrum-item-title" href="{{ m.url }}" target="_blank" rel="noopener"
+             onclick="fetch('{{ url_for('feed.click', article_id=m.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">{{ m.title }}</a>
+          {% if m.lead %}<p class="spectrum-item-lead">{{ m.lead|striptags|truncate(180) }}</p>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted spectrum-empty">More coverage of this story is available.</p>
+  {% endif %}
+  <a class="spectrum-full" href="{{ url_for('story.view', story_id=story_id) }}">
+    Full dossier{% if total_others > sample|length %} · all {{ total_others + 1 }} sources{% endif %} &rarr;
+  </a>
+</div>
