@@ -171,10 +171,11 @@ deploy so the new route + template load.
 
 ### PR
 
-- **PR (draft)** — Natural-language algorithm builder + roadmap
-  cluster. Rebased on `origin/main` after PRs #50–#55 (langdetect →
-  py3langid, discussion links, history archive) landed; roadmap.md +
-  style.css auto-merged cleanly.
+- **PR #59** — Natural-language algorithm builder + roadmap cluster
+  (merged 2026-05-17). Rebased on `origin/main` after PRs #50–#55
+  (langdetect → py3langid, discussion links, history archive) landed;
+  roadmap.md + style.css auto-merged cleanly. Tracking-doc cleanup
+  (roadmap → Done, this PR line) landed in a follow-up PR.
 
 ### Open items
 
