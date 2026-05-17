@@ -48,7 +48,7 @@
       async vote(t) {
         const r = await fetch("{{ url_for('signals.record', article_id=0, signal_type='X') }}"
                     .replace("/0/X", "/" + articleId + "/" + t),
-                  { method: "POST", headers: { "Accept": "application/json" } });
+                  { method: "POST", headers: { "Accept": "application/json", "X-CSRF-Token": window.csrfToken } });
         if (!r.ok) return;
         const data = await r.json();
         this.state = data.state;
@@ -60,7 +60,7 @@
         const fd = new FormData();
         fd.append("action", action);
         await fetch("{{ url_for('signals.source_pref', source_id=0) }}".replace("/0", "/" + sourceId),
-                    { method: "POST", body: fd });
+                    { method: "POST", body: fd, headers: { "X-CSRF-Token": window.csrfToken } });
         this.prompt = null;
       }
     };

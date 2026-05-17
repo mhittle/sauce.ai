@@ -4,6 +4,7 @@
 <p class="muted">These rows drive the toggles on the Your Algo page. Disable a feature to hide it from users.</p>
 {% for f in features %}
 <form method="post" class="feature-edit">
+  {{ csrf_field() }}
   <input type="hidden" name="feature_key" value="{{ f.feature_key }}" />
   <div class="row">
     <code>{{ f.feature_key }}</code>

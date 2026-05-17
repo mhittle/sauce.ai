@@ -29,7 +29,7 @@ shipped.
 | 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
 | 7 | 7 | ops, new-feature | Automated source discovery — social firehoses (Mastodon, Bluesky, X/Twitter) | backlog |
 | 8 | 7 | algo, backend, new-feature | Signal Learning (implicit + explicit reader signals → per-user adjustments) | backlog |
-| 7 | 4 | security | CSRF tokens + auth rate limiting | backlog |
+| 7 | 4 | security | CSRF tokens + auth rate limiting | done |
 | 7 | 4 | algo | Fold internal clicks into popularity (superseded by Signal Learning) | backlog |
 | 7 | 4 | ui | Mobile / responsive polish | done |
 | 7 | 4 | new-feature, ui | Article summary (3-bullet TL;DR via Haiku) | backlog |
@@ -281,13 +281,6 @@ v2: "Summarize today's brief" — meta-summary across the day's 10
 articles for a 3-minute orientation read at the top of the home feed.
 
 Depends on reader view body extraction (RSS blurbs make poor input).
-
-### CSRF tokens + auth rate limiting
-**Priority:** 7 · **LOE:** 4 · **Category:** security · **Status:** backlog
-
-v1 relies on same-site cookies only. Acceptable for a closed prototype, not
-for anything public. Add Flask-WTF (or hand-rolled) CSRF on POST routes,
-and a simple sliding-window rate limit on `/auth/login`, `/auth/signup`.
 
 ### Fold internal clicks into popularity
 **Priority:** 7 · **LOE:** 4 · **Category:** algo · **Status:** backlog
@@ -582,6 +575,19 @@ narrative lives in `engineering-history.md` under the same date.
   (`seed/migrations/2026-05-17-trending.sql`) + a new every-30-min
   cron entry. Does **not** supersede the separate "Trending topics
   view" item below (that's a dedicated `/trending` page).
+- **CSRF tokens + auth rate limiting** — Pri 7, LOE 4, security. PR #58.
+  Hand-rolled signed double-submit-cookie CSRF (stdlib `hmac`/`secrets`,
+  zero new dependency) enforced on every unsafe-method route via an
+  app-wide `before_request`. Token delivered to forms via a
+  `csrf_field()` helper, to HTMX via an `htmx:configRequest` header
+  hook, and to plain `fetch()` POSTs via a `<meta>` tag +
+  `window.csrfToken`. RFC 8058 one-click `/account/unsubscribe`
+  exempted (URL-token authenticated). `CSRF_ENABLED` config (default
+  on; conftest disables suite-wide, `test_csrf.py` re-enables).
+  Sliding-window in-process rate limit on `/auth/login` +
+  `/auth/signup` (default 10 POSTs / 5 min per IP, env-tunable);
+  per-worker caveat documented. No DB migration, no new dependency,
+  no manual prod action — standard Python App restart on deploy.
 
 ### 2026-05-14
 

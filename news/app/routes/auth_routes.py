@@ -1,9 +1,10 @@
-from flask import Blueprint, request, render_template, redirect, url_for, make_response, g, flash
+from flask import Blueprint, request, render_template, redirect, url_for, make_response, g, flash, current_app
 from ..auth import (
     SESSION_COOKIE, SESSION_TTL_DAYS,
     hash_password, check_password,
     create_session, destroy_session,
 )
+from ..ratelimit import client_ip
 from ..db import query, execute, get_conn
 
 bp = Blueprint("auth", __name__)
@@ -15,9 +16,19 @@ def _safe_next(target):
     return target
 
 
+def _rate_limited():
+    """True if this client IP has exceeded the auth attempt window."""
+    limiter = current_app.extensions["auth_limiter"]
+    return not limiter.hit(client_ip(request))
+
+
 @bp.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
+        if _rate_limited():
+            return render_template(
+                "signup.html", error="Too many attempts. Wait a few minutes and try again."
+            ), 429
         email = (request.form.get("email") or "").strip().lower()
         pw = request.form.get("password") or ""
         if not email or "@" not in email or len(pw) < 8:
@@ -38,6 +49,10 @@ def signup():
 def login():
     nxt = _safe_next(request.args.get("next") or request.form.get("next"))
     if request.method == "POST":
+        if _rate_limited():
+            return render_template(
+                "login.html", error="Too many attempts. Wait a few minutes and try again.", next=nxt
+            ), 429
         email = (request.form.get("email") or "").strip().lower()
         pw = request.form.get("password") or ""
         row = query("SELECT id, password_hash FROM users WHERE email = %s", (email,), one=True)

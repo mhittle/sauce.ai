@@ -3,12 +3,14 @@
 <h1>Feeds</h1>
 
 <form method="post" action="{{ url_for('admin.feeds_import') }}" class="inline">
+  {{ csrf_field() }}
   <button type="submit">Import / refresh seed CSV</button>
 </form>
 
 <details>
   <summary>Add a feed</summary>
   <form method="post" action="{{ url_for('admin.feeds_add') }}" class="feed-add">
+    {{ csrf_field() }}
     <input type="text" name="name" placeholder="Name" required />
     <input type="url" name="feed_url" placeholder="RSS URL" required />
     <input type="url" name="homepage" placeholder="Homepage" />
@@ -41,13 +43,16 @@
       <td>{{ s.error_count }}</td>
       <td>
         <form method="post" action="{{ url_for('admin.feeds_refresh', sid=s.id) }}" class="inline">
+          {{ csrf_field() }}
           <button type="submit" title="Hit the feed URL now; on success resets error count and re-enables">Refresh</button>
         </form>
         <form method="post" action="{{ url_for('admin.feeds_toggle', sid=s.id) }}" class="inline">
+          {{ csrf_field() }}
           <button type="submit">{{ 'Disable' if s.is_active else 'Enable' }}</button>
         </form>
         <form method="post" action="{{ url_for('admin.feeds_delete', sid=s.id) }}" class="inline"
               onsubmit="return confirm('Delete this feed and all its articles?')">
+          {{ csrf_field() }}
           <button type="submit">Delete</button>
         </form>
       </td>

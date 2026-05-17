@@ -53,6 +53,7 @@
       <td class="muted">{{ c.notes or '' }}</td>
       <td class="discovery-actions">
         <form method="post" action="{{ url_for('admin.discovery_approve', cid=c.id) }}">
+          {{ csrf_field() }}
           <input type="text" name="name" value="{{ c.name or c.domain }}" placeholder="name" size="20" />
           <input type="text" name="category" value="{{ c.category or 'general' }}" placeholder="category" size="10" />
           <input type="text" name="country" value="US" size="3" />
@@ -62,10 +63,12 @@
           <button type="submit">Approve</button>
         </form>
         <form method="post" action="{{ url_for('admin.discovery_reject', cid=c.id) }}" class="inline">
+          {{ csrf_field() }}
           <button type="submit">Reject</button>
         </form>
         <form method="post" action="{{ url_for('admin.discovery_blacklist', cid=c.id) }}" class="inline"
               onsubmit="return confirm('Blacklist {{ c.domain }} so it never reappears in candidates?')">
+          {{ csrf_field() }}
           <button type="submit">Blacklist</button>
         </form>
       </td>

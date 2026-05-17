@@ -4,7 +4,7 @@
            {% if current_user %}x-data='cardSignals({{ a.id }}, {{ a.source_id }}, {{ a.thumb|tojson if a.thumb else "null" }}, {{ a.source_name|tojson }})'{% endif %}>
     {% if a.thumbnail_url %}
       <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener"
-         onclick="fetch('{{ url_for('feed.click', article_id=a.id) }}', {method:'POST', keepalive:true})">
+         onclick="fetch('{{ url_for('feed.click', article_id=a.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">
         <img src="{{ a.thumbnail_url }}" alt="" loading="lazy" />
       </a>
     {% endif %}
@@ -31,7 +31,7 @@
       </div>
       <h2 class="card-title">
         <a href="{{ a.url }}" target="_blank" rel="noopener"
-           onclick="fetch('{{ url_for('feed.click', article_id=a.id) }}', {method:'POST', keepalive:true})">{{ a.title }}</a>
+           onclick="fetch('{{ url_for('feed.click', article_id=a.id) }}', {method:'POST', keepalive:true, headers:{'X-CSRF-Token':window.csrfToken}})">{{ a.title }}</a>
       </h2>
       {% if a.summary %}<p class="summary">{{ a.summary|striptags|truncate(220) }}</p>{% endif %}
       <div class="feature-bars">

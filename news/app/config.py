@@ -23,6 +23,10 @@ class Config:
 
     FEED_JITTER = float(os.environ.get("FEED_JITTER", "0.10"))
 
+    CSRF_ENABLED = os.environ.get("CSRF_ENABLED", "1") not in ("0", "false", "False")
+    AUTH_RATELIMIT_MAX = int(os.environ.get("AUTH_RATELIMIT_MAX", "10"))
+    AUTH_RATELIMIT_WINDOW_SECONDS = int(os.environ.get("AUTH_RATELIMIT_WINDOW_SECONDS", "300"))
+
     ARTICLE_RETENTION_DAYS = int(os.environ.get("ARTICLE_RETENTION_DAYS", "30"))
     BODY_RETENTION_DAYS = int(os.environ.get("BODY_RETENTION_DAYS", "30"))
     FEED_FETCH_BATCH = int(os.environ.get("FEED_FETCH_BATCH", "20"))

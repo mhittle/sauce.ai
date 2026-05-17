@@ -13,6 +13,7 @@
 
   <section x-show="tab==='ui'">
     <form class="nl-builder" method="post" action="{{ url_for('algo.describe') }}">
+      {{ csrf_field() }}
       <label for="nl-desc"><strong>Describe your ideal feed</strong></label>
       <p class="muted">Plain English &mdash; e.g. "More local tech and science, less political outrage, prefer long objective reads, hide paywalls." We'll set the sliders below; nothing is saved until you hit <em>Save algorithm</em>.</p>
       <textarea id="nl-desc" name="description" rows="3" maxlength="1000"
@@ -106,6 +107,7 @@
     <div class="presets">
       {% for key, p in presets.items() %}
         <form method="post" action="{{ url_for('algo.use_preset', key=key) }}" class="preset-card">
+          {{ csrf_field() }}
           <div>
             <h3>{{ p.label }}</h3>
             <p class="muted">{{ p.description }}</p>

@@ -37,6 +37,7 @@
   {% if success %}<div class="alert success">{{ success }}</div>{% endif %}
 
   <form class="add-feed" method="post" action="{{ url_for('sources.add') }}">
+    {{ csrf_field() }}
     <input type="url" name="feed_url" placeholder="https://example.com/feed.xml" required maxlength="500" />
     <input type="text" name="name" placeholder="Display name (optional)" maxlength="200" />
     <button type="submit">Add feed</button>
@@ -68,6 +69,7 @@
           <td>
             <form class="inline" method="post" action="{{ url_for('sources.delete', sid=s.id) }}"
                   onsubmit="return confirm('Remove this feed from your pool?');">
+              {{ csrf_field() }}
               <button type="submit" class="linkbtn">Remove</button>
             </form>
           </td>

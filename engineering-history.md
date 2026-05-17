@@ -92,6 +92,75 @@ overlapping tick no-ops.
 
 ---
 
+## 2026-05-17 — CSRF protection + auth rate limiting (PR #58)
+
+Roadmap Pri 7 / LOE 4 (security). v1 was same-site-cookie only —
+every POST forgeable. User chose **hand-rolled zero-dep CSRF** +
+**in-memory rate limit** (avoids another cPanel `pip install`, a
+`requirements.txt` conflict with parallel work, and any manual prod
+action).
+
+### What shipped
+
+- **`app/security.py`** (new) — signed double-submit-cookie CSRF.
+  Token `nonce.HMAC-SHA256(SECRET_KEY,nonce)` (stdlib only). Pure
+  helpers (`make_csrf_token`/`csrf_token_valid`/`tokens_match`,
+  no Flask import — testable like `app/language.py`). `init_csrf`
+  registers: `before_request` resolving the `news_csrf` cookie
+  (mints if missing/invalid) and rejecting unsafe-method requests
+  400 unless `_csrf` form field **or** `X-CSRF-Token` header
+  matches; `after_request` setting the cookie (httponly, Lax,
+  Secure when `request.is_secure`, 30-day) only when freshly
+  minted; context processor exposing `csrf_token` +
+  `csrf_field()` (`markupsafe.Markup`, not removed `flask.Markup`).
+  Registered before `_load_user` so forgeries die before the
+  session lookup. Only exempt endpoint: `account.unsubscribe`
+  (RFC 8058 one-click POST is tokenless + URL-token authenticated).
+- **`app/ratelimit.py`** (new) — thread-safe `SlidingWindowLimiter`
+  + `client_ip()` (XFF first hop → remote_addr). Limiter on
+  `app.extensions` per `create_app()`. `/auth/login` + `/auth/
+  signup` POST → 429 over limit. Default 10 / 300 s, env-tunable.
+- **`CSRF_ENABLED`** config (default on). Mirrors Flask-WTF's
+  test convention: `conftest.py` sets it `0` suite-wide (keeps the
+  existing `test_signals.py` POSTs green untouched);
+  `test_csrf.py` re-enables on its own app.
+- **Templates** — `{{ csrf_field() }}` in all POST `<form>`s
+  (incl. the PR #59 NL-builder `algo.describe` form picked up on
+  rebase); `base.html` `<meta csrf-token>` + end-of-body script
+  (`window.csrfToken` + `htmx:configRequest` header hook covering
+  algo `hx-post` preview/save); `X-CSRF-Token` header added to the
+  5 plain `fetch()` POST sites (signals + click tracking).
+- **Tests** — `test_ratelimit.py` (pure, run in-sandbox) +
+  `test_csrf.py` (pure helpers + Flask-integration). Pure logic
+  verified locally; Flask cases run on CI (sandbox has no
+  Flask/pytest — same env limit as PR #50).
+- **Docs** — INSTALL.txt §2b (optional `CSRF_ENABLED`/
+  `AUTH_RATELIMIT_*` + SECRET_KEY-must-be-real) and §10
+  (CSRF + rate limit shipped; per-worker caveat).
+
+### Server-side state touched
+
+None — no DB/cron/symlink/pip change. New env vars have working
+defaults. **Standard Python App restart on deploy** (Passenger
+import cache). CSRF HMAC uses the existing real `SECRET_KEY` cPanel
+env var — no action needed.
+
+### Notes for next session
+
+- Rate-limit counters are per Passenger worker; DB-backed
+  cross-worker upgrade noted in INSTALL §10 (only if distributed
+  credential-stuffing shows up).
+- CSRF cookie refreshes only when missing/invalid (stable across
+  tabs); helper supports per-form rotation if ever needed.
+- Email verification on signup (Pri 5) pairs with this + digest
+  SMTP.
+
+### PR
+
+- **PR #58** — CSRF protection + auth rate limiting (draft).
+
+---
+
 ## 2026-05-17 — Natural-language algorithm builder (+ user-empowerment roadmap cluster)
 
 ### Context

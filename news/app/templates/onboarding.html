@@ -5,6 +5,7 @@
   <h1>Pick a starting algorithm</h1>
   <p class="muted">You can fully customize this later on the Your Algo page. Pick whichever sounds closest.</p>
   <form method="post" class="presets">
+    {{ csrf_field() }}
     {% for key, p in presets.items() %}
       <label class="preset-card">
         <input type="radio" name="preset" value="{{ key }}" {% if key == 'balanced' %}checked{% endif %} />
