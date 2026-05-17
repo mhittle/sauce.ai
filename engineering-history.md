@@ -265,13 +265,17 @@ restart is cleaner).
 - Maintainer/CI: load `/`, `/algo`, `/firehose`, `/admin`, `/read`,
   `/story` in dark; toggle; hard-reload (confirm no light flash);
   cross-tab persistence. Tune any dark palette value that reads poorly.
-- `engineering-history.md` is at its ~34 KB budget — archive oldest
-  entries at the next wrap-up (deliberately not done here to keep this
-  low-risk UI PR off the high-conflict archive path).
+- On the next deploy: restart the Python App so the new template/CSS
+  load (no DB/cron/env/pip/symlink — no manual prod action).
 
 ### PR
 
-- **PR #63** — Dark mode (draft).
+- **PR #63** — Dark mode (merged 2026-05-17). Rebased twice (behind
+  PR #56, then PRs #62/#64); resolved the `engineering-history.md`
+  top-entry overlap and a union-merge `.save-btn` duplicate, and
+  fixed a self-referential `--surface-3` introduced by an earlier
+  `replace_all`. Tracking-doc cleanup (roadmap → Done, this line)
+  landed in a follow-up.
 
 ---
 

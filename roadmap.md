@@ -48,7 +48,7 @@ shipped.
 | 5 | 3 | security | Email verification on signup | backlog |
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
 | 4 | 7 | infra, skunkworks | Migrate to VPS (gunicorn + nginx) | backlog |
-| 3 | 2 | ui | Dark mode | in-progress |
+| 3 | 2 | ui | Dark mode | done |
 | 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | backlog |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
@@ -369,12 +369,6 @@ cleanly: Flask + gunicorn behind nginx, MySQL local, system cron.
 
 Defer until shared hosting actively breaks something the customer notices.
 
-### Dark mode
-**Priority:** 3 · **LOE:** 2 · **Category:** ui · **Status:** in-progress
-
-Toggle in the user nav. CSS custom-property swap. Persist preference in
-`localStorage`.
-
 ---
 
 ## User-empowerment cluster (added 2026-05-17)
@@ -504,6 +498,12 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Dark mode** — Pri 3, LOE 2, ui. PR #63 (merged 2026-05-17).
+  Client-only theme: a nav toggle persisted in `localStorage` with a
+  FOUC-free `<head>` init (falls back to `prefers-color-scheme`).
+  `style.css` gains a `:root[data-theme="dark"]` palette via semantic
+  surface vars; light-mode values unchanged. No DB/cron/env/pip/symlink
+  — Python App restart on deploy.
 - **Trending topics view** — Pri 7, LOE 5, new-feature/algo. PR #71
   (merged 2026-05-17). New `/trending` page ranking topics by
   distinct-outlet count ("20 outlets beat one outlet ×20"), each
