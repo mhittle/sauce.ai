@@ -106,7 +106,7 @@ rebuild from `seed/schema.sql` already includes these.
 
 ---
 
-## 2026-05-17 — BUG-020: firehose accumulates instead of churning (PR #<n>)
+## 2026-05-17 — BUG-020: firehose accumulates instead of churning (PR #72)
 
 ### Context
 
@@ -152,7 +152,7 @@ a later-reclassified row can re-appear at top (a dup, not a loss).
 
 ### PR
 
-- **PR #<n>** — BUG-020 firehose accumulation (draft).
+- **PR #72** — BUG-020 firehose accumulation (draft).
 
 ---
 

@@ -87,7 +87,7 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 ## Resolved
 
 ### BUG-020 — Firehose view doesn't show all articles
-**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #<n>, draft)
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #72, draft)
 
 User reported the `/firehose` view "doesn't actually show everything" —
 articles that should be in the live stream were missing.
@@ -103,7 +103,7 @@ not-yet-classified rows — that is the by-design "as they're classified"
 behavior the page advertises and was explicitly out of scope per the
 user's "make it accumulate" choice; this fix keeps classified-only.)
 
-**Fix (PR #<n>):** the page now *accumulates*. A stable
+**Fix (PR #72):** the page now *accumulates*. A stable
 `<tbody id="firehose-rows">` is rendered once; the 4s poll prepends only
 rows newer than the current top (`hx-swap="afterbegin"`) and a "Load
 more" button appends older rows (`hx-swap="beforeend"`), so nothing is
