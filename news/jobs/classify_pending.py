@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
 from app.classifier import (
     compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline,
-    source_obscurity_score, story_obscurity_score, detect_paywall,
+    source_obscurity_score, story_obscurity_score, detect_paywall, popularity_score,
 )
 from app.classifier.rules import split_bylines
 from app.extractor import extract_body
@@ -59,12 +59,13 @@ def _assign_story_id(cur, art):
             (my_th, my_id, CLUSTER_LOOKBACK_HOURS),
         )
         candidate = cur.fetchone()
-    if not candidate and my_sim is not None:
+    if not candidate and my_sim:
         cur.execute(
             """SELECT a2.id, a2.story_id, BIT_COUNT(a2.simhash ^ %s) AS hd
                FROM articles a2
                WHERE a2.fetched_at >= UTC_TIMESTAMP() - INTERVAL %s HOUR
                  AND a2.simhash IS NOT NULL
+                 AND a2.simhash <> 0
                  AND a2.id <> %s
                  AND BIT_COUNT(a2.simhash ^ %s) <= %s
                ORDER BY hd ASC, a2.id ASC LIMIT 1""",
@@ -107,16 +108,108 @@ def _assign_story_id(cur, art):
     return True
 
 
-def _ensure_journalist(cur, normalized, display):
+NOLLM_SUFFIX = "-nollm"
+
+
+def _classifier_version(aid, llm_by_id, base):
+    """Tag rows that fell back to source-level lean/objectivity (LLM
+    unavailable) with a distinct version so they're queryable and the
+    per-tick reclassify pass can find them (BUG-019)."""
+    return base if aid in llm_by_id else base + NOLLM_SUFFIX
+
+
+def _ensure_journalist(cur, normalized, display, first_seen=None):
+    """Look up (or create) a journalist row. `first_seen` is the article's
+    published_at: seeding tenure from publish date instead of row-insert time
+    keeps `journalist_reputation` from being a function of when our DB first
+    happened to see the byline (BUG-017). For an existing journalist, pull
+    first_seen_at earlier if this article predates it."""
     cur.execute("SELECT id FROM journalists WHERE normalized_name=%s", (normalized,))
     row = cur.fetchone()
     if row:
+        if first_seen is not None:
+            cur.execute(
+                "UPDATE journalists SET first_seen_at=%s "
+                "WHERE id=%s AND first_seen_at > %s",
+                (first_seen, row["id"], first_seen),
+            )
         return row["id"]
-    cur.execute(
-        "INSERT INTO journalists (normalized_name, display_name) VALUES (%s, %s)",
-        (normalized, display[:200]),
-    )
+    if first_seen is not None:
+        cur.execute(
+            "INSERT INTO journalists (normalized_name, display_name, first_seen_at) "
+            "VALUES (%s, %s, %s)",
+            (normalized, display[:200], first_seen),
+        )
+    else:
+        cur.execute(
+            "INSERT INTO journalists (normalized_name, display_name) VALUES (%s, %s)",
+            (normalized, display[:200]),
+        )
     return cur.lastrowid
+
+
+def _reclassify_nollm(conn, cfg, deadline):
+    """Re-run the LLM over rows previously classified with the `-nollm`
+    fallback (BUG-019). Bounded: one LLM batch per tick, only when the
+    pending queue is already drained and wallclock budget remains. Returns
+    (reclassified_count, cost_usd). No-ops (and clears nothing) if the LLM is
+    still unavailable, so a persistent outage just leaves the rows tagged for
+    the next tick."""
+    if time.time() >= deadline:
+        return 0, 0.0
+    marker = cfg.CLASSIFIER_VERSION + NOLLM_SUFFIX
+    conn.ping(reconnect=True)
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT a.id, a.title, a.summary, s.name AS source_name, s.source_lean
+               FROM article_features f
+               JOIN articles a ON a.id = f.article_id
+               JOIN sources s ON s.id = a.source_id
+               WHERE f.classifier_version = %s
+               ORDER BY f.classified_at ASC
+               LIMIT %s""",
+            (marker, cfg.LLM_BATCH_SIZE),
+        )
+        rows = cur.fetchall()
+    if not rows:
+        return 0, 0.0
+
+    items = [
+        (r["id"], r["source_name"], float(r["source_lean"] or 0.0),
+         r["title"], r["summary"] or "")
+        for r in rows
+    ]
+    try:
+        res = classify_batch_llm(cfg.ANTHROPIC_API_KEY, cfg.ANTHROPIC_MODEL, items)
+    except LLMUnavailable as e:
+        logger.info("reclassify: LLM still unavailable, leaving %d rows tagged: %s",
+                    len(rows), e)
+        return 0, 0.0
+
+    by_id = res["by_id"]
+    usage = res.get("usage") or {}
+    conn.ping(reconnect=True)
+    with conn.cursor() as cur:
+        for aid, vals in by_id.items():
+            cur.execute(
+                """UPDATE article_features
+                   SET political_lean=%s, objectivity=%s,
+                       classifier_version=%s, classified_at=UTC_TIMESTAMP()
+                   WHERE article_id=%s""",
+                (vals["political_lean"], vals["objectivity"],
+                 cfg.CLASSIFIER_VERSION, aid),
+            )
+        if usage:
+            cur.execute(
+                """INSERT INTO llm_usage (model, input_tokens, output_tokens,
+                   cache_read_tokens, articles, est_cost_usd)
+                   VALUES (%s,%s,%s,%s,%s,%s)""",
+                (usage.get("model"), usage.get("input_tokens", 0),
+                 usage.get("output_tokens", 0), usage.get("cache_read_tokens", 0),
+                 len(by_id), usage.get("est_cost_usd", 0.0)),
+            )
+    conn.commit()
+    return len(by_id), usage.get("est_cost_usd", 0.0)
 
 
 def main():
@@ -179,6 +272,28 @@ def _run():
                         title_hashes,
                     )
                     story_counts = {r["title_hash"]: r["n"] for r in cur.fetchall()}
+
+            # Popularity seed: an article can trend on Reddit/HN while it's
+            # still 'pending', so popularity_signals may already have rows for
+            # it. Seed from those instead of writing 0.0 (BUG-016). The
+            # nightly maintenance reconciliation is the authoritative
+            # catch-up; this just avoids a multi-hour 0.0 window.
+            pop_seed = {}
+            ids = [a["id"] for a in batch]
+            if ids:
+                ph = ", ".join(["%s"] * len(ids))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""SELECT article_id, MAX(score + 2 * comments) AS eng
+                            FROM popularity_signals
+                            WHERE article_id IN ({ph})
+                            GROUP BY article_id""",
+                        ids,
+                    )
+                    for r in cur.fetchall():
+                        # eng is already score+2*comments; pass as score with
+                        # comments=0 so the shared curve is applied verbatim.
+                        pop_seed[r["article_id"]] = popularity_score(r["eng"], 0)
 
             # Step 1: rules features (always succeeds)
             rules_features = {}
@@ -290,12 +405,14 @@ def _run():
                             aid, llm["political_lean"], rf["reading_level"], llm["objectivity"],
                             rf["info_density"], rf["journalist_reputation"], rf["source_lean"],
                             rf["source_reputation"], rf["category"], rf["country"], rf["region"],
-                            0.0, story_obs, src_obs, paywall, cfg.CLASSIFIER_VERSION,
+                            pop_seed.get(aid, 0.0), story_obs, src_obs, paywall,
+                            _classifier_version(aid, llm_by_id, cfg.CLASSIFIER_VERSION),
                         ),
                     )
                     # bylines
                     for byname in split_bylines(art.get("byline") or ""):
-                        jid = _ensure_journalist(cur, byname, byname.title())
+                        jid = _ensure_journalist(cur, byname, byname.title(),
+                                                 art.get("published_at"))
                         cur.execute(
                             "INSERT IGNORE INTO article_journalists (article_id, journalist_id) VALUES (%s, %s)",
                             (aid, jid),
@@ -346,7 +463,18 @@ def _run():
             if classified_total >= cfg.CLASSIFY_BATCH_LIMIT:
                 break
 
-        msg = f"classified={classified_total} llm_articles={llm_articles} cost_usd={cost_total:.4f}"
+        # Pending queue drained (or limit hit). If budget remains, spend one
+        # LLM batch healing rows previously stuck on the -nollm fallback.
+        reclassified = 0
+        try:
+            reclassified, recost = _reclassify_nollm(
+                conn, cfg, start + cfg.CLASSIFY_BUDGET_SECONDS)
+            cost_total += recost
+        except Exception as e:
+            logger.warning("reclassify pass failed: %s", e)
+
+        msg = (f"classified={classified_total} llm_articles={llm_articles} "
+               f"reclassified={reclassified} cost_usd={cost_total:.4f}")
         logger.info(msg)
         db_log(conn, JOB, "info", msg)
     finally:

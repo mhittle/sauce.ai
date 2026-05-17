@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Poll Reddit and Hacker News for popular URLs, match against our DB, update popularity."""
-import math
 import os
 import sys
 import time
@@ -11,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import requests
 
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
+from app.classifier import popularity_score
 
 JOB = "popularity_poll"
 logger = setup_logging(JOB)
@@ -108,9 +108,10 @@ def _fetch_hn(http):
 
 
 def _popularity_score(score, comments):
-    """Map raw engagement to 0..1 via a log curve."""
-    raw = math.log1p(score + 2 * comments) / math.log1p(2000 + 2 * 500)
-    return max(0.0, min(1.0, raw))
+    """Thin wrapper over the shared formula (app.classifier.popularity_score)
+    so popularity_poll, classify_pending seed, and the maintenance.py SQL
+    reconciliation all agree."""
+    return popularity_score(score, comments)
 
 
 def main():

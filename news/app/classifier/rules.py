@@ -92,6 +92,23 @@ def story_obscurity_score(cluster_count: int) -> float:
     return max(0.0, min(1.0, 1.0 - s))
 
 
+# Normalization denominator for popularity: log1p of a "very viral" engagement
+# (~2000 upvotes + 500 comments, weighting comments 2x). Kept as a module
+# constant so the SQL reconciliation in maintenance.py can mirror it exactly
+# (MySQL: LN(1 + score + 2*comments) / _POPULARITY_LN_DENOM).
+_POPULARITY_ENGAGEMENT_CAP = 2000 + 2 * 500
+_POPULARITY_LN_DENOM = math.log1p(_POPULARITY_ENGAGEMENT_CAP)
+
+
+def popularity_score(score: int, comments: int) -> float:
+    """Map raw Reddit/HN engagement to 0..1 via a log curve. Single source of
+    truth shared by popularity_poll (live signal) and classify_pending (seed
+    from prior signals); maintenance.py mirrors this in SQL."""
+    engagement = max(0, int(score or 0)) + 2 * max(0, int(comments or 0))
+    raw = math.log1p(engagement) / _POPULARITY_LN_DENOM
+    return max(0.0, min(1.0, raw))
+
+
 def _strip_html(text: str) -> str:
     if not text:
         return ""
