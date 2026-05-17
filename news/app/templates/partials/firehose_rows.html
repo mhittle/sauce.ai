@@ -1,33 +1,14 @@
-<table class="firehose-table">
-  <thead>
-    <tr>
-      <th>Time</th>
-      <th>Source</th>
-      <th>Title</th>
-      <th>Score</th>
-      <th>Lean</th>
-      <th>Obj</th>
-      <th>Dens</th>
-      <th>Read</th>
-      <th>Rep</th>
-      <th>Pop</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for r in rows %}
-    <tr>
-      <td class="muted">{{ r.classified_at.strftime('%H:%M:%S') if r.classified_at else '' }}</td>
-      <td>{{ r.source_name }}</td>
-      <td><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title|truncate(110) }}</a></td>
-      <td class="score-cell">{{ '%.2f' % r.score }}</td>
-      <td><span class="bar lean"><i style="--v: {{ r.political_lean }}"></i></span></td>
-      <td><span class="bar"><i style="width: {{ (r.objectivity*100)|round }}%"></i></span></td>
-      <td><span class="bar"><i style="width: {{ (r.info_density*100)|round }}%"></i></span></td>
-      <td><span class="bar"><i style="width: {{ (r.reading_level*100)|round }}%"></i></span></td>
-      <td><span class="bar"><i style="width: {{ (r.source_reputation*100)|round }}%"></i></span></td>
-      <td><span class="bar"><i style="width: {{ (r.popularity*100)|round }}%"></i></span></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% if not rows %}<p class="muted">No articles classified yet.</p>{% endif %}
+{% for r in rows %}
+<tr data-aid="{{ r.id }}" data-ts="{{ r.classified_at_iso }}">
+  <td class="muted">{{ r.classified_at.strftime('%H:%M:%S') if r.classified_at else '' }}</td>
+  <td>{{ r.source_name }}</td>
+  <td><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title|truncate(110) }}</a></td>
+  <td class="score-cell">{{ '%.2f' % r.score }}</td>
+  <td><span class="bar lean"><i style="--v: {{ r.political_lean }}"></i></span></td>
+  <td><span class="bar"><i style="width: {{ (r.objectivity*100)|round }}%"></i></span></td>
+  <td><span class="bar"><i style="width: {{ (r.info_density*100)|round }}%"></i></span></td>
+  <td><span class="bar"><i style="width: {{ (r.reading_level*100)|round }}%"></i></span></td>
+  <td><span class="bar"><i style="width: {{ (r.source_reputation*100)|round }}%"></i></span></td>
+  <td><span class="bar"><i style="width: {{ (r.popularity*100)|round }}%"></i></span></td>
+</tr>
+{% endfor %}
