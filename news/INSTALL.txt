@@ -517,5 +517,19 @@ K. /trending page is empty or 500s:
   roadmap upgrade; it pairs with Signal Learning entity work and
   was deferred here to avoid colliding with the in-flight
   classify_pending rewrite.
+- Article search (/search, nav box) uses a MySQL InnoDB FULLTEXT
+  index on articles(title, summary) in NATURAL LANGUAGE MODE.
+  v1 limits: searches title + summary only (not extracted body
+  text); subject to InnoDB's innodb_ft_min_token_size (default 3,
+  so 1-2 char terms don't match) and the server stopword list; no
+  stemming/synonyms ("run" != "running"); query is bound as a
+  parameter so boolean operators (+ - * ") are literal text, not
+  operators. Results are deduped by story cluster and obey the
+  same source-visibility + per-user source-mute rules as the feed,
+  and are ordered by relevance then recency. Requires the
+  2026-05-17-search-fulltext.sql migration (the ALTER ... ADD
+  FULLTEXT); /search 500s on the missing index until applied,
+  other routes are unaffected. Body-text search and a blended
+  relevance*recency score are roadmapped v2.
 
 You're done. Visit  https://sauce.ai/news .

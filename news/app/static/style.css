@@ -439,3 +439,14 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .spectrum-item-lead { font-size: 0.82em; line-height: 1.45; margin: 0.15em 0 0; color: #444; }
 .spectrum-empty { font-size: 0.82em; margin: 0.2em 0; }
 .spectrum-full { display: inline-block; margin-top: 0.5em; font-size: 0.82em; font-weight: 600; }
+
+/* full-text search (roadmap "Search across articles") */
+.nav-search { margin: 0; display: flex; }
+.nav-search input { width: 14em; max-width: 40vw; padding: 0.3em 0.6em; font-size: 0.9em; }
+.search-page-form { display: flex; gap: 0.6em; margin: 1em 0 0.4em; }
+.search-page-form input[type="search"] { flex: 1; }
+.search-card .card-title { margin-bottom: 0.1em; }
+@media (max-width: 640px) {
+  .nav-search { width: 100%; order: 99; }
+  .nav-search input { width: 100%; max-width: none; }
+}

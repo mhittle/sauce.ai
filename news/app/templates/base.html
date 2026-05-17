@@ -26,6 +26,10 @@
   <a href="{{ url_for('feed.index') }}">Feed</a>
   <a href="{{ url_for('trending.index') }}">Trending</a>
   <a href="{{ url_for('firehose.index') }}">Firehose</a>
+  <form class="nav-search" method="get" action="{{ url_for('search.index') }}" role="search">
+    <input type="search" name="q" value="{{ request.args.get('q', '') }}"
+           placeholder="Search&hellip;" aria-label="Search articles" />
+  </form>
   {% if current_user %}
     <a href="{{ url_for('algo.index') }}">Your Algo</a>
     <a href="{{ url_for('sources.index') }}">Your Sources</a>

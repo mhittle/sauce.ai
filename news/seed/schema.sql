@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS articles (
   KEY idx_articles_source_pub (source_id, published_at),
   KEY idx_articles_title_hash (title_hash, fetched_at),
   KEY idx_articles_story (story_id, published_at),
+  FULLTEXT KEY ft_articles_search (title, summary),
   CONSTRAINT fk_articles_source FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
