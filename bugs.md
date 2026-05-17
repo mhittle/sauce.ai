@@ -102,7 +102,7 @@ score DESC, a.published_at DESC`, identical inputs guarantee
 identical outputs. Refreshes inside the multi-second recency-decay
 plateau saw zero shuffle.
 
-**Fix (BUG-012, this commit):** added an opt-in `jitter` kwarg to
+**Fix (BUG-012, PR #46, merged 2026-05-13):** added an opt-in `jitter` kwarg to
 `build_score_sql`. When `jitter > 0` and the score has any active
 quality features, the final expression is wrapped in
 `* (1 + RAND() * %(jitter)s)`. The live feed route (`/`) now passes

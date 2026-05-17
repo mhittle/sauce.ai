@@ -167,7 +167,8 @@ App restart after FTP/CI deploy so the new code loads.
 
 ### PR
 
-- **PR #TBD** — BUG-012: refresh shuffle via score jitter (draft).
+- **PR #46** (merged 2026-05-13) — Fix BUG-012: refresh-shuffle via
+  score jitter.
 
 ---
 
