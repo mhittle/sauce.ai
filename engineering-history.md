@@ -236,14 +236,15 @@ this entry).
 
 ### PR
 
-- **PR #70** — Full-text article search (draft). Branch
-  `claude/onboard-news-aggregator-j0JdN`.
+- **PR #70** — Full-text article search (merged 2026-05-17). Branch
+  `claude/onboard-news-aggregator-j0JdN`. FULLTEXT migration applied
+  on prod 2026-05-17 (manual-actions.md Completed).
 
 ### Open items
 
-- Maintainer: apply the FULLTEXT migration before merge, then click
-  through `/search` (nav box → results → Load more) and confirm
-  muted-source/visibility scoping.
+- Merged + FULLTEXT migration applied on prod. Maintainer spot-check
+  when convenient: `/search` via the nav box → results → Load more,
+  confirm muted-source/visibility scoping in a real env.
 - v2: search extracted `article_bodies` text; blended
   relevance×recency score; boolean/phrase mode.
 

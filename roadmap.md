@@ -43,7 +43,7 @@ shipped.
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
 | 6 | 2 | ui, backend | Feed sort selector (Relevance / Newest / Popularity) | done |
 | 6 | 4 | new-feature, ui | User-added RSS feed subscriptions | done |
-| 6 | 6 | new-feature, ui | Search across articles | in-progress |
+| 6 | 6 | new-feature, ui | Search across articles | done |
 | 5 | 5 | infra | Test coverage expansion | backlog |
 | 5 | 3 | security | Email verification on signup | backlog |
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
@@ -306,20 +306,6 @@ next, playback speed.
 
 Depends on reader view body extraction.
 
-### Search across articles
-**Priority:** 6 · **LOE:** 6 · **Category:** new-feature, ui · **Status:** in-progress (PR #70)
-
-Full-text search box in the nav, results page sorted by relevance + recency.
-MySQL FULLTEXT index works for v1; revisit if quality is poor (then SQLite
-FTS5 in-process, or Meilisearch on a VPS).
-
-v1 (PR #70): InnoDB FULLTEXT index on `articles(title, summary)`; new
-`/search` route + nav box; NATURAL LANGUAGE MODE, results deduped by story
-cluster and scoped by the feed's source-visibility / per-user mute rules;
-`ORDER BY relevance DESC, published_at DESC`. Requires the
-`2026-05-17-search-fulltext.sql` migration on prod. Body-text search,
-boolean operators, and a blended relevance×recency score are noted as v2.
-
 ### Test coverage expansion
 **Priority:** 5 · **LOE:** 5 · **Category:** infra · **Status:** backlog
 
@@ -493,6 +479,16 @@ narrative lives in `engineering-history.md` under the same date.
   `_fetch_cluster`); pill progressively enhanced (keeps its `href` so
   no-JS/no-HTMX falls back to the full dossier page). No DB migration,
   no LLM call, no new dependency, no manual prod action.
+- **Search across articles** — Pri 6, LOE 6, new-feature/ui. PR #70
+  (merged 2026-05-17). Full-text search: new `/search` route + nav
+  box backed by a MySQL InnoDB FULLTEXT index on
+  `articles(title, summary)`, NATURAL LANGUAGE MODE with the query
+  bound as a parameter (no injection surface). Results deduped by
+  story cluster and scoped by the feed's source-visibility +
+  per-user mute rules; `ORDER BY relevance DESC, published_at DESC`.
+  No new dependency. Required the `2026-05-17-search-fulltext.sql`
+  FULLTEXT migration (applied on prod 2026-05-17). v2: body-text
+  search, boolean/phrase mode, blended relevance×recency score.
 - **Dark mode** — Pri 3, LOE 2, ui. PR #63 (merged 2026-05-17).
   Client-only theme: a nav toggle persisted in `localStorage` with a
   FOUC-free `<head>` init (falls back to `prefers-color-scheme`).
