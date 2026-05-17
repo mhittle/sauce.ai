@@ -20,10 +20,12 @@ from classify_pending import _assign_story_id  # noqa: E402
 class FakeCursor:
     def __init__(self, scripted_fetchone):
         self._fetch_queue = list(scripted_fetchone)
-        self.calls = []  # list of (sql, params)
+        self.calls = []     # list of (op, params) — stable 2-tuple contract
+        self.sql_log = []   # full SQL strings, parallel to self.calls
 
     def execute(self, sql, params=()):
         self.calls.append((sql.strip().split()[0].upper(), params))
+        self.sql_log.append(sql)
         # SELECTs consume a fetch result; UPDATEs do not.
         op = sql.strip().split()[0].upper()
         if op == "SELECT":
@@ -136,3 +138,43 @@ def test_null_simhash_and_null_title_hash_no_op():
     out = _assign_story_id(cur, art)
     assert out is False
     assert cur.calls == []
+
+
+def test_zero_simhash_does_not_cluster(monkeypatch):
+    # simhash==0 means "no usable tokens"; it must NOT run the simhash branch
+    # (otherwise every zero-simhash article is Hamming-0 from every other and
+    # collapses into one bogus megacluster — BUG-018).
+    cur = FakeCursor(scripted_fetchone=[])
+    art = {"id": 10, "title_hash": None, "simhash": 0,
+           "source_reputation": 0.5,
+           "published_at": datetime.datetime(2026, 5, 17, 9, 0, 0)}
+    out = _assign_story_id(cur, art)
+    assert out is False
+    # No simhash SELECT issued at all.
+    assert cur.calls == []
+
+
+def test_zero_simhash_still_uses_title_hash():
+    # A zero simhash must not break the title_hash clustering path.
+    cur = FakeCursor(scripted_fetchone=[
+        {"id": 5, "story_id": 5},                       # title_hash hit
+        {"id": 5, "published_at": datetime.datetime(2026, 5, 17, 8, 0, 0),
+         "source_reputation": 0.9},                     # canonical
+    ])
+    out = _assign_story_id(cur, _art(id_=10, title_hash="abc", simhash=0, rep=0.7))
+    assert out is True
+    ops = [op for op, _ in cur.calls]
+    # title SELECT, canonical SELECT, UPDATE — no simhash SELECT.
+    assert ops == ["SELECT", "SELECT", "UPDATE"]
+    assert cur.calls[2][1] == (5, 10)
+
+
+def test_simhash_query_excludes_zero_rows():
+    # When we DO run the simhash branch, the SQL must exclude a2.simhash=0
+    # candidates so a real article can't match the zero-bucket.
+    cur = FakeCursor(scripted_fetchone=[None, None])  # title miss, simhash miss
+    _assign_story_id(cur, _art(id_=10, title_hash="abc", simhash=0x1234))
+    # The simhash candidate query is the one that references BIT_COUNT.
+    sim_sql = [s for s in cur.sql_log if "BIT_COUNT" in s]
+    assert len(sim_sql) == 1
+    assert "a2.simhash <> 0" in sim_sql[0]

@@ -86,6 +86,81 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-019 — LLM-fallback classifications are permanent and unmarked
+**Status:** resolved · **Reporter:** internal (classifier review) · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #56)
+
+On `LLMUnavailable` (missing key, Anthropic 5xx/timeout) `classify_pending`
+fell back to `political_lean = source_lean`, `objectivity = 0.5`, marked the
+row `classified` with `classifier_version='v1'`, and never revisited it (the
+work query is `WHERE status='pending'`). Any outage window permanently
+contaminated the two flagship LLM features with no marker and no re-classify
+path.
+
+**Fix (PR #56):** new pure helper `_classifier_version()` tags fallback rows
+with `<CLASSIFIER_VERSION>-nollm` so they're queryable, and a new bounded
+`_reclassify_nollm()` pass re-runs the LLM over those rows (oldest first,
+one `LLM_BATCH_SIZE` per tick) only when the pending queue is drained and
+wallclock budget remains, rewriting `classifier_version` back to the clean
+base on success. A persistent outage just leaves rows tagged for the next
+tick (no infinite cost). Unit-tested in `tests/test_classify_pending.py`.
+
+### BUG-018 — `simhash == 0` collapses unrelated articles into one megacluster
+**Status:** resolved · **Reporter:** internal (classifier review) · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #56)
+
+`rules.simhash64` returns `0` for empty/all-stopword token sets; `fetch_feeds`
+inserted that 0. `classify_pending._assign_story_id` filtered
+`a2.simhash IS NOT NULL` but not `<> 0`, and treated `my_sim == 0` as valid
+(`my_sim is not None`). Every zero-simhash article was Hamming-distance 0
+from every other, so they all merged into one cross-topic "story"; the feed
+shows only the canonical, so the rest silently vanished from the deduped
+feed.
+
+**Fix (PR #56):** `_assign_story_id` now skips the simhash branch when
+`my_sim` is falsy (`if not candidate and my_sim:`) and the candidate query
+excludes `a2.simhash = 0` (`AND a2.simhash <> 0`); `fetch_feeds` stores
+`NULL` instead of `0` (`article_simhash(...) or None`). Existing 0 rows are
+harmless once the consumer ignores them. Covered by new
+`tests/test_assign_story_id.py` cases.
+
+### BUG-017 — `journalist_reputation` penalizes any article with a parseable byline
+**Status:** resolved · **Reporter:** internal (classifier review) · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #56)
+
+`rules.py` seeds `journalist_reputation = source_reputation` (~0.6). Nightly
+`maintenance.py` overwrote it for bylined articles with
+`0.5*avg(source_reputation) + 0.5*tenure`, where tenure derived from
+`journalists.first_seen_at` defaulting to row-creation time. Every journalist
+was therefore "new" → tenure≈0 → reputation≈0.3, *below* the no-byline
+fallback of ~0.6. With catalog `default_weight 0.6`, a recognized byline cost
+an article ~0.18 quality vs. an identical byline-less one — a perverse,
+systematic bias persisting ~a year.
+
+**Fix (PR #56):** `_ensure_journalist()` now seeds `journalists.first_seen_at`
+from the article's `published_at` (and pulls it earlier for an existing
+journalist if this article predates it). The `maintenance.py` reputation
+recompute is floored at the journalist's average source reputation —
+`GREATEST(avg_rep, 0.5*avg_rep + 0.5*tenure)` with `tenure` clamped
+non-negative — so tenure is upside-only and a byline can never score below
+the no-byline fallback. `_ensure_journalist` behavior unit-tested.
+
+### BUG-016 — Popularity feature chronically under-counts (signal lost while pending)
+**Status:** resolved · **Reporter:** internal (classifier review) · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #56)
+
+`classify_pending` wrote `article_features.popularity = 0.0` on the first
+INSERT and (correctly) omitted `popularity` from its `ON DUPLICATE KEY
+UPDATE`. `popularity_poll` only `UPDATE`s `article_features` rows that
+already exist, so anything that trended on HN/Reddit while still `pending`
+(the normal case — articles trend within hours, classify runs in batches)
+lost its signal permanently; nothing reconciled `article_features.popularity`
+back from `popularity_signals`.
+
+**Fix (PR #56):** single shared `app.classifier.popularity_score()` helper
+(popularity_poll's `_popularity_score` now delegates to it). `classify_pending`
+seeds `popularity` from existing `popularity_signals` rows at classify time
+instead of writing 0.0, and `maintenance.py` runs a nightly authoritative
+reconciliation recomputing `article_features.popularity` from
+`popularity_signals` using the same log curve in SQL (idempotent, 7-day
+window). Formula parity unit-tested against the cron wrapper.
+
 ### BUG-015 — Popularity sort surfaces almost exclusively Hacker News
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #53)
 
@@ -131,6 +206,7 @@ extraction lands (roadmap: Trending topics view / Signal Learning).
 **Note on numbering:** PR #50 (merged) landed BUG-013 and BUG-014
 first, so this is numbered BUG-015 (same convention as the
 BUG-010→BUG-011 renumber).
+
 
 ### BUG-014 — `ModuleNotFoundError: No module named 'langdetect'`
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #50)

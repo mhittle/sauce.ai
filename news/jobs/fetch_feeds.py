@@ -122,7 +122,10 @@ def fetch_one(conn, source, http):
             if not is_english(title, summary_text, feed_language):
                 skipped_lang += 1
                 continue
-            sim = article_simhash(title, summary_text)
+            # 0 means "no usable tokens" (empty/all-stopword). Store NULL so
+            # clustering doesn't treat every such article as Hamming-0
+            # identical (BUG-018).
+            sim = article_simhash(title, summary_text) or None
             try:
                 cur.execute(
                     """INSERT IGNORE INTO articles

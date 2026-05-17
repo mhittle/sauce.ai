@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
+from app.classifier.rules import _POPULARITY_LN_DENOM
 
 JOB = "maintenance"
 logger = setup_logging(JOB)
@@ -78,9 +79,35 @@ def _run():
                    WHERE a.fetched_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY"""
             )
 
-            # Recompute journalist reputation:
-            #   rep = 0.5 * avg(source_reputation across articles) + 0.5 * tenure_score
-            #   tenure_score = min(1, days_since_first_seen / 365)
+            # Reconcile popularity from popularity_signals. classify_pending
+            # writes popularity=0.0 on first insert and popularity_poll only
+            # UPDATEs rows that already exist, so anything that trended while
+            # still 'pending' permanently lost its signal (BUG-016). This is
+            # the authoritative catch-up: recompute from the raw signals using
+            # the same log curve as app.classifier.popularity_score
+            #   pop = LN(1 + score + 2*comments) / LN(1 + engagement_cap)
+            cur.execute(
+                """UPDATE article_features f
+                   JOIN articles a ON a.id = f.article_id
+                   JOIN (
+                     SELECT article_id, MAX(score + 2 * comments) AS engagement
+                     FROM popularity_signals
+                     GROUP BY article_id
+                   ) ps ON ps.article_id = f.article_id
+                   SET f.popularity = GREATEST(0, LEAST(1,
+                         LN(1 + ps.engagement) / %s
+                       ))
+                   WHERE a.fetched_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY""",
+                (_POPULARITY_LN_DENOM,),
+            )
+
+            # Recompute journalist reputation. Floored at the journalist's
+            # average source reputation so a parseable byline can never score
+            # below the no-byline fallback (which is the article's own
+            # source_reputation); tenure is upside-only (BUG-017).
+            #   base   = avg(source_reputation across their articles)
+            #   tenure = min(1, max(0, days_since_first_seen) / 365)
+            #   rep    = max(base, 0.5*base + 0.5*tenure)
             cur.execute(
                 """UPDATE journalists j
                    LEFT JOIN (
@@ -93,8 +120,12 @@ def _run():
                      GROUP BY aj.journalist_id
                    ) agg ON agg.journalist_id = j.id
                    SET j.article_count = COALESCE(agg.n, 0),
-                       j.computed_reputation = 0.5 * COALESCE(agg.avg_rep, 0.5)
-                          + 0.5 * LEAST(1.0, DATEDIFF(UTC_TIMESTAMP(), j.first_seen_at) / 365.0)
+                       j.computed_reputation = GREATEST(
+                         COALESCE(agg.avg_rep, 0.5),
+                         0.5 * COALESCE(agg.avg_rep, 0.5)
+                           + 0.5 * LEAST(1.0,
+                               GREATEST(0, DATEDIFF(UTC_TIMESTAMP(), j.first_seen_at)) / 365.0)
+                       )
                 """
             )
 

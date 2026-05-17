@@ -2,7 +2,7 @@ from app.classifier.rules import (
     flesch_kincaid_grade, normalized_reading_level, info_density,
     normalize_byline, split_bylines, compute_rules_features,
     normalize_title, title_hash,
-    source_obscurity_score, story_obscurity_score,
+    source_obscurity_score, story_obscurity_score, popularity_score,
 )
 
 
@@ -83,3 +83,37 @@ def test_story_obscurity_endpoints():
 def test_story_obscurity_monotonic_decreasing():
     vals = [story_obscurity_score(n) for n in (1, 2, 5, 10, 20)]
     assert vals == sorted(vals, reverse=True)
+
+
+def test_popularity_score_endpoints():
+    assert popularity_score(0, 0) == 0.0
+    # At/above the "very viral" cap it clamps to 1.0.
+    assert popularity_score(2000, 500) == 1.0
+    assert popularity_score(100000, 50000) == 1.0
+
+
+def test_popularity_score_in_range_and_monotonic():
+    vals = [popularity_score(s, 0) for s in (0, 10, 50, 200, 1000, 3000)]
+    assert all(0.0 <= v <= 1.0 for v in vals)
+    assert vals == sorted(vals)
+
+
+def test_popularity_score_comments_weighted_double():
+    # comments count 2x in the engagement term.
+    assert popularity_score(0, 10) == popularity_score(20, 0)
+
+
+def test_popularity_score_handles_none_and_negative():
+    assert popularity_score(None, None) == 0.0
+    assert popularity_score(-5, -3) == 0.0
+
+
+def test_popularity_poll_wrapper_matches_shared_formula():
+    import os
+    import sys
+    HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if os.path.join(HERE, "jobs") not in sys.path:
+        sys.path.insert(0, os.path.join(HERE, "jobs"))
+    from popularity_poll import _popularity_score
+    for s, c in ((0, 0), (10, 5), (500, 100), (2000, 500), (99999, 1)):
+        assert _popularity_score(s, c) == popularity_score(s, c)
