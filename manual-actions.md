@@ -45,7 +45,7 @@ _None — all tracked migrations applied._
 ---
 
 ### 2026-05-17 — Migration: articles FULLTEXT index (article search)
-**Status:** open · **PR:** #PRNUM · **Opened:** 2026-05-17 ·
+**Status:** open · **PR:** #70 · **Opened:** 2026-05-17 ·
 **File reference:** `news/seed/migrations/2026-05-17-search-fulltext.sql`
 
 Adds an InnoDB FULLTEXT index over `articles(title, summary)` backing the

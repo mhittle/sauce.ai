@@ -330,13 +330,13 @@ next, playback speed.
 Depends on reader view body extraction.
 
 ### Search across articles
-**Priority:** 6 · **LOE:** 6 · **Category:** new-feature, ui · **Status:** in-progress (PR #62)
+**Priority:** 6 · **LOE:** 6 · **Category:** new-feature, ui · **Status:** in-progress (PR #70)
 
 Full-text search box in the nav, results page sorted by relevance + recency.
 MySQL FULLTEXT index works for v1; revisit if quality is poor (then SQLite
 FTS5 in-process, or Meilisearch on a VPS).
 
-v1 (PR #62): InnoDB FULLTEXT index on `articles(title, summary)`; new
+v1 (PR #70): InnoDB FULLTEXT index on `articles(title, summary)`; new
 `/search` route + nav box; NATURAL LANGUAGE MODE, results deduped by story
 cluster and scoped by the feed's source-visibility / per-user mute rules;
 `ORDER BY relevance DESC, published_at DESC`. Requires the
