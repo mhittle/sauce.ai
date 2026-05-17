@@ -224,16 +224,17 @@ installs; and the import fails soft so it is **not** a site-down risk.
 
 ### Server-side state touched
 
-- **Manual prod action pending**: `pip install -r requirements.txt`
-  on cPanel (Terminal, venv activated — the "Run Pip Install" button
-  is greyed out) + Python App restart. Tracked in `manual-actions.md`
-  with full inline commands and pasted into chat. **Not** a site-down
-  risk: the detector import is lazy and fails soft, so the site and
-  fetch pipeline keep running; the European-language filtering is just
-  inert until py3langid is installed. py3langid + numpy are both
-  wheel-distributed so the install is a plain download (no build step
-  — this is what fixes BUG-014). No DB migration, no cron change, no
-  env var, no symlink.
+- **Manual prod action completed (2026-05-17)**: `pip install -r
+  requirements.txt` run on cPanel (Terminal, venv activated — the "Run
+  Pip Install" button is greyed out), installing `py3langid==0.3.0` +
+  wheel-distributed `numpy`. Tracked in `manual-actions.md` (now
+  Completed). The filter is live: `fetch_feeds` is a fresh per-tick
+  cron process so it picks up py3langid on its next tick regardless of
+  a Passenger restart (web routes don't use the detector). Was **not**
+  a site-down risk while pending: the detector import is lazy and fails
+  soft. py3langid + numpy are both wheel-distributed so the install was
+  a plain download (no build step — this is what fixes BUG-014). No DB
+  migration, no cron change, no env var, no symlink.
 - The filter is fetch-time only — it does not purge non-English rows
   already in `articles`; those age out of the 7-day window
   (multiplicative recency gate from BUG-011 crushes them well before
@@ -252,7 +253,8 @@ environmental, unrelated to this change — confirmed all
 ### PR
 
 - **PR #50** — BUG-013 + BUG-014: py3langid stage-3 for Latin-script
-  European filtering (draft).
+  European filtering (merged 2026-05-17; prod pip install applied
+  same day).
 
 ---
 
