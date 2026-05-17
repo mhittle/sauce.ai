@@ -18,10 +18,14 @@ from flask import Blueprint, abort, current_app, render_template, g
 
 from ..db import query, execute, get_conn
 from ..discussion import discussions_for_story
+from ..spectrum import pick_spectrum_sample
 from ..classifier import generate_framing, LLMUnavailable
 
 
 bp = Blueprint("story", __name__)
+
+# Max sibling articles previewed by the in-feed "+N angles" expansion.
+PEEK_MAX = 3
 
 
 LEAN_LEFT_THRESHOLD = -0.2
@@ -66,8 +70,14 @@ def _lead_paragraph(body_text, summary):
     return (summary or "").strip()
 
 
-@bp.route("/story/<int:story_id>")
-def view(story_id):
+def _fetch_cluster(story_id):
+    """Canonical-guard + visibility-scoped member fetch for a story cluster.
+
+    Shared by the full dossier (`/story/<id>`) and the in-feed peek
+    (`/story/<id>/peek`) so both bucket the same rows under the same
+    visibility rules. Aborts 404 for an unknown or non-canonical id;
+    returns the member list (caller enforces the >=2 guard).
+    """
     canonical = query(
         "SELECT id, story_id FROM articles WHERE id = %s",
         (story_id,),
@@ -99,8 +109,12 @@ def view(story_id):
         AND {vis_sql}
       ORDER BY a.published_at ASC
     """
-    members = query(sql, {"story_id": story_id, "lookback": DOSSIER_LOOKBACK_DAYS, **vis_params})
+    return query(sql, {"story_id": story_id, "lookback": DOSSIER_LOOKBACK_DAYS, **vis_params})
 
+
+@bp.route("/story/<int:story_id>")
+def view(story_id):
+    members = _fetch_cluster(story_id)
     if not members or len(members) < 2:
         abort(404)
 
@@ -131,6 +145,32 @@ def view(story_id):
         framing_eligible=eligible,
         framing_min_members=FRAMING_MIN_MEMBERS,
         framing_min_buckets=FRAMING_MIN_BUCKETS,
+    )
+
+
+@bp.route("/story/<int:story_id>/peek")
+def peek(story_id):
+    """In-feed mini-dossier: a few sibling angles, rendered as a partial.
+
+    Lazily fetched by HTMX when the user clicks the "+N angles" pill on a
+    feed card, so the feed query stays cheap and most clusters are never
+    materialized. The pill's plain `href` still points at the full
+    dossier, so no-JS / no-HTMX clients get the dossier page unchanged.
+    """
+    members = _fetch_cluster(story_id)
+    if not members or len(members) < 2:
+        abort(404)
+
+    sample = pick_spectrum_sample(members, exclude_id=story_id, limit=PEEK_MAX)
+    for m in sample:
+        m["lead"] = _lead_paragraph(m.get("body_text"), m.get("summary"))
+        m["bucket"] = _lean_bucket(m.get("political_lean"))
+
+    return render_template(
+        "partials/spectrum_peek.html",
+        story_id=story_id,
+        sample=sample,
+        total_others=len(members) - 1,
     )
 
 

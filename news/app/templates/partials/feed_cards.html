@@ -30,7 +30,9 @@
         <a class="reader-link" href="{{ url_for('reader.read', article_id=a.id) }}" title="Open in reader">Read &rarr;</a>
         {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}
           <a class="dossier-link" href="{{ url_for('story.view', story_id=a.story_id) }}"
-             title="See how this story is covered across the spectrum">+{{ a.cluster_size - 1 }} angle{{ '' if a.cluster_size == 2 else 's' }}</a>
+             hx-get="{{ url_for('story.peek', story_id=a.story_id) }}"
+             hx-target="#spectrum-{{ a.id }}" hx-swap="innerHTML"
+             title="See how this story is covered across the spectrum, inline">+{{ a.cluster_size - 1 }} angle{{ '' if a.cluster_size == 2 else 's' }}</a>
         {% endif %}
       </div>
       <h2 class="card-title">
@@ -54,6 +56,9 @@
             {%- if not loop.last %} <span class="discussion-sep">&middot;</span> {% endif %}
           {%- endfor %}
         </div>
+      {% endif %}
+      {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}
+        <div class="spectrum-peek" id="spectrum-{{ a.id }}"></div>
       {% endif %}
       {% if current_user %}
         <div class="source-prompt" x-show="prompt" x-cloak x-transition>

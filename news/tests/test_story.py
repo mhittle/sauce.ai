@@ -268,3 +268,54 @@ def test_single_bucket_cluster_skips_framing(monkeypatch, client, store):
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     assert "too small" in body
+
+
+# --- /story/<id>/peek (across-the-spectrum in-feed) ---------------------
+
+def test_peek_unknown_story_returns_404(client, store):
+    store["canonical"] = None
+    assert client.get("/story/999/peek").status_code == 404
+
+
+def test_peek_non_canonical_member_returns_404(client, store):
+    store["canonical"] = {"id": 100, "story_id": 200}
+    assert client.get("/story/100/peek").status_code == 404
+
+
+def test_peek_singleton_cluster_returns_404(client, store):
+    store["members"] = [
+        _article(100, source_id=1, source_name="Solo", source_lean=0.0, lean=0.0, title="Only"),
+    ]
+    assert client.get("/story/100/peek").status_code == 404
+
+
+def test_peek_renders_sibling_angles_excluding_the_card_article(client, store):
+    store["members"] = [
+        _article(100, source_id=1, source_name="LeftWeekly", source_lean=-0.6,
+                 lean=-0.5, title="Canonical headline"),
+        _article(101, source_id=2, source_name="RightDaily", source_lean=0.6,
+                 lean=0.5, title="Right take", summary="Right lead. " * 6),
+        _article(102, source_id=3, source_name="WireService", source_lean=0.0,
+                 lean=0.0, title="Wire take", summary="Wire lead. " * 6),
+    ]
+    r = client.get("/story/100/peek")
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert "Across the spectrum" in body
+    assert "RightDaily" in body and "WireService" in body
+    assert "Right take" in body and "Wire take" in body
+    # the card's own article must not be echoed back inside its peek
+    assert "Canonical headline" not in body
+    # deep-dive link to the full dossier is present
+    assert '/story/100"' in body
+    assert "Full dossier" in body
+
+
+def test_peek_partial_has_no_base_chrome(client, store):
+    store["members"] = [
+        _article(100, source_id=1, source_name="A", source_lean=-0.5, lean=-0.5, title="A"),
+        _article(101, source_id=2, source_name="B", source_lean=0.5, lean=0.5, title="B"),
+    ]
+    body = client.get("/story/100/peek").get_data(as_text=True)
+    assert "<nav class=\"topnav\"" not in body
+    assert "<!doctype html>" not in body.lower()

@@ -37,7 +37,7 @@ shipped.
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | done |
 | 7 | 4 | algo, backend, ui | External trending sort (Google News/Trends) — BUG-015 | done |
 | 7 | 3 | ui | Why This Article (ranking explainer popover) | backlog |
-| 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | backlog |
+| 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | in-progress |
 | 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | done |
 | 6 | 4 | new-feature, ui | Article save / bookmark | done |
 | 6 | 4 | new-feature, ui | TTS audio mode (Read-me-my-queue) | backlog |
@@ -252,7 +252,7 @@ informed ("oh, it ranked high because of X, but I don't actually care
 about X").
 
 ### Across-the-spectrum in-feed
-**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo · **Status:** backlog
+**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo · **Status:** in-progress (PR #69)
 
 The lightweight everyday cousin of the story dossier. Every card on
 the main feed that's part of a multi-source story gets a small
