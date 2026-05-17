@@ -49,7 +49,7 @@ shipped.
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
 | 4 | 7 | infra, skunkworks | Migrate to VPS (gunicorn + nginx) | backlog |
 | 3 | 2 | ui | Dark mode | backlog |
-| 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | in-progress |
+| 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | backlog |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | backlog |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
@@ -403,7 +403,7 @@ newsfeed" brainstorm. A = direct algorithm expressiveness; B = closing
 the feedback loop; C = crowdsourcing the feed for everyone.
 
 ### Natural-language algorithm builder
-**Priority:** 8 · **LOE:** 5 · **Category:** ui, algo, new-feature · **Status:** in-progress
+**Priority:** 8 · **LOE:** 5 · **Category:** ui, algo, new-feature · **Status:** done (v1, PR #59)
 
 User describes the feed they want in plain English ("more local tech and
 science, less political outrage, prefer long objective reads, hide
@@ -534,6 +534,19 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Natural-language algorithm builder** — Pri 8, LOE 5,
+  ui/algo/new-feature. PR #59. Plain-English feed description → one
+  Claude Haiku call → the existing 3-axis `FEATURES` weight vector,
+  pre-filling the `/algo` editor for review (never applied silently;
+  reuses the existing `/save` path, so **no DB migration**). New
+  Flask-free `app/algo_nl.py` (mirrors `classifier/framing.py`: lazy
+  `anthropic`, `LLMUnavailable` on any failure, every value clamped
+  into range, unknown keys dropped); `POST /algo/describe`
+  re-renders the editor; "Describe your ideal feed" panel on the UI
+  tab. Fails soft (no key / parse / API error → editor unchanged +
+  inline note, never 500s); no per-request LLM cost. Shipped
+  alongside a 10-item "user-empowerment" roadmap cluster (themes
+  A/B/C). No new dep, no cron/env/symlink change.
 - **Discussion links (Techmeme-style Reddit/HN)** — Pri 7, LOE 3,
   new-feature/ui/algo. PR #52. `popularity_poll` already matched
   Reddit/HN threads per article for the popularity score but
