@@ -12,6 +12,16 @@
   </header>
 
   <section x-show="tab==='ui'">
+    <form class="nl-builder" method="post" action="{{ url_for('algo.describe') }}">
+      <label for="nl-desc"><strong>Describe your ideal feed</strong></label>
+      <p class="muted">Plain English &mdash; e.g. "More local tech and science, less political outrage, prefer long objective reads, hide paywalls." We'll set the sliders below; nothing is saved until you hit <em>Save algorithm</em>.</p>
+      <textarea id="nl-desc" name="description" rows="3" maxlength="1000"
+                placeholder="Describe the news feed you want&hellip;">{{ nl_description or '' }}</textarea>
+      <button type="submit">Build from description</button>
+      {% if nl_notes %}<p class="nl-notes">{{ nl_notes }} <strong>Review the sliders below, then Save.</strong></p>{% endif %}
+      {% if nl_error %}<p class="nl-error">{{ nl_error }}</p>{% endif %}
+    </form>
+
     <form id="algo-form"
           hx-post="{{ url_for('algo.preview') }}"
           hx-trigger="input changed delay:300ms from:form, change delay:50ms from:form"
