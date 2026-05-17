@@ -20,6 +20,149 @@ for current prod state.
 
 ---
 
+## 2026-05-17 — Onboarding interview / cold-start (PR #62)
+
+### Context
+
+Roadmap Pri 7 / LOE 4, Theme A of the user-empowerment cluster. A basic
+`/algo/onboarding` already existed (a 4-preset radio picker). Upgraded it
+into a real cold-start interview so a new reader's first feed isn't the
+generic `balanced` preset.
+
+### What shipped
+
+- **`app/onboarding.py`** (new, Flask-free — mirrors `algo_nl.py` /
+  `language.py`). Pure helpers: `normalize_categories` (intersect with
+  the `CATEGORIES` catalog, dedupe, catalog order), `lean_direction`
+  (5-point balance key → signed `political_lean` direction; unknown →
+  center), `build_onboarding_weights` (copy the `balanced` preset, layer
+  on `category_filter` + `political_lean_direction`; never mutates
+  `PRESETS`), `top_trusted_sources` (dedupe candidate source rows by
+  name keeping the best reputation, sort, cap).
+- **`app/routes/algo.py`** — only the `onboarding()` route changed
+  (PR #59's editor surface left untouched). Now idempotent: if the user
+  already has an algorithm it redirects to the editor instead of
+  stacking a second active row. GET renders the interview (topics,
+  political balance, top-reputation trusted sources). POST builds the
+  tailored weights, inserts one `user_algorithms` row ("My starting
+  feed"), and boosts each picked source via `user_source_prefs`
+  (weight 1.5, reusing the PR #19 feed multiplier). Source ids are
+  validated against the global active pool before any write.
+- **`app/routes/auth_routes.py`** — signup now redirects to
+  `algo.onboarding` (was `algo.index`), so the interview is the actual
+  first-run screen.
+- **`onboarding.html`** rewritten (3 sections, carries `csrf_field()`
+  per the now-merged CSRF PR #58); single appended
+  `.onboarding-interview` CSS block + a mobile rule.
+- **`tests/test_onboarding.py`** (new) — 10 pure-helper cases (verified
+  green via direct import; sandbox has no pytest/Flask, same documented
+  limit as PR #50/#58) + 4 route cases (create_app + stubbed
+  query/execute, mirrors `test_signals.py`) for the maintainer's full
+  Flask run.
+
+### Server-side state touched
+
+None. No DB migration (`user_algorithms` / `user_source_prefs` already
+on prod; `category_filter` lives inside `weights_json`), no new cron, no
+new dependency, no env var. Standard Python App restart on deploy so the
+new route/template load — not a tracked manual action.
+
+### PR
+
+- **PR #62** — Onboarding interview / cold-start (merged 2026-05-17).
+
+---
+
+## 2026-05-17 — Classifier/feature review: fixed BUG-016..019
+
+### Context
+
+User asked for a review of the classifiers and features for bugs and
+poor performance. Read the full classifier/feature/ranking surface
+end-to-end. 11 findings (4 high, 4 medium, 3 low); user chose to fix
+the four high-severity ones. M/L items deferred (listed under Open).
+
+### What shipped (PR #56, merged 2026-05-17)
+
+- **BUG-016 — popularity chronically under-counted.** First feature
+  INSERT hard-wrote `popularity=0.0`; `popularity_poll` only UPDATEs
+  existing rows, so anything trending while still `pending` lost its
+  signal and nothing reconciled from `popularity_signals`. New shared
+  `app.classifier.popularity_score()` (popularity_poll delegates to
+  it); `classify_pending` seeds popularity from prior signals;
+  `maintenance.py` nightly authoritative SQL reconciliation
+  (`LN(1+score+2*comments)/LN(1+cap)`, 7-day window, idempotent) via
+  shared `_POPULARITY_LN_DENOM` so Python & SQL agree.
+- **BUG-017 — journalist_reputation penalized bylined articles.**
+  `first_seen_at` defaulted to row-insert time → tenure≈0 → rep≈0.3,
+  below the ~0.6 no-byline fallback. `_ensure_journalist()` seeds
+  `first_seen_at` from `published_at`; `maintenance.py` floors rep at
+  `GREATEST(avg_rep, 0.5*avg_rep+0.5*tenure)` (tenure clamped ≥0) so
+  it's upside-only.
+- **BUG-018 — `simhash==0` megacluster.** Empty/all-stopword articles
+  got simhash 0 and clustered at Hamming-0 with every other zero,
+  vanishing from the deduped feed behind a bogus canonical.
+  `_assign_story_id` skips the simhash branch when `my_sim` falsy and
+  excludes `a2.simhash=0`; `fetch_feeds` stores `NULL` for 0.
+- **BUG-019 — LLM-fallback contamination permanent + unmarked.**
+  `_classifier_version()` tags fallback rows `<ver>-nollm`; bounded
+  `_reclassify_nollm()` re-runs the LLM over oldest tagged rows (one
+  `LLM_BATCH_SIZE`/tick) when the pending queue is drained and budget
+  remains, restoring the clean version. Persistent outage just leaves
+  rows tagged. Per-tick log line gains `reclassified=N`.
+
+### Code touched
+
+- `app/classifier/rules.py` (popularity_score + `_POPULARITY_*`),
+  `app/classifier/__init__.py` (export), `jobs/popularity_poll.py`
+  (delegate; drop unused `import math`), `jobs/classify_pending.py`
+  (popularity seed, `_classifier_version`, `_ensure_journalist`
+  first_seen, simhash-0 guard, `_reclassify_nollm`),
+  `jobs/fetch_feeds.py` (NULL for 0 simhash), `jobs/maintenance.py`
+  (popularity reconcile + journalist rep floor).
+- Tests: `test_rules.py` (+popularity_score & cron parity),
+  `test_assign_story_id.py` (+simhash-0; `FakeCursor` gained a
+  parallel `sql_log`, 2-tuple `calls` contract unchanged),
+  `test_classify_pending.py` (new, +18 cases). Full suite **245
+  passing** after rebase onto `origin/main` (PR #50/52/53/54/55).
+
+### Server-side state touched
+
+**None.** No DB migration / schema / cron / env / pip / symlink
+change — code-only in cron scripts + a pure helper. Cron picks up new
+code on the next tick; no web route changed (no Python App restart
+strictly required). **No `manual-actions.md` entry.** Next-session
+notes: rows written `classifier_version='v1'` during a *past* LLM
+outage are not retroactively detectable (only rows tagged going
+forward self-heal); existing `popularity=0.0` rows self-heal on the
+next nightly `maintenance`; pre-existing `simhash=0` rows are now
+ignored by clustering and age out.
+
+### PRs
+
+- **PR #56** — Classifier/feature review fixes (BUG-016..019). Merged
+  2026-05-17.
+
+### Open items (remaining review findings, not yet actioned)
+
+- M5: `story_obscurity` counts only exact `title_hash` dupes, not the
+  simhash cluster (wrong for re-headlined syndication; weight 0 latent).
+- M6: no general rescore path beyond the `-nollm` heal.
+- M7: `_assign_story_id` window keyed to NOW → dedup degrades during/
+  after a classify backlog.
+- M8: LLM partial responses fail silent; `max_tokens=2048` is an
+  unguarded cliff if `LLM_BATCH_SIZE` is raised.
+- L9: `info_density`/`reading_level` use the RSS blurb, not the
+  extracted body; `_CAP_TOKEN` over-counts Title-Case headlines.
+- L10: `popularity_poll._normalize_url` `lstrip("www.")` strips a char
+  set, not the prefix — latent, harmless only because symmetric.
+- L11: `country`/`region` written but unused in ranking/filters
+  (spec feature #9 "geography" effectively unimplemented).
+- Perf: simhash candidate query is an unindexable `BIT_COUNT` scan
+  over 48h/pending row — fine now, watch as the catalog grows.
+
+---
+
 ## 2026-05-17 — CSRF protection + auth rate limiting (PR #58)
 
 Roadmap Pri 7 / LOE 4 (security). v1 was same-site-cookie only —
