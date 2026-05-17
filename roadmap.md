@@ -252,7 +252,7 @@ informed ("oh, it ranked high because of X, but I don't actually care
 about X").
 
 ### Across-the-spectrum in-feed
-**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo · **Status:** in-progress
+**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo · **Status:** in-progress (PR #69)
 
 The lightweight everyday cousin of the story dossier. Every card on
 the main feed that's part of a multi-source story gets a small

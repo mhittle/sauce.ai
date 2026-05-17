@@ -102,7 +102,7 @@ sort). A DB rebuild from `seed/schema.sql` already includes these.
 
 ---
 
-## 2026-05-17 — Across-the-spectrum in-feed (PR #__)
+## 2026-05-17 — Across-the-spectrum in-feed (PR #69)
 
 Roadmap Pri 7 / LOE 3 (ui, algo). The "+N angles" pill (added with the
 story dossier, PR #43) previously navigated to `/story/<id>`. It now
@@ -167,9 +167,9 @@ load. **No `manual-actions.md` entry.**
 
 ### PR / Open items
 
-- Draft PR (number filled in once opened). `feed.py` deliberately
-  untouched (zero overlap with in-flight PR #61); `style.css` is
-  append-only; `story.py` not in any other in-flight PR's scope.
+- **PR #69** — draft. `feed.py` deliberately untouched (zero overlap
+  with in-flight PR #61); `style.css` is append-only; `story.py` not
+  in any other in-flight PR's scope.
 - `engineering-history.md` is at its ~34 KB budget — run the archive
   procedure (`engineering-session-wrapup.md` §1b) at the next wrap-up.
 - Maintainer/CI: click a multi-source card's "+N angles", confirm the
