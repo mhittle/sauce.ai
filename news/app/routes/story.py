@@ -17,6 +17,7 @@ import hashlib
 from flask import Blueprint, abort, current_app, render_template, g
 
 from ..db import query, execute, get_conn
+from ..discussion import discussions_for_story
 from ..classifier import generate_framing, LLMUnavailable
 
 
@@ -117,6 +118,7 @@ def view(story_id):
         framing = _get_or_generate_framing(story_id, members)
 
     canonical_member = next((m for m in members if m["id"] == story_id), members[0])
+    discussions = discussions_for_story([m["id"] for m in members])
 
     return render_template(
         "story.html",
@@ -124,6 +126,7 @@ def view(story_id):
         canonical=canonical_member,
         members=members,
         buckets=buckets,
+        discussions=discussions,
         framing=framing,
         framing_eligible=eligible,
         framing_min_members=FRAMING_MIN_MEMBERS,

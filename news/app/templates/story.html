@@ -25,6 +25,20 @@
     </section>
   {% endif %}
 
+  {% if discussions %}
+    <section class="dossier-discussion">
+      <h2 class="dossier-framing-label">Discussion</h2>
+      <ul class="discussion-list">
+        {% for d in discussions %}
+          <li>
+            <a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.label }}</a>
+            {% if d.comments %}<span class="muted">{{ d.comments }} comment{{ '' if d.comments == 1 else 's' }}</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
   <div class="dossier-columns">
     {% for bucket_key, bucket_label in [('left','Left'), ('center','Center'), ('right','Right')] %}
       <section class="dossier-col dossier-col-{{ bucket_key }}">

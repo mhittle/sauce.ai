@@ -80,6 +80,7 @@ def store(monkeypatch):
     monkeypatch.setattr("app.routes.story.query", fake_query)
     monkeypatch.setattr("app.routes.story.execute", fake_execute)
     monkeypatch.setattr("app.routes.story.get_conn", lambda: FakeConn())
+    monkeypatch.setattr("app.discussion.query", lambda sql, params=None, one=False: [])
     return state
 
 
