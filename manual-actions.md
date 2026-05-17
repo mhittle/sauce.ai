@@ -118,32 +118,6 @@ prod: `/?sort=trending` returns 200 and is no longer HN-only;
 ### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)
 **Status:** completed · **PR:** #50 (BUG-013, BUG-014) · **Opened:** 2026-05-17 · **Completed:** 2026-05-17
 
-BUG-013 fix added a language-detector stage 3 to the English-only
-filter (catches Latin-script European content — German/Spanish/
-Finnish — that the non-Latin script heuristic can't). The dependency
-is `py3langid==0.3.0` (pulls `numpy>=2.0.0`); it replaced the original
-`langdetect==1.0.9` (BUG-014: sdist-only, fails to build under modern
-PEP 517/setuptools on the cPanel venv). User confirmed the install +
-Python App restart were done.
-
-**Commands run (cPanel Terminal, account `lt1ih6uyy2z6`):**
-
-```bash
-source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
-  && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news
-pip install -r requirements.txt
-```
-
-Python App restarted afterward. Verify: `skipped_lang=N` rises in
-`logs/cron.log` as European feeds get rejected; German/Spanish/Finnish
-content clears from the feed over ~7 days as pre-existing rows age out
-(the filter is fetch-time only; it does not purge existing rows).
-
----
-
-### 2026-05-17 — pip install -r requirements.txt (py3langid for BUG-013/BUG-014)
-**Status:** completed · **PR:** #50 (BUG-013, BUG-014) · **Opened:** 2026-05-17 · **Completed:** 2026-05-17
-
 User confirmed `pip install -r requirements.txt` was run on prod
 (2026-05-17), installing `py3langid==0.3.0` (+ wheel-distributed
 `numpy`). The European-language filter (stage 3 of `is_english`) is
