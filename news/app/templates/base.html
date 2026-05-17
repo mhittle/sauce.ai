@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="csrf-token" content="{{ csrf_token }}" />
   <title>{% block title %}News{% endblock %}</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t !== 'dark' && t !== 'light') {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
   <script src="{{ url_for('static', filename='alpine.min.js') }}" defer></script>
@@ -29,6 +40,7 @@
     <a href="{{ url_for('auth.login') }}">Sign in</a>
     <a href="{{ url_for('auth.signup') }}">Sign up</a>
   {% endif %}
+  <button type="button" id="theme-toggle" class="linkbtn theme-toggle" aria-label="Toggle dark mode" aria-pressed="false">Dark</button>
 </nav>
 <main>
 {% block content %}{% endblock %}
@@ -38,6 +50,23 @@
   document.body.addEventListener('htmx:configRequest', function (e) {
     e.detail.headers['X-CSRF-Token'] = window.csrfToken;
   });
+  (function () {
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    function sync() {
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      btn.textContent = dark ? 'Light' : 'Dark';
+      btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    }
+    sync();
+    btn.addEventListener('click', function () {
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      var next = dark ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+      sync();
+    });
+  })();
 </script>
 </body>
 </html>

@@ -48,7 +48,7 @@ shipped.
 | 5 | 3 | security | Email verification on signup | backlog |
 | 5 | 1 | ops | CloudLinux/GoDaddy support ticket re: shim | backlog |
 | 4 | 7 | infra, skunkworks | Migrate to VPS (gunicorn + nginx) | backlog |
-| 3 | 2 | ui | Dark mode | backlog |
+| 3 | 2 | ui | Dark mode | in-progress |
 | 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | backlog |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
@@ -370,7 +370,7 @@ cleanly: Flask + gunicorn behind nginx, MySQL local, system cron.
 Defer until shared hosting actively breaks something the customer notices.
 
 ### Dark mode
-**Priority:** 3 · **LOE:** 2 · **Category:** ui · **Status:** backlog
+**Priority:** 3 · **LOE:** 2 · **Category:** ui · **Status:** in-progress
 
 Toggle in the user nav. CSS custom-property swap. Persist preference in
 `localStorage`.
