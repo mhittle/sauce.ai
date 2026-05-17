@@ -142,7 +142,7 @@ None. Docs-only — no DB, cron, symlink, env-var, or pip change.
 
 ### PRs
 
-- **PR #TBD** — Engineering-history archive process (draft).
+- **PR #51** — Engineering-history archive process (draft).
 
 ---
 
