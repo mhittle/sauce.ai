@@ -92,6 +92,71 @@ overlapping tick no-ops.
 
 ---
 
+## 2026-05-17 — Dark mode (PR #62)
+
+Roadmap Pri 3 / LOE 2 (ui). Maintainer-picked. Client-only theme;
+no server state, no DB, no manual prod action.
+
+### What shipped
+
+- **`style.css`** — `:root` gains semantic surface vars
+  (`--surface`/`--surface-2`/`--surface-3`/`--notice-bg`/
+  `--notice-border`/`--err-bg`/`--warn-bg`) with the *current* light
+  values, so light mode is byte-for-byte unchanged. A new
+  `:root[data-theme="dark"]` block overrides all palette vars (incl.
+  brighter `--accent`/`--left`/`--right`/`--ok`/`--warn`/`--err` for
+  legibility on dark). ~30 hardcoded literals (`background: white`,
+  the `#f0efeb`/`#f7f6f0`/etc. fill family, `#333` lead, `#e3e3df`
+  feature-bar track) repointed at the vars — without this the panels
+  stayed white on a dark page. `color-scheme` per theme so native
+  controls/scrollbars follow. `color: white` on accent buttons left
+  literal (correct).
+- **`base.html`** — synchronous head script (before the stylesheet
+  link) sets `<html data-theme>` from `localStorage.theme`, falling
+  back to `prefers-color-scheme` — no FOUC. A `linkbtn`-styled
+  `#theme-toggle` button is the last nav item (signed-in or out);
+  end-of-body script toggles the attribute, persists to
+  `localStorage`, and relabels Dark/Light + `aria-pressed`. Pure
+  client-side (no POST) so no CSRF/route/DB involvement.
+
+### Code touched
+
+- `news/app/static/style.css` — theme vars + literal→var repointing.
+- `news/app/templates/base.html` — head theme-init, nav toggle,
+  toggle wiring.
+- `roadmap.md` — Dark mode → in-progress (→ Done on merge).
+
+### Server-side state touched
+
+None. CSS/template only; zero Python. Standard Python App restart on
+deploy so the new template/CSS load (Jinja autoreloads templates;
+restart is cleaner).
+
+### Verification
+
+- `base.html` Jinja-parses clean; no `.py` touched (suite unaffected;
+  sandbox has no pytest/Flask — same documented env limit as PR #50).
+- All hardcoded surface literals confirmed mapped (only `color:
+  white` on accent + the `:root` var *definitions* remain by design).
+- **Not verified**: in-browser toggle/persistence/no-FOUC and the
+  dark palette's per-page contrast — deferred to a real env / CI
+  (no Flask in sandbox).
+
+### Open items
+
+- Maintainer/CI: load `/`, `/algo`, `/firehose`, `/admin`, `/read`,
+  `/story` in dark; toggle; hard-reload (confirm no light flash);
+  cross-tab persistence. Tune any dark palette value that reads poorly.
+- `engineering-history.md` is at its ~34 KB budget — archive oldest
+  entries at the next wrap-up (deliberately not done here to keep this
+  low-risk UI PR off the high-conflict archive path).
+
+### PR
+
+- **PR #62** — Dark mode (draft).
+
+---
+
 ## 2026-05-17 — Article save / bookmark (roadmap Pri 6)
 
 Roadmap "Article save / bookmark" (Pri 6, LOE 4, new-feature/ui).
