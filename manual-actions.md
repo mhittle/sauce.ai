@@ -41,17 +41,20 @@ Sort **Open** newest-first. **Completed** newest-first.
 ## Open
 
 ### 2026-05-17 — Migration: user_saves (article save / bookmark)
-**Status:** open · **PR:** (Article save / bookmark, roadmap Pri 6) ·
+**Status:** open — **URGENT, PR #64 ALREADY MERGED & DEPLOYED** ·
+**PR:** #64 (merged 2026-05-17) ·
 **Opened:** 2026-05-17 ·
 **File reference:** `news/seed/migrations/2026-05-17-user-saves.sql`
 
 Creates `user_saves`, backing the star/bookmark button on feed cards
-and the new `/saved` page. **Load-bearing PRE-MERGE** (BUG-007 class):
-once the PR merges, every signed-in feed load runs a `SELECT ... FROM
-user_saves` and the nightly `jobs/maintenance.py` references it in both
-retention-prune DELETEs — a missing table 500s signed-in `/` and breaks
-`maintenance`. **Apply this migration before merging the PR**, then
-restart the Python App.
+and the new `/saved` page. **Load-bearing (BUG-007 class) — was NOT
+confirmed applied before PR #64 merged.** The merged code is now live:
+every signed-in feed load runs `SELECT ... FROM user_saves` and the
+nightly `jobs/maintenance.py` references it in both retention-prune
+DELETEs, so until this table exists **signed-in `/` returns 500 and
+the nightly `maintenance` job errors** (anonymous visitors unaffected).
+**Run the SQL below immediately**, then restart the Python App; move
+this entry to Completed once confirmed.
 
 **SQL to run (phpMyAdmin against `lt1ih6uyy2z6_news`):**
 

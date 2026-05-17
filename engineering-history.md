@@ -227,11 +227,18 @@ different statements). All edits localized/append-style; rebased on
 
 ### PR
 
-- Article save / bookmark (draft) — branch
-  `claude/onboard-news-aggregator-Fx2d4`.
+- **PR #64** — Article save / bookmark (merged 2026-05-17). Rebased
+  twice (behind PR #56 classifier fixes, then PR #62 onboarding);
+  `maintenance.py` / `style.css` / `engineering-history.md` conflicts
+  resolved each time. Follow-up tracking-doc cleanup landed separately.
 
 ### Open items
 
+- **Migration outstanding at merge time.** `2026-05-17-user-saves.sql`
+  was NOT confirmed applied before PR #64 merged (BUG-007-class
+  exposure: signed-in `/` 500s + nightly `maintenance` errors until
+  the table exists). Tracked `manual-actions.md` → Open as urgent;
+  apply immediately + Python App restart, then move to Completed.
 - v2 (roadmap): folder management UI, "N unread in Read Later" home
   prompt, keyboard `s` to save, export OPML/Markdown, extended
   retention pairing with summaries/TTS.
