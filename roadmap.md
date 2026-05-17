@@ -53,7 +53,7 @@ shipped.
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | backlog |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | backlog |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
-| 7 | 4 | ui, new-feature | Onboarding interview / cold-start | in-progress |
+| 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
 | 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
 | 8 | 6 | new-feature, ui | Shareable algorithm gallery | backlog |
@@ -450,17 +450,6 @@ instead of guesswork. Depends on Multiple saved algorithms for the
 "promote winner" half; the compare view itself can ship first against
 "current vs. a scratch algo".
 
-### Onboarding interview / cold-start
-**Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature · **Status:** in-progress
-
-First-run flow: pick a handful of trusted sources, a few topics, and a
-political-balance slider → seeds a real `user_algorithms` row instead of
-dropping the user into the default `balanced` preset with an
-undifferentiated feed. Fixes the empty/generic first impression.
-Composes with the NL builder ("describe your ideal feed" as the
-free-text step) and Multiple saved algorithms (the result is the user's
-first named profile).
-
 ### Tune from this article
 **Priority:** 7 · **LOE:** 4 · **Category:** algo, ui · **Status:** backlog
 
@@ -527,6 +516,18 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Onboarding interview / cold-start** — Pri 7, LOE 4,
+  ui/new-feature. PR #62. Theme A. Upgraded the bare `/algo/onboarding`
+  preset picker into a real interview: topic categories (hard
+  `category_filter`), a 5-point soft political-balance choice
+  (`political_lean_direction`, no threshold so cross-spectrum exposure
+  stays), and top-reputation trusted-source picks that get a
+  `user_source_prefs` boost (weight 1.5, reuses the PR #19 feed
+  multiplier). Answers layer on the `balanced` preset → one
+  "My starting feed" `user_algorithms` row; signup now lands here;
+  route is idempotent (re-visit after onboarding → editor). Pure logic
+  in new Flask-free `app/onboarding.py`. **No** DB migration / cron /
+  dep / env change.
 - **Natural-language algorithm builder** — Pri 8, LOE 5,
   ui/algo/new-feature. PR #59. Plain-English feed description → one
   Claude Haiku call → the existing 3-axis `FEATURES` weight vector,

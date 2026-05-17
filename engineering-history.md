@@ -168,7 +168,7 @@ different statements). All edits localized/append-style; rebased on
 
 ---
 
-## 2026-05-17 — Onboarding interview / cold-start (PR pending)
+## 2026-05-17 — Onboarding interview / cold-start (PR #62)
 
 ### Context
 
@@ -217,7 +217,7 @@ new route/template load — not a tracked manual action.
 
 ### PR
 
-- Draft PR pending on `claude/onboard-news-aggregator-pTXRY`.
+- **PR #62** — Onboarding interview / cold-start (merged 2026-05-17).
 
 ---
 
