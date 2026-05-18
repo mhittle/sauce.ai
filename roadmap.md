@@ -371,7 +371,7 @@ with the read-only Code tab and is a natural precursor to Sandboxed
 Python exec (Pri 9).
 
 ### Keyword / topic mute & boost
-**Priority:** 8 · **LOE:** 4 · **Category:** algo, ui · **Status:** in-progress (PR #NN, draft)
+**Priority:** 8 · **LOE:** 4 · **Category:** algo, ui · **Status:** in-progress (PR #77, draft)
 
 Per-user mute and boost term lists ("mute: crypto, royal family; boost:
 climate policy, local elections") applied at the feed-query layer as a

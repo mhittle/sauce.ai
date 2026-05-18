@@ -41,7 +41,7 @@ Sort **Open** newest-first. **Completed** newest-first.
 ## Open
 
 ### 2026-05-17 — Migration: user_term_prefs (keyword mute & boost)
-**Status:** open · **PR:** #NN (draft) · **Opened:** 2026-05-17 ·
+**Status:** open · **PR:** #77 (draft) · **Opened:** 2026-05-17 ·
 **File reference:** `news/seed/migrations/2026-05-17-term-prefs.sql`
 
 Adds the `user_term_prefs` table that backs per-user keyword **mute**

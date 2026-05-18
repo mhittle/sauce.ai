@@ -106,7 +106,7 @@ rebuild from `seed/schema.sql` already includes these.
 
 ---
 
-## 2026-05-17 — Keyword / topic mute & boost (PR #NN)
+## 2026-05-17 — Keyword / topic mute & boost (PR #77)
 
 Roadmap Pri 8 / LOE 4 (algo, ui), user-empowerment cluster theme A.
 Content-level lever distinct from `user_source_prefs` (whole-source
@@ -153,7 +153,7 @@ later also match `article_bodies`.
 
 ### PR
 
-- **PR #NN** — Keyword / topic mute & boost (draft).
+- **PR #77** — Keyword / topic mute & boost (draft).
 
 ---
 
