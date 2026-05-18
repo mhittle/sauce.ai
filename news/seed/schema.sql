@@ -223,6 +223,25 @@ CREATE TABLE IF NOT EXISTS user_saves (
   CONSTRAINT fk_saves_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Per-user keyword mute & boost. `mode='mute'` hard-filters any article
+-- whose title+summary contains `term`; `mode='boost'` multiplies a
+-- matching article's score by `weight` (the strongest matching boost
+-- wins; boosts don't compound). UNIQUE(user_id, term) keeps a term in
+-- exactly one mode per user — re-adding it in the other mode moves it.
+-- `weight` is unused for mute rows.
+CREATE TABLE IF NOT EXISTS user_term_prefs (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    INT UNSIGNED NOT NULL,
+  term       VARCHAR(128) NOT NULL,
+  mode       ENUM('mute','boost') NOT NULL,
+  weight     FLOAT NOT NULL DEFAULT 1.5,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_term_pref (user_id, term),
+  KEY idx_term_pref_user (user_id),
+  CONSTRAINT fk_term_pref_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Automated source-discovery candidate pool. One row per unknown domain
 -- surfaced by `jobs/discover_harvest.py` (Reddit/HN), `discover_llm.py`
 -- (Claude suggestions), or future social-firehose jobs. `score` is the

@@ -106,6 +106,57 @@ rebuild from `seed/schema.sql` already includes these.
 
 ---
 
+## 2026-05-17 — Keyword / topic mute & boost (PR #77)
+
+Roadmap Pri 8 / LOE 4 (algo, ui), user-empowerment cluster theme A.
+Content-level lever distinct from `user_source_prefs` (whole-source
+weights): **mute** = hard filter, **boost** = score multiplier.
+
+### What shipped
+
+- **`app/term_prefs.py`** (new, Flask-free, mirrors
+  `app/discussion.py` — pure, tested like `build_filters_sql`):
+  `normalize_term`, `clamp_boost` ([1.0,5.0], def 1.5), `escape_like`,
+  `build_term_clauses` → `(mute_sql, boost_expr, params)`. Mute = ANDed
+  `NOT (<title+summary> LIKE %term% ESCAPE …)`; boost =
+  `GREATEST(1.0, CASE WHEN … THEN w ELSE 0 END, …)` (strongest match
+  wins, no compounding); term-in-both → mute wins; always
+  parameterized.
+- **`user_term_prefs`** table (`UNIQUE(user_id,term)` → one mode/term)
+  + `seed/schema.sql` + `2026-05-17-term-prefs.sql`. New blueprint
+  `/terms` (mirrors `routes/sources.py`: list/add-upsert/delete,
+  100-term cap, `@login_required`), `me_terms.html`, nav link.
+- **`app/routes/feed.py`**: existing signed-in `if u:` block gains one
+  `user_term_prefs` read → boost multiplies score beside
+  `pref_score_mult`, mute appended to WHERE. Scope = `/` feed,
+  signed-in only (anon/firehose/digest untouched — `user_source_prefs`
+  parity; limits BUG-007 blast radius).
+- **`tests/test_term_prefs.py`** (17 pure); INSTALL §10; roadmap
+  in-progress; manual-actions Open + inline SQL.
+
+### Server-side state touched
+
+- **Migration pending on prod**: `2026-05-17-term-prefs.sql` (one
+  `CREATE TABLE user_term_prefs`). `routes/feed.py` reads it on every
+  signed-in feed load — **apply before merge** (BUG-007 class; anon
+  feed unaffected). `manual-actions.md` Open + chat paste. No
+  cron/env/pip/symlink. Python App restart on deploy.
+
+### Verification
+
+`test_term_prefs.py` 17/17 + `test_ranking` green in-sandbox; changed
+Python `py_compile` clean. Full suite needs flask/pymysql (documented
+sandbox limit); route + browser UX deferred to CI. v1 = plain substring
+match ("crypto" also hits "cryptography"); phrase/entity-aware is v2
+(shared with topic extraction); `_MATCH_EXPR` is the single point to
+later also match `article_bodies`.
+
+### PR
+
+- **PR #77** — Keyword / topic mute & boost (draft).
+
+---
+
 ## 2026-05-17 — BUG-020: firehose accumulates instead of churning (PR #72)
 
 ### Context
@@ -300,47 +351,6 @@ this entry).
 
 ---
 
-## 2026-05-17 — Trending topics view (/trending page, PR #71)
-
-Roadmap Pri 7 / LOE 5. New `/trending` page ranking topics by
-**distinct-outlet count** ("20 outlets beat one outlet ×20"), each
-linking to the dossier(s) under it. The roadmap's plan put topic
-extraction in the `classify_pending` Haiku call; PR #56 was rewriting
-that file, so the user chose (AskUserQuestion) the conflict-free route:
-**reuse the Google Trends/News topic index `trending_poll` already
-builds every 30 min** (PR #53) — no LLM, no `classify_pending` edit.
-
-- `trending_poll` now also rebuilds `trending_topics` /
-  `trending_topic_articles` in full each tick, in the same transaction
-  as the existing `article_features.trending` scalar (unchanged).
-- Pure helpers in `app/trending.py`: `topic_key` (sha1 of sorted
-  tokens — collapses near-dup headlines), `topic_matches`
-  (`score_article` refactored to its max, identical output, covered by
-  the existing suite), `build_persist_rows`, `group_topic_stories`;
-  `build_topic_index` tags `origin`. +14 `test_trending.py` cases.
-- New blueprint + template + nav + additive CSS; env-defaulted
-  `TRENDING_*`. Fragmentation handled by `topic_key` +
-  `TRENDING_MIN_SOURCES` (default 2) floor (no clustering). Visibility
-  mirrors feed/dossier. Limit (INSTALL §8K/§10): only surfaces topics
-  also trending on Google — internal LLM-entity version is the
-  follow-on (pairs with Signal Learning), deferred until PR #56 lands.
-
-**Server state:** migration `CREATE TABLE trending_topics` +
-`trending_topic_articles` **applied on prod 2026-05-17** (user-
-confirmed; `manual-actions.md` → Completed; in `schema.sql` + a
-migration file for fresh installs). **No new cron** — existing
-`trending_poll` fills them next tick (folded into the durable Cron
-list). No pip/env/symlink. Python App restart on deploy.
-
-**Verification:** pure helpers verified in-sandbox (ad-hoc harness;
-pytest/flask/pymysql unavailable — same limit as PR #50/53);
-`score_article == max(topic_matches)` confirmed; templates Jinja-parse;
-changed Python `py_compile`s clean. Live route/browser UX deferred to a
-real env. **Open:** confirm `logs/cron.log` `topics_persisted=T
-topic_matches=M` after a tick; LLM-entity follow-on once PR #56 lands.
-
----
-
 ## Condensed history
 
 Older entries, summarized. **Full verbatim text is in
@@ -351,6 +361,18 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-17
 
+- **Trending topics view — /trending (PR #71).** Pri 7 / LOE 5. New
+  `/trending` page ranking topics by distinct-outlet count, each
+  linking to the dossier(s) under it. Conflict-free route (PR #56 was
+  rewriting `classify_pending`): reuse the Google Trends/News topic
+  index `trending_poll` already builds every 30 min — no LLM, no
+  `classify_pending` edit. `trending_poll` now also rebuilds
+  `trending_topics`/`trending_topic_articles` each tick (same txn as
+  the `article_features.trending` scalar). Pure helpers in
+  `app/trending.py` (+14 tests). *Server:* `trending_topics` +
+  `trending_topic_articles` tables applied on prod 2026-05-17
+  (`manual-actions.md` → Completed); no new cron/pip/env. Full detail:
+  archive / INSTALL §8K/§10.
 - **Multiple saved algorithms / profiles (PR #65).** User-empowerment
   Theme A (Pri 7). `user_algorithms` already had `name`/`is_active`,
   so app-layer only (**no migration**): `app/routes/algo.py` gains

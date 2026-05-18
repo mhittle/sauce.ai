@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, g, redirect, url_for, jso
 
 from ..db import query, execute, get_conn
 from ..discussion import discussions_for_articles
+from ..term_prefs import build_term_clauses
 from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
 
 bp = Blueprint("feed", __name__)
@@ -100,6 +101,9 @@ def index():
     pref_filter_sql = ""
     pref_score_mult = ""
     pref_params = {}
+    term_mute_sql = ""
+    term_boost_mult = ""
+    term_params = {}
     if u:
         pref_join_sql = (
             " LEFT JOIN user_source_prefs usp "
@@ -108,6 +112,14 @@ def index():
         pref_filter_sql = " AND COALESCE(usp.weight, 1.0) > 0"
         pref_score_mult = " * COALESCE(usp.weight, 1.0)"
         pref_params["_pref_uid"] = u["id"]
+
+        term_rows = query(
+            "SELECT term, mode, weight FROM user_term_prefs WHERE user_id = %s",
+            (u["id"],),
+        )
+        term_mute_sql, term_boost_expr, term_params = build_term_clauses(term_rows)
+        if term_boost_expr:
+            term_boost_mult = f" * ({term_boost_expr})"
 
     uid = u["id"] if u else None
     vis_sql = "(s.owner_id IS NULL OR s.owner_id = %(_vis_owner)s)" if uid else "s.owner_id IS NULL"
@@ -125,7 +137,7 @@ def index():
              f.info_density, f.journalist_reputation, f.source_reputation,
              f.popularity, f.trending, f.category, f.country,
              COALESCE(cs.cluster_size, 1) AS cluster_size,
-             ({score_expr}){pref_score_mult} AS score
+             ({score_expr}){pref_score_mult}{term_boost_mult} AS score
       FROM articles a
       JOIN sources s ON s.id = a.source_id
       JOIN article_features f ON f.article_id = a.id
@@ -144,10 +156,12 @@ def index():
         {filter_sql}
         {cat_filter_sql}
         {pref_filter_sql}
+        {term_mute_sql}
       {order_by_sql}
       LIMIT %(limit)s OFFSET %(offset)s
     """
     params = {**score_params, **filter_params, **pref_params, **vis_params,
+              **term_params,
               "limit": page_size, "offset": (page - 1) * page_size}
     articles = query(sql, params)
 

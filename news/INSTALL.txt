@@ -531,5 +531,17 @@ K. /trending page is empty or 500s:
   FULLTEXT); /search 500s on the missing index until applied,
   other routes are unaffected. Body-text search and a blended
   relevance*recency score are roadmapped v2.
+- Per-user keyword mute & boost (managed at /terms) is applied at
+  the reader-feed query layer for SIGNED-IN users on the main feed
+  only -- the anonymous feed, /firehose, and the email digest are
+  intentionally unaffected (same scoping as per-source prefs).
+  Matching is plain case-insensitive SUBSTRING against title +
+  summary: it is NOT word/phrase/entity aware, so a muted "crypto"
+  also hides "cryptography" and a boosted "AI" matches "rain".
+  Good enough for v1 control; phrase/entity-aware matching is the
+  v2 upgrade shared with topic extraction (Trending topics view /
+  Signal Learning). Requires the 2026-05-17-term-prefs.sql
+  migration (user_term_prefs); a missing table 500s the signed-in
+  feed, so apply it before deploying the code.
 
 You're done. Visit  https://sauce.ai/news .

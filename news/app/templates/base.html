@@ -34,6 +34,7 @@
     <a href="{{ url_for('algo.index') }}">Your Algo</a>
     <a href="{{ url_for('sources.index') }}">Your Sources</a>
     <a href="{{ url_for('saves.saved') }}">Saved</a>
+    <a href="{{ url_for('term_prefs.index') }}">Your Keywords</a>
     <a href="{{ url_for('account.settings') }}">Settings</a>
     {% if current_user.is_admin %}<a href="{{ url_for('admin.index') }}">Admin</a>{% endif %}
     <form method="post" action="{{ url_for('auth.logout') }}" class="inline">
