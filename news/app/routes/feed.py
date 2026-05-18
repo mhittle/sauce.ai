@@ -1,8 +1,10 @@
+import datetime
 import json
-from flask import Blueprint, render_template, request, g, redirect, url_for, jsonify, current_app
+from flask import Blueprint, render_template, request, g, redirect, url_for, jsonify, current_app, abort
 
 from ..db import query, execute, get_conn
 from ..discussion import discussions_for_articles
+from ..explain import explain_article
 from ..term_prefs import build_term_clauses
 from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
 
@@ -231,3 +233,45 @@ def click(article_id):
     execute("INSERT INTO user_clicks (user_id, article_id) VALUES (%s, %s)", (uid, article_id))
     get_conn().commit()
     return ("", 204)
+
+
+@bp.route("/article/<int:article_id>/explain")
+def explain(article_id):
+    """Why-this-article panel: the score breakdown for *this* viewer.
+
+    Lazily fetched by HTMX when the "Why?" toggle on a card is clicked, so
+    the feed query stays cheap. Uses the same active-weights resolution and
+    source-visibility scoping as the feed itself (anon → balanced default),
+    so the explanation reflects what actually ranked the row for the viewer.
+    """
+    weights = _active_weights()
+    u = getattr(g, "user", None)
+    uid = u["id"] if u else None
+    vis_sql = "(s.owner_id IS NULL OR s.owner_id = %(_vis_owner)s)" if uid else "s.owner_id IS NULL"
+    vis_params = {"_vis_owner": uid} if uid else {}
+
+    row = query(
+        f"""
+        SELECT a.id, a.title, a.published_at,
+               f.political_lean, f.source_lean, f.objectivity, f.reading_level,
+               f.info_density, f.journalist_reputation, f.source_reputation,
+               f.popularity, f.trending, f.story_obscurity, f.source_obscurity,
+               f.paywall
+        FROM articles a
+        JOIN sources s ON s.id = a.source_id
+        JOIN article_features f ON f.article_id = a.id
+        WHERE a.id = %(aid)s AND a.status = 'classified' AND {vis_sql}
+        """,
+        {"aid": article_id, **vis_params},
+        one=True,
+    )
+    if not row:
+        abort(404)
+
+    hours_old = None
+    if row.get("published_at"):
+        delta = datetime.datetime.utcnow() - row["published_at"]
+        hours_old = max(0.0, delta.total_seconds() / 3600.0)
+
+    ex = explain_article(row, weights, hours_old=hours_old, top_n=3)
+    return render_template("partials/why_panel.html", a=row, ex=ex)

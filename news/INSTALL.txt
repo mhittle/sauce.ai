@@ -543,5 +543,18 @@ K. /trending page is empty or 500s:
   Signal Learning). Requires the 2026-05-17-term-prefs.sql
   migration (user_term_prefs); a missing table 500s the signed-in
   feed, so apply it before deploying the code.
+- "Why?" ranking explainer: the "Why?" toggle on each feed card
+  lazily loads a per-feature score breakdown (feed.explain ->
+  /article/<id>/explain). It is a progressive enhancement -- HTMX
+  only, no no-JS fallback (the core feed is unaffected without JS).
+  The breakdown reproduces ranking.build_score_sql's per-feature
+  term + the recency gate in Python (app/explain.py, parity-tested);
+  it does NOT model the per-user source/keyword multipliers applied
+  outside the feature sum, and the learned-model contribution line is
+  deferred until Signal Learning lands (roadmap). It explains the
+  viewer's active algorithm (anonymous visitors see the balanced
+  default, matching the feed). No DB migration / cron / dep / env
+  change -- just the standard Python App restart on deploy so the new
+  route + partial load.
 
 You're done. Visit  https://sauce.ai/news .
