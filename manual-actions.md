@@ -40,18 +40,27 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+_None — all tracked migrations applied._
+
+---
+
+## Completed
+
 ### 2026-05-17 — Migration: user_term_prefs (keyword mute & boost)
-**Status:** open · **PR:** #77 (draft) · **Opened:** 2026-05-17 ·
+**Status:** completed · **PR:** #77 (merged 2026-05-17) ·
+**Opened:** 2026-05-17 · **Completed:** 2026-05-17 ·
 **File reference:** `news/seed/migrations/2026-05-17-term-prefs.sql`
 
-Adds the `user_term_prefs` table that backs per-user keyword **mute**
-(hard-filter) and **boost** (score multiplier). `routes/feed.py` reads
-this table on **every signed-in feed load**, so this must be applied
-**before the PR merges** — a missing table 500s the signed-in feed
-(BUG-007 class). Anonymous visitors and the firehose/digest are
-unaffected (the query only runs for signed-in users on `/`).
+Created `user_term_prefs`, backing per-user keyword **mute**
+(hard-filter) and **boost** (score multiplier) at `/terms`.
+`routes/feed.py` reads it on every signed-in feed load (BUG-007 class
+if absent). User confirmed the `CREATE TABLE` was run via phpMyAdmin
+against `lt1ih6uyy2z6_news` and the Python App restarted (2026-05-17),
+so the signed-in feed is safe. Anonymous feed / `/firehose` / digest
+were unaffected throughout. In the repo via `schema.sql` + the
+migration file so fresh installs replay it.
 
-**SQL to apply (phpMyAdmin against `lt1ih6uyy2z6_news`):**
+**SQL applied:**
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_term_prefs (
@@ -68,14 +77,8 @@ CREATE TABLE IF NOT EXISTS user_term_prefs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-After applying, restart the Python App in cPanel so the new `/terms`
-blueprint + nav link load. Verify: `/terms` returns 200 for a signed-in
-user; add a mute term, confirm matching articles drop from `/`; add a
-boost term, confirm matching articles rise.
-
----
-
-## Completed
+**Verify:** `/terms` returns 200 for a signed-in user; a muted term
+drops matching articles from `/`; a boosted term raises them.
 
 ### 2026-05-17 — Migration: articles FULLTEXT index (article search)
 **Status:** completed · **PR:** #70 · **Opened:** 2026-05-17 ·

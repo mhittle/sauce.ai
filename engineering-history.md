@@ -136,10 +136,10 @@ weights): **mute** = hard filter, **boost** = score multiplier.
 
 ### Server-side state touched
 
-- **Migration pending on prod**: `2026-05-17-term-prefs.sql` (one
-  `CREATE TABLE user_term_prefs`). `routes/feed.py` reads it on every
-  signed-in feed load — **apply before merge** (BUG-007 class; anon
-  feed unaffected). `manual-actions.md` Open + chat paste. No
+- **Migration applied on prod 2026-05-17** (user-confirmed;
+  `manual-actions.md` → Completed): `2026-05-17-term-prefs.sql`
+  (`CREATE TABLE user_term_prefs`). `routes/feed.py` reads it every
+  signed-in feed load (BUG-007 class if absent; anon unaffected). No
   cron/env/pip/symlink. Python App restart on deploy.
 
 ### Verification
@@ -153,7 +153,8 @@ later also match `article_bodies`.
 
 ### PR
 
-- **PR #77** — Keyword / topic mute & boost (draft).
+- **PR #77** — Keyword / topic mute & boost (merged 2026-05-17;
+  migration applied on prod same day).
 
 ---
 

@@ -50,7 +50,7 @@ shipped.
 | 4 | 7 | infra, skunkworks | Migrate to VPS (gunicorn + nginx) | backlog |
 | 3 | 2 | ui | Dark mode | done |
 | 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
-| 8 | 4 | algo, ui | Keyword / topic mute & boost | in-progress |
+| 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
@@ -371,7 +371,7 @@ with the read-only Code tab and is a natural precursor to Sandboxed
 Python exec (Pri 9).
 
 ### Keyword / topic mute & boost
-**Priority:** 8 · **LOE:** 4 · **Category:** algo, ui · **Status:** in-progress (PR #77, draft)
+**Priority:** 8 · **LOE:** 4 · **Category:** algo, ui · **Status:** done (v1, PR #77)
 
 Per-user mute and boost term lists ("mute: crypto, royal family; boost:
 climate policy, local elections") applied at the feed-query layer as a
@@ -382,15 +382,10 @@ for first. New `user_term_prefs(user_id, term, mode, weight)` table;
 matched against title + summary (+ body once extracted). v2: phrase /
 entity-aware matching once topic extraction (Trending) lands.
 
-**Status note (2026-05-17):** v1 shipped on a draft PR — new
-`user_term_prefs` table + `seed/migrations/2026-05-17-term-prefs.sql`,
-Flask-free `app/term_prefs.py` SQL builder, `/terms` management page
-(mirrors `/sources`), feed-query integration scoped to signed-in users
-(parity with `user_source_prefs`; anon / firehose / digest unchanged).
-Substring match against title+summary (v2 = phrase/entity-aware). Left
-to do: maintainer review + merge, and **the DB migration must be applied
-on prod before merge** (signed-in feed reads the table every load —
-BUG-007 class). Then this moves to Done.
+Shipped v1 (PR #77, merged 2026-05-17; migration applied on prod
+same day). v2 = phrase/entity-aware matching (shared with topic
+extraction); also fold in `article_bodies` text (`_MATCH_EXPR` is the
+single point to change).
 
 ### Multiple saved algorithms / profiles
 **Priority:** 7 · **LOE:** 4 · **Category:** backend, ui · **Status:** in-progress
@@ -478,6 +473,17 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-17
 
+- **Keyword / topic mute & boost** — Pri 8, LOE 4, algo/ui. PR #77
+  (merged 2026-05-17; `user_term_prefs` migration applied on prod same
+  day). Per-user content-level lever distinct from `user_source_prefs`:
+  **mute** hard-filters any article whose title+summary contains the
+  term, **boost** multiplies a matching article's score (strongest
+  match wins, mute beats boost). New Flask-free `app/term_prefs.py` SQL
+  builder (escaped LIKE, `GREATEST` boost, injection-proof; 17 pure
+  tests), `user_term_prefs` table + migration, `/terms` page (mirrors
+  `/sources`) + "Your Keywords" nav, feed integration scoped to
+  signed-in users on `/` only (anon/firehose/digest untouched). v1 =
+  substring match; phrase/entity-aware + body-text are v2.
 - **Across-the-spectrum in-feed** — Pri 7, LOE 3, ui/algo. PR #69
   (merged 2026-05-17). The `+N angles` pill on multi-source feed cards
   (shipped with the dossier, PR #43) now **expands inline** to a
