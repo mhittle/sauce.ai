@@ -106,6 +106,49 @@ rebuild from `seed/schema.sql` already includes these.
 
 ---
 
+## 2026-05-18 — Why This Article: ranking explainer (PR #79)
+
+Roadmap Pri 7 / LOE 3 (ui). A "Why?" toggle on each feed card lazily
+expands an inline per-feature score breakdown for the viewer's active
+algorithm.
+
+### What shipped
+
+- **`app/explain.py`** (new, pure/Flask-free/DB-free, mirrors
+  `spectrum.py`): reproduces `build_score_sql`'s per-feature term
+  `w*(1-|v-d|/scale)` + the `exp(-w·h/24)` recency gate in Python.
+  Imports `_direction_from_weights`/`_scale_width` **from `ranking.py`**
+  (not re-derived) so the explainer can't desync from the scorer —
+  parity is the whole point. 18 pure tests `tests/test_explain.py`.
+- **`feed.explain`** `GET /article/<id>/explain` → `partials/
+  why_panel.html`; same `_active_weights` + `sources.owner_id`
+  visibility scoping as the feed (anon → balanced default), 404 on
+  unknown/unclassified/hidden.
+- **`feed_cards.html`**: progressive-enhancement HTMX trigger (GET, no
+  CSRF) + per-card `#why-<id>` container; `style.css` append-only
+  `.why-*` block, dark-mode-aware via semantic vars (no existing rule
+  touched). INSTALL §10 limit note; roadmap → in-progress.
+
+### Server-side state touched
+
+None. No DB/cron/env/pip/symlink. Python App restart on deploy so the
+new route + partial load. **No `manual-actions.md` entry.**
+
+### Verification
+
+`test_explain` 18/18 + `test_ranking`/`test_spectrum` green via the
+sandbox driver (no pytest/Flask in sandbox — documented limit);
+changed Python `py_compile` clean, templates Jinja-parse. Route/browser
+deferred to CI/real env. Scope: feature contributions + recency only
+(per-user source/term multipliers applied outside the feature sum are
+not modeled); the learned-model line waits on Signal Learning.
+
+### PR
+
+- **PR #79** — Why This Article ranking explainer (draft).
+
+---
+
 ## 2026-05-17 — Keyword / topic mute & boost (PR #77)
 
 Roadmap Pri 8 / LOE 4 (algo, ui), user-empowerment cluster theme A.
