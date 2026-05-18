@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Your keywords{% endblock %}
+{% block content %}
+<style>
+  .me-terms { max-width: 880px; margin: 0 auto; }
+  .me-terms h1 { font-family: ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, serif; font-weight: 500; }
+  .me-terms .lede { color: #555; margin-bottom: 1.5rem; }
+  .me-terms form.add-term { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; align-items: center; }
+  .me-terms form.add-term input[type=text] { flex: 1; min-width: 240px; padding: .55rem .7rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+  .me-terms form.add-term select,
+  .me-terms form.add-term input[type=number] { padding: .55rem .5rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+  .me-terms form.add-term input[type=number] { width: 5.5rem; }
+  .me-terms form.add-term button { padding: .55rem 1rem; border: 0; background: #222; color: #fff; border-radius: 4px; cursor: pointer; }
+  .me-terms .alert { padding: .6rem .8rem; border-radius: 4px; margin-bottom: 1rem; }
+  .me-terms .alert.error { background: #fdecea; color: #61231b; }
+  .me-terms .alert.success { background: #e8f5e9; color: #1b4332; }
+  .me-terms .cap { color: #888; font-size: .82rem; text-align: right; margin-bottom: 1.5rem; }
+  .me-terms .cols { display: flex; gap: 2rem; flex-wrap: wrap; }
+  .me-terms .col { flex: 1; min-width: 280px; }
+  .me-terms h2 { font-size: 1rem; font-weight: 600; margin: 0 0 .5rem; }
+  .me-terms .hint { color: #888; font-size: .82rem; margin: 0 0 .8rem; }
+  .me-terms ul { list-style: none; padding: 0; margin: 0; }
+  .me-terms li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .45rem .2rem; border-bottom: 1px solid #eee; }
+  .me-terms .term { font-size: .95rem; }
+  .me-terms .wt { color: #2e7d32; font-size: .8rem; margin-left: .4rem; }
+  .me-terms button.linkbtn { background: none; border: 0; color: #b71c1c; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+  .me-terms .empty { color: #888; font-style: italic; padding: .8rem 0; }
+</style>
+
+<div class="me-terms">
+  <h1>Your keywords</h1>
+  <p class="lede">
+    <strong>Mute</strong> a keyword or phrase to hide every article whose
+    headline or summary contains it. <strong>Boost</strong> one to push
+    matching articles up your feed (the multiplier is applied to the
+    article's score; the strongest matching boost wins). Matching is
+    case-insensitive and applies to your main feed.
+  </p>
+
+  {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert success">{{ success }}</div>{% endif %}
+
+  <form class="add-term" method="post" action="{{ url_for('term_prefs.add') }}">
+    {{ csrf_field() }}
+    <input type="text" name="term" placeholder="keyword or phrase (e.g. crypto, royal family)"
+           required maxlength="128" />
+    <select name="mode" aria-label="Mode">
+      <option value="mute">Mute</option>
+      <option value="boost">Boost</option>
+    </select>
+    <input type="number" name="weight" step="0.1" min="1" max="5"
+           value="{{ '%.1f'|format(boost_default) }}"
+           title="Boost multiplier (1–5, ignored for Mute)" />
+    <button type="submit">Add</button>
+  </form>
+  <div class="cap">
+    Keywords: {{ (muted|length) + (boosted|length) }} / {{ max_terms }}
+  </div>
+
+  <div class="cols">
+    <div class="col">
+      <h2>Muted</h2>
+      <p class="hint">Articles matching these are hidden from your feed.</p>
+      {% if muted %}
+        <ul>
+          {% for t in muted %}
+          <li>
+            <span class="term">{{ t.term }}</span>
+            <form class="inline" method="post"
+                  action="{{ url_for('term_prefs.delete', tid=t.id) }}">
+              {{ csrf_field() }}
+              <button type="submit" class="linkbtn">Remove</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty">No muted keywords.</div>
+      {% endif %}
+    </div>
+
+    <div class="col">
+      <h2>Boosted</h2>
+      <p class="hint">Matching articles get a score multiplier.</p>
+      {% if boosted %}
+        <ul>
+          {% for t in boosted %}
+          <li>
+            <span class="term">{{ t.term }}<span class="wt">&times;{{ '%.1f'|format(t.weight) }}</span></span>
+            <form class="inline" method="post"
+                  action="{{ url_for('term_prefs.delete', tid=t.id) }}">
+              {{ csrf_field() }}
+              <button type="submit" class="linkbtn">Remove</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty">No boosted keywords.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

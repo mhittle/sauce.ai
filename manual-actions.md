@@ -40,7 +40,38 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-_None — all tracked migrations applied._
+### 2026-05-17 — Migration: user_term_prefs (keyword mute & boost)
+**Status:** open · **PR:** #NN (draft) · **Opened:** 2026-05-17 ·
+**File reference:** `news/seed/migrations/2026-05-17-term-prefs.sql`
+
+Adds the `user_term_prefs` table that backs per-user keyword **mute**
+(hard-filter) and **boost** (score multiplier). `routes/feed.py` reads
+this table on **every signed-in feed load**, so this must be applied
+**before the PR merges** — a missing table 500s the signed-in feed
+(BUG-007 class). Anonymous visitors and the firehose/digest are
+unaffected (the query only runs for signed-in users on `/`).
+
+**SQL to apply (phpMyAdmin against `lt1ih6uyy2z6_news`):**
+
+```sql
+CREATE TABLE IF NOT EXISTS user_term_prefs (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    INT UNSIGNED NOT NULL,
+  term       VARCHAR(128) NOT NULL,
+  mode       ENUM('mute','boost') NOT NULL,
+  weight     FLOAT NOT NULL DEFAULT 1.5,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_term_pref (user_id, term),
+  KEY idx_term_pref_user (user_id),
+  CONSTRAINT fk_term_pref_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+After applying, restart the Python App in cPanel so the new `/terms`
+blueprint + nav link load. Verify: `/terms` returns 200 for a signed-in
+user; add a mute term, confirm matching articles drop from `/`; add a
+boost term, confirm matching articles rise.
 
 ---
 
