@@ -36,7 +36,7 @@ shipped.
 | 7 | 4 | ui, new-feature, algo | Reading diet meter | backlog |
 | 7 | 5 | new-feature, algo | Trending topics view (upgraded post-dedup) | done |
 | 7 | 4 | algo, backend, ui | External trending sort (Google News/Trends) — BUG-015 | done |
-| 7 | 3 | ui | Why This Article (ranking explainer popover) | in-progress |
+| 7 | 3 | ui | Why This Article (ranking explainer popover) | done |
 | 7 | 3 | ui, algo | Across-the-spectrum in-feed (mini-dossier on multi-source cards) | done |
 | 7 | 3 | new-feature, ui, algo | Discussion links (Techmeme-style Reddit/HN threads) | done |
 | 6 | 4 | new-feature, ui | Article save / bookmark | done |
@@ -235,7 +235,7 @@ Bumped from Pri 5 to Pri 7 because the dedup-enabled version is much
 stronger than the v1 version, and because it feeds the dossier theme.
 
 ### Why This Article
-**Priority:** 7 · **LOE:** 3 · **Category:** ui · **Status:** in-progress
+**Priority:** 7 · **LOE:** 3 · **Category:** ui · **Status:** done (v1, PR #79)
 
 Small "i" icon on each card → popover showing the top 3 feature
 contributions to that article's score, plus learned-model influence
@@ -470,6 +470,23 @@ pipeline's `candidate_sources` table (done).
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-18
+
+- **Why This Article** — Pri 7, LOE 3, ui. PR #79 (merged 2026-05-18).
+  A "Why?" toggle on each feed card lazily expands an inline per-feature
+  score breakdown for the viewer's active algorithm (anon → balanced
+  default, matching the feed): top-3 weighted contributors with a match
+  bar, the multiplicative recency gate, the final score, and an
+  all-features expansion. New pure `app/explain.py` reproduces
+  `build_score_sql`'s per-feature term + recency gate in Python and
+  imports `_direction_from_weights`/`_scale_width` from `ranking.py` so
+  it can't desync from the scorer (18 parity tests); `feed.explain`
+  `GET /article/<id>/explain` partial with the feed's
+  active-weights+visibility scoping; progressive-enhancement HTMX
+  trigger; append-only dark-mode-aware CSS. No DB/cron/env/dep/symlink.
+  v2 (deferred): the learned-model contribution line lands with Signal
+  Learning; per-user source/term multipliers are not modeled.
 
 ### 2026-05-17
 
