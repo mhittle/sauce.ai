@@ -450,3 +450,27 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
   .nav-search { width: 100%; order: 99; }
   .nav-search input { width: 100%; max-width: none; }
 }
+
+/* why-this-article ranking explainer (roadmap "Why This Article") */
+.card-meta .why-link { background: none; border: none; padding: 0; font: inherit; font-size: 0.85em; color: var(--muted); cursor: pointer; }
+.card-meta .why-link:hover { color: var(--accent); }
+.why-panel:empty { display: none; }
+.why-box { background: var(--surface-3); border: 1px solid var(--line); border-radius: 6px; padding: 0.6em 0.8em; margin-top: 0.5em; }
+.why-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4em; }
+.why-label { font-size: 0.72em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.why-hide { font-size: 0.78em; }
+.why-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.55em; }
+.why-item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6em; }
+.why-name { font-size: 0.9em; font-weight: 600; color: var(--fg); }
+.why-points { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); }
+.why-bar { height: 4px; border-radius: 2px; background: var(--line); margin: 0.2em 0 0.15em; }
+.why-bar i { display: block; height: 100%; width: var(--w, 0%); background: var(--accent); border-radius: 2px; }
+.why-detail { font-size: 0.78em; }
+.why-recency { font-size: 0.8em; margin-top: 0.5em; }
+.why-total { display: flex; align-items: baseline; gap: 0.5em; margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--line); font-size: 0.9em; }
+.why-more { margin-top: 0.5em; font-size: 0.85em; }
+.why-more summary { cursor: pointer; color: var(--muted); }
+.why-list-rest { margin-top: 0.4em; gap: 0.25em; }
+.why-item-row { display: flex; justify-content: space-between; gap: 0.6em; font-size: 0.85em; }
+.why-empty { font-size: 0.82em; margin: 0.2em 0; }
+.why-tune { display: inline-block; margin-top: 0.5em; font-size: 0.82em; font-weight: 600; }

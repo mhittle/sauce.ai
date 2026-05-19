@@ -1,0 +1,52 @@
+{# Why-this-article ranking explainer, loaded by the "Why?" toggle (feed.explain). #}
+<div class="why-box">
+  <div class="why-head">
+    <span class="why-label">Why this ranked</span>
+    <button type="button" class="linkbtn muted why-hide"
+            onclick="this.closest('.why-panel').innerHTML=''">Hide</button>
+  </div>
+  {% if ex.top %}
+    <ul class="why-list">
+      {% for c in ex.top %}
+        {% set match = (c.contribution / c.weight) if c.weight else 0 %}
+        <li class="why-item">
+          <div class="why-item-head">
+            <span class="why-name">{{ c.label }}</span>
+            <span class="why-points" title="weight {{ '%.2f' % c.weight }} &times; {{ '%.0f' % (match * 100) }}% match">+{{ '%.2f' % c.contribution }}</span>
+          </div>
+          <div class="why-bar"><i style="--w: {{ (match * 100)|round }}%"></i></div>
+          <div class="why-detail muted">
+            article {{ '%+.2f' % c.value if c.scale == 2 else '%.2f' % c.value }}, you target {{ '%+.2f' % c.direction if c.scale == 2 else '%.2f' % c.direction }}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if ex.recency_multiplier is not none %}
+      <div class="why-recency muted">
+        Freshness gate: &times;{{ '%.2f' % ex.recency_multiplier }}
+        {%- if ex.hours_old is not none %} (~{{ ex.hours_old|round|int }}h old){% endif %}
+      </div>
+    {% endif %}
+    <div class="why-total">
+      <span class="muted">Score</span>
+      <strong>{{ '%.2f' % ex.final_score }}</strong>
+      {% if ex.recency_multiplier is not none %}<span class="muted">(quality {{ '%.2f' % ex.quality }})</span>{% endif %}
+    </div>
+    {% if ex.contributions|length > ex.top|length %}
+      <details class="why-more">
+        <summary>All {{ ex.contributions|length }} weighted features</summary>
+        <ul class="why-list why-list-rest">
+          {% for c in ex.contributions %}
+            <li class="why-item-row">
+              <span class="why-name">{{ c.label }}</span>
+              <span class="why-points muted">+{{ '%.2f' % c.contribution }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
+  {% else %}
+    <p class="muted why-empty">This algorithm has no weighted features, so every article scores 0 &mdash; ordering falls back to recency.</p>
+  {% endif %}
+  <a class="why-tune" href="{{ url_for('algo.index') }}">Tune your algorithm &rarr;</a>
+</div>
