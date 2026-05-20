@@ -26,22 +26,7 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-### BUG-022 — Topnav text overflows page width
-**Status:** open · **Reporter:** user · **Opened:** 2026-05-20
-
-User reports the topnav menu has text too large — the nav extends past
-the width of the main page (overflows horizontally). Likely cause: the
-nav links accumulated past what the current font-size / spacing allows
-at typical desktop widths after several recent additions (gallery,
-density toggle, dark-mode toggle, search, keywords, etc.).
-
-Repro: load `/` on a desktop browser; observe the topnav links extend
-past the main content column / viewport edge.
-
-Fix direction: shrink topnav text and/or tighten spacing in
-`app/static/style.css` `.topnav` rules (additive change; no template
-restructuring needed). Verify mobile (≤640px) media block still wraps
-cleanly.
+(none currently)
 
 ---
 
@@ -100,6 +85,35 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 ---
 
 ## Resolved
+
+### BUG-022 — Topnav text overflows page width
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-20 · **Closed:** 2026-05-20 (PR pending)
+
+User reported the topnav extended past the width of the main page.
+
+**Root cause (`app/static/style.css` `.topnav`):** the nav had a
+full-size (`1em`) font with `1.2em` gaps and no `flex-wrap` on
+desktop. Signed-in users have ~10 link items (Feed, Trending,
+Firehose, Gallery, Your Algo, Your Sources, Saved, Your Keywords,
+Settings, plus Admin for admins, plus Sign-out-with-email-address)
+flanking a 14em search box and trailing Compact/Dark toggles. The
+accumulated width exceeded a typical desktop viewport, and without
+`flex-wrap` the row ran off the right edge instead of wrapping. The
+existing `@media (max-width:640px)` block added wrap and a tighter
+font-size only on mobile.
+
+**Fix (PR pending):** in `.topnav`, reduce `font-size` to `0.88em`,
+tighten `gap` from `1.2em` → `0.9em`, and add `flex-wrap: wrap` so
+the row falls to a second line on overflow instead of running off-
+screen. Brand `font-size` bumped from `1.05em` → `1.15em` (and its
+`margin-right` tightened) so the wordmark stays a touch larger than
+the link row — net absolute size of the brand is roughly unchanged.
+Mobile media-query rules still win below 640px (they override
+`font-size` and `gap` for that breakpoint).
+
+**Scope:** CSS-only, single rule + one selector tweak. No template,
+DB, cron, env, or pip change. Picked up on the next Python App
+restart (Jinja autoreloads templates; CSS is statically served).
 
 ### BUG-021 — Feed dominated by a single source across multiple algorithms
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-20 · **Closed:** 2026-05-20 (PR pending)

@@ -164,6 +164,17 @@ server-side migration referenced below was applied on prod and is in
   new sources from `seed/source_lean.csv` (768 → 1919). Dead URLs
   will self-deactivate at `error_count=10` over the next few days.
   `manual-actions.md` entry moved to Completed.
+- **BUG-022 topnav text overflows page width (PR pending).** User
+  reported the topnav extended past the main page. Root cause:
+  `.topnav` had `font-size:1em` + `gap:1.2em` + no `flex-wrap` on
+  desktop; signed-in users carry ~10 links + a 14em search box +
+  Compact/Dark toggles, so the row ran off the right edge instead of
+  wrapping. Fix: shrink `.topnav` to `font-size:0.88em`, tighten
+  `gap` to `0.9em`, add `flex-wrap:wrap`; bump brand to `1.15em` so
+  the wordmark stays a touch larger than the link row (net absolute
+  brand size roughly unchanged). Mobile `@media (max-width:640px)`
+  overrides still win below that breakpoint. *Server:* none — CSS-
+  only; restart on deploy. Full detail: `bugs.md` BUG-022.
 - **Shareable algorithm gallery v1 (PR #88).** Pri 8 / LOE 6,
   new-feature/ui (theme C keystone). User: "an algorithm library
   where users can pick and use other people's algos" with filterable
