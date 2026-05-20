@@ -450,130 +450,47 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-13
 
-- **BUG-012 — refresh-shuffle via score jitter (PR #46).** Feed was
-  deterministic so reloads showed the same top-30; added an opt-in
-  `jitter` kwarg to `build_score_sql` wrapping the score in
-  `* (1 + RAND()*jitter)`, live feed passes `FEED_JITTER` (default
-  0.10); digest / firehose / algo-preview stay deterministic.
-  *Server:* none; `FEED_JITTER` env-var has a working default. Full
-  detail: `bugs.md` BUG-012.
-- **English-only article filter at fetch time (PR #42).** Pure
-  `app/language.py is_english(title,summary,feed_language)` — stage 1
-  trusts a non-English feed `<language>` tag, stage 2 rejects when
-  >25% of letters fall outside Latin script ranges; wired into
-  `fetch_feeds` before insert with a `skipped_lang` counter. Existing
-  non-English rows left to age out (no backfill purge). Known gap:
-  Latin-script European content leaked through — later closed by
-  BUG-013/014 (py3langid stage 3, PR #50). *Server:* none (cron
-  picks up the new module on its next tick).
-- **Story dossier v1 — `/story/<id>` (PR #43).** Multi-source view of a
-  deduped story group across the lean spectrum; new `story_dossiers`
-  table caches a Haiku framing summary keyed by member-signature,
-  cost-gated to clusters with 3+ members and 2+ lean buckets; "+N
-  angles" pill on multi-source feed cards. *Server:* `story_dossiers`
-  migration; reuses the existing anthropic dep; restart post-merge.
-- **Mobile / responsive polish (PR #40).** Single additive
-  `@media (max-width:640px)` block + `.table-scroll` utility in
-  `style.css`; desktop layout untouched. *Server:* none (CSS-only).
-- **Automated source discovery — Reddit/HN + LLM agent (PR #38).** New
-  `candidate_sources` table; 3 cron jobs (`discover_harvest` hourly,
-  `discover_promote` nightly 04:00, `discover_llm` weekly Mon 05:00);
-  `/admin/discovery` approve/reject/blacklist queue; pure helpers in
-  `app/discovery.py`. *Server:* `candidate_sources` migration + the 3
-  cron entries; no new pip dep.
-- **BUG-011 — multiplicative recency gate (PR #34).** Ranking was
-  additive so stale high-quality articles dominated forever; changed
-  `recency` to a multiplicative freshness gate
-  `score = quality * EXP(-r*h/24)` (`recency=0` = legacy behavior).
-  *Server:* none; restart. Full root cause: `bugs.md` BUG-011.
-- **BUG-010 — feature bars all rendered identically (PR #35).** Template
-  wrote `style="width:NN%"` but `.feature-bars i` is a flex child and
-  the CSS reads a `--w` custom property; switched to `style="--w:NN%"`.
-  *Server:* none.
-- **BUG-008/009 — classify_pending stalled prod (PR #32).** GoDaddy
-  shared MySQL drops idle sockets during the long LLM/HTTP gap before
-  the write block → added `conn.ping(reconnect=True)` at every idle
-  point in `classify_pending` / `popularity_poll` / `fetch_feeds`;
-  parallelized paywall + body HTTP via `ThreadPoolExecutor(10)`;
-  `CLASSIFY_BUDGET_SECONDS` 90→240; throughput 10→180/tick. Lesson:
-  ping-reconnect any cron that does HTTP between writes. *Server:* no
-  schema change; `jobs/*.bak-*` on prod are stale (safe to delete).
-  Full detail: `bugs.md` BUG-008/009.
-- **BUG-007 recovery + wrap-up (PRs #30, #31).** Merged code referenced
-  `sources.owner_id` + `user_source_prefs` before those migrations were
-  run, 500'ing every reader route; ran them, restarted, drained the
-  queue, confirmed prod schema synced, installed trafilatura.
-  *Process learning:* treat `manual-actions.md` Open as a load-bearing
-  blocker — run a migration before merging the next one. Full detail:
-  `bugs.md` BUG-007.
-- **Article deduplication across sources (PR #24).** `articles.simhash`
-  + `articles.story_id` + `(story_id,published_at)` index; `fetch_feeds`
-  computes a 64-bit SimHash and seeds `story_id=id`; `classify_pending`
-  `_assign_story_id` clusters via exact `title_hash` or Hamming≤8 over a
-  48h window, canonical = highest `source_reputation`; feed dedupes by
-  `story_id`, firehose stays un-deduped; `maintenance` heals orphans.
-  Heavy paraphrase not clustered (v2 = embeddings). *Server:* dedup
-  migration; restart.
-- **Manual-actions tracker (PR #22).** Added `manual-actions.md`
-  (Open/Completed, full SQL inline) + the session-start/wrap-up
-  lifecycle hooks. *Server:* none.
-- **User-added RSS feed subscriptions (PR #29).** `/sources` page;
-  signed-in users add personal feeds scoped by `sources.owner_id`;
-  feed/firehose visibility filter; `app/feed_validation.py`. *Server:*
-  `sources.owner_id` migration.
-- **In-app reader view + body extraction (PR #21).** `article_bodies`
-  table; `app/extractor.py` (lazy `trafilatura`, 1 MB cap,
-  `MIN_WORDS=60`) wired into `classify_pending` (paywall-aware, shares
-  the cron wallclock budget); `/read/<id>` + reader template; nightly
-  `BODY_RETENTION_DAYS` prune. *Server:* `article_bodies` migration +
-  `pip install` (trafilatura); restart.
-- **Thumbs up/down + signal foundation (PR #19).** Generic
-  `user_signals` table (forward-compat for Signal Learning) +
-  `user_source_prefs`; `/signal` blueprint (toggle thumbs,
-  3-downs-from-source prompt); feed query splices the per-user-source
-  weight. *Server:* signals migration.
-- **Daily personalized email digest (PR #23).** Opt-in
-  `users.digest_enabled` + unsub token; noon-UTC `send_digest` cron
-  reusing the feed ranking SQL; stdlib `smtplib` (localhost MTA by
-  default; `SMTP_*` env vars for a real relay). *Server:* digest
-  migration + the noon-UTC cron; optional `SMTP_*` env vars.
-- **Cron hardening + PyMySQL timeouts (PR #15).** `job_lock(name)`
-  fcntl mutex in `_bootstrap.py` wrapping each `main()`; `requests`
-  timeouts on RSS/Reddit/HN; anthropic `timeout=30`; PyMySQL timeouts
-  (web `(5,15,10)`, cron `(5,30,15)`); `FEED_FETCH_BATCH` 80→20.
-  *Server:* none; restart; lockfiles appear in `news/logs/`.
+- **Ranking + freshness bug fixes.** BUG-012 score jitter (PR #46,
+  `FEED_JITTER` 0.10 default, deterministic for digest/firehose/
+  algo-preview); BUG-011 multiplicative recency gate (PR #34,
+  `score = quality * EXP(-r*h/24)`); BUG-010 feature-bar CSS
+  custom-property fix (PR #35). *Server:* none.
+- **Reliability + perf.** BUG-008/009 `conn.ping(reconnect=True)` in
+  `classify_pending` / `popularity_poll` / `fetch_feeds` (PR #32);
+  parallelized HTTP via `ThreadPoolExecutor(10)`, throughput
+  10→180/tick; BUG-007 recovery (`sources.owner_id`,
+  `user_source_prefs` migrations were merged ahead of being run —
+  process learning: Open `manual-actions.md` gates merges); cron
+  hardening with `job_lock` + PyMySQL timeouts (PR #15). *Server:*
+  several migrations + trafilatura pip install.
+- **Pipeline + feed features.** English-only fetch filter (PR #42,
+  later supplemented by py3langid in BUG-013/014); article dedup via
+  simhash + story_id (PR #24); story dossier v1 `/story/<id>` (PR
+  #43); user-added RSS feeds + `/sources` (PR #29); in-app reader
+  view + body extraction (PR #21, trafilatura); thumbs up/down +
+  `user_signals` foundation (PR #19); daily email digest (PR #23);
+  automated source discovery (PR #38, 3 cron jobs); mobile polish
+  (PR #40); manual-actions tracker (PR #22). *Server:* migrations
+  for `article_bodies`, signals, dedup, candidate_sources, digest,
+  story_dossiers, sources.owner_id; 3 new cron entries
+  (`discover_harvest` hourly, `discover_promote` nightly,
+  `discover_llm` weekly) + noon-UTC `send_digest`.
 
 ### 2026-05-12
 
-- **Paywall feature (PR #14).** Active per-article HTTP probe in
-  `classify_pending` writes `article_features.paywall` 0..1 (JSON-LD /
-  `content_tier` / phrase heuristics; blocked → 0.5 "suspected");
-  opt-in catalog entry; `/admin/feeds` paywall column. *Server:*
-  paywall migration.
-- **Editorial serif wordmark (PR #13).** `.brand` restyled in
-  `base.html` + `style.css` (system serif; italic "news"). *Server:*
-  none.
-- **Feature batch #7–#11.** #7 fix **BUG-006** (article links: HTMX
-  `hx-post` on the anchors → `onclick` fetch+keepalive so browser
-  navigation works); #8 category tabs on `/`; #9 3-axis feature config
-  (Direction + Weight + Threshold; uniform
-  `weight*(1-|v-dir|/scale)`); #10 obscurity features (story + source,
-  log-scaled) + migration; #11 source catalog 135→768 +
-  auto-deactivate at `error_count=10` + `/admin/feeds` Refresh button.
-  *Server:* obscurity migration; +633 seed-CSV import. Detail:
-  `bugs.md` BUG-006.
-- **Doc framework.** Added `roadmap.md`, `bugs.md` (BUG-001..005
-  pre-populated), `engineering-session-wrapup.md`, and wired all into
-  `new-engineering-session-instructions.md`. *Server:* none.
-- **v1 prototype deploy to GoDaddy (PRs #3, #4).** First working
-  deploy. Fixed 5 deploy bugs: `APPLICATION_ROOT` double-prefix 404
-  (BUG-004), INSTALL path mismatch (BUG-005), CloudLinux venv-shim
-  fork-bomb (BUG-001), cPanel self-recursive `passenger_wsgi.py`
-  (BUG-002), `anthropic 0.39` / `httpx 0.28` incompat → bumped to
-  `0.101.0` (BUG-003). All not-in-repo server state from this deploy is
-  consolidated in **Load-bearing production state** above; root causes
-  in `bugs.md` BUG-001..005 and `INSTALL.txt` §8. The Anthropic key +
-  DB password were exposed in chat and rotated before close.
+- **v1 prototype deploy + initial feature batch (PRs #3, #4, #7–#14).**
+  First working deploy to GoDaddy; fixed BUG-001..005 (CloudLinux
+  shim, cPanel wsgi scaffold, anthropic 0.39 / httpx 0.28 incompat,
+  `APPLICATION_ROOT` double-prefix, INSTALL path mismatch — all
+  consolidated in "Load-bearing production state" above + `bugs.md`).
+  Feature batch: paywall HTTP probe (PR #14), serif wordmark (#13),
+  BUG-006 article-click fix (#7), category tabs (#8), 3-axis feature
+  config (#9), obscurity features (#10), source catalog 135→768 +
+  auto-deactivate at `error_count=10` (#11). Doc framework added
+  (`roadmap.md`, `bugs.md`, `engineering-session-wrapup.md`).
+  *Server:* paywall + obscurity migrations; +633 seed-CSV import.
+  Anthropic key + DB password exposed in chat then rotated. Full
+  detail: archive.
 
 ---
 
