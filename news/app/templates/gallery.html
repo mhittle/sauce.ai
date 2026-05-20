@@ -67,7 +67,10 @@
   {% if listings %}
     <ul class="gallery-list">
       {% for L in listings %}
-      <li class="gallery-card">
+      {% set permalink = url_for('gallery.index', _external=True) ~ '#listing-' ~ L.id %}
+      {% set _share_subject = 'Algorithm on sauce.ai/news: ' ~ L.name %}
+      {% set _share_body = 'I thought you might like this newsfeed algorithm on sauce.ai/news:\n\n' ~ L.name ~ ('\n\n' ~ L.description if L.description else '') ~ '\n\n' ~ permalink ~ '\n' %}
+      <li class="gallery-card" id="listing-{{ L.id }}">
         <div class="gallery-card-head">
           <h2 class="gallery-card-name">
             {{ L.name }}
@@ -115,6 +118,13 @@
           {% else %}
             <a class="gallery-adopt" href="{{ url_for('auth.login', next=url_for('gallery.index')) }}">Sign in to adopt</a>
           {% endif %}
+          <button type="button" class="linkbtn gallery-copy"
+                  data-link="{{ permalink }}"
+                  onclick="copyGalleryLink(this)"
+                  aria-label="Copy link to this algorithm">Copy link</button>
+          <a class="linkbtn gallery-share-email"
+             href="mailto:?subject={{ _share_subject|urlencode }}&amp;body={{ _share_body|urlencode }}"
+             aria-label="Share this algorithm by email">Email</a>
         </div>
       </li>
       {% endfor %}
@@ -129,4 +139,21 @@
     </p>
   {% endif %}
 </div>
+
+<script>
+  function copyGalleryLink(btn) {
+    var link = btn.getAttribute('data-link') || '';
+    var done = function () {
+      var orig = btn.dataset.origLabel || btn.textContent;
+      btn.dataset.origLabel = orig;
+      btn.textContent = 'Copied!';
+      setTimeout(function () { btn.textContent = orig; }, 1500);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(link).then(done, function () { window.prompt('Copy this link:', link); });
+    } else {
+      window.prompt('Copy this link:', link);
+    }
+  }
+</script>
 {% endblock %}

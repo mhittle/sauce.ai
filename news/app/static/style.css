@@ -542,3 +542,5 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .gallery-adopt { padding: 0.45em 0.9em; border: 0; background: var(--accent, #222); color: #fff; border-radius: 6px; cursor: pointer; font: inherit; text-decoration: none; display: inline-block; }
 .gallery-unpublish { color: #b71c1c; }
 .gallery-empty { padding: 2em 0; text-align: center; }
+.gallery-copy, .gallery-share-email { font-size: 0.9em; }
+.gallery-card:target { box-shadow: 0 0 0 2px var(--accent); }

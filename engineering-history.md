@@ -126,6 +126,29 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Gallery — Copy link + Email share buttons (PR pending).** Tiny
+  follow-on to PR #88 (gallery v1). Each `/gallery` card now has two
+  new actions next to Adopt/Unpublish: **Copy link** (button writes
+  a permalink to the clipboard via `navigator.clipboard.writeText`,
+  falls back to `window.prompt` on non-secure contexts / older
+  browsers — degrades gracefully, never errors) and **Email** (plain
+  `<a href="mailto:?subject=…&body=…">` so it works without JS and
+  hooks the user's native mail client). Permalink is
+  `url_for('gallery.index', _external=True) ~ '#listing-<id>'`, and
+  each card now has an `id="listing-<id>"` anchor with a `:target`
+  CSS rule that highlights the card when followed. Subject/body
+  composed in the template; Jinja `|urlencode` handles
+  spaces/newlines/`&`/`#`. Available to anonymous viewers too —
+  sharing shouldn't require sign-in. Template/CSS only — no route,
+  no DB, no migration, no cron, no env, no pip dep. *Server:* none
+  (Python App restart on deploy for the new template/CSS to load,
+  but Jinja autoreloads templates so even that is optional).
+- **Source catalog admin re-import on prod (PR #91 follow-up).** User
+  ran the `/admin/feeds` → "Re-import seed CSV" action on prod
+  2026-05-20 (idempotent upsert on `feed_url`), loading the +1151
+  new sources from `seed/source_lean.csv` (768 → 1919). Dead URLs
+  will self-deactivate at `error_count=10` over the next few days.
+  `manual-actions.md` entry moved to Completed.
 - **Shareable algorithm gallery v1 (PR #88).** Pri 8 / LOE 6,
   new-feature/ui (theme C keystone). User: "an algorithm library
   where users can pick and use other people's algos" with filterable
