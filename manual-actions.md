@@ -41,7 +41,7 @@ Sort **Open** newest-first. **Completed** newest-first.
 ## Open
 
 ### 2026-05-20 — Source catalog import (+1151 new sources)
-**Status:** open · **PR:** TBD (this session) · **Opened:** 2026-05-20
+**Status:** open · **PR:** #91 (merged 2026-05-20) · **Opened:** 2026-05-20
 
 `seed/source_lean.csv` grew 768 → 1919 sources (added 1151 hand-curated
 outlets + Substacks + Medium pubs + engineering blogs). To load them on

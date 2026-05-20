@@ -116,286 +116,6 @@ already includes these.
 
 ---
 
-## 2026-05-20 — Source catalog expansion (+1151 sources)
-
-User-requested: 1000 more high-quality sources, including Substack /
-Medium individual writers. Scope confirmed via `AskUserQuestion`:
-50/50 outlets/individuals, ~65% US / ~35% intl, single PR appending
-to `seed/source_lean.csv` (vs. the candidate_sources review queue).
-
-### What shipped
-
-- **`seed/source_lean.csv`**: 768 → 1919 (+1151 unique rows). ~630
-  institutional outlets (US regional / state-capital papers across all
-  50 states; States-Newsroom + local investigative nonprofits; NPR
-  affiliates; trade pubs — Stat News, Defense One, etc.; magazines —
-  Atlantic subsections, Foreign Affairs, Lawfare, NY Mag, NYRB, LRB;
-  think tanks — Brookings/AEI/Cato/CFR/CSIS/Chatham/RUSI; intl —
-  Le Monde, Mediapart, Spiegel International, Politico Europe, Kyiv
-  Independent, Meduza, Bellingcat, Asahi, Nikkei, Caixin, HKFP, Daily
-  Maverick, Premium Times, Animal Político, El Faro, Haaretz). ~520
-  individuals — Stratechery, Platformer, Slow Boring, HCR, Money Stuff
-  (Bloomberg author RSS), Marginal Revolution, Construction Physics,
-  Works in Progress, Apricitas, Adam Tooze, YLE, Volts, Heatmap,
-  Latent Space, Karpathy, Simon Willison, Pluralistic, Schneier;
-  corporate eng blogs (Netflix Tech, Stripe, Cloudflare, GitHub,
-  OpenAI, Anthropic, HuggingFace, BAIR); intl analysis (Sinocism,
-  ChinaTalk, Phillips O'Brien, Le Grand Continent, Le Monde
-  Diplomatique). Lean -0.5..+0.5 honestly; reputation 0.66–0.92.
-- **Distribution**: 47+ countries; US 69% (target 65%); GB 7%, others
-  small. Categories: general 412 / politics 282 / tech 161 / world 122
-  / business 101 / science 68 / sports 5.
-- **`roadmap.md`**: new Done entry + at-a-glance row (Pri 7/LOE 3,
-  ops/new-feature).
-- **`manual-actions.md`**: Open entry — admin clicks `Re-import seed
-  CSV` on `/admin/feeds` (idempotent `feed_url` upsert, no schema
-  change).
-
-### Server-side state touched
-
-None **yet** — one queued manual action. No DB migration, no cron
-change, no env var, no pip install, no symlink. `fetch_feeds` picks up
-new `sources` rows on its next 15-min tick once the admin import runs;
-dead/wrong URLs self-deactivate at `error_count=10` via the PR #11
-auto-deactivate logic, so no hand-cleanup needed for the inevitable
-dead-feed tail (~5–15% expected from training-memory URLs).
-
-### Verification
-
-- 0 duplicate `feed_url` rows in final CSV; all 1920 lines have 8
-  fields; all `source_lean` in [-1,1] and `source_reputation` in
-  [0,1]; all URLs start `http(s)://` (Python validation: 0 problems).
-- 1411 drafted → 209 dropped vs existing → 51 dropped as internal
-  dupes → 1151 net unique added.
-- Live import + per-feed validity deferred to maintainer / cron
-  (sandbox has no admin session; ~115 feed-URL guesses from training
-  memory will fail at first fetch — auto-deactivate handles).
-
-### Known v1 caveats
-
-- Expect ~5–15% dead-feed tail (e.g., Arc Publishing `/arc/outbound
-  feeds/rss/` URL patterns vary across McClatchy/Tribune/Hearst
-  papers); cron auto-deactivates at error_count=10.
-- A handful of engineering corporate blogs (Netflix Tech, Stripe
-  Blog) sit in `tech` and aren't strictly journalism; intentional for
-  the tech-heavy-algo audience, downweightable per-user via
-  `/sources`.
-- Per-source body-extractor tuning (`trafilatura`) is generic v1 path
-  — paywalled / JS-heavy new sources may show short summaries.
-
-### PR
-
-- **PR #91** — Source catalog expansion (+1151 sources) (draft,
-  branch `claude/onboard-news-aggregator-6ndxz`).
-
----
-
-## 2026-05-20 — BUG-021 single-source feed domination (per-source cap, PR #89)
-
-User reported the `/` feed was filled with Philadelphia Inquirer
-articles under different algorithms ("weird recency bias"). Logged as
-BUG-021 (PR #87, docs-only, merged); fix shipped in PR #89.
-
-### Root cause
-
-`app/routes/feed.py index()` had no per-source diversification. The
-query ordered by `score DESC` (or `published_at` / `f.trending`
-depending on `?sort=`) and took the top 30. Dedup was per-`story_id`
-(cluster), not per-source — so a source with a recent fetch burst, or
-with high `source_reputation` plus the BUG-011 multiplicative recency
-gate hitting many rows at once, legitimately rose into all 30 slots
-until ~24h decay broke it up. BUG-012's score jitter shuffles within a
-tier but doesn't cap any one source.
-
-### What shipped
-
-- **`app/feed_diversify.py`** (new, Flask-free / DB-free, mirrors
-  `app/spectrum.py` / `app/firehose_cursor.py`): `cap_per_source(rows,
-  cap=N, key="source_id")` keeps at most N rows per source preserving
-  input order; `fetch_budget(page, page_size, cap)` returns the SQL
-  row budget needed to guarantee a full page after capping;
-  `page_slice` slices the requested page out of the capped list. 14
-  pure tests in `tests/test_feed_diversify.py` (cap behavior,
-  over-fetch sizing, pagination stability across pages, 50-row
-  same-source burst regression).
-- **`app/routes/feed.py`**: `index()` now reads
-  `current_app.config["FEED_MAX_PER_SOURCE"]`, calls `fetch_budget()` to
-  set the SQL `LIMIT` (always `OFFSET 0`), runs `cap_per_source()` over
-  the result, then `page_slice()` to return the requested page.
-  Pagination is stable: page N+1 sees the same capped sequence as page
-  N (it's a deterministic prefix function of the SQL row order).
-- **`app/config.py`**: new `FEED_MAX_PER_SOURCE` (default 3,
-  env-tunable; 0 disables — the cap can be killed without a deploy).
-- **`news/INSTALL.txt`** §10: documented v1 limits of the cap.
-- **`bugs.md`**: BUG-021 entry moved to Resolved with root-cause +
-  fix narrative.
-
-### Scope choices
-
-- **Python cap, not a SQL window function.** `ROW_NUMBER() OVER
-  (PARTITION BY a.source_id ...)` would be cleaner but needs MySQL 8 /
-  MariaDB 10.2+; staying in Python keeps the fix shared-host-agnostic
-  and unit-testable without a live DB.
-- **`/` only.** `/firehose` is intentionally un-deduped; `/search` is
-  intentionally relevance-ordered with story-cluster dedup; `/saved`
-  is the user's own bookmarks; the email digest already caps at
-  `DIGEST_MAX_ARTICLES` (default 8) and per-source dilution is less
-  visible there. Each can be added later by passing the same cap.
-- **Cap is applied AFTER the existing ORDER BY**, so the survivors
-  preserve the ranking that brought them in. The "first 3 by score"
-  per source are kept regardless of which `?sort=` is active.
-
-### Server-side state touched
-
-None. No DB / cron / env / pip / symlink change. Standard Python App
-restart on deploy.
-
-### Verification
-
-`tests/test_feed_diversify.py` 14/14 green via the sandbox driver (no
-pytest in sandbox — documented limit). Changed Python `py_compile`
-clean. Route-level / browser verification deferred to CI / real env
-(sandbox lacks Flask + PyMySQL).
-
-### Known limits
-
-- Worst case where all sources in the rolling 7-day window come from a
-  single source, the cap leaves the page short rather than refilling
-  from outside the over-fetch window. Not reachable at the real
-  catalog size (~768 active sources).
-- The over-fetch multiplier sizes for `cap=3` / `page_size=30`. If a
-  future tuning drops the cap to 1 with the same page size we'd need
-  to revisit the multiplier (covered by `fetch_budget`'s logic but
-  unit-tested only at the current defaults).
-
-### Rebase
-
-Branch was rebased onto `origin/main` mid-session after PRs #82, #83,
-#84 (perceptual feature expansion), #85, #86, and #87 landed. Only
-conflict was `engineering-history.md` (both this entry and PR #84 are
-dated 2026-05-20 — hand-resolved by keeping both, BUG-021 newest);
-INSTALL.txt §10 and `app/routes/feed.py` auto-merged cleanly with no
-overlap.
-
-### PRs
-
-- **PR #87** — BUG-021 log entry (merged 2026-05-20, docs-only).
-- **PR #89** — per-source cap implementation.
-
----
-
-## 2026-05-20 — Perceptual feature expansion: 12 new ranking features (PR #84)
-
-Roadmap "Perceptual feature expansion" (Pri 7 / LOE 5, algo/backend) —
-user-requested mid-session pivot from the original onboarding pick.
-Doubles the size of the `FEATURES` catalog (12 → 24) by adding 6
-LLM-judged perceptual signals and 6 rule-based structural ones, both
-batched into the existing classify pipeline (no new cron, no new
-LLM request).
-
-### What shipped
-
-- **`app/classifier/rules.py`** — 6 new pure scorers:
-  `headline_length_score` (normalized title word count, cap 24),
-  `caps_ratio_score` (uppercase ratio over letters in title),
-  `punctuation_intensity_score` (!? per word, scaled),
-  `numeric_density_score` (digit-runs per word, scaled),
-  `question_headline_score` (0/1), `quote_present_score` (0/1, straight
-  and smart quotes). Wired into `compute_rules_features` return dict.
-- **`app/classifier/schema.py` + `app/classifier/llm.py`** — extended
-  the Haiku system prompt to ask for 6 perceptual fields per article
-  (`tone_calmness`, `sensationalism`, `analysis_depth`,
-  `emotional_charge`, `hedging`, `solution_orientation`); parser
-  clamps each to [0,1], defaults missing fields to 0.5. New
-  `LLM_PERCEPTION_KEYS` constant + `LLM_PERCEPTION_DEFAULT = 0.5`.
-- **`jobs/classify_pending.py`** — `_run()` INSERT extended to write
-  all 12 new columns (LLM-unavailable rows get 0.5 across the 6
-  perceptual ones, mirroring how the existing fallback treats
-  `objectivity`); `_reclassify_nollm` UPDATE extended to also heal
-  the 6 LLM features when the bounded reclassify pass runs.
-- **`app/ranking.py`** — 12 new entries in `FEATURES` with modest
-  default weights (0.1–0.5) and sensible default_directions
-  (preferring calm/non-sensational/analytical/neutral; no preference
-  on hedging/headline-length/solution/data/quote). Because existing
-  `user_algorithms.weights_json` doesn't reference the new keys,
-  `build_score_sql` skips them for legacy users — opt-in via the
-  /algo editor, where the existing `{% for feat in features %}` loop
-  auto-renders the 12 new rows.
-- **`seed/schema.sql` + `seed/feature_catalog.sql`** — 12 new columns
-  on `article_features` and 12 new catalog rows.
-- **Migration** `seed/migrations/2026-05-20-perception-features.sql`
-  (ADD COLUMN x12 + INSERT x12).
-- **Tests** — `tests/test_rules.py` (15 new pure scorer cases,
-  in-sandbox green), `tests/test_ranking.py` (5 new — catalog
-  shape, SQL contribution, threshold, legacy compat),
-  `tests/test_llm_unavailable.py` (1 new — perception constants
-  shape), `tests/test_classify_pending.py` (existing reclassify
-  test updated to expect the 8-field UPDATE shape).
-- **INSTALL.txt §10** — new entry documenting the 12 features,
-  fallback semantics, cost delta (~3x prior per-article LLM cost,
-  still sub-$0.001/article), no-backfill behavior, and migration
-  dependency.
-
-### Server-side state touched
-
-- **One manual DB migration** logged Open in `manual-actions.md` with
-  full inline SQL: `2026-05-20-perception-features.sql`
-  (12 ADD COLUMN on `article_features` + 12 INSERT into
-  `feature_catalog`). **Load-bearing (BUG-007 class):**
-  `classify_pending` INSERTs into the new columns on every 5-min
-  tick after deploy and errors hard if they're missing. Apply
-  before merge / before the next deploy; restart the Python App on
-  deploy. Existing user feeds keep rendering normally throughout
-  (their algos don't reference the new keys); only the classify
-  cron breaks if the migration is missed.
-- No new cron / env-var / symlink / pip dep.
-
-### Verification
-
-- 84 sandbox-runnable tests in the changed area green
-  (`test_rules.py`, `test_ranking.py`, `test_llm_unavailable.py`,
-  `test_classify_pending.py`); 174 total in the full sandbox-runnable
-  subset green. The 6 collection errors are the documented
-  environmental sandbox limitation (no flask/feedparser — same
-  pattern as PR #50/#53/#59/#69/#70/#77). Changed Python files
-  `py_compile` clean.
-- Full route + browser exercise of the editor (12 new sliders
-  render, save+reload preserves them, scores reflect tuned values)
-  and a real classify_pending tick (writes non-default values for
-  the new LLM + rule fields) deferred to CI / real env.
-
-### Rebase / conflicts
-
-Rebased once mid-session onto `origin/main` after PRs #79 (Why This
-Article), #80, #81 (compact toggle), #82 (per-algorithm keyword
-mute/boost), and #83 landed. Tracking-doc conflicts hand-resolved
-(history/archive/roadmap/manual-actions/INSTALL.txt — both 2026-05-20
-entries kept; my Condensed-history archive entries dropped in favour
-of HEAD's already-condensed PR #77 entry). Code files
-(`app/classifier/*`, `app/ranking.py`, `jobs/classify_pending.py`,
-`seed/schema.sql`, `seed/feature_catalog.sql`, tests) auto-merged
-cleanly — no overlap with the algo/feed/explain/style changes in the
-upstream PRs.
-
-### PR
-
-- **PR #84** — Add 12 perceptual ranking features (merged 2026-05-20).
-  Migration `2026-05-20-perception-features.sql` still **Open** in
-  `manual-actions.md` — `classify_pending` errors on the missing
-  columns every 5-min tick until applied on prod. Apply + restart
-  Python App + move tracker to Completed.
-
-### Open items / next session
-
-- Apply the migration above (load-bearing).
-- Doc-drift noticed but **not** fixed here: `roadmap.md` still shows
-  "Multiple saved algorithms / profiles" as `in-progress` even though
-  it's merged on main and surfaced by `algo.html` (PR #65 per
-  Condensed history); stale draft PR #61 for the same feature.
-  Maintainer cleanup pass.
-
----
-
 ## Condensed history
 
 Older entries, summarized. **Full verbatim text is in
@@ -406,6 +126,59 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Source catalog expansion +1151 sources (PR #91).** Pri 7 / LOE 3,
+  ops/new-feature. Appended 1151 hand-curated high-quality sources to
+  `seed/source_lean.csv` (768 → 1919). ~630 institutional outlets (US
+  regional papers, state-capital press, States-Newsroom nonprofits, NPR
+  affiliates, trade pubs, magazines, think tanks; intl — UK/EU/LATAM/
+  Africa/MENA/Asia-Pacific). ~520 individual writers / Substacks /
+  Medium / engineering blogs (Stratechery, Platformer, Slow Boring,
+  HCR, Money Stuff, Marginal Revolution, Volts, Heatmap, Latent Space,
+  Karpathy, Simon Willison, Sinocism, ChinaTalk, Le Grand Continent,
+  corporate eng blogs from Netflix/Stripe/Cloudflare/GitHub/OpenAI/
+  Anthropic/HuggingFace/BAIR). 47+ countries; US share 69%; honest
+  source_lean -0.5..+0.5, reputation 0.66–0.92. 0 dup `feed_url`. No
+  code change. *Server:* one Open `manual-actions.md` entry —
+  admin clicks "Re-import seed CSV" on `/admin/feeds` (idempotent
+  upsert; no migration, no cron change, no restart). Dead/wrong URLs
+  self-deactivate via the PR #11 `error_count=10` gate (~5–15%
+  expected tail). Full detail: archive.
+- **BUG-021 single-source feed domination (per-source cap, PR #89).**
+  User-reported "weird recency bias" — the `/` feed showed mostly
+  Philadelphia Inquirer under different algorithms. Root cause: no
+  per-source diversification; feed dedup was per-`story_id` only, so
+  a source with a fetch burst (or high `source_reputation` × BUG-011
+  recency multiplier hitting many rows) legitimately swept all 30
+  slots until ~24h decay broke it up. Fix: new pure
+  `app/feed_diversify.py` (`cap_per_source` / `fetch_budget` /
+  `page_slice`); `feed.py index()` over-fetches, caps in Python AFTER
+  the existing ORDER BY (preserving rank within source), then slices
+  the page. New `FEED_MAX_PER_SOURCE` config (default 3,
+  env-tunable; 0 disables — kill-switch w/o deploy). `/` only;
+  `/firehose`/`/search`/`/saved`/digest unchanged. 14 pure tests.
+  *Server:* none. Full detail: archive / `bugs.md` BUG-021. PRs #87
+  (BUG-021 log) + #89 (fix).
+- **Perceptual feature expansion — 12 new ranking features (PR #84).**
+  Roadmap Pri 7 / LOE 5, algo/backend. Doubled `FEATURES` (12→24):
+  6 LLM-judged (`tone_calmness`, `sensationalism`, `analysis_depth`,
+  `emotional_charge`, `hedging`, `solution_orientation`) batched into
+  the existing `classify_pending` Haiku call (one extra JSON object
+  per article, ~3× prior per-article LLM cost, still
+  sub-$0.001/article) + 6 rule-based (`headline_length`, `caps_ratio`,
+  `punctuation_intensity`, `numeric_density`, `question_headline`,
+  `quote_present`) computed in `app/classifier/rules.py` with no
+  network/LLM. LLM-unavailable rows get 0.5 across the 6 perceptual
+  ones; `_reclassify_nollm` heals them. Existing user algos
+  unaffected — their `weights_json` doesn't reference the new keys,
+  `build_score_sql` skips them until a user opts in via /algo
+  (template loop auto-renders the 12 new sliders). 21 new pure tests.
+  *Server:* `2026-05-20-perception-features.sql` (12 ADD COLUMN + 12
+  feature_catalog INSERT) applied on prod 2026-05-20
+  (`manual-actions.md` → Completed; folded into the load-bearing
+  "Applied prod schema migrations" line above); BUG-007 class
+  (`classify_pending` writes the new columns every 5-min tick;
+  Python App restart required to load the updated `FEATURES`
+  catalog). Full detail: archive.
 - **Per-algorithm keyword mute & boost (PR #82).** Pri 7 / LOE 3,
   algo/ui. Extends PR #77's per-user `user_term_prefs` with a parallel
   **per-profile** surface inside the `/algo` builder: new
