@@ -42,18 +42,20 @@ def _order_by_for_sort(sort):
 
 
 def _active_weights():
-    """Return the active user's weights, or the balanced default for anon visitors."""
+    """Return the active user's weights + active-algo id, or the balanced
+    default for anon visitors. The id is None for anon and for signed-in
+    users with no saved algorithm; callers must handle that."""
     u = getattr(g, "user", None)
     if not u:
-        return default_weights()
+        return default_weights(), None
     row = query(
-        "SELECT weights_json FROM user_algorithms WHERE user_id = %s AND is_active = 1 ORDER BY updated_at DESC LIMIT 1",
+        "SELECT id, weights_json FROM user_algorithms WHERE user_id = %s AND is_active = 1 ORDER BY updated_at DESC LIMIT 1",
         (u["id"],),
         one=True,
     )
     if not row:
-        return default_weights()
-    return parse_weights_json(row["weights_json"])
+        return default_weights(), None
+    return parse_weights_json(row["weights_json"]), row["id"]
 
 
 def _needs_onboarding():
@@ -82,7 +84,7 @@ def _switcher_profiles():
 def index():
     if _needs_onboarding():
         return redirect(url_for("algo.onboarding"))
-    weights = _active_weights()
+    weights, active_algo_id = _active_weights()
     page = max(1, int(request.args.get("page", 1)))
     page_size = 30
     category = (request.args.get("category") or "").strip() or None
@@ -115,10 +117,20 @@ def index():
         pref_score_mult = " * COALESCE(usp.weight, 1.0)"
         pref_params["_pref_uid"] = u["id"]
 
-        term_rows = query(
+        # Account-wide keywords (managed at /terms) + per-algorithm keywords
+        # for the currently active profile (managed on /algo's Keywords tab).
+        # The pure builder dedupes by term and lets mute win over boost, so
+        # the union is just list concatenation — no merge helper needed.
+        term_rows = list(query(
             "SELECT term, mode, weight FROM user_term_prefs WHERE user_id = %s",
             (u["id"],),
-        )
+        ) or [])
+        if active_algo_id:
+            term_rows.extend(query(
+                "SELECT term, mode, weight FROM algorithm_term_prefs "
+                "WHERE algorithm_id = %s",
+                (active_algo_id,),
+            ) or [])
         term_mute_sql, term_boost_expr, term_params = build_term_clauses(term_rows)
         if term_boost_expr:
             term_boost_mult = f" * ({term_boost_expr})"
