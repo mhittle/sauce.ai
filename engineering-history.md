@@ -208,112 +208,20 @@ upstream PRs.
 
 ### PR
 
-- **PR #84** — Add 12 perceptual ranking features (draft 2026-05-20).
-  Migration in `manual-actions.md` Open; apply before merge.
-
-### Open items
-
-- Apply `2026-05-20-perception-features.sql` on prod before merge
-  (classify_pending errors on the missing columns from the first
-  post-deploy tick).
-- Doc-drift cleanup noticed but **not** fixed in this PR: `roadmap.md`
-  still shows "Multiple saved algorithms / profiles" as `in-progress`
-  even though it's merged on main and surfaced by `algo.html` (PR #65
-  per Condensed history). PR #61 (stale draft) is a rework of the
-  same feature. Worth a maintainer pass.
-
----
-
-## 2026-05-20 — Per-algorithm keyword mute & boost (PR #82)
-
-Roadmap "Per-algorithm keyword mute & boost (in the algo builder)"
-(Pri 7 / LOE 3, algo/ui). User ask: "when building an algo, users
-should be able to enter relevant keywords that they are interested in."
-Extends PR #77's per-user `user_term_prefs` (still edited at `/terms`,
-account-wide) with a parallel per-profile surface inside the algo
-builder so different saved profiles can carry their own keyword intent
-("Morning brief" boosts AI/local tech; "Weekend deep-dive" mutes
-politics). `/terms` kept as the power-user account-wide surface; the
-feed unions both lists.
-
-### What shipped
-
-- **New table `algorithm_term_prefs(algorithm_id, term, mode, weight)`**
-  — same shape as `user_term_prefs` but FK'd to `user_algorithms`
-  (`ON DELETE CASCADE` so deleting a profile removes its keywords).
-  Migration `2026-05-20-algorithm-term-prefs.sql` + `seed/schema.sql`.
-- **`app/routes/algo.py`** — two new routes (`POST /algo/keywords/add`,
-  `POST /algo/keywords/<id>/delete`) reusing the shared
-  `normalize_term` / `clamp_boost` helpers, the same 100-term cap as
-  `/terms`, an ON-DUPLICATE-KEY upsert that moves a term between modes
-  on re-add, and ownership-validated delete via a JOIN against
-  `user_algorithms`. `_render_editor` now loads the active algorithm's
-  mute/boost lists for the template.
-- **`algo.html`** — new "Keywords" tab in the existing Alpine tab
-  switcher (alongside UI / Code / Presets / Profiles); add form
-  defaults to **boost** ("interested in" wording), profile-aware
-  header shows which profile is being edited, link out to `/terms`
-  for the global list. Append-only `.algo .add-keyword` / `.kw-*`
-  block in `style.css` (no existing rule touched).
-- **`app/routes/feed.py`** — `_active_weights()` now returns
-  `(weights, active_algo_id)`. The signed-in term-prefs block reads
-  `algorithm_term_prefs` for that id and **concatenates** the rows
-  with `user_term_prefs` before calling `build_term_clauses`. The
-  pure builder's existing dedupe + mute-wins rules carry the union
-  semantics — mute at either scope drops the article, strongest
-  boost on a term wins. No new helper, no ranking-formula change.
-- **5 new pure tests** in `tests/test_term_prefs.py` pinning the
-  cross-scope behavior (account-mute beats algo-boost on same term,
-  algo-mute beats account-boost, distinct boost terms coexist,
-  same-term boost dedupes to one clause). 22/22 green in-sandbox.
-
-### Server-side state touched
-
-- **One manual prod migration** (`manual-actions.md` Open, full
-  inline SQL): `CREATE TABLE algorithm_term_prefs`. **BUG-007
-  class** — the signed-in feed 500s on a missing table until applied
-  (anon / `/firehose` / digest unaffected). Python App restart on
-  deploy. No cron / env-var / pip / symlink change.
-
-### Scope decisions (user-confirmed via AskUserQuestion up front)
-
-- **Per-algorithm** (not per-user) — schema change accepted in
-  exchange for per-profile intent.
-- **Both mute and boost** in the embedded UI (not boost-only).
-- **`/terms` kept** as a parallel power-user account-wide surface.
-
-### Verification
-
-`test_term_prefs.py` 22/22 in-sandbox; changed Python `py_compile`
-clean; `algo.html` / `feed.html` Jinja-parse clean. Route + browser
-UX deferred to CI / real env (no Flask/pymysql in sandbox —
-documented limit).
-
-### Rebase / conflicts
-
-Rebased once mid-session onto `origin/main` after PRs #79 (Why This
-Article explainer), #80, and #81 (compact toggle) landed. Two
-append-only conflicts hand-resolved: `INSTALL.txt` (kept the new
-"Why?" bullet from PR #79 and added the per-algo bullet underneath),
-`style.css` (kept the `.why-*` block and appended `.algo .kw-*`).
-`feed.py` auto-merged cleanly (PR #79 added an unrelated explainer
-route; my edit lives in `index()`); `roadmap.md` auto-merged with no
-duplicate rows or detail drift.
-
-### PRs
-
-- **PR #82** — Per-algorithm keyword mute & boost (merged 2026-05-20;
-  `algorithm_term_prefs` migration applied on prod same day —
-  `manual-actions.md` Completed).
+- **PR #84** — Add 12 perceptual ranking features (merged 2026-05-20).
+  Migration `2026-05-20-perception-features.sql` still **Open** in
+  `manual-actions.md` — `classify_pending` errors on the missing
+  columns every 5-min tick until applied on prod. Apply + restart
+  Python App + move tracker to Completed.
 
 ### Open items / next session
 
-- Tracking-doc drift surfaced (not addressed in this PR to avoid
-  scope creep): `engineering-history.md` says *Multiple saved
-  algorithms / profiles* merged as **PR #65**, but `roadmap.md`
-  still lists it `in-progress` and a stale draft **PR #61** for the
-  same feature is open. A small cleanup pass should move the
-  roadmap row to Done and close PR #61.
+- Apply the migration above (load-bearing).
+- Doc-drift noticed but **not** fixed here: `roadmap.md` still shows
+  "Multiple saved algorithms / profiles" as `in-progress` even though
+  it's merged on main and surfaced by `algo.html` (PR #65 per
+  Condensed history); stale draft PR #61 for the same feature.
+  Maintainer cleanup pass.
 
 ---
 
@@ -327,6 +235,22 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Per-algorithm keyword mute & boost (PR #82).** Pri 7 / LOE 3,
+  algo/ui. Extends PR #77's per-user `user_term_prefs` with a parallel
+  **per-profile** surface inside the `/algo` builder: new
+  `algorithm_term_prefs(algorithm_id, term, mode, weight)` table FK'd
+  to `user_algorithms` (CASCADE), two new `POST /algo/keywords/*`
+  routes (ownership-validated, 100/profile cap, mode-move upsert),
+  new "Keywords" tab in the algo Alpine switcher. `routes/feed.py`
+  reads both tables for the active profile and unions the rows
+  through the existing pure `build_term_clauses` builder — mute at
+  EITHER scope wins, strongest matching boost wins. 5 new cross-scope
+  tests. Same v1 substring caveat as PR #77; same scope (signed-in
+  main feed only; anon/firehose/digest untouched). *Server:*
+  `2026-05-20-algorithm-term-prefs.sql` (CREATE TABLE) applied on
+  prod 2026-05-20 (`manual-actions.md` → Completed; folded into the
+  load-bearing "Applied prod schema migrations" line above); BUG-007
+  class if absent. Full detail: archive.
 - **Compact / density toggle (PR #81).** Pri 6 / LOE 2, ui. Techmeme-
   style toggle on the home feed: extends `base.html`'s existing
   dark-mode IIFE to also init `data-density` pre-stylesheet from
