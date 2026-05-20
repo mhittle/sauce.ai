@@ -26,7 +26,18 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-021 — Feed dominated by a single source (Philadelphia Inquirer) across multiple algorithms
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-20
+
+User reports the `/` feed is filled with Philadelphia Inquirer articles
+under different algorithms — described as a "weird recency bias". A
+single source crowding out the rest of the catalog across algorithms
+suggests the source-diversity / per-source cap is not applied (or is
+mis-applied), or the source has an outsized recency / popularity /
+trending score that the ranker amplifies. To investigate: check whether
+inquirer.com has a recent fetch burst (many articles in the last hour),
+its `source_reputation`, any `user_source_prefs` boost the reporter set,
+and whether the ranker has any per-source diversification at all.
 
 ---
 
