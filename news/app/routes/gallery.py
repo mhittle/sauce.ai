@@ -146,10 +146,25 @@ def index():
 @bp.route("/publish", methods=["POST"])
 @login_required
 def publish():
+    """Snapshot one of the user's profiles into `shared_algorithms`.
+
+    Source profile defaults to the active one (the gallery page's own form
+    doesn't pass `algo_id`); the algo Profiles tab passes `algo_id` so a
+    non-active profile can be published without first being activated."""
     uid = g.user["id"]
-    active = _active_algo(uid)
-    if not active:
-        # Nothing to snapshot — bounce them to the editor.
+    try:
+        algo_id = int(request.form.get("algo_id", 0) or 0)
+    except (TypeError, ValueError):
+        algo_id = 0
+    if algo_id:
+        source = query(
+            "SELECT id, name, weights_json FROM user_algorithms "
+            "WHERE id = %s AND user_id = %s",
+            (algo_id, uid), one=True,
+        )
+    else:
+        source = _active_algo(uid)
+    if not source:
         return redirect(url_for("algo.index"))
 
     cap_row = query(
@@ -160,14 +175,14 @@ def publish():
         return redirect(url_for("gallery.index"))
 
     name = clean_listing_name(
-        request.form.get("name"), fallback=active["name"] or "Untitled algorithm"
+        request.form.get("name"), fallback=source["name"] or "Untitled algorithm"
     )
     description = clean_description(request.form.get("description"))
 
     execute(
         "INSERT INTO shared_algorithms (owner_id, name, description, weights_json) "
         "VALUES (%s, %s, %s, %s)",
-        (uid, name, description, active["weights_json"]),
+        (uid, name, description, source["weights_json"]),
     )
     get_conn().commit()
     return redirect(url_for("gallery.index"))

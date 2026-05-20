@@ -185,6 +185,12 @@
             <input type="text" name="profile_name" value="{{ p.name }}" maxlength="120" />
             <button type="submit">Rename</button>
           </form>
+          <form method="post" action="{{ url_for('gallery.publish') }}" class="inline"
+                onsubmit="return confirm('Publish a snapshot of &quot;{{ p.name|e }}&quot; to the public gallery? Other readers will be able to adopt it.');">
+            {{ csrf_field() }}
+            <input type="hidden" name="algo_id" value="{{ p.id }}" />
+            <button type="submit" class="linkbtn">Publish to gallery</button>
+          </form>
           {% if profiles|length > 1 %}
           <form method="post" action="{{ url_for('algo.delete_profile') }}" class="inline"
                 onsubmit="return confirm('Delete this profile?');">
