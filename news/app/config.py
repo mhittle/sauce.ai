@@ -22,6 +22,9 @@ class Config:
     CLASSIFIER_VERSION = os.environ.get("CLASSIFIER_VERSION", "v1")
 
     FEED_JITTER = float(os.environ.get("FEED_JITTER", "0.10"))
+    # BUG-021: cap how many articles a single source can occupy in one
+    # page of `/`. 0 disables the cap.
+    FEED_MAX_PER_SOURCE = int(os.environ.get("FEED_MAX_PER_SOURCE", "3"))
 
     # /trending page. WINDOW_DAYS mirrors trending_poll's default (the
     # cron only persists matches for in-window articles). MIN_SOURCES is
