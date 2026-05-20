@@ -105,10 +105,11 @@ and 500'd signed-in `/` until run); new `trending_topics`/
 index `ft_articles_search` on `articles(title, summary)` (PR #70,
 article search); new `user_term_prefs` table (PR #77, per-user
 keyword mute/boost; `routes/feed.py` reads it on every signed-in feed
-load — BUG-007 class if absent). A DB rebuild from `seed/schema.sql`
-already includes these. **Pending** (Open in `manual-actions.md`):
-`algorithm_term_prefs` (PR #82, per-algorithm keyword mute/boost) —
-signed-in feed 500s until applied.
+load — BUG-007 class if absent); new `algorithm_term_prefs` table
+(PR #82, per-algorithm keyword mute/boost; applied 2026-05-20 —
+`routes/feed.py` reads it for the active algorithm on every signed-in
+feed load, same BUG-007 class). A DB rebuild from `seed/schema.sql`
+already includes these.
 
 ---
 
@@ -191,14 +192,11 @@ duplicate rows or detail drift.
 ### PRs
 
 - **PR #82** — Per-algorithm keyword mute & boost (merged 2026-05-20;
-  migration **not yet** applied on prod — see `manual-actions.md`
-  Open).
+  `algorithm_term_prefs` migration applied on prod same day —
+  `manual-actions.md` Completed).
 
 ### Open items / next session
 
-- Apply `2026-05-20-algorithm-term-prefs.sql` on prod, restart the
-  Python App, and move the `manual-actions.md` entry to Completed
-  (BUG-007 class blocker until then).
 - Tracking-doc drift surfaced (not addressed in this PR to avoid
   scope creep): `engineering-history.md` says *Multiple saved
   algorithms / profiles* merged as **PR #65**, but `roadmap.md`

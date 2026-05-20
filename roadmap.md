@@ -506,8 +506,9 @@ narrative lives in `engineering-history.md` under the same date.
 ### 2026-05-20
 
 - **Per-algorithm keyword mute & boost (in the algo builder)** —
-  Pri 7, LOE 3, algo/ui. PR #82 (merged 2026-05-20; migration
-  pending on prod — see `manual-actions.md` Open). Extends PR #77's
+  Pri 7, LOE 3, algo/ui. PR #82 (merged 2026-05-20;
+  `algorithm_term_prefs` migration applied on prod same day —
+  `manual-actions.md` Completed). Extends PR #77's
   per-user `user_term_prefs` with a parallel **per-profile** surface
   on `/algo`: new `algorithm_term_prefs(algorithm_id, term, mode,
   weight)` table FK'd to `user_algorithms`; new
