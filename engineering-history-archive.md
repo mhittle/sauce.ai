@@ -20,6 +20,165 @@ for current prod state.
 
 ---
 
+## 2026-05-20 — Compact / density toggle (PR #81)
+
+User-requested mid-session: a Techmeme-style density toggle that strips
+images and chrome from the home feed.
+
+### What shipped
+
+- **`base.html`**: extended the existing `<head>` IIFE to also read
+  `localStorage.density` and set `data-density="compact"` on `<html>`
+  pre-stylesheet (no FOUC, mirrors the dark-mode init from PR #63). New
+  `<button id="density-toggle">` in the topnav next to `theme-toggle`;
+  paired click-handler IIFE flips the attribute + writes localStorage
+  + syncs `Compact ↔ Comfortable` label and `aria-pressed`.
+- **`style.css`**: appended `:root[data-density="compact"] #feed-cards …`
+  block — collapses the grid to single-column, tightens card padding,
+  hides `.thumb` / `.summary` / `.feature-bars` / `.byline`. Source,
+  lean dot, category, timestamp, thumbs/save, `+N angles`, `Read →`,
+  discussion line, and the auto-hide-when-empty `.spectrum-peek` all
+  stay.
+- **`roadmap.md`**: new "Compact / density toggle (Techmeme-style)"
+  entry (Pri 6 / LOE 2, ui), status `in-progress`.
+
+### Scope choices (user-confirmed via AskUserQuestion at session start)
+
+- **Persistence = localStorage only** (per-device, no DB). Matches
+  dark-mode exactly — lowest-conflict path for parallel sessions.
+- **Scope = home feed `/` only**. CSS is keyed on `#feed-cards` (unique
+  to `feed.html`), so `/search`, `/saved`, `/firehose` are deliberately
+  untouched. Future expansion to those pages is just removing the
+  `#feed-cards` prefix.
+- Toggle button itself is **global in the topnav** (mirrors the
+  dark-mode toggle UX); flipping it from a non-`/` page just primes the
+  preference for the next visit to `/`.
+
+### Server-side state touched
+
+None. No DB / cron / env / pip / symlink change. **No `manual-actions.md`
+entry.** Standard Python App restart on deploy.
+
+### Verification
+
+`base.html`, `feed.html`, `partials/feed_cards.html` Jinja-parse clean.
+Sandbox lacks pytest (documented limit) but no Python changed — there
+is no test surface. Real-env / browser verification deferred to CI /
+maintainer: toggle flips label + persists; compact mode strips
+image/feature-bars/summary/byline on `/`; other pages unaffected; HTMX
+"Load more" rows honor compact via global CSS; `+N angles` still
+expands `.spectrum-peek` inline.
+
+### PR
+
+- **PR #81** — Compact / density toggle (draft, branch
+  `claude/onboard-news-aggregator-ReNpA`).
+
+### Doc-drift noted during onboarding (not in this PR)
+
+- Roadmap still marks **"Multiple saved algorithms / profiles"** as
+  `in-progress` though `engineering-history.md` Condensed history
+  records it as shipped in **PR #65** (app-layer only). Open draft
+  **PR #61** implements the same feature from a separate older session
+  and is very likely superseded — flagged to the user; left alone here.
+
+---
+
+## 2026-05-18 — Why This Article: ranking explainer (PR #79)
+
+Roadmap Pri 7 / LOE 3 (ui). A "Why?" toggle on each feed card lazily
+expands an inline per-feature score breakdown for the viewer's active
+algorithm.
+
+### What shipped
+
+- **`app/explain.py`** (new, pure/Flask-free/DB-free, mirrors
+  `spectrum.py`): reproduces `build_score_sql`'s per-feature term
+  `w*(1-|v-d|/scale)` + the `exp(-w·h/24)` recency gate in Python.
+  Imports `_direction_from_weights`/`_scale_width` **from `ranking.py`**
+  (not re-derived) so the explainer can't desync from the scorer —
+  parity is the whole point. 18 pure tests `tests/test_explain.py`.
+- **`feed.explain`** `GET /article/<id>/explain` → `partials/
+  why_panel.html`; same `_active_weights` + `sources.owner_id`
+  visibility scoping as the feed (anon → balanced default), 404 on
+  unknown/unclassified/hidden.
+- **`feed_cards.html`**: progressive-enhancement HTMX trigger (GET, no
+  CSRF) + per-card `#why-<id>` container; `style.css` append-only
+  `.why-*` block, dark-mode-aware via semantic vars (no existing rule
+  touched). INSTALL §10 limit note; roadmap → in-progress.
+
+### Server-side state touched
+
+None. No DB/cron/env/pip/symlink. Python App restart on deploy so the
+new route + partial load. **No `manual-actions.md` entry.**
+
+### Verification
+
+`test_explain` 18/18 + `test_ranking`/`test_spectrum` green via the
+sandbox driver (no pytest/Flask in sandbox — documented limit);
+changed Python `py_compile` clean, templates Jinja-parse. Route/browser
+deferred to CI/real env. Scope: feature contributions + recency only
+(per-user source/term multipliers applied outside the feature sum are
+not modeled); the learned-model line waits on Signal Learning.
+
+### PR
+
+- **PR #79** — Why This Article ranking explainer (merged 2026-05-18).
+
+---
+
+## 2026-05-17 — Keyword / topic mute & boost (PR #77)
+
+Roadmap Pri 8 / LOE 4 (algo, ui), user-empowerment cluster theme A.
+Content-level lever distinct from `user_source_prefs` (whole-source
+weights): **mute** = hard filter, **boost** = score multiplier.
+
+### What shipped
+
+- **`app/term_prefs.py`** (new, Flask-free, mirrors
+  `app/discussion.py` — pure, tested like `build_filters_sql`):
+  `normalize_term`, `clamp_boost` ([1.0,5.0], def 1.5), `escape_like`,
+  `build_term_clauses` → `(mute_sql, boost_expr, params)`. Mute = ANDed
+  `NOT (<title+summary> LIKE %term% ESCAPE …)`; boost =
+  `GREATEST(1.0, CASE WHEN … THEN w ELSE 0 END, …)` (strongest match
+  wins, no compounding); term-in-both → mute wins; always
+  parameterized.
+- **`user_term_prefs`** table (`UNIQUE(user_id,term)` → one mode/term)
+  + `seed/schema.sql` + `2026-05-17-term-prefs.sql`. New blueprint
+  `/terms` (mirrors `routes/sources.py`: list/add-upsert/delete,
+  100-term cap, `@login_required`), `me_terms.html`, nav link.
+- **`app/routes/feed.py`**: existing signed-in `if u:` block gains one
+  `user_term_prefs` read → boost multiplies score beside
+  `pref_score_mult`, mute appended to WHERE. Scope = `/` feed,
+  signed-in only (anon/firehose/digest untouched — `user_source_prefs`
+  parity; limits BUG-007 blast radius).
+- **`tests/test_term_prefs.py`** (17 pure); INSTALL §10; roadmap
+  in-progress; manual-actions Open + inline SQL.
+
+### Server-side state touched
+
+- **Migration applied on prod 2026-05-17** (user-confirmed;
+  `manual-actions.md` → Completed): `2026-05-17-term-prefs.sql`
+  (`CREATE TABLE user_term_prefs`). `routes/feed.py` reads it every
+  signed-in feed load (BUG-007 class if absent; anon unaffected). No
+  cron/env/pip/symlink. Python App restart on deploy.
+
+### Verification
+
+`test_term_prefs.py` 17/17 + `test_ranking` green in-sandbox; changed
+Python `py_compile` clean. Full suite needs flask/pymysql (documented
+sandbox limit); route + browser UX deferred to CI. v1 = plain substring
+match ("crypto" also hits "cryptography"); phrase/entity-aware is v2
+(shared with topic extraction); `_MATCH_EXPR` is the single point to
+later also match `article_bodies`.
+
+### PR
+
+- **PR #77** — Keyword / topic mute & boost (merged 2026-05-17;
+  migration applied on prod same day).
+
+---
+
 ## 2026-05-17 — BUG-020: firehose accumulates instead of churning (PR #72)
 
 ### Context

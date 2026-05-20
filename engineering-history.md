@@ -101,167 +101,110 @@ gained `permalink`/`subreddit` (PR #52, discussion links);
 sort); new `user_saves` table (PR #64, article save / bookmark —
 applied 2026-05-17, BUG-007 recurrence: trailed the merge by minutes
 and 500'd signed-in `/` until run); new `trending_topics`/
-`trending_topic_articles` tables (PR #71, /trending page). A DB
-rebuild from `seed/schema.sql` already includes these.
+`trending_topic_articles` tables (PR #71, /trending page); FULLTEXT
+index `ft_articles_search` on `articles(title, summary)` (PR #70,
+article search); new `user_term_prefs` table (PR #77, per-user
+keyword mute/boost; `routes/feed.py` reads it on every signed-in feed
+load — BUG-007 class if absent). A DB rebuild from `seed/schema.sql`
+already includes these. **Pending** (Open in `manual-actions.md`):
+`algorithm_term_prefs` (PR #82, per-algorithm keyword mute/boost) —
+signed-in feed 500s until applied.
 
 ---
 
-## 2026-05-20 — Compact / density toggle (PR #81)
+## 2026-05-20 — Per-algorithm keyword mute & boost (PR #82)
 
-User-requested mid-session: a Techmeme-style density toggle that strips
-images and chrome from the home feed.
-
-### What shipped
-
-- **`base.html`**: extended the existing `<head>` IIFE to also read
-  `localStorage.density` and set `data-density="compact"` on `<html>`
-  pre-stylesheet (no FOUC, mirrors the dark-mode init from PR #63). New
-  `<button id="density-toggle">` in the topnav next to `theme-toggle`;
-  paired click-handler IIFE flips the attribute + writes localStorage
-  + syncs `Compact ↔ Comfortable` label and `aria-pressed`.
-- **`style.css`**: appended `:root[data-density="compact"] #feed-cards …`
-  block — collapses the grid to single-column, tightens card padding,
-  hides `.thumb` / `.summary` / `.feature-bars` / `.byline`. Source,
-  lean dot, category, timestamp, thumbs/save, `+N angles`, `Read →`,
-  discussion line, and the auto-hide-when-empty `.spectrum-peek` all
-  stay.
-- **`roadmap.md`**: new "Compact / density toggle (Techmeme-style)"
-  entry (Pri 6 / LOE 2, ui), status `in-progress`.
-
-### Scope choices (user-confirmed via AskUserQuestion at session start)
-
-- **Persistence = localStorage only** (per-device, no DB). Matches
-  dark-mode exactly — lowest-conflict path for parallel sessions.
-- **Scope = home feed `/` only**. CSS is keyed on `#feed-cards` (unique
-  to `feed.html`), so `/search`, `/saved`, `/firehose` are deliberately
-  untouched. Future expansion to those pages is just removing the
-  `#feed-cards` prefix.
-- Toggle button itself is **global in the topnav** (mirrors the
-  dark-mode toggle UX); flipping it from a non-`/` page just primes the
-  preference for the next visit to `/`.
-
-### Server-side state touched
-
-None. No DB / cron / env / pip / symlink change. **No `manual-actions.md`
-entry.** Standard Python App restart on deploy.
-
-### Verification
-
-`base.html`, `feed.html`, `partials/feed_cards.html` Jinja-parse clean.
-Sandbox lacks pytest (documented limit) but no Python changed — there
-is no test surface. Real-env / browser verification deferred to CI /
-maintainer: toggle flips label + persists; compact mode strips
-image/feature-bars/summary/byline on `/`; other pages unaffected; HTMX
-"Load more" rows honor compact via global CSS; `+N angles` still
-expands `.spectrum-peek` inline.
-
-### PR
-
-- **PR #81** — Compact / density toggle (draft, branch
-  `claude/onboard-news-aggregator-ReNpA`).
-
-### Doc-drift noted during onboarding (not in this PR)
-
-- Roadmap still marks **"Multiple saved algorithms / profiles"** as
-  `in-progress` though `engineering-history.md` Condensed history
-  records it as shipped in **PR #65** (app-layer only). Open draft
-  **PR #61** implements the same feature from a separate older session
-  and is very likely superseded — flagged to the user; left alone here.
-
----
-
-## 2026-05-18 — Why This Article: ranking explainer (PR #79)
-
-Roadmap Pri 7 / LOE 3 (ui). A "Why?" toggle on each feed card lazily
-expands an inline per-feature score breakdown for the viewer's active
-algorithm.
+Roadmap "Per-algorithm keyword mute & boost (in the algo builder)"
+(Pri 7 / LOE 3, algo/ui). User ask: "when building an algo, users
+should be able to enter relevant keywords that they are interested in."
+Extends PR #77's per-user `user_term_prefs` (still edited at `/terms`,
+account-wide) with a parallel per-profile surface inside the algo
+builder so different saved profiles can carry their own keyword intent
+("Morning brief" boosts AI/local tech; "Weekend deep-dive" mutes
+politics). `/terms` kept as the power-user account-wide surface; the
+feed unions both lists.
 
 ### What shipped
 
-- **`app/explain.py`** (new, pure/Flask-free/DB-free, mirrors
-  `spectrum.py`): reproduces `build_score_sql`'s per-feature term
-  `w*(1-|v-d|/scale)` + the `exp(-w·h/24)` recency gate in Python.
-  Imports `_direction_from_weights`/`_scale_width` **from `ranking.py`**
-  (not re-derived) so the explainer can't desync from the scorer —
-  parity is the whole point. 18 pure tests `tests/test_explain.py`.
-- **`feed.explain`** `GET /article/<id>/explain` → `partials/
-  why_panel.html`; same `_active_weights` + `sources.owner_id`
-  visibility scoping as the feed (anon → balanced default), 404 on
-  unknown/unclassified/hidden.
-- **`feed_cards.html`**: progressive-enhancement HTMX trigger (GET, no
-  CSRF) + per-card `#why-<id>` container; `style.css` append-only
-  `.why-*` block, dark-mode-aware via semantic vars (no existing rule
-  touched). INSTALL §10 limit note; roadmap → in-progress.
+- **New table `algorithm_term_prefs(algorithm_id, term, mode, weight)`**
+  — same shape as `user_term_prefs` but FK'd to `user_algorithms`
+  (`ON DELETE CASCADE` so deleting a profile removes its keywords).
+  Migration `2026-05-20-algorithm-term-prefs.sql` + `seed/schema.sql`.
+- **`app/routes/algo.py`** — two new routes (`POST /algo/keywords/add`,
+  `POST /algo/keywords/<id>/delete`) reusing the shared
+  `normalize_term` / `clamp_boost` helpers, the same 100-term cap as
+  `/terms`, an ON-DUPLICATE-KEY upsert that moves a term between modes
+  on re-add, and ownership-validated delete via a JOIN against
+  `user_algorithms`. `_render_editor` now loads the active algorithm's
+  mute/boost lists for the template.
+- **`algo.html`** — new "Keywords" tab in the existing Alpine tab
+  switcher (alongside UI / Code / Presets / Profiles); add form
+  defaults to **boost** ("interested in" wording), profile-aware
+  header shows which profile is being edited, link out to `/terms`
+  for the global list. Append-only `.algo .add-keyword` / `.kw-*`
+  block in `style.css` (no existing rule touched).
+- **`app/routes/feed.py`** — `_active_weights()` now returns
+  `(weights, active_algo_id)`. The signed-in term-prefs block reads
+  `algorithm_term_prefs` for that id and **concatenates** the rows
+  with `user_term_prefs` before calling `build_term_clauses`. The
+  pure builder's existing dedupe + mute-wins rules carry the union
+  semantics — mute at either scope drops the article, strongest
+  boost on a term wins. No new helper, no ranking-formula change.
+- **5 new pure tests** in `tests/test_term_prefs.py` pinning the
+  cross-scope behavior (account-mute beats algo-boost on same term,
+  algo-mute beats account-boost, distinct boost terms coexist,
+  same-term boost dedupes to one clause). 22/22 green in-sandbox.
 
 ### Server-side state touched
 
-None. No DB/cron/env/pip/symlink. Python App restart on deploy so the
-new route + partial load. **No `manual-actions.md` entry.**
+- **One manual prod migration** (`manual-actions.md` Open, full
+  inline SQL): `CREATE TABLE algorithm_term_prefs`. **BUG-007
+  class** — the signed-in feed 500s on a missing table until applied
+  (anon / `/firehose` / digest unaffected). Python App restart on
+  deploy. No cron / env-var / pip / symlink change.
+
+### Scope decisions (user-confirmed via AskUserQuestion up front)
+
+- **Per-algorithm** (not per-user) — schema change accepted in
+  exchange for per-profile intent.
+- **Both mute and boost** in the embedded UI (not boost-only).
+- **`/terms` kept** as a parallel power-user account-wide surface.
 
 ### Verification
 
-`test_explain` 18/18 + `test_ranking`/`test_spectrum` green via the
-sandbox driver (no pytest/Flask in sandbox — documented limit);
-changed Python `py_compile` clean, templates Jinja-parse. Route/browser
-deferred to CI/real env. Scope: feature contributions + recency only
-(per-user source/term multipliers applied outside the feature sum are
-not modeled); the learned-model line waits on Signal Learning.
+`test_term_prefs.py` 22/22 in-sandbox; changed Python `py_compile`
+clean; `algo.html` / `feed.html` Jinja-parse clean. Route + browser
+UX deferred to CI / real env (no Flask/pymysql in sandbox —
+documented limit).
 
-### PR
+### Rebase / conflicts
 
-- **PR #79** — Why This Article ranking explainer (merged 2026-05-18).
+Rebased once mid-session onto `origin/main` after PRs #79 (Why This
+Article explainer), #80, and #81 (compact toggle) landed. Two
+append-only conflicts hand-resolved: `INSTALL.txt` (kept the new
+"Why?" bullet from PR #79 and added the per-algo bullet underneath),
+`style.css` (kept the `.why-*` block and appended `.algo .kw-*`).
+`feed.py` auto-merged cleanly (PR #79 added an unrelated explainer
+route; my edit lives in `index()`); `roadmap.md` auto-merged with no
+duplicate rows or detail drift.
 
----
+### PRs
 
-## 2026-05-17 — Keyword / topic mute & boost (PR #77)
+- **PR #82** — Per-algorithm keyword mute & boost (merged 2026-05-20;
+  migration **not yet** applied on prod — see `manual-actions.md`
+  Open).
 
-Roadmap Pri 8 / LOE 4 (algo, ui), user-empowerment cluster theme A.
-Content-level lever distinct from `user_source_prefs` (whole-source
-weights): **mute** = hard filter, **boost** = score multiplier.
+### Open items / next session
 
-### What shipped
-
-- **`app/term_prefs.py`** (new, Flask-free, mirrors
-  `app/discussion.py` — pure, tested like `build_filters_sql`):
-  `normalize_term`, `clamp_boost` ([1.0,5.0], def 1.5), `escape_like`,
-  `build_term_clauses` → `(mute_sql, boost_expr, params)`. Mute = ANDed
-  `NOT (<title+summary> LIKE %term% ESCAPE …)`; boost =
-  `GREATEST(1.0, CASE WHEN … THEN w ELSE 0 END, …)` (strongest match
-  wins, no compounding); term-in-both → mute wins; always
-  parameterized.
-- **`user_term_prefs`** table (`UNIQUE(user_id,term)` → one mode/term)
-  + `seed/schema.sql` + `2026-05-17-term-prefs.sql`. New blueprint
-  `/terms` (mirrors `routes/sources.py`: list/add-upsert/delete,
-  100-term cap, `@login_required`), `me_terms.html`, nav link.
-- **`app/routes/feed.py`**: existing signed-in `if u:` block gains one
-  `user_term_prefs` read → boost multiplies score beside
-  `pref_score_mult`, mute appended to WHERE. Scope = `/` feed,
-  signed-in only (anon/firehose/digest untouched — `user_source_prefs`
-  parity; limits BUG-007 blast radius).
-- **`tests/test_term_prefs.py`** (17 pure); INSTALL §10; roadmap
-  in-progress; manual-actions Open + inline SQL.
-
-### Server-side state touched
-
-- **Migration applied on prod 2026-05-17** (user-confirmed;
-  `manual-actions.md` → Completed): `2026-05-17-term-prefs.sql`
-  (`CREATE TABLE user_term_prefs`). `routes/feed.py` reads it every
-  signed-in feed load (BUG-007 class if absent; anon unaffected). No
-  cron/env/pip/symlink. Python App restart on deploy.
-
-### Verification
-
-`test_term_prefs.py` 17/17 + `test_ranking` green in-sandbox; changed
-Python `py_compile` clean. Full suite needs flask/pymysql (documented
-sandbox limit); route + browser UX deferred to CI. v1 = plain substring
-match ("crypto" also hits "cryptography"); phrase/entity-aware is v2
-(shared with topic extraction); `_MATCH_EXPR` is the single point to
-later also match `article_bodies`.
-
-### PR
-
-- **PR #77** — Keyword / topic mute & boost (merged 2026-05-17;
-  migration applied on prod same day).
+- Apply `2026-05-20-algorithm-term-prefs.sql` on prod, restart the
+  Python App, and move the `manual-actions.md` entry to Completed
+  (BUG-007 class blocker until then).
+- Tracking-doc drift surfaced (not addressed in this PR to avoid
+  scope creep): `engineering-history.md` says *Multiple saved
+  algorithms / profiles* merged as **PR #65**, but `roadmap.md`
+  still lists it `in-progress` and a stale draft **PR #61** for the
+  same feature is open. A small cleanup pass should move the
+  roadmap row to Done and close PR #61.
 
 ---
 
@@ -273,8 +216,51 @@ the deep context (root causes, calibration notes, file lists). Every
 server-side migration referenced below was applied on prod and is in
 `manual-actions.md` → Completed; bug root causes are in `bugs.md`.
 
+### 2026-05-20
+
+- **Compact / density toggle (PR #81).** Pri 6 / LOE 2, ui. Techmeme-
+  style toggle on the home feed: extends `base.html`'s existing
+  dark-mode IIFE to also init `data-density` pre-stylesheet from
+  `localStorage` (no FOUC); new `#density-toggle` button in the
+  topnav. Append-only `style.css` block keyed on
+  `:root[data-density="compact"] #feed-cards …` collapses to single
+  column, tightens padding, hides `.thumb`/`.summary`/`.feature-bars`/
+  `.byline` — source/lean dot/category/timestamp/`+N angles`/`Read →`
+  all stay. Persistence per-device (no DB); scope `/` only. *Server:*
+  none. Full detail: archive.
+
+### 2026-05-18
+
+- **Why This Article ranking explainer (PR #79).** Pri 7 / LOE 3, ui.
+  "Why?" toggle on each feed card lazily loads an inline per-feature
+  score breakdown for the viewer's active algorithm (anon → balanced).
+  New pure `app/explain.py` reproduces `build_score_sql`'s per-feature
+  term + recency gate in Python and **imports** the direction/scale
+  helpers from `ranking.py` so the explainer can't desync from the
+  scorer (18 parity tests). New `feed.explain` `GET /article/<id>/
+  explain` partial with feed visibility scoping; HTMX progressive
+  enhancement, no no-JS fallback; append-only dark-mode-aware CSS.
+  *Server:* none — no DB/cron/dep/env/symlink. Per-user source/term
+  multipliers applied outside the feature sum are deliberately not
+  modeled in v1; learned-model line waits on Signal Learning. Full
+  detail: archive.
+
 ### 2026-05-17
 
+- **Keyword / topic mute & boost (PR #77).** Pri 8 / LOE 4, user-
+  empowerment Theme A. Content-level lever distinct from
+  `user_source_prefs` (whole-source weights): **mute** = hard filter,
+  **boost** = score multiplier (strongest match wins, no compounding,
+  term-in-both → mute wins). New Flask-free `app/term_prefs.py`
+  builder (escaped LIKE, `GREATEST` boost — 17 pure tests, injection-
+  proof); new `user_term_prefs` table + `/terms` blueprint + nav;
+  `feed.py` reads it on every signed-in feed load and threads it
+  through the `if u:` block. Scope = `/` feed, signed-in only
+  (anon/firehose/digest untouched). v1 = substring match; phrase/
+  entity-aware is v2. *Server:* `2026-05-17-term-prefs.sql`
+  (`CREATE TABLE user_term_prefs`) applied on prod 2026-05-17 — folded
+  into the load-bearing "Applied prod schema migrations" line above;
+  BUG-007 class if absent. Full detail: archive.
 - **BUG-020 firehose accumulation (PR #72).** `/firehose` was a
   refreshing snapshot — its 4s `innerHTML` poll replaced the table with
   only the newest ≤25 classified rows, dropping everything else. Now

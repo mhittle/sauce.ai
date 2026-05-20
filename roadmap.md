@@ -51,7 +51,7 @@ shipped.
 | 3 | 2 | ui | Dark mode | done |
 | 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
-| 7 | 3 | algo, ui | Per-algorithm keyword mute & boost (in the algo builder) | in-progress |
+| 7 | 3 | algo, ui | Per-algorithm keyword mute & boost (in the algo builder) | done |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
@@ -390,7 +390,7 @@ extraction); also fold in `article_bodies` text (`_MATCH_EXPR` is the
 single point to change).
 
 ### Per-algorithm keyword mute & boost (in the algo builder)
-**Priority:** 7 · **LOE:** 3 · **Category:** algo, ui · **Status:** in-progress
+**Priority:** 7 · **LOE:** 3 · **Category:** algo, ui · **Status:** done (v1, PR #82)
 
 Extension of the shipped per-user keyword mute & boost (PR #77). Today
 keywords live at `/terms` and are scoped to the user — they apply to
@@ -502,6 +502,28 @@ pipeline's `candidate_sources` table (done).
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-20
+
+- **Per-algorithm keyword mute & boost (in the algo builder)** —
+  Pri 7, LOE 3, algo/ui. PR #82 (merged 2026-05-20; migration
+  pending on prod — see `manual-actions.md` Open). Extends PR #77's
+  per-user `user_term_prefs` with a parallel **per-profile** surface
+  on `/algo`: new `algorithm_term_prefs(algorithm_id, term, mode,
+  weight)` table FK'd to `user_algorithms`; new
+  `POST /algo/keywords/{add,<id>/delete}` routes (ownership-checked,
+  100/profile cap, idempotent mode-move upsert); new "Keywords" tab
+  in the algo builder (mute/boost lists, boost-default add form,
+  profile-aware header, link to `/terms` for the account-wide
+  list). `routes/feed.py` reads both tables for the active profile
+  and concatenates the rows through the existing pure
+  `build_term_clauses` builder — dedupe + mute-wins rules carry the
+  union semantics so a mute at EITHER scope hides the article and
+  the strongest matching boost wins. 5 new pure tests (22/22
+  in-sandbox). Same v1 substring-match caveat as PR #77 (a muted
+  "crypto" also hides "cryptography"); entity-aware matching is the
+  shared v2. Same scoping: signed-in main feed only; anon /
+  `/firehose` / digest are unaffected.
 
 ### 2026-05-18
 
