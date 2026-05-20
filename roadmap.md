@@ -53,6 +53,7 @@ shipped.
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
+| 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
 | 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
@@ -396,6 +397,18 @@ active `user_algorithms` row per user; this generalizes to many with an
 `is_active` flag + `name` and a profile switcher. Pairs with the NL
 builder (each generated algo can be saved as a profile) and time-of-day
 auto-switching as a v2 follow-on.
+
+### Compact / density toggle (Techmeme-style)
+**Priority:** 6 · **LOE:** 2 · **Category:** ui · **Status:** in-progress
+
+Topnav toggle (next to dark-mode) that strips the home feed down to a
+dense Techmeme-style list: no thumbnails, no feature bars, no lead
+paragraph, single column, tight padding — title + source + lean dot +
+"+N angles" + discussion line + thumbs/save controls only. Persisted in
+`localStorage` (mirrors the dark-mode pattern, PR #63 — client-only, no
+DB migration). Scoped via `#feed-cards` so `/`, `/search`, `/saved`,
+`/firehose` keep their current layouts; firehose is already dense and
+search/saved would be cheap follow-ons by removing the scope.
 
 ### A/B split feed
 **Priority:** 6 · **LOE:** 5 · **Category:** ui, algo · **Status:** backlog

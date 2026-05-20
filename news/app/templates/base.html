@@ -14,6 +14,10 @@
         }
         document.documentElement.setAttribute('data-theme', t);
       } catch (e) {}
+      try {
+        var d = localStorage.getItem('density');
+        if (d === 'compact') document.documentElement.setAttribute('data-density', 'compact');
+      } catch (e) {}
     })();
   </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
@@ -45,6 +49,7 @@
     <a href="{{ url_for('auth.login') }}">Sign in</a>
     <a href="{{ url_for('auth.signup') }}">Sign up</a>
   {% endif %}
+  <button type="button" id="density-toggle" class="linkbtn density-toggle" aria-label="Toggle compact view" aria-pressed="false">Compact</button>
   <button type="button" id="theme-toggle" class="linkbtn theme-toggle" aria-label="Toggle dark mode" aria-pressed="false">Dark</button>
 </nav>
 <main>
@@ -69,6 +74,27 @@
       var next = dark ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       try { localStorage.setItem('theme', next); } catch (e) {}
+      sync();
+    });
+  })();
+  (function () {
+    var btn = document.getElementById('density-toggle');
+    if (!btn) return;
+    function sync() {
+      var compact = document.documentElement.getAttribute('data-density') === 'compact';
+      btn.textContent = compact ? 'Comfortable' : 'Compact';
+      btn.setAttribute('aria-pressed', compact ? 'true' : 'false');
+    }
+    sync();
+    btn.addEventListener('click', function () {
+      var compact = document.documentElement.getAttribute('data-density') === 'compact';
+      if (compact) {
+        document.documentElement.removeAttribute('data-density');
+        try { localStorage.removeItem('density'); } catch (e) {}
+      } else {
+        document.documentElement.setAttribute('data-density', 'compact');
+        try { localStorage.setItem('density', 'compact'); } catch (e) {}
+      }
       sync();
     });
   })();
