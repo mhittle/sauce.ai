@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, request, g, redirect, url_for, jso
 from ..db import query, execute, get_conn
 from ..discussion import discussions_for_articles
 from ..explain import explain_article
+from ..feed_diversify import cap_per_source, fetch_budget, page_slice
 from ..term_prefs import build_term_clauses
 from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
 
@@ -174,10 +175,17 @@ def index():
       {order_by_sql}
       LIMIT %(limit)s OFFSET %(offset)s
     """
+    # BUG-021: over-fetch from the top so the per-source cap (applied in
+    # Python below) still yields a full page. Single-source-burst pages
+    # would otherwise be silently short.
+    src_cap = int(current_app.config.get("FEED_MAX_PER_SOURCE", 0) or 0)
+    fetch_limit = fetch_budget(page, page_size, src_cap)
     params = {**score_params, **filter_params, **pref_params, **vis_params,
               **term_params,
-              "limit": page_size, "offset": (page - 1) * page_size}
-    articles = query(sql, params)
+              "limit": fetch_limit, "offset": 0}
+    raw = query(sql, params)
+    capped = cap_per_source(raw, cap=src_cap)
+    articles = page_slice(capped, page, page_size)
 
     if u and articles:
         ids = [a["id"] for a in articles]

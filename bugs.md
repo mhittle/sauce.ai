@@ -26,18 +26,7 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-### BUG-021 — Feed dominated by a single source (Philadelphia Inquirer) across multiple algorithms
-**Status:** open · **Reporter:** user · **Opened:** 2026-05-20
-
-User reports the `/` feed is filled with Philadelphia Inquirer articles
-under different algorithms — described as a "weird recency bias". A
-single source crowding out the rest of the catalog across algorithms
-suggests the source-diversity / per-source cap is not applied (or is
-mis-applied), or the source has an outsized recency / popularity /
-trending score that the ranker amplifies. To investigate: check whether
-inquirer.com has a recent fetch burst (many articles in the last hour),
-its `source_reputation`, any `user_source_prefs` boost the reporter set,
-and whether the ranker has any per-source diversification at all.
+(none currently)
 
 ---
 
@@ -96,6 +85,46 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 ---
 
 ## Resolved
+
+### BUG-021 — Feed dominated by a single source across multiple algorithms
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-20 · **Closed:** 2026-05-20 (PR pending)
+
+User reported the `/` feed was filled with Philadelphia Inquirer
+articles under different algorithms — described as a "weird recency
+bias". The same source crowded out the catalog regardless of which
+algorithm was active.
+
+**Root cause (`app/routes/feed.py` `index()`):** the feed query had no
+per-source diversification at all. It ordered by `score DESC` (or
+`published_at`/`f.trending` depending on `?sort=`) and took the top 30.
+Dedup is per-`story_id` (cluster), not per-source — so a source with a
+recent fetch burst, or with high `source_reputation` plus the
+multiplicative recency gate (BUG-011 fix) hitting many of its rows at
+once, legitimately rose into 30 of the 30 slots until ~24h decay
+broke it up. Score jitter (BUG-012 fix) shuffled within a tier but
+didn't cap any source.
+
+**Fix (PR pending):** new pure `app/feed_diversify.py` (Flask-free /
+DB-free, mirrors `app/spectrum.py` / `app/firehose_cursor.py`):
+`cap_per_source(rows, cap=N, key="source_id")` keeps at most N rows per
+source while preserving input order; `fetch_budget(page, page_size,
+cap)` returns the SQL row budget needed to guarantee a full page after
+capping; `page_slice` returns the requested window of the capped list.
+`feed.index()` now over-fetches `page * page_size * multiplier` rows
+from MySQL, applies the cap, then slices the requested page —
+pagination is stable across pages because page N+1 sees the same
+capped sequence as page N. New `FEED_MAX_PER_SOURCE` config (default 3,
+env-tunable; 0 disables the cap). Only the `/` route is touched —
+`/firehose` (deliberately un-deduped), `/search`, `/saved`, and the
+email digest are unaffected.
+
+**Scope decision:** Python-layer cap rather than a SQL window function
+(`ROW_NUMBER() OVER (PARTITION BY source_id)`) so the fix is
+version-agnostic across the shared MySQL / MariaDB host fleet and
+unit-testable without a DB. 14 pure tests in
+`tests/test_feed_diversify.py` cover the cap, the over-fetch budget,
+page-slice stability across pages, and a "50-row same-source burst"
+regression case. No DB migration, no cron, no env required.
 
 ### BUG-020 — Firehose view doesn't show all articles
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-17 · **Closed:** 2026-05-17 (PR #72, draft)

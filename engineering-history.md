@@ -113,6 +113,100 @@ already includes these.
 
 ---
 
+## 2026-05-20 — BUG-021 single-source feed domination (per-source cap, PR #89)
+
+User reported the `/` feed was filled with Philadelphia Inquirer
+articles under different algorithms ("weird recency bias"). Logged as
+BUG-021 (PR #87, docs-only, merged); fix shipped in PR #89.
+
+### Root cause
+
+`app/routes/feed.py index()` had no per-source diversification. The
+query ordered by `score DESC` (or `published_at` / `f.trending`
+depending on `?sort=`) and took the top 30. Dedup was per-`story_id`
+(cluster), not per-source — so a source with a recent fetch burst, or
+with high `source_reputation` plus the BUG-011 multiplicative recency
+gate hitting many rows at once, legitimately rose into all 30 slots
+until ~24h decay broke it up. BUG-012's score jitter shuffles within a
+tier but doesn't cap any one source.
+
+### What shipped
+
+- **`app/feed_diversify.py`** (new, Flask-free / DB-free, mirrors
+  `app/spectrum.py` / `app/firehose_cursor.py`): `cap_per_source(rows,
+  cap=N, key="source_id")` keeps at most N rows per source preserving
+  input order; `fetch_budget(page, page_size, cap)` returns the SQL
+  row budget needed to guarantee a full page after capping;
+  `page_slice` slices the requested page out of the capped list. 14
+  pure tests in `tests/test_feed_diversify.py` (cap behavior,
+  over-fetch sizing, pagination stability across pages, 50-row
+  same-source burst regression).
+- **`app/routes/feed.py`**: `index()` now reads
+  `current_app.config["FEED_MAX_PER_SOURCE"]`, calls `fetch_budget()` to
+  set the SQL `LIMIT` (always `OFFSET 0`), runs `cap_per_source()` over
+  the result, then `page_slice()` to return the requested page.
+  Pagination is stable: page N+1 sees the same capped sequence as page
+  N (it's a deterministic prefix function of the SQL row order).
+- **`app/config.py`**: new `FEED_MAX_PER_SOURCE` (default 3,
+  env-tunable; 0 disables — the cap can be killed without a deploy).
+- **`news/INSTALL.txt`** §10: documented v1 limits of the cap.
+- **`bugs.md`**: BUG-021 entry moved to Resolved with root-cause +
+  fix narrative.
+
+### Scope choices
+
+- **Python cap, not a SQL window function.** `ROW_NUMBER() OVER
+  (PARTITION BY a.source_id ...)` would be cleaner but needs MySQL 8 /
+  MariaDB 10.2+; staying in Python keeps the fix shared-host-agnostic
+  and unit-testable without a live DB.
+- **`/` only.** `/firehose` is intentionally un-deduped; `/search` is
+  intentionally relevance-ordered with story-cluster dedup; `/saved`
+  is the user's own bookmarks; the email digest already caps at
+  `DIGEST_MAX_ARTICLES` (default 8) and per-source dilution is less
+  visible there. Each can be added later by passing the same cap.
+- **Cap is applied AFTER the existing ORDER BY**, so the survivors
+  preserve the ranking that brought them in. The "first 3 by score"
+  per source are kept regardless of which `?sort=` is active.
+
+### Server-side state touched
+
+None. No DB / cron / env / pip / symlink change. Standard Python App
+restart on deploy.
+
+### Verification
+
+`tests/test_feed_diversify.py` 14/14 green via the sandbox driver (no
+pytest in sandbox — documented limit). Changed Python `py_compile`
+clean. Route-level / browser verification deferred to CI / real env
+(sandbox lacks Flask + PyMySQL).
+
+### Known limits
+
+- Worst case where all sources in the rolling 7-day window come from a
+  single source, the cap leaves the page short rather than refilling
+  from outside the over-fetch window. Not reachable at the real
+  catalog size (~768 active sources).
+- The over-fetch multiplier sizes for `cap=3` / `page_size=30`. If a
+  future tuning drops the cap to 1 with the same page size we'd need
+  to revisit the multiplier (covered by `fetch_budget`'s logic but
+  unit-tested only at the current defaults).
+
+### Rebase
+
+Branch was rebased onto `origin/main` mid-session after PRs #82, #83,
+#84 (perceptual feature expansion), #85, #86, and #87 landed. Only
+conflict was `engineering-history.md` (both this entry and PR #84 are
+dated 2026-05-20 — hand-resolved by keeping both, BUG-021 newest);
+INSTALL.txt §10 and `app/routes/feed.py` auto-merged cleanly with no
+overlap.
+
+### PRs
+
+- **PR #87** — BUG-021 log entry (merged 2026-05-20, docs-only).
+- **PR #89** — per-source cap implementation.
+
+---
+
 ## 2026-05-20 — Perceptual feature expansion: 12 new ranking features (PR #84)
 
 Roadmap "Perceptual feature expansion" (Pri 7 / LOE 5, algo/backend) —

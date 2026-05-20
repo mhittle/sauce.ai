@@ -543,6 +543,19 @@ K. /trending page is empty or 500s:
   Signal Learning). Requires the 2026-05-17-term-prefs.sql
   migration (user_term_prefs); a missing table 500s the signed-in
   feed, so apply it before deploying the code.
+- Per-source diversification on `/` (BUG-021): the home feed caps
+  any single source to FEED_MAX_PER_SOURCE articles per page
+  (default 3, env-tunable; 0 disables). The cap is applied in Python
+  after the SQL ORDER BY by over-fetching from MySQL and dropping
+  overflow rows from sources that already hit the cap; pagination is
+  stable because page N+1 sees the same capped sequence as page N.
+  Only `/` is capped: `/firehose` (deliberately un-deduped),
+  `/search`, `/saved`, and the email digest are unaffected. A
+  pathological case where the entire over-fetch window comes from one
+  source can leave the page short rather than refilling from outside
+  the window — not reachable at the real catalog size (~768 active
+  sources). No DB/cron/env change required to deploy; flip
+  FEED_MAX_PER_SOURCE=0 in cPanel env vars to disable in a hurry.
 - "Why?" ranking explainer: the "Why?" toggle on each feed card
   lazily loads a per-feature score breakdown (feed.explain ->
   /article/<id>/explain). It is a progressive enhancement -- HTMX
