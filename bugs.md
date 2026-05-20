@@ -26,7 +26,22 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-022 — Topnav text overflows page width
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-20
+
+User reports the topnav menu has text too large — the nav extends past
+the width of the main page (overflows horizontally). Likely cause: the
+nav links accumulated past what the current font-size / spacing allows
+at typical desktop widths after several recent additions (gallery,
+density toggle, dark-mode toggle, search, keywords, etc.).
+
+Repro: load `/` on a desktop browser; observe the topnav links extend
+past the main content column / viewport edge.
+
+Fix direction: shrink topnav text and/or tighten spacing in
+`app/static/style.css` `.topnav` rules (additive change; no template
+restructuring needed). Verify mobile (≤640px) media block still wraps
+cleanly.
 
 ---
 
