@@ -126,6 +126,20 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Per-profile "Publish to gallery" button (PR #94).** Small
+  UX follow-on to the gallery v1 (PR #88): each row in `/algo`
+  Profiles tab now carries a "Publish to gallery" form that
+  snapshots that specific profile, not just whichever one happens
+  to be active. `gallery.publish` extended to accept an optional
+  `algo_id` form param (ownership-checked via
+  `WHERE id = %s AND user_id = %s`); when absent it falls back to
+  the active profile, so the gallery page's existing
+  "Publish your active algorithm" details form keeps working
+  unchanged. Same `MAX_PUBLISHED_PER_USER` cap, same
+  `clean_listing_name`/`clean_description` sanitization, same
+  redirect target. Existing 11 pure tests still green; the new
+  if/else branch reuses already-tested helpers. *Server:* none —
+  no migration/cron/dep/env/symlink.
 - **Gallery — Copy link + Email share buttons (PR pending).** Tiny
   follow-on to PR #88 (gallery v1). Each `/gallery` card now has two
   new actions next to Adopt/Unpublish: **Copy link** (button writes
