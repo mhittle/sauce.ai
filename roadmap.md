@@ -24,6 +24,7 @@ shipped.
 
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
+| 6 | 1 | ui, ops, docs | Root sauce.ai/ landing page (product lab positioning + coming-soon product cards) | in-progress |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | done |
 | 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
@@ -68,6 +69,29 @@ shipped.
 ---
 
 ## Items in detail
+
+### Root sauce.ai/ landing page
+**Priority:** 6 · **LOE:** 1 · **Category:** ui, ops, docs · **Status:** in-progress
+
+Static `index.html` at the repo root (FTP-deployed to
+`~/public_html/sauce.ai/index.html` by the existing GitHub Actions
+workflow — `local-dir: ./`, `server-dir: /`, incremental sync). Until
+now the root domain had no in-repo content; this stakes out the
+positioning. Hero states the thesis: **"sauce.ai is an autonomous AI
+product development and engineering lab. Agent systems —
+semi-autonomously and autonomously — design, build, and ship consumer
+products you'll love."** Card grid of 8 products: `sauce.ai/news`
+(live, links to `/news`) + 7 "Coming soon" concepts brainstormed as
+plausible next agent-built consumer surfaces — Recipes, Travel, Money,
+Fit, Learn, Inbox, Stage. Self-contained file (inline CSS, no
+framework, no build step); matches the news app's editorial-serif
+wordmark and warm-neutral palette; `prefers-color-scheme: dark` for
+the dark theme (no JS toggle in v1 — news has its own). No server-side
+state, no migration, no cron, no env var, no pip dep.
+
+v2 ideas (not in scope here): per-product "notify me" email capture,
+in-flight progress meter per coming-soon product, a /lab page that
+shows real-time agent activity / the GitHub PR stream.
 
 ### Sandboxed Python algorithm execution
 **Priority:** 9 · **LOE:** 8 · **Category:** backend, new-feature · **Status:** backlog

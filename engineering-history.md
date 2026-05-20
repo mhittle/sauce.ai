@@ -129,6 +129,36 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Root sauce.ai/ landing page (product-lab positioning, PR drafted
+  this session).** Roadmap Pri 6 / LOE 1, ui/ops/docs. User: "the root
+  site of sauce.ai will state that sauce.ai is an autonomous ai product
+  development and engineering lab... the first product is Sauce.ai
+  news. Make a few other cards for consumer products that we could
+  start to autonomously engineer next." Until now the repo root carried
+  no HTML — anything at `https://sauce.ai/` was a cPanel default. The
+  existing GitHub Actions FTP workflow (`local-dir: ./`,
+  `server-dir: /`, `dangerous-clean-slate: false`, FTP user
+  `sauce@sauce.ai` → `~/public_html/sauce.ai/`) already publishes
+  whatever's at the repo root, so a single new `index.html` is enough.
+  *Code:* one new file, `/index.html` — self-contained (inline CSS, no
+  framework, no extra HTTP request, no build step); matches the news
+  app's editorial-serif wordmark (`ui-serif` family, italic for the
+  product noun) and warm-neutral palette (`--bg #fafaf7`, surfaces,
+  same accent feel); `prefers-color-scheme: dark` handles dark theme
+  with no JS toggle in v1 (news has its own toggle on its subdomain
+  surface). Hero states the thesis; 8-card grid: 1 live card
+  (`sauce.ai/news`, links to `/news`, "Live" badge) plus 7 "Coming
+  soon" concepts — Recipes (taste-aware meal planner), Travel (vibe →
+  bookable itinerary), Money (personal CFO), Fit (wearable-aware
+  coach), Learn (30-min daily course generator), Inbox (voice-matching
+  triage), Stage (live music/theatre/comedy radar). Footer: "built by
+  agents, supervised by humans" — owns the thesis. *Server:* none — no
+  migration, no cron, no env var, no pip dep, no symlink, no Python
+  App restart needed. **Deploy caveat:** on first push to `main`, the
+  FTP sync will *overwrite* whatever `index.html` currently lives at
+  `~/public_html/sauce.ai/index.html` (cPanel default or prior
+  placeholder). The news app at `/news` is untouched (separate dir,
+  separate `.htaccess`).
 - **Keywords-on-algo only — drop /terms, travel with gallery publish/adopt
   (PR drafted).** Pri 6 / LOE 3, algo/ui/new-feature. User: "keywords
   should be part of each algo." Two coupled changes:
