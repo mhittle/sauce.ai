@@ -108,7 +108,10 @@ keyword mute/boost; `routes/feed.py` reads it on every signed-in feed
 load — BUG-007 class if absent); new `algorithm_term_prefs` table
 (PR #82, per-algorithm keyword mute/boost; applied 2026-05-20 —
 `routes/feed.py` reads it for the active algorithm on every signed-in
-feed load, same BUG-007 class). A DB rebuild from `seed/schema.sql`
+feed load, same BUG-007 class); 12 new `article_features` columns
+(PR #84, perceptual feature expansion — 6 LLM-judged + 6 rule-based;
+applied 2026-05-20, BUG-007 class for `classify_pending` every 5-min
+tick). A DB rebuild from `seed/schema.sql`
 already includes these.
 
 ---

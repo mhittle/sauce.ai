@@ -40,26 +40,34 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+_None — all tracked migrations applied._
+
+---
+
+## Completed
+
 ### 2026-05-20 — Migration: 12 perceptual feature columns + catalog rows
-**Status:** open · **PR:** #84 (draft) ·
-**Opened:** 2026-05-20 ·
+**Status:** completed · **PR:** #84 (merged 2026-05-20) ·
+**Opened:** 2026-05-20 · **Completed:** 2026-05-20 ·
 **File reference:** `news/seed/migrations/2026-05-20-perception-features.sql`
 
-Adds 6 LLM-judged perceptual columns (`tone_calmness`, `sensationalism`,
-`analysis_depth`, `emotional_charge`, `hedging`, `solution_orientation`,
-all DEFAULT 0.5) and 6 rule-based structural columns (`headline_length`,
-`caps_ratio`, `punctuation_intensity`, `numeric_density`,
-`question_headline`, `quote_present`, all DEFAULT 0) to `article_features`,
-plus the matching 12 `feature_catalog` rows. **Load-bearing
-(BUG-007 class):** `jobs/classify_pending.py` INSERTs into all 12 new
-columns on every tick after this deploy and errors hard if they don't
-exist — runs every 5 min, so a missing column manifests within minutes.
-Existing user algorithms don't reference the new feature keys so
-signed-in `/`, `/firehose`, and `/algo` keep rendering normally; only
-the classify cron breaks. Apply this BEFORE merging / before the next
-deploy; restart the Python App on deploy.
+Added 6 LLM-judged perceptual columns (`tone_calmness`,
+`sensationalism`, `analysis_depth`, `emotional_charge`, `hedging`,
+`solution_orientation`, all DEFAULT 0.5) and 6 rule-based structural
+columns (`headline_length`, `caps_ratio`, `punctuation_intensity`,
+`numeric_density`, `question_headline`, `quote_present`, all DEFAULT
+0) to `article_features`, plus the matching 12 `feature_catalog`
+rows. Load-bearing (BUG-007 class): `jobs/classify_pending.py` INSERTs
+into all 12 new columns on every tick after the deploy and would have
+errored hard on the missing columns. User confirmed the ALTER + INSERT
+were run via phpMyAdmin against `lt1ih6uyy2z6_news` and the Python App
+restarted (2026-05-20), so `classify_pending` is now writing the new
+columns and `/algo` exposes the 12 new sliders. In the repo via
+`schema.sql` + `feature_catalog.sql` + the migration file so fresh
+installs replay it. Folded into the load-bearing "Applied prod schema
+migrations" line in `engineering-history.md`.
 
-**SQL applied (phpMyAdmin against `lt1ih6uyy2z6_news`):**
+**SQL applied:**
 
 ```sql
 ALTER TABLE article_features
@@ -90,28 +98,6 @@ INSERT INTO feature_catalog (feature_key, label, type, range_min, range_max, des
   ('question_headline',    'Question headline',     'scale', 0, 1, 'Rule-based: 1 if title ends with `?`, else 0.',                    1, 170),
   ('quote_present',        'Direct quote',          'scale', 0, 1, 'Rule-based: 1 if a direct quoted span appears in title or summary.', 1, 175);
 ```
-
-**Verify (post-deploy):**
-
-```sql
-SHOW COLUMNS FROM article_features LIKE 'tone_calmness';        -- exists
-SHOW COLUMNS FROM article_features LIKE 'question_headline';    -- exists
-SELECT COUNT(*) FROM feature_catalog WHERE feature_key IN
-  ('tone_calmness','sensationalism','analysis_depth','emotional_charge',
-   'hedging','solution_orientation','headline_length','caps_ratio',
-   'punctuation_intensity','numeric_density','question_headline','quote_present');
--- expect: 12
-```
-
-Then tail `logs/cron.log` for a `classify_pending` tick that writes a
-non-default value: e.g.
-`SELECT article_id, tone_calmness, sensationalism, caps_ratio
-   FROM article_features ORDER BY classified_at DESC LIMIT 5;`
-should show varied values once classify_pending has run after deploy.
-
----
-
-## Completed
 
 ### 2026-05-20 — Migration: algorithm_term_prefs (per-algorithm keyword mute & boost)
 **Status:** completed · **PR:** #82 (merged 2026-05-20) ·
