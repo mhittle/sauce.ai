@@ -17,6 +17,8 @@ catalog default (typically 1.0 = "high is good").
 """
 import json
 
+from .geo import haversine_sql
+
 # Declarative per-feature catalog. The template + ranking both read from this.
 FEATURES = [
     {"key": "political_lean",        "scale": "signed",   "label": "Political lean",
@@ -49,6 +51,16 @@ FEATURE_KEYS = [f["key"] for f in FEATURES]
 SIGNED_FEATURES = {f["key"] for f in FEATURES if f["scale"] == "signed"}
 
 CATEGORIES = ["politics", "world", "tech", "business", "science", "sports", "general"]
+
+# Country codes the algo editor offers as hard-filter checkboxes. Sources are
+# US-default today; the list is kept open-ended so a non-US source added later
+# starts filtering correctly without a code change. Order matters for the UI.
+COUNTRIES = ["US", "GB", "CA", "AU", "IE", "IN", "NZ", "ZA"]
+
+# Cap on the radius the editor lets a user pick (miles). The dataset is
+# US-only, so radii bigger than the country are noise.
+GEO_RADIUS_MAX_MI = 500
+GEO_RADIUS_DEFAULT_MI = 50
 
 
 def _direction_from_weights(weights, feat):
@@ -244,12 +256,48 @@ def build_filters_sql(weights: dict):
             placeholders.append(f"%({k})s")
             params[k] = c
         clauses.append(f"f.category IN ({', '.join(placeholders)})")
+    countries = weights.get("country_filter") or []
+    if countries:
+        placeholders = []
+        for i, c in enumerate(countries):
+            k = f"country_{i}"
+            placeholders.append(f"%({k})s")
+            params[k] = c
+        clauses.append(f"f.country IN ({', '.join(placeholders)})")
+    geo = _geo_filter_from_weights(weights)
+    if geo is not None:
+        lat, lng, radius = geo
+        clause, geo_params = haversine_sql(lat, lng, radius)
+        clauses.append(clause)
+        params.update(geo_params)
     deny = weights.get("source_deny") or []
     for i, sid in enumerate(deny):
         k = f"deny_{i}"
         params[k] = int(sid)
         clauses.append(f"a.source_id <> %({k})s")
     return (" AND " + " AND ".join(clauses)) if clauses else "", params
+
+
+def _geo_filter_from_weights(weights):
+    """Return (lat, lng, radius_mi) if all three are configured, else None.
+
+    Stored under `geo_lat` / `geo_lng` / `geo_radius_mi` on weights_json.
+    A zero or negative radius disables the filter even if coords are set.
+    """
+    try:
+        lat = weights.get("geo_lat")
+        lng = weights.get("geo_lng")
+        radius = weights.get("geo_radius_mi")
+        if lat is None or lng is None or radius is None:
+            return None
+        lat = float(lat)
+        lng = float(lng)
+        radius = float(radius)
+    except (TypeError, ValueError):
+        return None
+    if radius <= 0:
+        return None
+    return lat, lng, radius
 
 
 def weights_to_expression(weights: dict) -> str:
@@ -277,6 +325,9 @@ def weights_to_expression(weights: dict) -> str:
         rec = 0.0
 
     cat_filter = weights.get("category_filter") or []
+    country_filter = weights.get("country_filter") or []
+    geo = _geo_filter_from_weights(weights)
+    geo_label = (weights.get("geo_label") or "").strip()
     deny = weights.get("source_deny") or []
 
     lines = ["def score(article):"]
@@ -299,6 +350,12 @@ def weights_to_expression(weights: dict) -> str:
     lines.append("")
     if cat_filter:
         lines.append(f"# only show categories: {cat_filter}")
+    if country_filter:
+        lines.append(f"# only show countries: {country_filter}")
+    if geo:
+        lat, lng, radius = geo
+        where = geo_label or f"{lat:.4f},{lng:.4f}"
+        lines.append(f"# only show articles within {radius:.0f} mi of {where}")
     if deny:
         lines.append(f"# exclude source ids: {deny}")
     lines.append("# (v1 executes this via SQL; raw Python execution comes in v2)")

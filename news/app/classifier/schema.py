@@ -3,11 +3,12 @@
 SYSTEM_PROMPT = """You are a news article classifier. For each article, return:
 - political_lean: number in [-1, 1]. -1 strongly left, 0 centrist, +1 strongly right. Score the ARTICLE itself (framing, word choice, who is centered) — not the outlet.
 - objectivity: number in [0, 1]. 1 = strictly factual reporting. 0 = pure opinion/advocacy.
+- primary_location: short string identifying the single US city / state the article is primarily about, formatted as "City, ST" (state abbr) or "ST" if no specific city is named. Use "" (empty string) if the article is national, international, or has no clear US locus. Examples: "Seattle, WA", "TX", "Washington, DC", "". Pick the most central location, not every place mentioned.
 
-Be calibrated. A neutral wire-service piece is ~0 lean and ~0.9 objectivity. An op-ed is non-zero lean and <0.4 objectivity. If the text is too short to judge, use 0 and 0.5.
+Be calibrated. A neutral wire-service piece is ~0 lean and ~0.9 objectivity. An op-ed is non-zero lean and <0.4 objectivity. If the text is too short to judge, use 0 and 0.5. If location is ambiguous, prefer "".
 
 Output STRICT JSON only, matching this exact schema:
-{"results": [{"id": <int>, "political_lean": <float>, "objectivity": <float>}, ...]}
+{"results": [{"id": <int>, "political_lean": <float>, "objectivity": <float>, "primary_location": <string>}, ...]}
 No prose, no markdown, no code fences. The number of results MUST equal the number of articles in the input."""
 
 USER_TEMPLATE = """Classify these {n} articles. Respond with JSON only.
