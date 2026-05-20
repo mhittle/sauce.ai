@@ -28,12 +28,17 @@ CSRF_HEADER = "X-CSRF-Token"
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
-# Endpoints that must NOT be CSRF-enforced. `account.unsubscribe` is the
-# RFC 8058 one-click List-Unsubscribe-Post target: mail clients POST to it
-# with no token and no session, and it's already authenticated by the
-# unguessable 40-hex digest token in the URL, so it's CSRF-resistant by
-# construction. Enforcing CSRF here would break email unsubscribe.
-_EXEMPT_ENDPOINTS = frozenset({"account.unsubscribe"})
+# Endpoints that must NOT be CSRF-enforced.
+# - `account.unsubscribe` is the RFC 8058 one-click List-Unsubscribe-Post
+#   target: mail clients POST to it with no token and no session, and it's
+#   already authenticated by the unguessable 40-hex digest token in the
+#   URL, so it's CSRF-resistant by construction.
+# - `lab.vote` is the anonymous vote endpoint for the root-domain
+#   lab landing page (`https://sauce.ai/`). The static page can't carry
+#   the news app's CSRF cookie (different rendering path), and the
+#   endpoint is anon-only with a per-voter UNIQUE index — a forged vote
+#   on someone else's behalf just flips one anonymous concept vote.
+_EXEMPT_ENDPOINTS = frozenset({"account.unsubscribe", "lab.vote"})
 
 
 def _sign(secret: str, nonce: str) -> str:

@@ -410,3 +410,18 @@ CREATE TABLE IF NOT EXISTS algorithm_adoptions (
   CONSTRAINT fk_aa_user_algo FOREIGN KEY (user_algorithm_id)
     REFERENCES user_algorithms (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Anonymous up/down votes for "Coming soon" product concepts on the
+-- root-domain lab landing page (https://sauce.ai/). See
+-- migrations/2026-05-20-lab-votes.sql.
+CREATE TABLE IF NOT EXISTS lab_concept_votes (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  concept_key  VARCHAR(64) NOT NULL,
+  voter_token  CHAR(40) NOT NULL,
+  vote         TINYINT NOT NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_concept_voter (concept_key, voter_token),
+  KEY idx_concept (concept_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

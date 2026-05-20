@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sauce.ai &mdash; an autonomous AI product lab</title>
-<meta name="description" content="sauce.ai is an autonomous AI product development and engineering lab. Agent systems &mdash; semi-autonomously and autonomously &mdash; build consumer products you'll love.">
+<meta name="description" content="sauce.ai is an autonomous AI product development and engineering lab. Agent systems &mdash; semi-autonomously and autonomously &mdash; build consumer products you'll love. Vote on what we should build next.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='4' y='48' font-family='Georgia,serif' font-size='52' font-weight='600'%3Es%3C/text%3E%3C/svg%3E">
 <style>
   :root {
@@ -16,6 +16,8 @@
     --surface: #ffffff;
     --surface-2: #f0efeb;
     --accent: #b04a2a;
+    --up: #2d7a4e;
+    --down: #b04a2a;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -27,6 +29,8 @@
       --surface: #1c1d23;
       --surface-2: #24262e;
       --accent: #e07a55;
+      --up: #5cb585;
+      --down: #e07a55;
     }
   }
   * { box-sizing: border-box; }
@@ -61,7 +65,7 @@
   header.site nav a:hover { color: var(--accent); }
 
   /* Hero */
-  .hero { padding: 4.5em 0 3.5em; max-width: 760px; }
+  .hero { padding: 4.5em 0 3.5em; max-width: 780px; }
   .hero h1 {
     font-family: ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, serif;
     font-size: clamp(2.4em, 5.5vw, 3.8em);
@@ -77,6 +81,7 @@
     display: flex; align-items: baseline; justify-content: space-between;
     margin: 2em 0 1.2em;
     padding-bottom: 0.5em; border-bottom: 1px solid var(--line);
+    gap: 0.8em; flex-wrap: wrap;
   }
   .section-head h2 {
     font-family: ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, serif;
@@ -93,27 +98,26 @@
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 10px;
-    padding: 1.2em 1.25em 1.1em;
+    padding: 1.2em 1.25em 1em;
     display: flex; flex-direction: column;
-    min-height: 178px;
+    min-height: 200px;
     transition: border-color 120ms ease, transform 120ms ease;
   }
-  .card.live { border-color: var(--line); }
   .card.live:hover { border-color: var(--accent); transform: translateY(-1px); }
-  .card.soon { opacity: 0.88; }
+  .card.soon { opacity: 0.96; }
 
   .card .name {
     font-family: ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, serif;
     font-size: 1.18em; font-weight: 600;
-    margin: 0 0 0.05em;
+    margin: 0.4em 0 0.05em;
   }
   .card .name em { font-style: italic; font-weight: 500; }
   .card .name .slash { color: var(--muted); margin: 0 0.1em; font-weight: 400; }
 
   .card .pitch {
     color: var(--fg);
-    font-size: 0.96em; line-height: 1.45;
-    margin: 0.55em 0 1em;
+    font-size: 0.94em; line-height: 1.45;
+    margin: 0.5em 0 0.9em;
     flex: 1;
   }
 
@@ -125,9 +129,7 @@
     border-radius: 4px;
     vertical-align: middle;
   }
-  .badge.live {
-    background: var(--accent); color: #fff;
-  }
+  .badge.live { background: var(--accent); color: #fff; }
   .badge.soon {
     background: var(--surface-2); color: var(--muted);
     border: 1px solid var(--line);
@@ -138,6 +140,37 @@
     font-weight: 500;
   }
   .card.live a.cta:hover { text-decoration: underline; }
+
+  /* Vote bar */
+  .vote {
+    display: flex; align-items: center; gap: 0.6em;
+    margin-top: auto; padding-top: 0.7em;
+    border-top: 1px dashed var(--line);
+    font-size: 0.9em;
+  }
+  .vote button {
+    appearance: none;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.18em 0.55em;
+    cursor: pointer;
+    font-size: 1em;
+    line-height: 1;
+    transition: background 100ms ease, color 100ms ease, border-color 100ms ease;
+    font-family: inherit;
+  }
+  .vote button:hover { background: var(--bg-2); color: var(--fg); }
+  .vote button[disabled] { cursor: default; opacity: 0.55; }
+  .vote button.is-mine.up   { background: var(--up); color: #fff; border-color: var(--up); }
+  .vote button.is-mine.down { background: var(--down); color: #fff; border-color: var(--down); }
+  .vote .score {
+    font-variant-numeric: tabular-nums;
+    color: var(--fg); font-weight: 600;
+    min-width: 2em; text-align: center;
+  }
+  .vote .label { color: var(--muted); margin-left: auto; font-size: 0.85em; }
 
   /* Footer */
   footer.site {
@@ -175,21 +208,20 @@
     </p>
     <p class="sub">
       The first is <a href="/news">sauce.ai/news</a>, a news reader you
-      build yourself. More are on the way.
+      build yourself. Below are concepts we're considering next &mdash;
+      <strong>vote on which we should ship first</strong>.
     </p>
   </section>
 
   <div class="section-head">
     <h2>Products</h2>
-    <span class="note">1 live &middot; 7 in development</span>
+    <span class="note">1 live &middot; <span id="soon-count">17</span> in development</span>
   </div>
 
-  <div class="grid">
+  <div class="grid" id="product-grid">
 
     <a class="card live" href="/news">
-      <div>
-        <span class="badge live">Live</span>
-      </div>
+      <div><span class="badge live">Live</span></div>
       <p class="name">sauce<span class="slash">.ai/</span><em>news</em></p>
       <p class="pitch">
         A news reader you build. Thousands of sources, ranked by an
@@ -199,85 +231,273 @@
       <span class="cta">Read the feed &rarr;</span>
     </a>
 
-    <div class="card soon">
-      <div>
-        <span class="badge soon">Coming soon</span>
-      </div>
-      <p class="name">sauce<span class="slash">.ai/</span><em>recipes</em></p>
+    <div class="card soon" data-concept-key="jar">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>jar</em></p>
       <p class="pitch">
-        A cook that knows your fridge, your tastes, and your week.
-        Personalized meal plans and smart shopping lists that adapt as
-        you eat.
+        Your AI memory jar. Drop in voice notes, screenshots, scraps
+        and half&#8209;thoughts; agents organize, connect, and resurface
+        them when you need them. Your second brain, finally with shape.
       </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
     </div>
 
-    <div class="card soon">
-      <div>
-        <span class="badge soon">Coming soon</span>
-      </div>
-      <p class="name">sauce<span class="slash">.ai/</span><em>travel</em></p>
+    <div class="card soon" data-concept-key="negotiate">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>negotiate</em></p>
       <p class="pitch">
-        Describe the trip. Get a real itinerary &mdash; flights, stays,
-        and restaurants &mdash; that fits the vibe and the budget, ready
-        to book.
+        A personal negotiator that calls your providers &mdash; cable,
+        insurance, hospital bills, rent &mdash; and brings you a better
+        number. Pay only on the savings.
       </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
     </div>
 
-    <div class="card soon">
-      <div>
-        <span class="badge soon">Coming soon</span>
+    <div class="card soon" data-concept-key="doctor">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>doctor</em></p>
+      <p class="pitch">
+        Symptoms in, calibrated triage out. Second opinions on
+        diagnoses, catches drug interactions, drafts the post&#8209;visit
+        questions you wish you'd thought to ask.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
       </div>
+    </div>
+
+    <div class="card soon" data-concept-key="legal">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>legal</em></p>
+      <p class="pitch">
+        Feed it any contract, lease, or dispute. Plain&#8209;English
+        explanations, redlines you can send, response letters,
+        small&#8209;claims filings.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="clone">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>clone</em></p>
+      <p class="pitch">
+        Trained on your voice, writing, and reasoning. Drafts replies,
+        sits second chair in meetings, writes the thing in your voice
+        while you do the thing only you can do.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="money">
+      <div><span class="badge soon">Coming soon</span></div>
       <p class="name">sauce<span class="slash">.ai/</span><em>money</em></p>
       <p class="pitch">
         A personal CFO that connects your accounts, kills hidden fees,
         and quietly keeps you on plan.
       </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
     </div>
 
-    <div class="card soon">
-      <div>
-        <span class="badge soon">Coming soon</span>
+    <div class="card soon" data-concept-key="tax">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>tax</em></p>
+      <p class="pitch">
+        A year&#8209;round tax agent. Categorizes deductibles as you
+        spend, files quarterlies, flags audit risk, drafts the return
+        so April becomes a five&#8209;minute review.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
       </div>
+    </div>
+
+    <div class="card soon" data-concept-key="decide">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>decide</em></p>
+      <p class="pitch">
+        Bring it the big call &mdash; a job offer, a move, a surgery.
+        It structures the tradeoffs, gathers the missing data,
+        simulates outcomes, and recommends, with its reasoning shown.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="friend">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>friend</em></p>
+      <p class="pitch">
+        Keeps your closest people in focus. Remembers their kids'
+        names, the last conversation, when you last reached out
+        &mdash; and quietly nudges you before it's been too long.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="estate">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>estate</em></p>
+      <p class="pitch">
+        Wills, beneficiaries, digital legacy, password&#8209;vault
+        inheritance. The thing you keep meaning to do, done &mdash;
+        and kept current.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="mirror">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>mirror</em></p>
+      <p class="pitch">
+        A five&#8209;minute weekly debrief synthesized from your
+        calendar, spend, sleep, reading, and messages. The Friday
+        meeting with yourself you've been meaning to take.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="recipes">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>recipes</em></p>
+      <p class="pitch">
+        A cook that knows your fridge, your tastes, and your week.
+        Personalized meal plans and smart shopping lists that adapt
+        as you eat.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="fit">
+      <div><span class="badge soon">Coming soon</span></div>
       <p class="name">sauce<span class="slash">.ai/</span><em>fit</em></p>
       <p class="pitch">
-        A coach that reads your wearable and tomorrow's calendar and
-        rewrites today's workout to match how you actually feel.
+        A coach that reads your wearable and tomorrow's calendar
+        and rewrites today's workout to match how you actually feel.
       </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
     </div>
 
-    <div class="card soon">
-      <div>
-        <span class="badge soon">Coming soon</span>
+    <div class="card soon" data-concept-key="travel">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>travel</em></p>
+      <p class="pitch">
+        Describe the trip. Get a real itinerary &mdash; flights, stays,
+        and restaurants &mdash; that fits the vibe and the budget,
+        ready to book.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
       </div>
+    </div>
+
+    <div class="card soon" data-concept-key="learn">
+      <div><span class="badge soon">Coming soon</span></div>
       <p class="name">sauce<span class="slash">.ai/</span><em>learn</em></p>
       <p class="pitch">
-        Tell it what you want to know. It builds a 30&#8209;minute daily
-        course on it &mdash; from the best videos, papers, and podcasts
-        on the open web.
+        Tell it what you want to know. It builds a 30&#8209;minute
+        daily course on it &mdash; from the best videos, papers, and
+        podcasts on the open web.
       </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
     </div>
 
-    <div class="card soon">
-      <div>
-        <span class="badge soon">Coming soon</span>
-      </div>
+    <div class="card soon" data-concept-key="inbox">
+      <div><span class="badge soon">Coming soon</span></div>
       <p class="name">sauce<span class="slash">.ai/</span><em>inbox</em></p>
       <p class="pitch">
-        An inbox triage agent that drafts replies in your voice, batches
-        what can wait, and unsubscribes from the noise you forgot you
-        signed up for.
+        An inbox triage agent that drafts replies in your voice,
+        batches what can wait, and unsubscribes from the noise you
+        forgot you signed up for.
       </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
     </div>
 
-    <div class="card soon">
-      <div>
-        <span class="badge soon">Coming soon</span>
-      </div>
+    <div class="card soon" data-concept-key="stage">
+      <div><span class="badge soon">Coming soon</span></div>
       <p class="name">sauce<span class="slash">.ai/</span><em>stage</em></p>
       <p class="pitch">
-        Live music, theatre, and comedy near you &mdash; curated to your
-        taste, with presale alerts before tickets go public.
+        Live music, theatre, and comedy near you &mdash; curated to
+        your taste, with presale alerts before tickets go public.
       </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
     </div>
 
   </div>
@@ -288,5 +508,99 @@
   </footer>
 
 </div>
+
+<script>
+(function () {
+  var TALLY_URL = "/news/labvotes/tally";
+  var VOTE_URL  = "/news/labvotes/vote";
+
+  function $cards() {
+    return document.querySelectorAll(".card.soon[data-concept-key]");
+  }
+
+  function renderCard(card, slot) {
+    var score = card.querySelector(".score");
+    var up    = card.querySelector("button.up");
+    var down  = card.querySelector("button.down");
+    if (!score || !up || !down) return;
+    var net = (slot && typeof slot.score === "number") ? slot.score : 0;
+    score.textContent = (net > 0 ? "+" + net : String(net));
+    up.classList.toggle("is-mine",   slot && slot.you === 1);
+    down.classList.toggle("is-mine", slot && slot.you === -1);
+  }
+
+  function setDisabled(disabled) {
+    document.querySelectorAll(".card.soon button[data-vote]").forEach(function (b) {
+      b.disabled = !!disabled;
+    });
+  }
+
+  function postVote(key, voteVal) {
+    return fetch(VOTE_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      credentials: "same-origin",
+      body: JSON.stringify({concept_key: key, vote: voteVal})
+    }).then(function (r) {
+      if (!r.ok) throw new Error("vote failed " + r.status);
+      return r.json();
+    });
+  }
+
+  function wire() {
+    $cards().forEach(function (card) {
+      var key = card.getAttribute("data-concept-key");
+      card.querySelectorAll("button[data-vote]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          if (btn.disabled) return;
+          var dir = btn.getAttribute("data-vote");
+          var already = btn.classList.contains("is-mine");
+          var nextVote = already ? 0 : (dir === "up" ? 1 : -1);
+          // Optimistic UI
+          var up    = card.querySelector("button.up");
+          var down  = card.querySelector("button.down");
+          up.classList.toggle("is-mine",   nextVote === 1);
+          down.classList.toggle("is-mine", nextVote === -1);
+
+          setDisabled(true);
+          postVote(key, nextVote)
+            .then(function (slot) { renderCard(card, slot); })
+            .catch(function () {
+              // Revert on failure (best effort)
+              up.classList.remove("is-mine");
+              down.classList.remove("is-mine");
+            })
+            .then(function () { setDisabled(false); });
+        });
+      });
+    });
+  }
+
+  function init() {
+    fetch(TALLY_URL, {credentials: "same-origin"})
+      .then(function (r) { if (!r.ok) throw new Error("tally " + r.status); return r.json(); })
+      .then(function (payload) {
+        var tally = (payload && payload.tally) || {};
+        $cards().forEach(function (card) {
+          renderCard(card, tally[card.getAttribute("data-concept-key")]);
+        });
+        wire();
+      })
+      .catch(function () {
+        // Backend unreachable (migration not applied, app down, etc.):
+        // hide vote rows so the page still looks intentional.
+        document.querySelectorAll(".card.soon .vote").forEach(function (el) {
+          el.style.display = "none";
+        });
+      });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
 </body>
 </html>

@@ -24,7 +24,8 @@ shipped.
 
 | Pri | LOE | Category | Title | Status |
 | --- | --- | --- | --- | --- |
-| 6 | 1 | ui, ops, docs | Root sauce.ai/ landing page (product lab positioning + coming-soon product cards) | in-progress |
+| 6 | 1 | ui, ops, docs | Root sauce.ai/ landing page (product lab positioning + coming-soon product cards) | done |
+| 6 | 3 | ui, new-feature, backend | Lab landing expansion: 10 more radical concepts + anon up/down voting | in-progress |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | done |
 | 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
@@ -69,6 +70,48 @@ shipped.
 ---
 
 ## Items in detail
+
+### Lab landing expansion: 10 more radical concepts + anon up/down voting
+**Priority:** 6 · **LOE:** 3 · **Category:** ui, new-feature, backend · **Status:** in-progress
+
+Follow-on to PR #101 (root `index.html`). User feedback on the first
+7 coming-soon concepts: "kind of mid — add more radical, high-leverage
+tools like jar.ai." Two coupled changes:
+
+- **+10 concepts on the lab landing page.** Total card grid is now
+  1 live + 17 coming-soon. New: `jar` (AI memory jar / second brain),
+  `negotiate` (success-fee bill negotiator), `clone` (your voice +
+  reasoning, trained), `doctor` (calibrated health triage and second
+  opinions), `legal` (contracts / leases / small claims), `tax`
+  (year-round agent, file the return), `estate` (wills, beneficiaries,
+  digital legacy), `decide` (big-call structurer with simulated
+  outcomes), `friend` (relationship-maintenance nudger), `mirror`
+  (weekly self-debrief synthesized from digital exhaust).
+- **Anonymous up/down voting** on each coming-soon card so visitors
+  can rank what we should build next. Aggregate counts visible to
+  all (HN-style net score in the middle, ▲/▼ on the sides). Anon
+  identity is a 40-hex token in a `lab_voter_token` cookie, scoped
+  `Path=/` so the static root page and the news app at
+  `sauce.ai/news` share it. Backend: new pure
+  `app/lab_concepts.py` (concept-key allowlist + vote validation +
+  `tally_with_you`; 12 pure tests), new `app/routes/lab.py` blueprint
+  (`GET /labvotes/tally`, `POST /labvotes/vote`), new
+  `lab_concept_votes` table (BUG-007 class? **No** — only the
+  `/labvotes/*` endpoints touch it; the rest of the news app and the
+  static landing page are unaffected if the table is missing; the
+  landing page's JS catches a tally fetch error and hides the vote UI
+  silently). `lab.vote` added to the CSRF-exempt set
+  (anon endpoint, low-stakes, `(concept_key, voter_token)` UNIQUE
+  index caps abuse from any one cookie).
+
+*Server-side state:* one new migration
+(`2026-05-20-lab-votes.sql` — `CREATE TABLE lab_concept_votes`). No
+new cron, no env var, no pip dep, no symlink. Python App restart on
+deploy so the new blueprint registers.
+
+v2 ideas (out of scope here): sort cards by net score on load, vote
+log / brigading mitigation beyond the per-cookie unique key,
+"trending concept" callout above the grid, share buttons per card.
 
 ### Root sauce.ai/ landing page
 **Priority:** 6 · **LOE:** 1 · **Category:** ui, ops, docs · **Status:** in-progress
