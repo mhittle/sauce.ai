@@ -88,6 +88,9 @@ CREATE TABLE IF NOT EXISTS article_features (
   category              VARCHAR(64) NOT NULL DEFAULT 'general',
   country               VARCHAR(8) NOT NULL DEFAULT 'US',
   region                VARCHAR(64) NOT NULL DEFAULT 'national',
+  geo_lat               FLOAT DEFAULT NULL,         -- LLM-extracted place centroid; NULL = unresolved
+  geo_lng               FLOAT DEFAULT NULL,
+  geo_place             VARCHAR(120) DEFAULT NULL,  -- raw place string the LLM returned
   popularity            FLOAT NOT NULL DEFAULT 0,   -- 0..1
   story_obscurity       FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = only-this-story
   source_obscurity      FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = tiny/unknown source
@@ -99,6 +102,7 @@ CREATE TABLE IF NOT EXISTS article_features (
   KEY idx_feat_lean (political_lean),
   KEY idx_feat_obj (objectivity),
   KEY idx_feat_cat (category),
+  KEY idx_feat_geo (geo_lat, geo_lng),
   CONSTRAINT fk_features_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

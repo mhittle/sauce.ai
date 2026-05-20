@@ -22,6 +22,7 @@ from app.classifier import (
 )
 from app.classifier.rules import split_bylines
 from app.extractor import extract_body
+from app.geo import geocode_place
 
 JOB = "classify_pending"
 logger = setup_logging(JOB)
@@ -191,12 +192,20 @@ def _reclassify_nollm(conn, cfg, deadline):
     conn.ping(reconnect=True)
     with conn.cursor() as cur:
         for aid, vals in by_id.items():
+            place = (vals.get("primary_location") or "").strip() or None
+            lat = lng = None
+            if place:
+                resolved = geocode_place(place)
+                if resolved:
+                    lat, lng, _label = resolved
             cur.execute(
                 """UPDATE article_features
                    SET political_lean=%s, objectivity=%s,
+                       geo_lat=%s, geo_lng=%s, geo_place=%s,
                        classifier_version=%s, classified_at=UTC_TIMESTAMP()
                    WHERE article_id=%s""",
                 (vals["political_lean"], vals["objectivity"],
+                 lat, lng, place,
                  cfg.CLASSIFIER_VERSION, aid),
             )
         if usage:
@@ -373,7 +382,14 @@ def _run():
                     llm = llm_by_id.get(aid, {
                         "political_lean": float(art["source_lean"]),  # fallback
                         "objectivity": 0.5,
+                        "primary_location": "",
                     })
+                    geo_lat = geo_lng = None
+                    geo_place = (llm.get("primary_location") or "").strip() or None
+                    if geo_place:
+                        resolved = geocode_place(geo_place)
+                        if resolved:
+                            geo_lat, geo_lng, _label = resolved
                     src_obs = source_obscurity_score(art.get("article_count_30d") or 0)
                     th = art.get("title_hash")
                     story_obs = story_obscurity_score(story_counts.get(th, 1)) if th else 0.5
@@ -382,9 +398,10 @@ def _run():
                         """INSERT INTO article_features
                            (article_id, political_lean, reading_level, objectivity, info_density,
                             journalist_reputation, source_lean, source_reputation, category,
-                            country, region, popularity, story_obscurity, source_obscurity,
+                            country, region, geo_lat, geo_lng, geo_place,
+                            popularity, story_obscurity, source_obscurity,
                             paywall, classifier_version)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            ON DUPLICATE KEY UPDATE
                               political_lean=VALUES(political_lean),
                               reading_level=VALUES(reading_level),
@@ -396,6 +413,9 @@ def _run():
                               category=VALUES(category),
                               country=VALUES(country),
                               region=VALUES(region),
+                              geo_lat=VALUES(geo_lat),
+                              geo_lng=VALUES(geo_lng),
+                              geo_place=VALUES(geo_place),
                               story_obscurity=VALUES(story_obscurity),
                               source_obscurity=VALUES(source_obscurity),
                               paywall=VALUES(paywall),
@@ -405,6 +425,7 @@ def _run():
                             aid, llm["political_lean"], rf["reading_level"], llm["objectivity"],
                             rf["info_density"], rf["journalist_reputation"], rf["source_lean"],
                             rf["source_reputation"], rf["category"], rf["country"], rf["region"],
+                            geo_lat, geo_lng, geo_place,
                             pop_seed.get(aid, 0.0), story_obs, src_obs, paywall,
                             _classifier_version(aid, llm_by_id, cfg.CLASSIFIER_VERSION),
                         ),

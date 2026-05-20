@@ -92,7 +92,15 @@ def classify_batch_llm(api_key: str, model: str, articles: List[Tuple]) -> dict:
             aid = int(r["id"])
             lean = max(-1.0, min(1.0, float(r.get("political_lean", 0.0))))
             obj = max(0.0, min(1.0, float(r.get("objectivity", 0.5))))
-            by_id[aid] = {"political_lean": lean, "objectivity": obj}
+            loc = r.get("primary_location") or ""
+            if not isinstance(loc, str):
+                loc = ""
+            loc = loc.strip()[:120]
+            by_id[aid] = {
+                "political_lean": lean,
+                "objectivity": obj,
+                "primary_location": loc,
+            }
         except (KeyError, TypeError, ValueError):
             continue
 

@@ -14,10 +14,12 @@ from ..onboarding import (
 )
 from ..ranking import (
     PRESETS, FEATURES, FEATURE_KEYS, SIGNED_FEATURES, CATEGORIES,
+    COUNTRIES, GEO_RADIUS_MAX_MI, GEO_RADIUS_DEFAULT_MI,
     default_weights, parse_weights_json, weights_to_expression,
     build_score_sql, build_filters_sql, resolved_weights_for_view,
 )
 from ..term_prefs import normalize_term, clamp_boost, BOOST_DEFAULT, VALID_MODES
+from ..geo import geocode_query
 
 MAX_KEYWORDS_PER_ALGO = 100
 
@@ -91,6 +93,40 @@ def _parse_form_weights(form):
     except ValueError:
         weights["recency"] = 0.0
     weights["category_filter"] = [c for c in form.getlist("category_filter") if c in CATEGORIES]
+    weights["country_filter"] = [c for c in form.getlist("country_filter") if c in COUNTRIES]
+
+    # Geo radius filter: free-text place + radius. Resolve the place once at
+    # save time so the SQL layer can stay dumb. An unparseable place silently
+    # clears the filter rather than 400ing — same forgiving feel as the
+    # natural-language slider builder.
+    geo_query = (form.get("geo_query") or "").strip()
+    try:
+        geo_radius = float(form.get("geo_radius_mi") or 0)
+    except ValueError:
+        geo_radius = 0.0
+    if geo_query and geo_radius > 0:
+        resolved = geocode_query(geo_query)
+        if resolved:
+            lat, lng, label = resolved
+            weights["geo_lat"] = lat
+            weights["geo_lng"] = lng
+            weights["geo_radius_mi"] = min(geo_radius, float(GEO_RADIUS_MAX_MI))
+            weights["geo_query"] = geo_query
+            weights["geo_label"] = label
+        else:
+            # Keep the query string so the editor can show "couldn't resolve",
+            # but null the active filter so SQL ignores it.
+            weights["geo_query"] = geo_query
+            weights["geo_label"] = ""
+            weights["geo_lat"] = None
+            weights["geo_lng"] = None
+            weights["geo_radius_mi"] = None
+    else:
+        weights["geo_query"] = geo_query
+        weights["geo_label"] = ""
+        weights["geo_lat"] = None
+        weights["geo_lng"] = None
+        weights["geo_radius_mi"] = None
     return weights
 
 
@@ -122,6 +158,9 @@ def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None,
         feature_keys=FEATURE_KEYS,
         signed_features=SIGNED_FEATURES,
         categories=CATEGORIES,
+        countries=COUNTRIES,
+        geo_radius_max=GEO_RADIUS_MAX_MI,
+        geo_radius_default=GEO_RADIUS_DEFAULT_MI,
         expression=weights_to_expression(weights),
         presets=PRESETS,
         profiles=profiles,

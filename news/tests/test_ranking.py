@@ -235,3 +235,62 @@ def test_paywall_threshold_creates_filter():
     sql, params = build_filters_sql(w)
     assert "ABS(f.paywall - %(paywall_d_th)s)" in sql
     assert params["paywall_th"] == 0.2
+
+
+def test_country_filter_emits_in_clause():
+    sql, params = build_filters_sql({"country_filter": ["US", "GB"]})
+    assert "f.country IN (" in sql
+    # Both codes parameterised, in order.
+    assert params["country_0"] == "US"
+    assert params["country_1"] == "GB"
+
+
+def test_country_filter_empty_is_noop():
+    sql, _ = build_filters_sql({"country_filter": []})
+    assert "f.country" not in sql
+
+
+def test_country_filter_combines_with_category():
+    sql, params = build_filters_sql(
+        {"category_filter": ["tech"], "country_filter": ["US"]})
+    assert "f.category IN (" in sql
+    assert "f.country IN (" in sql
+    assert " AND " in sql
+
+
+def test_geo_radius_emits_haversine_clause():
+    w = {"geo_lat": 47.6, "geo_lng": -122.3, "geo_radius_mi": 50}
+    sql, params = build_filters_sql(w)
+    assert "f.geo_lat IS NOT NULL" in sql
+    assert "ASIN(SQRT(" in sql
+    assert params["geo_lat"] == 47.6
+    assert params["geo_r"] == 50.0
+
+
+def test_geo_radius_disabled_when_radius_missing_or_zero():
+    """All three of lat/lng/radius must be set, and radius must be > 0."""
+    assert "geo_lat" not in build_filters_sql(
+        {"geo_lat": 47.6, "geo_lng": -122.3})[1]
+    assert "geo_lat" not in build_filters_sql(
+        {"geo_lat": 47.6, "geo_lng": -122.3, "geo_radius_mi": 0})[1]
+    assert "geo_lat" not in build_filters_sql({"geo_radius_mi": 50})[1]
+
+
+def test_geo_radius_handles_garbage_values():
+    w = {"geo_lat": "not-a-number", "geo_lng": -122.3, "geo_radius_mi": 50}
+    sql, params = build_filters_sql(w)
+    assert "geo_lat" not in params
+    assert "ASIN" not in sql
+
+
+def test_expression_mentions_country_and_geo_filters():
+    from app.ranking import weights_to_expression
+    expr = weights_to_expression({
+        "objectivity": 0.5,
+        "country_filter": ["US", "GB"],
+        "geo_lat": 47.6, "geo_lng": -122.3,
+        "geo_radius_mi": 50, "geo_label": "Seattle, WA",
+    })
+    assert "['US', 'GB']" in expr
+    assert "50 mi" in expr
+    assert "Seattle, WA" in expr

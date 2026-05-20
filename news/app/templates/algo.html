@@ -88,6 +88,40 @@
             {% endfor %}
           </div>
         </div>
+
+        <div class="feature-row">
+          <div class="feature-name">Country filter</div>
+          <div class="checkboxes">
+            {% for c in countries %}
+              <label><input type="checkbox" name="country_filter" value="{{ c }}"
+                     {% if c in (weights.get('country_filter') or []) %}checked{% endif %} /> {{ c }}</label>
+            {% endfor %}
+          </div>
+        </div>
+
+        {% set geo_q = weights.get('geo_query') or '' %}
+        {% set geo_label = weights.get('geo_label') or '' %}
+        {% set geo_radius = weights.get('geo_radius_mi') %}
+        <div class="feature-row">
+          <div class="feature-name">Near a place</div>
+          <label class="slider geo-query">
+            <input type="text" name="geo_query" value="{{ geo_q }}" maxlength="80"
+                   placeholder="ZIP, city, &ldquo;Seattle, WA&rdquo;, or state" />
+            {% if geo_q and geo_label %}
+              <span class="muted">&nbsp;resolved: <em>{{ geo_label }}</em></span>
+            {% elif geo_q and not geo_label %}
+              <span class="nl-error">&nbsp;couldn&rsquo;t resolve &mdash; try a US ZIP, city, or state</span>
+            {% endif %}
+          </label>
+          <label class="slider weight">
+            Radius (mi)
+            <input type="range" min="0" max="{{ geo_radius_max }}" step="5"
+                   name="geo_radius_mi"
+                   value="{{ geo_radius|round(0)|int if geo_radius else geo_radius_default }}"
+                   oninput="this.nextElementSibling.textContent=parseInt(this.value)" />
+            <output>{{ geo_radius|round(0)|int if geo_radius else geo_radius_default }}</output>
+          </label>
+        </div>
       </div>
 
       <div class="algo-actions">

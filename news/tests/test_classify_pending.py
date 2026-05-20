@@ -180,8 +180,10 @@ def test_reclassify_updates_rows_and_clears_marker(monkeypatch):
     # 1 SELECT + 2 UPDATEs + 1 llm_usage INSERT
     assert ops == ["SELECT", "UPDATE", "UPDATE", "INSERT"]
     # UPDATEs rewrite classifier_version back to the clean base version.
+    # The reclassify path also writes geo_* columns; with no primary_location
+    # in the LLM response they stay NULL.
     up1 = cur.executed[1][2]
-    assert up1 == (0.3, 0.7, "v1", 1)
+    assert up1 == (0.3, 0.7, None, None, None, "v1", 1)
     assert conn.commits == 1
 
 
