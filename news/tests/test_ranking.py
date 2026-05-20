@@ -294,3 +294,55 @@ def test_expression_mentions_country_and_geo_filters():
     assert "['US', 'GB']" in expr
     assert "50 mi" in expr
     assert "Seattle, WA" in expr
+PERCEPTION_KEYS = (
+    "tone_calmness", "sensationalism", "analysis_depth", "emotional_charge",
+    "hedging", "solution_orientation",
+    "headline_length", "caps_ratio", "punctuation_intensity",
+    "numeric_density", "question_headline", "quote_present",
+)
+
+
+def test_perception_features_all_in_catalog():
+    keys = {f["key"] for f in FEATURES}
+    for k in PERCEPTION_KEYS:
+        assert k in keys, f"missing FEATURES entry: {k}"
+
+
+def test_perception_features_are_unsigned_with_valid_metadata():
+    for k in PERCEPTION_KEYS:
+        feat = next(f for f in FEATURES if f["key"] == k)
+        assert feat["scale"] == "unsigned"
+        assert 0.0 <= feat["default_direction"] <= 1.0
+        assert 0.0 <= feat["default_weight"] <= 2.0
+        assert feat["label"] and feat["low"] and feat["high"]
+
+
+def test_perception_feature_contributes_to_score_when_weighted():
+    w = {"tone_calmness": 0.6, "tone_calmness_direction": 1.0,
+         "sensationalism": 0.4, "sensationalism_direction": 0.0}
+    expr, params = build_score_sql(w)
+    assert "f.tone_calmness" in expr
+    assert "f.sensationalism" in expr
+    assert params["tone_calmness_w"] == 0.6
+    assert params["sensationalism_d"] == 0.0
+
+
+def test_perception_feature_threshold_filter():
+    w = {"sensationalism_direction": 0.0, "sensationalism_threshold": 0.3}
+    sql, params = build_filters_sql(w)
+    assert "ABS(f.sensationalism - %(sensationalism_d_th)s)" in sql
+    assert params["sensationalism_th"] == 0.3
+
+
+def test_existing_user_algos_unaffected_when_perception_keys_missing():
+    """An old user_algorithms row written before this change has none of the
+    new feature keys. build_score_sql must treat missing keys as weight=0 so
+    legacy scores are byte-identical to pre-deploy."""
+    legacy_w = {"objectivity": 1.0, "objectivity_direction": 1.0,
+                "info_density": 0.8, "info_density_direction": 1.0,
+                "recency": 0.7}
+    expr, params = build_score_sql(legacy_w)
+    for k in PERCEPTION_KEYS:
+        assert f"f.{k}" not in expr
+        assert f"{k}_w" not in params
+        assert f"{k}_d" not in params

@@ -61,6 +61,7 @@ shipped.
 | 8 | 6 | new-feature, ui | Shareable algorithm gallery | backlog |
 | 7 | 5 | algo, backend | Community source-quality overlay | backlog |
 | 6 | 5 | new-feature | Community "add a source" on dossiers | backlog |
+| 7 | 5 | algo, backend | Perceptual feature expansion (12 new ranking features) | done |
 
 ---
 
@@ -525,6 +526,26 @@ narrative lives in `engineering-history.md` under the same date.
   "crypto" also hides "cryptography"); entity-aware matching is the
   shared v2. Same scoping: signed-in main feed only; anon /
   `/firehose` / digest are unaffected.
+- **Perceptual feature expansion (12 new ranking features)** —
+  Pri 7, LOE 5, algo/backend. PR #84 (draft 2026-05-20; migration
+  pending on prod — see `manual-actions.md` Open). 6 LLM-judged
+  perceptual signals (`tone_calmness`, `sensationalism`,
+  `analysis_depth`, `emotional_charge`, `hedging`,
+  `solution_orientation`) batched into the existing
+  `classify_pending` Haiku call (one extra JSON object per article,
+  ~3x prior per-article LLM cost — still sub-$0.001/article) plus
+  6 rule-based structural signals (`headline_length`, `caps_ratio`,
+  `punctuation_intensity`, `numeric_density`, `question_headline`,
+  `quote_present`) in `app/classifier/rules.py` with no
+  network/LLM. All 12 added to `FEATURES`, `article_features`,
+  `feature_catalog`, and (via the existing template loop) the
+  `/algo` editor. Existing user algorithms are unaffected — their
+  saved `weights_json` doesn't reference the new keys, so
+  `build_score_sql` ignores them until a user opts in.
+  `_reclassify_nollm` extended to also heal the 6 LLM features.
+  **Requires manual DB migration**
+  (`2026-05-20-perception-features.sql`: 12 ADD COLUMN + 12
+  feature_catalog rows).
 
 ### 2026-05-18
 

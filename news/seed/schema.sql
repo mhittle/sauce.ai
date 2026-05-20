@@ -96,6 +96,20 @@ CREATE TABLE IF NOT EXISTS article_features (
   source_obscurity      FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = tiny/unknown source
   paywall               FLOAT NOT NULL DEFAULT 0,   -- 0..1, 1 = subscription-required
   trending              FLOAT NOT NULL DEFAULT 0,   -- 0..1, external trending-topic match (trending_poll)
+  -- 6 LLM-judged perceptual features (Haiku, batched with political_lean/objectivity):
+  tone_calmness         FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = calm/measured, 0 = alarmist
+  sensationalism        FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = clickbait/sensational, 0 = plain
+  analysis_depth        FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = analytical/explainer, 0 = brief
+  emotional_charge      FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = emotionally loaded, 0 = neutral
+  hedging               FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = heavy hedging, 0 = confident
+  solution_orientation  FLOAT NOT NULL DEFAULT 0.5, -- 0..1, 1 = solution-focused, 0 = problem-focused
+  -- 6 rule-based structural features (deterministic, no LLM cost):
+  headline_length       FLOAT NOT NULL DEFAULT 0,   -- 0..1, normalized title word count
+  caps_ratio            FLOAT NOT NULL DEFAULT 0,   -- 0..1, uppercase ratio in title
+  punctuation_intensity FLOAT NOT NULL DEFAULT 0,   -- 0..1, !? density per word
+  numeric_density       FLOAT NOT NULL DEFAULT 0,   -- 0..1, digit-run density per word
+  question_headline     FLOAT NOT NULL DEFAULT 0,   -- 0/1, title ends with `?`
+  quote_present         FLOAT NOT NULL DEFAULT 0,   -- 0/1, direct quote in title or summary
   classifier_version    VARCHAR(32) NOT NULL DEFAULT 'v1',
   classified_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (article_id),

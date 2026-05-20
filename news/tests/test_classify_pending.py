@@ -161,12 +161,20 @@ def test_reclassify_updates_rows_and_clears_marker(monkeypatch):
     cur = _RCursor(rows)
     conn = _RConn(cur)
 
+    def _perception(**overrides):
+        base = {"tone_calmness": 0.6, "sensationalism": 0.2,
+                "analysis_depth": 0.5, "emotional_charge": 0.3,
+                "hedging": 0.4, "solution_orientation": 0.5}
+        base.update(overrides)
+        return base
+
     def fake_llm(api_key, model, items):
         assert [it[0] for it in items] == [1, 2]
         return {
             "by_id": {
-                1: {"political_lean": 0.3, "objectivity": 0.7},
-                2: {"political_lean": -0.5, "objectivity": 0.4},
+                1: {"political_lean": 0.3, "objectivity": 0.7, **_perception()},
+                2: {"political_lean": -0.5, "objectivity": 0.4,
+                    **_perception(tone_calmness=0.1, sensationalism=0.9)},
             },
             "usage": {"model": model, "input_tokens": 10, "output_tokens": 5,
                       "cache_read_tokens": 0, "est_cost_usd": 0.002},
@@ -179,11 +187,16 @@ def test_reclassify_updates_rows_and_clears_marker(monkeypatch):
     ops = [e[0] for e in cur.executed]
     # 1 SELECT + 2 UPDATEs + 1 llm_usage INSERT
     assert ops == ["SELECT", "UPDATE", "UPDATE", "INSERT"]
-    # UPDATEs rewrite classifier_version back to the clean base version.
-    # The reclassify path also writes geo_* columns; with no primary_location
-    # in the LLM response they stay NULL.
+    # UPDATEs rewrite classifier_version back to the clean base version and
+    # now also carry the 6 perception fields + 3 geo columns. The fake_llm
+    # above omits primary_location, so geo_lat/geo_lng/geo_place stay None.
     up1 = cur.executed[1][2]
-    assert up1 == (0.3, 0.7, None, None, None, "v1", 1)
+    assert up1 == (0.3, 0.7, 0.6, 0.2, 0.5, 0.3, 0.4, 0.5, None, None, None, "v1", 1)
+    up2 = cur.executed[2][2]
+    assert up2[:2] == (-0.5, 0.4)
+    assert up2[2] == 0.1   # tone_calmness override
+    assert up2[3] == 0.9   # sensationalism override
+    assert up2[-5:] == (None, None, None, "v1", 2)
     assert conn.commits == 1
 
 

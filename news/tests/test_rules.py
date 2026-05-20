@@ -3,6 +3,8 @@ from app.classifier.rules import (
     normalize_byline, split_bylines, compute_rules_features,
     normalize_title, title_hash,
     source_obscurity_score, story_obscurity_score, popularity_score,
+    headline_length_score, caps_ratio_score, punctuation_intensity_score,
+    numeric_density_score, question_headline_score, quote_present_score,
 )
 
 
@@ -106,6 +108,111 @@ def test_popularity_score_comments_weighted_double():
 def test_popularity_score_handles_none_and_negative():
     assert popularity_score(None, None) == 0.0
     assert popularity_score(-5, -3) == 0.0
+
+
+def test_headline_length_empty_and_long():
+    assert headline_length_score("") == 0.0
+    assert headline_length_score("one two three") < 0.2
+    assert headline_length_score(" ".join(["w"] * 30)) == 1.0
+
+
+def test_headline_length_monotonic():
+    vals = [headline_length_score(" ".join(["w"] * n)) for n in (0, 3, 8, 16, 24, 48)]
+    assert vals == sorted(vals)
+    assert vals[-1] == 1.0
+
+
+def test_caps_ratio_all_caps():
+    assert caps_ratio_score("BREAKING NEWS HUGE") == 1.0
+
+
+def test_caps_ratio_lowercase():
+    assert caps_ratio_score("a quiet headline") == 0.0
+
+
+def test_caps_ratio_title_case_is_modest():
+    r = caps_ratio_score("A Quiet Headline About Things")
+    assert 0.0 < r < 0.4
+
+
+def test_caps_ratio_empty_and_no_letters():
+    assert caps_ratio_score("") == 0.0
+    assert caps_ratio_score("!!! 123 ???") == 0.0
+
+
+def test_punctuation_intensity_calm_text():
+    assert punctuation_intensity_score("The market closed down today.") == 0.0
+
+
+def test_punctuation_intensity_heavy_text():
+    r = punctuation_intensity_score("Wow!! Really?! Are you sure?!")
+    assert r > 0.5
+
+
+def test_punctuation_intensity_empty():
+    assert punctuation_intensity_score("") == 0.0
+
+
+def test_numeric_density_text_without_numbers():
+    assert numeric_density_score("hello world from the office") == 0.0
+
+
+def test_numeric_density_data_heavy():
+    r = numeric_density_score("The S&P fell 2.3% to 4567 amid 12 layoffs.")
+    assert r > 0.3
+
+
+def test_numeric_density_clamped_to_one():
+    # Heavy-numbers text: 5 numbers across 5 letter-words -> raw=1.0, *5 -> clamped to 1.0.
+    r = numeric_density_score("Stocks 12 fell 34 amid 56 jumps 78 over 90")
+    assert r == 1.0
+
+
+def test_numeric_density_pure_digits_no_words_returns_zero():
+    # _WORD_RE is letter-only, so a pure-digits string has zero "words" and
+    # the score short-circuits to 0 rather than dividing by zero.
+    assert numeric_density_score("1 2 3 4 5") == 0.0
+
+
+def test_question_headline_yes_and_no():
+    assert question_headline_score("Is the economy slowing down?") == 1.0
+    assert question_headline_score("The economy is slowing down.") == 0.0
+    assert question_headline_score("Are we there yet?   ") == 1.0
+
+
+def test_question_headline_empty():
+    assert question_headline_score("") == 0.0
+
+
+def test_quote_present_straight_quotes():
+    assert quote_present_score('CEO says "we will not back down"') == 1.0
+
+
+def test_quote_present_smart_quotes():
+    assert quote_present_score("Senator: “this is unacceptable”") == 1.0
+
+
+def test_quote_present_in_summary_only():
+    assert quote_present_score("Profit drops", 'analyst said "this was inevitable"') == 1.0
+
+
+def test_quote_present_no_quote():
+    assert quote_present_score("Bank profits drop in second quarter") == 0.0
+
+
+def test_compute_rules_features_includes_new_keys():
+    art = {"title": "WHY did stocks CRASH today??", "summary": '"Markets are spooked," said one analyst, "by 12 events"'}
+    src = {"source_lean": 0.0, "source_reputation": 0.5, "category": "business",
+           "country": "US", "region": "national"}
+    feats = compute_rules_features(art, src)
+    for k in ("headline_length", "caps_ratio", "punctuation_intensity",
+              "numeric_density", "question_headline", "quote_present"):
+        assert k in feats
+        assert 0.0 <= feats[k] <= 1.0
+    assert feats["question_headline"] == 1.0
+    assert feats["quote_present"] == 1.0
+    assert feats["caps_ratio"] > 0.3  # WHY, CRASH heavy
+    assert feats["punctuation_intensity"] > 0.0
 
 
 def test_popularity_poll_wrapper_matches_shared_formula():

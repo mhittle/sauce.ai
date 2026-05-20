@@ -20,6 +20,7 @@ from app.classifier import (
     compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline,
     source_obscurity_score, story_obscurity_score, detect_paywall, popularity_score,
 )
+from app.classifier.llm import LLM_PERCEPTION_KEYS, LLM_PERCEPTION_DEFAULT
 from app.classifier.rules import split_bylines
 from app.extractor import extract_body
 from app.geo import geocode_place
@@ -201,10 +202,14 @@ def _reclassify_nollm(conn, cfg, deadline):
             cur.execute(
                 """UPDATE article_features
                    SET political_lean=%s, objectivity=%s,
+                       tone_calmness=%s, sensationalism=%s, analysis_depth=%s,
+                       emotional_charge=%s, hedging=%s, solution_orientation=%s,
                        geo_lat=%s, geo_lng=%s, geo_place=%s,
                        classifier_version=%s, classified_at=UTC_TIMESTAMP()
                    WHERE article_id=%s""",
                 (vals["political_lean"], vals["objectivity"],
+                 vals["tone_calmness"], vals["sensationalism"], vals["analysis_depth"],
+                 vals["emotional_charge"], vals["hedging"], vals["solution_orientation"],
                  lat, lng, place,
                  cfg.CLASSIFIER_VERSION, aid),
             )
@@ -379,11 +384,15 @@ def _run():
                 for art in batch:
                     aid = art["id"]
                     rf = rules_features[aid]
-                    llm = llm_by_id.get(aid, {
-                        "political_lean": float(art["source_lean"]),  # fallback
-                        "objectivity": 0.5,
-                        "primary_location": "",
-                    })
+                    llm = llm_by_id.get(aid)
+                    if llm is None:
+                        llm = {
+                            "political_lean": float(art["source_lean"]),  # fallback
+                            "objectivity": 0.5,
+                            "primary_location": "",
+                        }
+                        for k in LLM_PERCEPTION_KEYS:
+                            llm[k] = LLM_PERCEPTION_DEFAULT
                     geo_lat = geo_lng = None
                     geo_place = (llm.get("primary_location") or "").strip() or None
                     if geo_place:
@@ -400,8 +409,18 @@ def _run():
                             journalist_reputation, source_lean, source_reputation, category,
                             country, region, geo_lat, geo_lng, geo_place,
                             popularity, story_obscurity, source_obscurity,
-                            paywall, classifier_version)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            paywall,
+                            tone_calmness, sensationalism, analysis_depth, emotional_charge,
+                            hedging, solution_orientation,
+                            headline_length, caps_ratio, punctuation_intensity,
+                            numeric_density, question_headline, quote_present,
+                            classifier_version)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                                   %s,%s,%s,
+                                   %s,%s,%s,%s,
+                                   %s,%s,%s,%s,%s,%s,
+                                   %s,%s,%s,%s,%s,%s,
+                                   %s)
                            ON DUPLICATE KEY UPDATE
                               political_lean=VALUES(political_lean),
                               reading_level=VALUES(reading_level),
@@ -419,6 +438,18 @@ def _run():
                               story_obscurity=VALUES(story_obscurity),
                               source_obscurity=VALUES(source_obscurity),
                               paywall=VALUES(paywall),
+                              tone_calmness=VALUES(tone_calmness),
+                              sensationalism=VALUES(sensationalism),
+                              analysis_depth=VALUES(analysis_depth),
+                              emotional_charge=VALUES(emotional_charge),
+                              hedging=VALUES(hedging),
+                              solution_orientation=VALUES(solution_orientation),
+                              headline_length=VALUES(headline_length),
+                              caps_ratio=VALUES(caps_ratio),
+                              punctuation_intensity=VALUES(punctuation_intensity),
+                              numeric_density=VALUES(numeric_density),
+                              question_headline=VALUES(question_headline),
+                              quote_present=VALUES(quote_present),
                               classifier_version=VALUES(classifier_version),
                               classified_at=UTC_TIMESTAMP()""",
                         (
@@ -427,6 +458,10 @@ def _run():
                             rf["source_reputation"], rf["category"], rf["country"], rf["region"],
                             geo_lat, geo_lng, geo_place,
                             pop_seed.get(aid, 0.0), story_obs, src_obs, paywall,
+                            llm["tone_calmness"], llm["sensationalism"], llm["analysis_depth"],
+                            llm["emotional_charge"], llm["hedging"], llm["solution_orientation"],
+                            rf["headline_length"], rf["caps_ratio"], rf["punctuation_intensity"],
+                            rf["numeric_density"], rf["question_headline"], rf["quote_present"],
                             _classifier_version(aid, llm_by_id, cfg.CLASSIFIER_VERSION),
                         ),
                     )
