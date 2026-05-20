@@ -116,6 +116,80 @@ already includes these.
 
 ---
 
+## 2026-05-20 — Source catalog expansion (+1151 sources)
+
+User-requested: 1000 more high-quality sources, including Substack /
+Medium individual writers. Scope confirmed via `AskUserQuestion`:
+50/50 outlets/individuals, ~65% US / ~35% intl, single PR appending
+to `seed/source_lean.csv` (vs. the candidate_sources review queue).
+
+### What shipped
+
+- **`seed/source_lean.csv`**: 768 → 1919 (+1151 unique rows). ~630
+  institutional outlets (US regional / state-capital papers across all
+  50 states; States-Newsroom + local investigative nonprofits; NPR
+  affiliates; trade pubs — Stat News, Defense One, etc.; magazines —
+  Atlantic subsections, Foreign Affairs, Lawfare, NY Mag, NYRB, LRB;
+  think tanks — Brookings/AEI/Cato/CFR/CSIS/Chatham/RUSI; intl —
+  Le Monde, Mediapart, Spiegel International, Politico Europe, Kyiv
+  Independent, Meduza, Bellingcat, Asahi, Nikkei, Caixin, HKFP, Daily
+  Maverick, Premium Times, Animal Político, El Faro, Haaretz). ~520
+  individuals — Stratechery, Platformer, Slow Boring, HCR, Money Stuff
+  (Bloomberg author RSS), Marginal Revolution, Construction Physics,
+  Works in Progress, Apricitas, Adam Tooze, YLE, Volts, Heatmap,
+  Latent Space, Karpathy, Simon Willison, Pluralistic, Schneier;
+  corporate eng blogs (Netflix Tech, Stripe, Cloudflare, GitHub,
+  OpenAI, Anthropic, HuggingFace, BAIR); intl analysis (Sinocism,
+  ChinaTalk, Phillips O'Brien, Le Grand Continent, Le Monde
+  Diplomatique). Lean -0.5..+0.5 honestly; reputation 0.66–0.92.
+- **Distribution**: 47+ countries; US 69% (target 65%); GB 7%, others
+  small. Categories: general 412 / politics 282 / tech 161 / world 122
+  / business 101 / science 68 / sports 5.
+- **`roadmap.md`**: new Done entry + at-a-glance row (Pri 7/LOE 3,
+  ops/new-feature).
+- **`manual-actions.md`**: Open entry — admin clicks `Re-import seed
+  CSV` on `/admin/feeds` (idempotent `feed_url` upsert, no schema
+  change).
+
+### Server-side state touched
+
+None **yet** — one queued manual action. No DB migration, no cron
+change, no env var, no pip install, no symlink. `fetch_feeds` picks up
+new `sources` rows on its next 15-min tick once the admin import runs;
+dead/wrong URLs self-deactivate at `error_count=10` via the PR #11
+auto-deactivate logic, so no hand-cleanup needed for the inevitable
+dead-feed tail (~5–15% expected from training-memory URLs).
+
+### Verification
+
+- 0 duplicate `feed_url` rows in final CSV; all 1920 lines have 8
+  fields; all `source_lean` in [-1,1] and `source_reputation` in
+  [0,1]; all URLs start `http(s)://` (Python validation: 0 problems).
+- 1411 drafted → 209 dropped vs existing → 51 dropped as internal
+  dupes → 1151 net unique added.
+- Live import + per-feed validity deferred to maintainer / cron
+  (sandbox has no admin session; ~115 feed-URL guesses from training
+  memory will fail at first fetch — auto-deactivate handles).
+
+### Known v1 caveats
+
+- Expect ~5–15% dead-feed tail (e.g., Arc Publishing `/arc/outbound
+  feeds/rss/` URL patterns vary across McClatchy/Tribune/Hearst
+  papers); cron auto-deactivates at error_count=10.
+- A handful of engineering corporate blogs (Netflix Tech, Stripe
+  Blog) sit in `tech` and aren't strictly journalism; intentional for
+  the tech-heavy-algo audience, downweightable per-user via
+  `/sources`.
+- Per-source body-extractor tuning (`trafilatura`) is generic v1 path
+  — paywalled / JS-heavy new sources may show short summaries.
+
+### PR
+
+- **PR #91** — Source catalog expansion (+1151 sources) (draft,
+  branch `claude/onboard-news-aggregator-6ndxz`).
+
+---
+
 ## 2026-05-20 — BUG-021 single-source feed domination (per-source cap, PR #89)
 
 User reported the `/` feed was filled with Philadelphia Inquirer

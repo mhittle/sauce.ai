@@ -40,7 +40,45 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-_None — all tracked migrations applied._
+### 2026-05-20 — Source catalog import (+1151 new sources)
+**Status:** open · **PR:** TBD (this session) · **Opened:** 2026-05-20
+
+`seed/source_lean.csv` grew 768 → 1919 sources (added 1151 hand-curated
+outlets + Substacks + Medium pubs + engineering blogs). To load them on
+prod, sign in as admin and POST `/admin/feeds/import` (the "Re-import
+seed CSV" button on `/admin/feeds`). The import is **idempotent** —
+existing rows are updated, new rows inserted, keyed on `feed_url`. Dead
+feeds self-deactivate at `error_count=10` per the existing cron worker,
+so there's no need to vet 1100+ URLs by hand before importing.
+
+**Action (one of):**
+
+1. **Browser:** Sign in as admin → visit `https://sauce.ai/news/admin/feeds`
+   → click **Re-import seed CSV** (the form POSTs to
+   `/admin/feeds/import`). Wait ~30 s for the upsert loop to finish; you
+   get a redirect with `?added=N&updated=M` in the URL.
+2. **curl (with admin session cookie):**
+
+   ```bash
+   curl -X POST -b "session=<your-admin-session-cookie>" \
+     -H "X-CSRF-Token: <token-from-meta-tag>" \
+     https://sauce.ai/news/admin/feeds/import
+   ```
+
+No DB migration, no cron change, no env var, no pip install, no symlink.
+Python App restart not required (the import code rereads the CSV from
+disk every time the button is clicked, and `fetch_feeds` picks up new
+`sources` rows on its next 15-min tick).
+
+**Verify:** `https://sauce.ai/news/admin/feeds` row count jumps to
+~1919. Within an hour or two, `logs/cron.log` shows `fetch_feeds` hitting
+the new feed URLs; some will error and `error_count` will climb on
+dead/wrong ones (expected — they auto-deactivate at 10). Spot-check a
+few new sources for fresh articles on `/firehose`.
+
+---
+
+
 
 ---
 

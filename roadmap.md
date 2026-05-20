@@ -55,6 +55,7 @@ shipped.
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
+| 7 | 3 | ops, new-feature | Source catalog expansion (+1000 high-quality sources, incl. Substack / Medium) | done |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
 | 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
@@ -506,6 +507,21 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-20
 
+- **Source catalog expansion (+1151 sources)** — Pri 7, LOE 3, ops /
+  new-feature. PR #91 (draft 2026-05-20; admin re-import pending on prod
+  — see `manual-actions.md` Open). Appended 1151 hand-curated
+  high-quality sources to `seed/source_lean.csv` (768 → 1919): ~630
+  institutional outlets (US regional papers, state capital press, local
+  investigative nonprofits, trade pubs, magazines, NPR affiliates; plus
+  UK, EU, LATAM, Africa, MENA, Asia-Pacific outlets) and ~520
+  individual writers / newsletters / Medium publications / engineering
+  blogs (Stratechery, Platformer, Slow Boring, Heather Cox Richardson,
+  Money Stuff via Bloomberg, Sinocism, ChinaTalk, Latent Space,
+  Karpathy, Simon Willison, etc.). US share 69%, 47+ countries
+  represented. Honest `source_lean` ratings spanning -0.5 to +0.5. No
+  code change, no schema change; loads via the existing `/admin/feeds`
+  Import button (idempotent upsert on `feed_url`). Dead feeds
+  self-deactivate at `error_count=10`.
 - **Per-algorithm keyword mute & boost (in the algo builder)** —
   Pri 7, LOE 3, algo/ui. PR #82 (merged 2026-05-20;
   `algorithm_term_prefs` migration applied on prod same day —

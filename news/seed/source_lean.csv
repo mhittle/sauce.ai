@@ -767,3 +767,1154 @@ ABC News Investigations,https://abcnews.go.com/abcnews/investigationheadlines,ht
 60 Minutes CBS,https://www.cbsnews.com/latest/rss/60-minutes,https://www.cbsnews.com/60-minutes,-0.1,0.84,politics,US,national
 Frontline PBS,https://www.pbs.org/wgbh/frontline/feed/,https://www.pbs.org/wgbh/frontline,-0.2,0.86,politics,US,national
 The Conversation Asia Pacific,https://theconversation.com/au/topics/asia-pacific/articles.atom,https://theconversation.com/au/topics/asia-pacific,-0.1,0.82,world,AU,national
+Boston Globe,https://www.bostonglobe.com/arc/outboundfeeds/rss/,https://www.bostonglobe.com,-0.2,0.84,general,US,massachusetts
+Boston Globe Politics,https://www.bostonglobe.com/arc/outboundfeeds/rss/category/metro/,https://www.bostonglobe.com/metro,-0.2,0.82,politics,US,massachusetts
+Boston Herald,https://www.bostonherald.com/feed/,https://www.bostonherald.com,0.1,0.7,general,US,massachusetts
+WBUR Boston,https://www.wbur.org/feed,https://www.wbur.org,-0.1,0.82,general,US,massachusetts
+GBH News Boston,https://www.wgbh.org/news.rss,https://www.wgbh.org/news,-0.1,0.78,general,US,massachusetts
+CommonWealth Beacon,https://commonwealthbeacon.org/feed/,https://commonwealthbeacon.org,-0.1,0.78,politics,US,massachusetts
+The Berkshire Eagle,https://www.berkshireeagle.com/search/?f=rss,https://www.berkshireeagle.com,-0.1,0.7,general,US,massachusetts
+Worcester Telegram,https://www.telegram.com/rss/,https://www.telegram.com,0.0,0.7,general,US,massachusetts
+Cape Cod Times,https://www.capecodtimes.com/rss/,https://www.capecodtimes.com,0.0,0.68,general,US,massachusetts
+New Haven Register,https://www.nhregister.com/news/feed/Local-News-49.php,https://www.nhregister.com,0.0,0.7,general,US,connecticut
+Hartford Courant,https://www.courant.com/arcio/rss/,https://www.courant.com,-0.1,0.74,general,US,connecticut
+Connecticut Mirror Politics,https://ctmirror.org/category/ct-government-politics/feed/,https://ctmirror.org,-0.1,0.78,politics,US,connecticut
+CT Insider,https://www.ctinsider.com/rss/feed/CT-Insider-Top-Stories-19438.php,https://www.ctinsider.com,-0.1,0.7,general,US,connecticut
+Providence Journal,https://www.providencejournal.com/rss/,https://www.providencejournal.com,0.0,0.74,general,US,rhode-island
+Rhode Island Current,https://rhodeislandcurrent.com/feed/,https://rhodeislandcurrent.com,-0.1,0.74,politics,US,rhode-island
+Portland Press Herald,https://www.pressherald.com/feed/,https://www.pressherald.com,-0.1,0.76,general,US,maine
+Maine Public,https://www.mainepublic.org/news.rss,https://www.mainepublic.org/news,-0.1,0.78,general,US,maine
+New Hampshire Bulletin,https://newhampshirebulletin.com/feed/,https://newhampshirebulletin.com,-0.1,0.76,politics,US,new-hampshire
+NH Public Radio,https://www.nhpr.org/news.rss,https://www.nhpr.org/news,-0.1,0.78,general,US,new-hampshire
+Vermont Public,https://www.vermontpublic.org/news.rss,https://www.vermontpublic.org/news,-0.1,0.78,general,US,vermont
+Seven Days Vermont,https://www.sevendaysvt.com/PaperRss?oid=2,https://www.sevendaysvt.com,-0.2,0.74,general,US,vermont
+Vermont Digger Politics,https://vtdigger.org/category/news/politics/feed/,https://vtdigger.org,-0.1,0.78,politics,US,vermont
+Times Union Albany,https://www.timesunion.com/rss/feed/Local-News-49.php,https://www.timesunion.com,-0.1,0.74,general,US,new-york
+Syracuse Post-Standard,https://www.syracuse.com/arc/outboundfeeds/rss/,https://www.syracuse.com,-0.1,0.7,general,US,new-york
+Newsday Long Island,https://www.newsday.com/cmlink/1.811905,https://www.newsday.com,-0.1,0.78,general,US,new-york
+The City NYC,https://www.thecity.nyc/rss/,https://www.thecity.nyc,-0.2,0.82,general,US,new-york
+Gothamist,https://gothamist.com/feed,https://gothamist.com,-0.2,0.78,general,US,new-york
+City Limits NYC,https://citylimits.org/feed/,https://citylimits.org,-0.2,0.78,politics,US,new-york
+The Riverdale Press,https://www.riverdalepress.com/feed/,https://www.riverdalepress.com,-0.1,0.7,general,US,new-york
+The Lo-Down NYC,https://www.thelodownny.com/leslog/feed,https://www.thelodownny.com,-0.1,0.66,general,US,new-york
+Philadelphia Inquirer,https://www.inquirer.com/arc/outboundfeeds/rss/,https://www.inquirer.com,-0.1,0.82,general,US,pennsylvania
+WHYY Philadelphia,https://whyy.org/feed/,https://whyy.org,-0.1,0.78,general,US,pennsylvania
+Spotlight PA,https://www.spotlightpa.org/feeds/articles.rss,https://www.spotlightpa.org,-0.1,0.82,politics,US,pennsylvania
+Pittsburgh Post-Gazette,https://www.post-gazette.com/feeds/uncategorized,https://www.post-gazette.com,0.0,0.76,general,US,pennsylvania
+PublicSource Pittsburgh,https://www.publicsource.org/feed/,https://www.publicsource.org,-0.1,0.78,politics,US,pennsylvania
+TribLIVE Pittsburgh,https://triblive.com/feed/,https://triblive.com,0.1,0.72,general,US,pennsylvania
+WESA Pittsburgh,https://www.wesa.fm/news.rss,https://www.wesa.fm,-0.1,0.74,general,US,pennsylvania
+Patriot-News Harrisburg,https://www.pennlive.com/arc/outboundfeeds/rss/,https://www.pennlive.com,-0.1,0.7,general,US,pennsylvania
+NJ Advance Media,https://www.nj.com/arc/outboundfeeds/rss/,https://www.nj.com,-0.1,0.7,general,US,new-jersey
+Asbury Park Press,https://www.app.com/rss/,https://www.app.com,-0.1,0.7,general,US,new-jersey
+The Bergen Record,https://www.northjersey.com/rss/,https://www.northjersey.com,-0.1,0.7,general,US,new-jersey
+WHYY Plan Philly,https://whyy.org/sections/planphilly/feed/,https://whyy.org/sections/planphilly,-0.1,0.74,general,US,pennsylvania
+Baltimore Sun,https://www.baltimoresun.com/arc/outboundfeeds/rss/,https://www.baltimoresun.com,-0.1,0.76,general,US,maryland
+Baltimore Banner,https://www.thebaltimorebanner.com/arc/outboundfeeds/rss/category/local-news/,https://www.thebaltimorebanner.com,-0.1,0.78,general,US,maryland
+Maryland Matters,https://marylandmatters.org/feed/,https://marylandmatters.org,-0.1,0.76,politics,US,maryland
+DCist,https://dcist.com/feed/,https://dcist.com,-0.2,0.76,general,US,dc
+Washingtonian,https://www.washingtonian.com/feed/,https://www.washingtonian.com,-0.1,0.7,general,US,dc
+DC Line,https://thedcline.org/feed/,https://thedcline.org,-0.1,0.66,general,US,dc
+Virginia Mercury,https://virginiamercury.com/feed/,https://virginiamercury.com,-0.1,0.78,politics,US,virginia
+Cardinal News Virginia,https://cardinalnews.org/feed/,https://cardinalnews.org,-0.1,0.74,politics,US,virginia
+Richmond Times-Dispatch,https://richmond.com/search/?f=rss&t=article,https://richmond.com,0.0,0.72,general,US,virginia
+West Virginia Watch,https://westvirginiawatch.com/feed/,https://westvirginiawatch.com,-0.1,0.74,politics,US,west-virginia
+Charleston Gazette-Mail,https://www.wvgazettemail.com/search/?f=rss,https://www.wvgazettemail.com,-0.1,0.74,general,US,west-virginia
+NC Newsline,https://ncnewsline.com/feed/,https://ncnewsline.com,-0.1,0.74,politics,US,north-carolina
+News & Observer Raleigh,https://www.newsobserver.com/syndication/v2/rss/section/news/local/,https://www.newsobserver.com,-0.1,0.76,general,US,north-carolina
+Charlotte Observer,https://www.charlotteobserver.com/syndication/v2/rss/section/news/local/,https://www.charlotteobserver.com,-0.1,0.74,general,US,north-carolina
+WUNC NC Public Radio,https://www.wunc.org/news.rss,https://www.wunc.org,-0.1,0.76,general,US,north-carolina
+Carolina Public Press,https://carolinapublicpress.org/feed/,https://carolinapublicpress.org,-0.1,0.74,politics,US,north-carolina
+The Assembly NC,https://www.theassemblync.com/feed/,https://www.theassemblync.com,-0.1,0.74,politics,US,north-carolina
+Asheville Watchdog,https://avlwatchdog.org/feed/,https://avlwatchdog.org,-0.1,0.74,politics,US,north-carolina
+SC Daily Gazette,https://scdailygazette.com/feed/,https://scdailygazette.com,-0.1,0.74,politics,US,south-carolina
+The Post and Courier,https://www.postandcourier.com/search/?f=rss,https://www.postandcourier.com,-0.1,0.78,general,US,south-carolina
+Greenville News,https://www.greenvilleonline.com/rss/,https://www.greenvilleonline.com,0.0,0.7,general,US,south-carolina
+The State Columbia,https://www.thestate.com/syndication/v2/rss/section/news/local/,https://www.thestate.com,-0.1,0.72,general,US,south-carolina
+Georgia Recorder,https://georgiarecorder.com/feed/,https://georgiarecorder.com,-0.1,0.74,politics,US,georgia
+Atlanta Journal-Constitution,https://www.ajc.com/arc/outboundfeeds/rss/,https://www.ajc.com,-0.1,0.78,general,US,georgia
+Atlanta Civic Circle,https://atlantaciviccircle.org/feed/,https://atlantaciviccircle.org,-0.1,0.7,politics,US,georgia
+Capital B Atlanta,https://atlanta.capitalbnews.org/feed/,https://atlanta.capitalbnews.org,-0.2,0.74,general,US,georgia
+Florida Phoenix,https://floridaphoenix.com/feed/,https://floridaphoenix.com,-0.1,0.74,politics,US,florida
+Miami Herald,https://www.miamiherald.com/syndication/v2/rss/section/news/local/,https://www.miamiherald.com,-0.1,0.78,general,US,florida
+WLRN Miami,https://www.wlrn.org/news.rss,https://www.wlrn.org,-0.1,0.74,general,US,florida
+Suncoast Searchlight,https://www.suncoastsearchlight.org/feed/,https://www.suncoastsearchlight.org,-0.1,0.7,politics,US,florida
+Alabama Reflector,https://alabamareflector.com/feed/,https://alabamareflector.com,-0.1,0.74,politics,US,alabama
+AL.com Birmingham,https://www.al.com/arc/outboundfeeds/rss/,https://www.al.com,-0.1,0.7,general,US,alabama
+Alabama Daily News,https://www.aldailynews.com/feed/,https://www.aldailynews.com,0.0,0.7,politics,US,alabama
+WBHM Birmingham,https://wbhm.org/feed/,https://wbhm.org,-0.1,0.72,general,US,alabama
+Clarion Ledger Jackson,https://www.clarionledger.com/rss/,https://www.clarionledger.com,-0.1,0.7,general,US,mississippi
+Tennessee Lookout,https://tennesseelookout.com/feed/,https://tennesseelookout.com,-0.1,0.74,politics,US,tennessee
+The Tennessean Nashville,https://www.tennessean.com/rss/,https://www.tennessean.com,-0.1,0.74,general,US,tennessee
+WPLN Nashville,https://wpln.org/feed/,https://wpln.org,-0.1,0.74,general,US,tennessee
+Tennessee Holler,https://tnholler.com/feed/,https://tnholler.com,-0.4,0.66,politics,US,tennessee
+Memphis Commercial Appeal,https://www.commercialappeal.com/rss/,https://www.commercialappeal.com,-0.1,0.7,general,US,tennessee
+Kentucky Lantern,https://kentuckylantern.com/feed/,https://kentuckylantern.com,-0.1,0.74,politics,US,kentucky
+Louisville Courier-Journal,https://www.courier-journal.com/rss/,https://www.courier-journal.com,-0.1,0.72,general,US,kentucky
+Lexington Herald-Leader,https://www.kentucky.com/syndication/v2/rss/section/news/local/,https://www.kentucky.com,-0.1,0.72,general,US,kentucky
+LPM Louisville Public Media,https://www.lpm.org/feed/,https://www.lpm.org,-0.1,0.74,general,US,kentucky
+Ohio Capital Journal,https://ohiocapitaljournal.com/feed/,https://ohiocapitaljournal.com,-0.1,0.74,politics,US,ohio
+The Plain Dealer Cleveland,https://www.cleveland.com/news/index.ssf/local/,https://www.cleveland.com,-0.1,0.74,general,US,ohio
+Cincinnati Enquirer,https://www.cincinnati.com/rss/,https://www.cincinnati.com,-0.1,0.72,general,US,ohio
+Columbus Dispatch,https://www.dispatch.com/rss/,https://www.dispatch.com,-0.1,0.74,general,US,ohio
+Akron Beacon Journal,https://www.beaconjournal.com/rss/,https://www.beaconjournal.com,-0.1,0.7,general,US,ohio
+Signal Cleveland,https://signalcleveland.org/feed/,https://signalcleveland.org,-0.1,0.74,general,US,ohio
+Signal Akron,https://signalakron.org/feed/,https://signalakron.org,-0.1,0.72,general,US,ohio
+WOSU Columbus,https://news.wosu.org/feed,https://news.wosu.org,-0.1,0.74,general,US,ohio
+Indiana Capital Chronicle,https://indianacapitalchronicle.com/feed/,https://indianacapitalchronicle.com,-0.1,0.74,politics,US,indiana
+Indianapolis Star,https://www.indystar.com/rss/,https://www.indystar.com,-0.1,0.74,general,US,indiana
+Mirror Indy,https://mirrorindy.org/feed/,https://mirrorindy.org,-0.1,0.7,general,US,indiana
+WFYI Indianapolis,https://www.wfyi.org/news/feed,https://www.wfyi.org,-0.1,0.72,general,US,indiana
+Detroit Free Press,https://www.freep.com/rss/,https://www.freep.com,-0.1,0.78,general,US,michigan
+The Detroit News,https://www.detroitnews.com/rss/,https://www.detroitnews.com,0.0,0.74,general,US,michigan
+Michigan Advance,https://michiganadvance.com/feed/,https://michiganadvance.com,-0.2,0.74,politics,US,michigan
+BridgeDetroit,https://www.bridgedetroit.com/feed/,https://www.bridgedetroit.com,-0.1,0.74,general,US,michigan
+MLive Michigan,https://www.mlive.com/arc/outboundfeeds/rss/,https://www.mlive.com,-0.1,0.7,general,US,michigan
+Wisconsin Examiner,https://wisconsinexaminer.com/feed/,https://wisconsinexaminer.com,-0.1,0.74,politics,US,wisconsin
+Milwaukee Journal Sentinel,https://www.jsonline.com/rss/,https://www.jsonline.com,-0.1,0.76,general,US,wisconsin
+Wisconsin Watch,https://wisconsinwatch.org/feed/,https://wisconsinwatch.org,-0.1,0.78,politics,US,wisconsin
+WPR Wisconsin Public Radio,https://www.wpr.org/feed,https://www.wpr.org,-0.1,0.76,general,US,wisconsin
+Minnesota Reformer,https://minnesotareformer.com/feed/,https://minnesotareformer.com,-0.1,0.74,politics,US,minnesota
+Minneapolis Star Tribune Politics,https://www.startribune.com/local/index.rss2,https://www.startribune.com,-0.1,0.82,politics,US,minnesota
+Sahan Journal,https://sahanjournal.com/feed/,https://sahanjournal.com,-0.1,0.74,general,US,minnesota
+MPR News,https://www.mprnews.org/feed,https://www.mprnews.org,-0.1,0.78,general,US,minnesota
+The Minnesota Star Tribune Business,https://www.startribune.com/business/index.rss2,https://www.startribune.com/business,-0.1,0.78,business,US,minnesota
+Des Moines Register,https://www.desmoinesregister.com/rss/,https://www.desmoinesregister.com,-0.1,0.76,general,US,iowa
+Cedar Rapids Gazette,https://www.thegazette.com/feed/,https://www.thegazette.com,0.0,0.72,general,US,iowa
+Iowa Public Radio,https://www.iowapublicradio.org/feed,https://www.iowapublicradio.org,-0.1,0.74,general,US,iowa
+Missouri Independent,https://missouriindependent.com/feed/,https://missouriindependent.com,-0.1,0.74,politics,US,missouri
+St. Louis Post-Dispatch,https://www.stltoday.com/search/?f=rss,https://www.stltoday.com,-0.1,0.76,general,US,missouri
+Kansas City Star,https://www.kansascity.com/syndication/v2/rss/section/news/local/,https://www.kansascity.com,-0.1,0.74,general,US,missouri
+St. Louis Public Radio,https://news.stlpr.org/feed,https://news.stlpr.org,-0.1,0.74,general,US,missouri
+Kansas Reflector,https://kansasreflector.com/feed/,https://kansasreflector.com,-0.1,0.74,politics,US,kansas
+Wichita Eagle,https://www.kansas.com/syndication/v2/rss/section/news/local/,https://www.kansas.com,-0.1,0.7,general,US,kansas
+Nebraska Examiner,https://nebraskaexaminer.com/feed/,https://nebraskaexaminer.com,-0.1,0.74,politics,US,nebraska
+Omaha World-Herald,https://omaha.com/search/?f=rss,https://omaha.com,-0.1,0.72,general,US,nebraska
+Flatwater Free Press Nebraska,https://flatwaterfreepress.org/feed/,https://flatwaterfreepress.org,-0.1,0.74,politics,US,nebraska
+South Dakota Searchlight,https://southdakotasearchlight.com/feed/,https://southdakotasearchlight.com,-0.1,0.72,politics,US,south-dakota
+North Dakota Monitor,https://northdakotamonitor.com/feed/,https://northdakotamonitor.com,-0.1,0.72,politics,US,north-dakota
+Daily Montanan,https://dailymontanan.com/feed/,https://dailymontanan.com,-0.1,0.72,politics,US,montana
+Montana Free Press,https://montanafreepress.org/feed/,https://montanafreepress.org,-0.1,0.78,politics,US,montana
+Idaho Capital Sun,https://idahocapitalsun.com/feed/,https://idahocapitalsun.com,-0.1,0.74,politics,US,idaho
+Idaho Statesman,https://www.idahostatesman.com/syndication/v2/rss/section/news/local/,https://www.idahostatesman.com,-0.1,0.72,general,US,idaho
+Wyoming Public Media,https://www.wyomingpublicmedia.org/feed,https://www.wyomingpublicmedia.org,-0.1,0.74,general,US,wyoming
+WyoFile,https://wyofile.com/feed/,https://wyofile.com,-0.1,0.78,politics,US,wyoming
+Cowboy State Daily,https://cowboystatedaily.com/feed/,https://cowboystatedaily.com,0.2,0.66,general,US,wyoming
+Source NM New Mexico,https://sourcenm.com/feed/,https://sourcenm.com,-0.1,0.74,politics,US,new-mexico
+New Mexico In Depth,https://nmindepth.com/feed/,https://nmindepth.com,-0.1,0.74,politics,US,new-mexico
+Searchlight New Mexico,https://searchlightnm.org/feed/,https://searchlightnm.org,-0.1,0.74,politics,US,new-mexico
+KUNM Albuquerque,https://www.kunm.org/feed,https://www.kunm.org,-0.1,0.72,general,US,new-mexico
+Arizona Mirror,https://azmirror.com/feed/,https://azmirror.com,-0.1,0.74,politics,US,arizona
+Arizona Republic,https://www.azcentral.com/rss/,https://www.azcentral.com,-0.1,0.74,general,US,arizona
+Arizona Daily Star,https://tucson.com/search/?f=rss,https://tucson.com,-0.1,0.7,general,US,arizona
+KJZZ Phoenix,https://kjzz.org/feed,https://kjzz.org,-0.1,0.74,general,US,arizona
+Nevada Current,https://nevadacurrent.com/feed/,https://nevadacurrent.com,-0.1,0.74,politics,US,nevada
+Reno Gazette-Journal,https://www.rgj.com/rss/,https://www.rgj.com,-0.1,0.7,general,US,nevada
+The Nevada Independent,https://thenevadaindependent.com/feed,https://thenevadaindependent.com,-0.1,0.78,politics,US,nevada
+Utah News Dispatch,https://utahnewsdispatch.com/feed/,https://utahnewsdispatch.com,-0.1,0.74,politics,US,utah
+Salt Lake Tribune,https://www.sltrib.com/arc/outboundfeeds/rss/,https://www.sltrib.com,-0.1,0.78,general,US,utah
+Deseret News,https://www.deseret.com/arc/outboundfeeds/rss/,https://www.deseret.com,0.1,0.74,general,US,utah
+KUER Salt Lake,https://www.kuer.org/feed,https://www.kuer.org,-0.1,0.74,general,US,utah
+Colorado Newsline,https://coloradonewsline.com/feed/,https://coloradonewsline.com,-0.1,0.74,politics,US,colorado
+Colorado Public Radio,https://www.cpr.org/feed/,https://www.cpr.org,-0.1,0.78,general,US,colorado
+Colorado Sun Politics,https://coloradosun.com/category/politics/feed/,https://coloradosun.com/politics,-0.1,0.78,politics,US,colorado
+Denverite,https://denverite.com/feed/,https://denverite.com,-0.1,0.74,general,US,colorado
+Aspen Daily News,https://www.aspendailynews.com/feed/,https://www.aspendailynews.com,-0.1,0.7,general,US,colorado
+Oregon Capital Chronicle,https://oregoncapitalchronicle.com/feed/,https://oregoncapitalchronicle.com,-0.1,0.74,politics,US,oregon
+OPB Oregon,https://www.opb.org/news/feed/,https://www.opb.org/news,-0.1,0.78,general,US,oregon
+Eugene Register-Guard,https://www.registerguard.com/rss/,https://www.registerguard.com,-0.1,0.7,general,US,oregon
+Willamette Week Portland,https://www.wweek.com/feed/,https://www.wweek.com,-0.2,0.72,general,US,oregon
+Washington State Standard,https://washingtonstatestandard.com/feed/,https://washingtonstatestandard.com,-0.1,0.74,politics,US,washington
+KUOW Seattle,https://www.kuow.org/feeds/news.xml,https://www.kuow.org,-0.1,0.78,general,US,washington
+Cascade PBS,https://crosscut.com/feed,https://crosscut.com,-0.1,0.74,politics,US,washington
+The Stranger Seattle,https://www.thestranger.com/news/Rss.xml,https://www.thestranger.com,-0.4,0.72,general,US,washington
+InvestigateWest,https://www.invw.org/feed/,https://www.invw.org,-0.1,0.74,politics,US,washington
+Alaska Beacon,https://alaskabeacon.com/feed/,https://alaskabeacon.com,-0.1,0.74,politics,US,alaska
+Alaska Public Media,https://alaskapublic.org/feed/,https://alaskapublic.org,-0.1,0.74,general,US,alaska
+Hawaii Public Radio,https://www.hawaiipublicradio.org/feed,https://www.hawaiipublicradio.org,-0.1,0.72,general,US,hawaii
+San Francisco Chronicle,https://www.sfchronicle.com/rss/feed/Bay-Area-Top-Stories-499.php,https://www.sfchronicle.com,-0.1,0.82,general,US,california
+SFGate,https://www.sfgate.com/rss/feed/Bay-Area-and-State-429.php,https://www.sfgate.com,-0.1,0.72,general,US,california
+Mission Local SF,https://missionlocal.org/feed/,https://missionlocal.org,-0.1,0.74,general,US,california
+LAist,https://laist.com/feed,https://laist.com,-0.2,0.76,general,US,california
+LA Daily News,https://www.dailynews.com/feed/,https://www.dailynews.com,-0.1,0.72,general,US,california
+Orange County Register,https://www.ocregister.com/feed/,https://www.ocregister.com,0.0,0.72,general,US,california
+San Diego Union-Tribune,https://www.sandiegouniontribune.com/feed/,https://www.sandiegouniontribune.com,-0.1,0.76,general,US,california
+Voice of San Diego,https://voiceofsandiego.org/feed/,https://voiceofsandiego.org,-0.1,0.78,politics,US,california
+KQED San Francisco,https://www.kqed.org/news/feed,https://www.kqed.org,-0.1,0.78,general,US,california
+The Sacramento Bee,https://www.sacbee.com/syndication/v2/rss/section/news/local/,https://www.sacbee.com,-0.1,0.74,general,US,california
+Fresno Bee,https://www.fresnobee.com/syndication/v2/rss/section/news/local/,https://www.fresnobee.com,-0.1,0.72,general,US,california
+CalMatters Politics,https://calmatters.org/category/politics/feed/,https://calmatters.org,-0.1,0.82,politics,US,california
+Texas Monthly,https://www.texasmonthly.com/feed/,https://www.texasmonthly.com,-0.1,0.82,general,US,texas
+Houston Chronicle,https://www.houstonchronicle.com/rss/feed/Houston-Chronicle-RSS-Feed-460.php,https://www.houstonchronicle.com,-0.1,0.78,general,US,texas
+San Antonio Express-News,https://www.expressnews.com/rss/feed/Top-Stories-Headlines-447.php,https://www.expressnews.com,-0.1,0.74,general,US,texas
+Austin American-Statesman,https://www.statesman.com/rss/,https://www.statesman.com,-0.1,0.74,general,US,texas
+KUT Austin,https://www.kut.org/feed,https://www.kut.org,-0.1,0.74,general,US,texas
+The San Antonio Report,https://sanantonioreport.org/feed/,https://sanantonioreport.org,-0.1,0.74,general,US,texas
+Houston Public Media,https://www.houstonpublicmedia.org/feed/,https://www.houstonpublicmedia.org,-0.1,0.74,general,US,texas
+The Texas Tribune Politics,https://www.texastribune.org/feeds/topics/politics/,https://www.texastribune.org/topics/politics,-0.1,0.84,politics,US,texas
+Houston Landing,https://houstonlanding.org/feed/,https://houstonlanding.org,-0.1,0.74,general,US,texas
+The Dallas Express,https://dallasexpress.com/feed/,https://dallasexpress.com,0.3,0.66,general,US,texas
+Louisiana Illuminator,https://lailluminator.com/feed/,https://lailluminator.com,-0.1,0.74,politics,US,louisiana
+New Orleans Times-Picayune,https://www.nola.com/search/?f=rss,https://www.nola.com,-0.1,0.74,general,US,louisiana
+The Lens NOLA,https://thelensnola.org/feed/,https://thelensnola.org,-0.1,0.74,politics,US,louisiana
+WWNO New Orleans,https://www.wwno.org/feed,https://www.wwno.org,-0.1,0.74,general,US,louisiana
+Arkansas Advocate,https://arkansasadvocate.com/feed/,https://arkansasadvocate.com,-0.1,0.74,politics,US,arkansas
+Arkansas Times,https://arktimes.com/feed/,https://arktimes.com,-0.2,0.74,general,US,arkansas
+Oklahoma Voice,https://oklahomavoice.com/feed/,https://oklahomavoice.com,-0.1,0.74,politics,US,oklahoma
+The Frontier Oklahoma,https://www.readfrontier.org/feed/,https://www.readfrontier.org,-0.1,0.74,politics,US,oklahoma
+The Oklahoman,https://www.oklahoman.com/rss/,https://www.oklahoman.com,-0.1,0.72,general,US,oklahoma
+NonDoc Oklahoma,https://nondoc.com/feed/,https://nondoc.com,-0.1,0.7,politics,US,oklahoma
+Tulsa World,https://tulsaworld.com/search/?f=rss,https://tulsaworld.com,-0.1,0.7,general,US,oklahoma
+Daily Memphian,https://dailymemphian.com/feed/rss,https://dailymemphian.com,-0.1,0.74,general,US,tennessee
+StateImpact Pennsylvania,https://stateimpact.npr.org/pennsylvania/feed/,https://stateimpact.npr.org/pennsylvania,-0.1,0.74,politics,US,pennsylvania
+WAMC Northeast Public Radio,https://www.wamc.org/feed,https://www.wamc.org,-0.1,0.74,general,US,new-york
+WBEZ Chicago Politics,https://www.wbez.org/topics/politics/feed/,https://www.wbez.org,-0.1,0.78,politics,US,illinois
+Chicago Tribune,https://www.chicagotribune.com/arc/outboundfeeds/rss/,https://www.chicagotribune.com,-0.1,0.78,general,US,illinois
+Chicago Sun-Times Politics,https://chicago.suntimes.com/politics?service=rss,https://chicago.suntimes.com/politics,-0.1,0.76,politics,US,illinois
+Capitol News Illinois,https://capitolnewsillinois.com/feed/,https://capitolnewsillinois.com,-0.1,0.78,politics,US,illinois
+Illinois Answers Project,https://illinoisanswers.org/feed/,https://illinoisanswers.org,-0.1,0.74,politics,US,illinois
+Chicago Reader,https://chicagoreader.com/feed/,https://chicagoreader.com,-0.2,0.72,general,US,illinois
+Injustice Watch Chicago,https://www.injusticewatch.org/feed/,https://www.injusticewatch.org,-0.1,0.74,politics,US,illinois
+Borderless Magazine,https://borderlessmag.org/feed/,https://borderlessmag.org,-0.2,0.72,general,US,illinois
+Chalkbeat,https://chalkbeat.org/arc/outboundfeeds/rss/category/national/,https://chalkbeat.org,-0.1,0.82,politics,US,national
+Chalkbeat Chicago,https://chalkbeat.org/arc/outboundfeeds/rss/category/chicago/,https://chalkbeat.org/chicago,-0.1,0.78,politics,US,illinois
+The 74 Education,https://www.the74million.org/feed/,https://www.the74million.org,0.1,0.74,politics,US,national
+Mother Jones Politics,https://www.motherjones.com/politics/feed/,https://www.motherjones.com/politics,-0.5,0.78,politics,US,national
+Washington Monthly,https://washingtonmonthly.com/feed/,https://washingtonmonthly.com,-0.3,0.74,politics,US,national
+The Daily Caller News Foundation,https://dailycallernewsfoundation.org/feed/,https://dailycallernewsfoundation.org,0.5,0.66,politics,US,national
+Real Clear Politics,https://www.realclearpolitics.com/index.xml,https://www.realclearpolitics.com,0.2,0.7,politics,US,national
+The Bulwark,https://www.thebulwark.com/feed,https://www.thebulwark.com,0.1,0.78,politics,US,national
+Lawfare,https://www.lawfaremedia.org/rss.xml,https://www.lawfaremedia.org,-0.1,0.86,politics,US,national
+Defense One,https://www.defenseone.com/rss/,https://www.defenseone.com,0.0,0.82,world,US,national
+Breaking Defense,https://breakingdefense.com/feed/,https://breakingdefense.com,0.0,0.78,world,US,national
+The War Zone,https://www.twz.com/feed,https://www.twz.com,0.0,0.74,world,US,national
+Air & Space Forces Magazine,https://www.airandspaceforces.com/feed/,https://www.airandspaceforces.com,0.0,0.76,world,US,national
+Bolts Magazine,https://boltsmag.org/feed/,https://boltsmag.org,-0.3,0.78,politics,US,national
+The Appeal,https://theappeal.org/feed/,https://theappeal.org,-0.4,0.74,politics,US,national
+Stateline,https://stateline.org/feed/,https://stateline.org,-0.1,0.84,politics,US,national
+Capital & Main,https://capitalandmain.com/feed,https://capitalandmain.com,-0.3,0.74,politics,US,national
+High Country News,https://www.hcn.org/rss,https://www.hcn.org,-0.1,0.82,science,US,national
+Sierra Magazine,https://www.sierraclub.org/sierra/rss.xml,https://www.sierraclub.org/sierra,-0.3,0.74,science,US,national
+Anthropocene Magazine,https://www.anthropocenemagazine.org/feed/,https://www.anthropocenemagazine.org,-0.1,0.78,science,US,national
+Nautilus Science,https://nautil.us/rss/all,https://nautil.us,-0.1,0.78,science,US,national
+Sapiens Anthropology,https://www.sapiens.org/feed/,https://www.sapiens.org,-0.1,0.74,science,US,national
+Smithsonian Magazine,https://www.smithsonianmag.com/rss/,https://www.smithsonianmag.com,-0.1,0.82,general,US,national
+National Geographic,https://www.nationalgeographic.com/content/natgeo/en_us/rss/all-stories.rss,https://www.nationalgeographic.com,-0.1,0.84,science,US,national
+Popular Science,https://www.popsci.com/feed/,https://www.popsci.com,-0.1,0.72,science,US,national
+Discover Magazine,https://www.discovermagazine.com/feed,https://www.discovermagazine.com,-0.1,0.74,science,US,national
+Astronomy Magazine,https://astronomy.com/feed,https://astronomy.com,0.0,0.74,science,US,national
+ScienceNews,https://www.sciencenews.org/feed,https://www.sciencenews.org,-0.1,0.84,science,US,national
+Chemistry World,https://www.chemistryworld.com/XmlServers/navsectionRSS.aspx?navsectioncode=1004,https://www.chemistryworld.com,0.0,0.78,science,US,national
+C&EN Chemical Engineering News,https://cen.acs.org/content/cen/feeds/news.rss,https://cen.acs.org,0.0,0.82,science,US,national
+Physics Today,https://physicstoday.scitation.org/rss/most_read.xml,https://physicstoday.scitation.org,0.0,0.82,science,US,national
+Spaceflight Now,https://spaceflightnow.com/feed/,https://spaceflightnow.com,0.0,0.78,science,US,national
+Quanta Magazine Math,https://api.quantamagazine.org/feed/?sec=mathematics,https://www.quantamagazine.org,-0.1,0.88,science,US,national
+Wired Backchannel,https://www.wired.com/feed/category/backchannel/latest/rss,https://www.wired.com/category/backchannel,-0.1,0.82,tech,US,national
+MIT Technology Review AI,https://www.technologyreview.com/topic/artificial-intelligence/feed,https://www.technologyreview.com/topic/artificial-intelligence,-0.1,0.86,tech,US,national
+Coda Story Tech,https://www.codastory.com/feed/?cat=technology,https://www.codastory.com,-0.1,0.78,tech,US,national
+SecurityWeek,https://www.securityweek.com/feed/,https://www.securityweek.com,0.0,0.78,tech,US,national
+The Record by Recorded Future,https://therecord.media/feed,https://therecord.media,0.0,0.82,tech,US,national
+CyberScoop,https://cyberscoop.com/feed/,https://cyberscoop.com,0.0,0.78,tech,US,national
+StateScoop,https://statescoop.com/feed/,https://statescoop.com,0.0,0.74,tech,US,national
+Fedscoop,https://fedscoop.com/feed/,https://fedscoop.com,0.0,0.76,tech,US,national
+NextGov,https://www.nextgov.com/rss/all/,https://www.nextgov.com,0.0,0.78,tech,US,national
+Government Executive,https://www.govexec.com/rss/all/,https://www.govexec.com,0.0,0.78,politics,US,national
+Federal News Network,https://federalnewsnetwork.com/feed/,https://federalnewsnetwork.com,0.0,0.74,politics,US,national
+Government Technology,https://www.govtech.com/rss,https://www.govtech.com,0.0,0.74,tech,US,national
+Inside Higher Ed,https://www.insidehighered.com/rss/news_and_views,https://www.insidehighered.com,-0.1,0.82,politics,US,national
+The Chronicle of Higher Education,https://www.chronicle.com/section/news/6,https://www.chronicle.com,-0.1,0.84,politics,US,national
+Education Week,https://www.edweek.org/main/rss,https://www.edweek.org,-0.1,0.82,politics,US,national
+K-12 Dive,https://www.k12dive.com/feeds/news/,https://www.k12dive.com,-0.1,0.74,politics,US,national
+Higher Ed Dive,https://www.highereddive.com/feeds/news/,https://www.highereddive.com,-0.1,0.74,politics,US,national
+Healthcare Dive,https://www.healthcaredive.com/feeds/news/,https://www.healthcaredive.com,0.0,0.78,business,US,national
+Stat Plus Health,https://www.statnews.com/category/health/feed/,https://www.statnews.com,-0.1,0.84,science,US,national
+MedPage Today,https://www.medpagetoday.com/rss/Headlines.xml,https://www.medpagetoday.com,0.0,0.76,science,US,national
+Modern Healthcare,https://www.modernhealthcare.com/rss/news.xml,https://www.modernhealthcare.com,0.0,0.78,business,US,national
+NEJM,https://www.nejm.org/action/showFeed?type=etoc&feed=rss&jc=nejm,https://www.nejm.org,0.0,0.92,science,US,national
+JAMA Network,https://jamanetwork.com/rss/site_1/74.xml,https://jamanetwork.com,0.0,0.92,science,US,national
+The Lancet,https://www.thelancet.com/rssfeed/lancet_current.xml,https://www.thelancet.com,0.0,0.92,science,GB,national
+Annals of Internal Medicine,https://www.acpjournals.org/action/showFeed?type=etoc&feed=rss&jc=aim,https://www.acpjournals.org,0.0,0.9,science,US,national
+Health Affairs,https://www.healthaffairs.org/rss,https://www.healthaffairs.org,-0.1,0.84,science,US,national
+The DO Magazine,https://thedo.osteopathic.org/feed/,https://thedo.osteopathic.org,0.0,0.7,science,US,national
+Aviation Week,https://aviationweek.com/rss.xml,https://aviationweek.com,0.0,0.78,business,US,national
+FlightGlobal,https://www.flightglobal.com/rss-feeds/news,https://www.flightglobal.com,0.0,0.78,business,GB,national
+Simple Flying,https://simpleflying.com/feed/,https://simpleflying.com,0.0,0.7,business,GB,national
+The Air Current,https://theaircurrent.com/feed/,https://theaircurrent.com,0.0,0.82,business,US,national
+American Banker,https://www.americanbanker.com/feed,https://www.americanbanker.com,0.0,0.78,business,US,national
+Banking Dive,https://www.bankingdive.com/feeds/news/,https://www.bankingdive.com,0.0,0.74,business,US,national
+Pensions & Investments,https://www.pionline.com/rss.xml,https://www.pionline.com,0.0,0.78,business,US,national
+Institutional Investor,https://www.institutionalinvestor.com/Rss/,https://www.institutionalinvestor.com,0.0,0.78,business,US,national
+The Real Deal NY,https://therealdeal.com/feed/,https://therealdeal.com,0.0,0.78,business,US,national
+Bisnow,https://www.bisnow.com/feeds/main.xml,https://www.bisnow.com,0.0,0.72,business,US,national
+Construction Dive,https://www.constructiondive.com/feeds/news/,https://www.constructiondive.com,0.0,0.74,business,US,national
+Engineering News-Record,https://www.enr.com/rss/2-Top-Stories,https://www.enr.com,0.0,0.78,business,US,national
+Supply Chain Dive,https://www.supplychaindive.com/feeds/news/,https://www.supplychaindive.com,0.0,0.74,business,US,national
+Industry Dive,https://www.industrydive.com/feeds/,https://www.industrydive.com,0.0,0.74,business,US,national
+Restaurant Dive,https://www.restaurantdive.com/feeds/news/,https://www.restaurantdive.com,0.0,0.72,business,US,national
+Retail Dive,https://www.retaildive.com/feeds/news/,https://www.retaildive.com,0.0,0.74,business,US,national
+Marketing Dive,https://www.marketingdive.com/feeds/news/,https://www.marketingdive.com,0.0,0.74,business,US,national
+AdExchanger,https://www.adexchanger.com/feed/,https://www.adexchanger.com,0.0,0.74,tech,US,national
+Marketing Brew Newsletter,https://www.marketingbrew.com/feed,https://www.marketingbrew.com,0.0,0.72,business,US,national
+Morning Brew,https://www.morningbrew.com/daily/feed,https://www.morningbrew.com,0.0,0.7,business,US,national
+Fortune,https://fortune.com/feed,https://fortune.com,0.0,0.78,business,US,national
+Entrepreneur Magazine,https://www.entrepreneur.com/latest.rss,https://www.entrepreneur.com,0.0,0.7,business,US,national
+Harvard Business Review,https://hbr.org/the-latest/rss,https://hbr.org,0.0,0.86,business,US,national
+Stanford Social Innovation Review,https://ssir.org/site/rss,https://ssir.org,-0.1,0.78,business,US,national
+The American Lawyer,https://www.law.com/americanlawyer/feed/,https://www.law.com/americanlawyer,0.0,0.78,business,US,national
+Law360,https://www.law360.com/rss,https://www.law360.com,0.0,0.78,business,US,national
+Above the Law,https://abovethelaw.com/feed/,https://abovethelaw.com,-0.1,0.72,business,US,national
+Reuters Legal,https://www.reuters.com/arc/outboundfeeds/v3/category/legal/,https://www.reuters.com/legal,0.0,0.84,business,US,national
+SCOTUSblog,https://www.scotusblog.com/feed/,https://www.scotusblog.com,0.0,0.86,politics,US,national
+Volokh Conspiracy Reason,https://reason.com/volokh/feed/,https://reason.com/volokh,0.3,0.74,politics,US,national
+Election Law Blog Hasen,https://electionlawblog.org/?feed=rss2,https://electionlawblog.org,-0.1,0.82,politics,US,national
+Balls and Strikes,https://ballsandstrikes.org/feed/,https://ballsandstrikes.org,-0.4,0.7,politics,US,national
+Take Care Blog,https://takecareblog.com/feed,https://takecareblog.com,-0.3,0.74,politics,US,national
+The Cut New York Magazine,https://www.thecut.com/rss/feeds/index.xml,https://www.thecut.com,-0.2,0.74,general,US,national
+New York Magazine,https://nymag.com/rss/all.xml,https://nymag.com,-0.3,0.82,general,US,national
+The Drift Magazine,https://www.thedriftmag.com/feed/,https://www.thedriftmag.com,-0.3,0.74,general,US,national
+The Hedgehog Review,https://hedgehogreview.com/index.rss,https://hedgehogreview.com,0.1,0.74,general,US,national
+Plough Quarterly,https://www.plough.com/en/rss/all,https://www.plough.com,0.1,0.7,general,US,national
+Comment Magazine,https://comment.org/feed/,https://comment.org,0.1,0.7,general,US,national
+City Journal,https://www.city-journal.org/feed/,https://www.city-journal.org,0.4,0.78,politics,US,national
+National Affairs,https://nationalaffairs.com/api/rss,https://nationalaffairs.com,0.3,0.76,politics,US,national
+Modern Age Conservative,https://isi.org/modern-age/feed/,https://isi.org/modern-age,0.4,0.7,politics,US,national
+The New Atlantis Tech,https://www.thenewatlantis.com/rss,https://www.thenewatlantis.com,0.2,0.78,tech,US,national
+Lapham's Quarterly,https://www.laphamsquarterly.org/contents.rss,https://www.laphamsquarterly.org,-0.1,0.78,general,US,national
+The Sun Magazine,https://www.thesunmagazine.org/feed,https://www.thesunmagazine.org,-0.1,0.74,general,US,national
+Orion Magazine,https://orionmagazine.org/feed/,https://orionmagazine.org,-0.2,0.78,science,US,national
+Emergence Magazine,https://emergencemagazine.org/feed/,https://emergencemagazine.org,-0.1,0.78,science,US,national
+The Imprint Youth Welfare,https://imprintnews.org/feed/,https://imprintnews.org,-0.1,0.74,politics,US,national
+Youth Today,https://youthtoday.org/feed/,https://youthtoday.org,-0.1,0.7,politics,US,national
+Disability Scoop,https://www.disabilityscoop.com/feed/,https://www.disabilityscoop.com,-0.1,0.74,politics,US,national
+Word in Black,https://wordinblack.com/feed/,https://wordinblack.com,-0.2,0.74,general,US,national
+The 19th News Politics,https://19thnews.org/category/politics/feed/,https://19thnews.org,-0.2,0.78,politics,US,national
+Prism Reports,https://prismreports.org/feed/,https://prismreports.org,-0.3,0.74,politics,US,national
+Common Dreams,https://www.commondreams.org/feeds/feed.rss,https://www.commondreams.org,-0.5,0.7,politics,US,national
+Sludge Money in Politics,https://readsludge.com/feed/,https://readsludge.com,-0.3,0.78,politics,US,national
+The Lever Independent News,https://www.levernews.com/rss/,https://www.levernews.com,-0.4,0.78,politics,US,national
+More Perfect Union,https://perfectunion.us/feed/,https://perfectunion.us,-0.4,0.74,politics,US,national
+Inequality.org,https://inequality.org/feed/,https://inequality.org,-0.4,0.74,politics,US,national
+Capital Research Center,https://capitalresearch.org/feed/,https://capitalresearch.org,0.4,0.66,politics,US,national
+The Center Square,https://www.thecentersquare.com/search/?f=rss&t=article,https://www.thecentersquare.com,0.3,0.7,politics,US,national
+Empower Wisconsin,https://empowerwisconsin.org/feed/,https://empowerwisconsin.org,0.4,0.66,politics,US,wisconsin
+Gallup News,https://news.gallup.com/rss/Default.aspx,https://news.gallup.com,0.0,0.86,politics,US,national
+RAND Corporation,https://www.rand.org/topics.xml,https://www.rand.org,0.0,0.88,politics,US,national
+Cato Institute,https://www.cato.org/rss/all,https://www.cato.org,0.3,0.82,politics,US,national
+Center on Budget and Policy Priorities,https://www.cbpp.org/rss.xml,https://www.cbpp.org,-0.3,0.84,politics,US,national
+Tax Policy Center,https://www.taxpolicycenter.org/rss.xml,https://www.taxpolicycenter.org,-0.1,0.86,politics,US,national
+Tax Foundation,https://taxfoundation.org/feed/,https://taxfoundation.org,0.2,0.84,politics,US,national
+Economic Policy Institute,https://www.epi.org/feed/,https://www.epi.org,-0.4,0.82,business,US,national
+Manhattan Institute,https://manhattan.institute/feed,https://manhattan.institute,0.3,0.78,politics,US,national
+Mercatus Center,https://www.mercatus.org/feeds/all/all.xml,https://www.mercatus.org,0.3,0.78,politics,US,national
+Niskanen Center,https://www.niskanencenter.org/feed/,https://www.niskanencenter.org,0.1,0.82,politics,US,national
+Roosevelt Institute,https://rooseveltinstitute.org/feed/,https://rooseveltinstitute.org,-0.4,0.78,politics,US,national
+Council on Foreign Relations,https://www.cfr.org/rss-feeds,https://www.cfr.org,0.0,0.88,world,US,national
+Atlantic Council,https://www.atlanticcouncil.org/feed/,https://www.atlanticcouncil.org,0.0,0.86,world,US,national
+Hudson Institute,https://www.hudson.org/feeds/all-research.xml,https://www.hudson.org,0.2,0.82,world,US,national
+Hoover Institution,https://www.hoover.org/site.xml,https://www.hoover.org,0.3,0.82,politics,US,national
+Wilson Center,https://www.wilsoncenter.org/rss.xml,https://www.wilsoncenter.org,0.0,0.86,world,US,national
+Stimson Center,https://www.stimson.org/feed/,https://www.stimson.org,0.0,0.82,world,US,national
+United States Institute of Peace,https://www.usip.org/rss.xml,https://www.usip.org,0.0,0.84,world,US,national
+Center for a New American Security,https://www.cnas.org/feed,https://www.cnas.org,0.0,0.84,world,US,national
+Quincy Institute,https://quincyinst.org/feed/,https://quincyinst.org,-0.2,0.78,world,US,national
+Belfer Center Harvard,https://www.belfercenter.org/rss.xml,https://www.belfercenter.org,0.0,0.84,world,US,national
+World Politics Review,https://www.worldpoliticsreview.com/feed/,https://www.worldpoliticsreview.com,0.0,0.78,world,US,national
+The American Interest,https://www.the-american-interest.com/feed/,https://www.the-american-interest.com,0.1,0.74,world,US,national
+Sports Illustrated,https://www.si.com/rss/si_topstories.rss,https://www.si.com,0.0,0.74,sports,US,national
+The Athletic NYT,https://theathletic.com/rss/,https://theathletic.com,0.0,0.82,sports,US,national
+Defector Sports,https://defector.com/feeds/sports,https://defector.com,-0.1,0.78,sports,US,national
+SB Nation Top Stories,https://www.sbnation.com/rss/index.xml,https://www.sbnation.com,-0.1,0.7,sports,US,national
+The Other 14 College Football,https://www.theother14.com/feed,https://www.theother14.com,0.0,0.66,sports,US,national
+FiveThirtyEight,https://fivethirtyeight.com/all/feed/,https://fivethirtyeight.com,-0.1,0.86,politics,US,national
+Cook Political Report,https://www.cookpolitical.com/rss.xml,https://www.cookpolitical.com,0.0,0.86,politics,US,national
+Inside Elections,https://insideelections.com/news/feed,https://insideelections.com,0.0,0.82,politics,US,national
+Daily Kos Recommended,https://www.dailykos.com/blogs/main.rss,https://www.dailykos.com,-0.5,0.66,politics,US,national
+LaRouche,https://larouchepac.com/feed,https://larouchepac.com,0.5,0.5,politics,US,national
+Tablet Magazine,https://www.tabletmag.com/feeds/articles.rss,https://www.tabletmag.com,0.2,0.78,general,US,national
+Jewish Insider,https://jewishinsider.com/feed/,https://jewishinsider.com,0.1,0.78,politics,US,national
+The Jewish Telegraphic Agency,https://www.jta.org/feed,https://www.jta.org,0.0,0.78,general,US,national
+Religion Dispatches,https://religiondispatches.org/feed/,https://religiondispatches.org,-0.2,0.74,general,US,national
+Christianity Today,https://www.christianitytoday.com/index.rss,https://www.christianitytoday.com,0.2,0.78,general,US,national
+National Catholic Reporter,https://www.ncronline.org/feeds/news/all,https://www.ncronline.org,-0.1,0.78,general,US,national
+The Pillar Catholic,https://www.pillarcatholic.com/feed,https://www.pillarcatholic.com,0.1,0.76,general,US,national
+Commentary Magazine,https://www.commentary.org/feed/,https://www.commentary.org,0.4,0.78,politics,US,national
+Spectator World,https://thespectator.com/feed/,https://thespectator.com,0.3,0.74,politics,US,national
+Discourse Magazine,https://www.discoursemagazine.com/api/rss/all,https://www.discoursemagazine.com,0.2,0.74,politics,US,national
+The UnPopulist,https://www.theunpopulist.net/feed,https://www.theunpopulist.net,0.0,0.74,politics,US,national
+Liberal Currents,https://www.liberalcurrents.com/rss/,https://www.liberalcurrents.com,-0.1,0.72,politics,US,national
+Responsible Statecraft,https://responsiblestatecraft.org/feed/,https://responsiblestatecraft.org,-0.2,0.78,world,US,national
+Times of London,https://www.thetimes.co.uk/rss,https://www.thetimes.co.uk,0.2,0.86,general,GB,national
+Sunday Times UK,https://www.thetimes.co.uk/rss/sundaytimes/news.xml,https://www.thetimes.co.uk/sunday-times,0.2,0.84,general,GB,national
+The Telegraph,https://www.telegraph.co.uk/rss.xml,https://www.telegraph.co.uk,0.3,0.78,general,GB,national
+Telegraph Politics,https://www.telegraph.co.uk/politics/rss.xml,https://www.telegraph.co.uk/politics,0.3,0.78,politics,GB,national
+The Independent UK,https://www.independent.co.uk/news/uk/rss,https://www.independent.co.uk,-0.2,0.78,general,GB,national
+i Paper UK,https://inews.co.uk/feed,https://inews.co.uk,-0.1,0.74,general,GB,national
+Sky News,https://feeds.skynews.com/feeds/rss/home.xml,https://news.sky.com,0.0,0.82,general,GB,national
+The Critic Magazine,https://thecritic.co.uk/feed/,https://thecritic.co.uk,0.4,0.74,politics,GB,national
+UnHerd,https://unherd.com/feed/,https://unherd.com,0.2,0.76,general,GB,national
+Tortoise Media UK,https://www.tortoisemedia.com/feed/,https://www.tortoisemedia.com,-0.1,0.78,general,GB,national
+openDemocracy,https://www.opendemocracy.net/feeds/main.rss/,https://www.opendemocracy.net,-0.3,0.78,politics,GB,national
+The Bureau of Investigative Journalism,https://www.thebureauinvestigates.com/feed.xml,https://www.thebureauinvestigates.com,-0.2,0.86,politics,GB,national
+Tribune Magazine UK,https://tribunemag.co.uk/feed,https://tribunemag.co.uk,-0.5,0.74,politics,GB,national
+The Big Issue,https://www.bigissue.com/feed/,https://www.bigissue.com,-0.2,0.74,general,GB,national
+Byline Times,https://bylinetimes.com/feed/,https://bylinetimes.com,-0.3,0.74,politics,GB,national
+Private Eye,https://www.private-eye.co.uk/rss/,https://www.private-eye.co.uk,-0.1,0.78,politics,GB,national
+LBC News,https://www.lbc.co.uk/news/rss/,https://www.lbc.co.uk,0.0,0.7,general,GB,national
+Channel 4 News,https://www.channel4.com/news/feed,https://www.channel4.com/news,-0.2,0.84,general,GB,national
+ITV News,https://www.itv.com/news/index.rss,https://www.itv.com/news,0.0,0.78,general,GB,national
+The Herald Scotland,https://www.heraldscotland.com/news/rss/,https://www.heraldscotland.com,0.0,0.74,general,GB,scotland
+The National Scotland,https://www.thenational.scot/news/rss/,https://www.thenational.scot,-0.3,0.7,politics,GB,scotland
+Holyrood Scotland,https://www.holyrood.com/feeds/all,https://www.holyrood.com,0.0,0.74,politics,GB,scotland
+Belfast Telegraph,https://www.belfasttelegraph.co.uk/news/rss.xml,https://www.belfasttelegraph.co.uk,0.0,0.72,general,GB,northern-ireland
+WalesOnline,https://www.walesonline.co.uk/news/?service=rss,https://www.walesonline.co.uk,-0.1,0.72,general,GB,wales
+Nation Cymru,https://nation.cymru/feed/,https://nation.cymru,-0.1,0.72,general,GB,wales
+Manchester Evening News,https://www.manchestereveningnews.co.uk/news/?service=rss,https://www.manchestereveningnews.co.uk,-0.1,0.7,general,GB,manchester
+Yorkshire Post,https://www.yorkshirepost.co.uk/rss,https://www.yorkshirepost.co.uk,0.0,0.72,general,GB,yorkshire
+Birmingham Mail,https://www.birminghammail.co.uk/news/?service=rss,https://www.birminghammail.co.uk,-0.1,0.7,general,GB,birmingham
+Liverpool Echo,https://www.liverpoolecho.co.uk/news/?service=rss,https://www.liverpoolecho.co.uk,-0.1,0.7,general,GB,liverpool
+Daily Maverick,https://www.dailymaverick.co.za/dmrss/,https://www.dailymaverick.co.za,-0.1,0.84,general,ZA,national
+Bhekisisa Centre Health Journalism,https://bhekisisa.org/feed/,https://bhekisisa.org,-0.1,0.78,science,ZA,national
+The Continent Africa Weekly,https://www.thecontinent.org/_files/feed.xml,https://www.thecontinent.org,-0.1,0.78,general,ZA,national
+The Cable Nigeria,https://www.thecable.ng/feed,https://www.thecable.ng,-0.1,0.74,general,NG,national
+Sahara Reporters,https://saharareporters.com/feed,https://saharareporters.com,-0.2,0.74,general,NG,national
+TheCable Index Politics,https://www.thecable.ng/category/politics/feed,https://www.thecable.ng/category/politics,-0.1,0.74,politics,NG,national
+HumAngle Nigeria,https://humanglemedia.com/feed/,https://humanglemedia.com,-0.1,0.74,general,NG,national
+Stears Business Nigeria,https://www.stears.co/business/feed/,https://www.stears.co/business,0.0,0.74,business,NG,national
+The East African,https://www.theeastafrican.co.ke/rss.xml,https://www.theeastafrican.co.ke,0.0,0.78,general,KE,regional
+Mail and Guardian Africa,https://mg.co.za/africa/feed/,https://mg.co.za/africa,-0.1,0.78,world,ZA,national
+The Africa Report,https://www.theafricareport.com/feed/,https://www.theafricareport.com,0.0,0.78,world,FR,national
+Africa is a Country,https://africasacountry.com/feed,https://africasacountry.com,-0.3,0.74,politics,ZA,national
+African Arguments,https://africanarguments.org/feed/,https://africanarguments.org,-0.1,0.78,politics,GB,national
+The Africa Center,https://africacenter.org/feed/,https://africacenter.org,0.0,0.78,world,US,national
+ISS Africa,https://issafrica.org/iss-today/rss,https://issafrica.org,0.0,0.82,world,ZA,national
+Daily Trust Nigeria,https://dailytrust.com/feed/,https://dailytrust.com,0.0,0.74,general,NG,national
+GhanaWeb,https://www.ghanaweb.com/GhanaHomePage/rss/news.xml,https://www.ghanaweb.com,0.0,0.7,general,GH,national
+TIMEP Tahrir Inst,https://timep.org/feed/,https://timep.org,0.0,0.78,world,US,national
+The New Arab,https://www.newarab.com/rss,https://www.newarab.com,-0.2,0.74,world,GB,national
+Middle East Eye,https://www.middleeasteye.net/rss/news,https://www.middleeasteye.net,-0.2,0.78,world,GB,national
+Asharq Al-Awsat English,https://english.aawsat.com/home/rss.xml,https://english.aawsat.com,0.1,0.74,world,SA,national
+The National UAE,https://www.thenationalnews.com/feed/,https://www.thenationalnews.com,0.1,0.78,world,AE,national
+Gulf News UAE,https://gulfnews.com/rss/,https://gulfnews.com,0.0,0.74,world,AE,national
+Khaleej Times UAE,https://www.khaleejtimes.com/rss,https://www.khaleejtimes.com,0.0,0.7,general,AE,national
++972 Magazine,https://www.972mag.com/feed,https://www.972mag.com,-0.5,0.74,world,IL,national
+Iran International,https://www.iranintl.com/en/rss.xml,https://www.iranintl.com/en,0.0,0.74,world,GB,national
+Tehran Times,https://www.tehrantimes.com/feed,https://www.tehrantimes.com,0.0,0.6,world,IR,national
+Le Figaro,https://www.lefigaro.fr/rss/figaro_actualites.xml,https://www.lefigaro.fr,0.2,0.82,general,FR,national
+Liberation,https://www.liberation.fr/arc/outboundfeeds/rss/?outputType=xml,https://www.liberation.fr,-0.3,0.78,general,FR,national
+The Local France,https://www.thelocal.fr/feed,https://www.thelocal.fr,0.0,0.74,general,FR,national
+Euractiv,https://www.euractiv.com/rss/all/,https://www.euractiv.com,0.0,0.78,politics,BE,regional
+EUobserver,https://euobserver.com/rss.xml,https://euobserver.com,-0.1,0.78,politics,BE,regional
+Politico Berlin,https://www.politico.eu/section/berlin-bulletin/feed,https://www.politico.eu/section/berlin-bulletin,0.0,0.78,politics,DE,national
+Die Zeit English,https://www.zeit.de/index/index.rdf,https://www.zeit.de/english,-0.1,0.82,general,DE,national
+Die Welt,https://www.welt.de/feeds/latest.rss,https://www.welt.de,0.2,0.78,general,DE,national
+Tageszeitung Berlin,https://taz.de/!p4608;rss/,https://taz.de,-0.4,0.74,general,DE,berlin
+Berliner Zeitung,https://www.berliner-zeitung.de/feed.rss,https://www.berliner-zeitung.de,-0.1,0.72,general,DE,berlin
+NDR Norddeutscher Rundfunk,https://www.ndr.de/nachrichten/index-rss.xml,https://www.ndr.de,-0.1,0.78,general,DE,regional
+The Local Germany,https://www.thelocal.de/feed,https://www.thelocal.de,0.0,0.74,general,DE,national
+ARD Tagesschau,https://www.tagesschau.de/index~rss2.xml,https://www.tagesschau.de,-0.1,0.84,general,DE,national
+La Vanguardia,https://www.lavanguardia.com/rss/home.xml,https://www.lavanguardia.com,-0.1,0.78,general,ES,national
+20 Minutos Spain,https://www.20minutos.es/rss/,https://www.20minutos.es,0.0,0.7,general,ES,national
+Eldiario.es,https://www.eldiario.es/rss/,https://www.eldiario.es,-0.4,0.78,general,ES,national
+infoLibre Spain,https://www.infolibre.es/rss/feed.rss,https://www.infolibre.es,-0.3,0.74,politics,ES,national
+Publico Spain,https://www.publico.es/rss/all,https://www.publico.es,-0.4,0.74,general,ES,national
+Catalunya Plural,https://catalunyaplural.cat/feed/,https://catalunyaplural.cat,-0.2,0.7,general,ES,catalonia
+Vilaweb Catalonia,https://www.vilaweb.cat/rss/home.xml,https://www.vilaweb.cat,-0.2,0.7,general,ES,catalonia
+The Local Spain,https://www.thelocal.es/feed,https://www.thelocal.es,0.0,0.74,general,ES,national
+La Stampa,https://www.lastampa.it/rss.xml,https://www.lastampa.it,-0.1,0.78,general,IT,national
+Il Sole 24 Ore,https://www.ilsole24ore.com/rss/italia--attualita.xml,https://www.ilsole24ore.com,0.0,0.82,business,IT,national
+ANSA English,https://www.ansa.it/sito/ansait_rss.xml,https://www.ansa.it,0.0,0.82,world,IT,national
+Il Manifesto,https://ilmanifesto.it/feed,https://ilmanifesto.it,-0.5,0.74,general,IT,national
+Il Foglio,https://www.ilfoglio.it/rss.jsp?id=10,https://www.ilfoglio.it,0.2,0.74,politics,IT,national
+The Local Italy,https://www.thelocal.it/feed,https://www.thelocal.it,0.0,0.74,general,IT,national
+NL Times,https://nltimes.nl/rss.xml,https://nltimes.nl,0.0,0.74,general,NL,national
+De Volkskrant,https://www.volkskrant.nl/rss.xml,https://www.volkskrant.nl,-0.2,0.82,general,NL,national
+De Correspondent,https://decorrespondent.nl/rss,https://decorrespondent.nl,-0.2,0.84,general,NL,national
+The Brussels Times,https://www.brusselstimes.com/feed,https://www.brusselstimes.com,0.0,0.74,general,BE,national
+The Local Belgium,https://www.thelocal.be/feed,https://www.thelocal.be,0.0,0.7,general,BE,national
+Reuters Brussels,https://www.reuters.com/world/europe/rss,https://www.reuters.com/world/europe,0.0,0.86,world,BE,regional
+RTBF Belgium English,https://www.rtbf.be/site/api/rss/info,https://www.rtbf.be,-0.1,0.74,general,BE,national
+SVT News Sweden,https://www.svt.se/rss.xml,https://www.svt.se,-0.1,0.78,general,SE,national
+The Local Sweden,https://www.thelocal.se/feed,https://www.thelocal.se,0.0,0.74,general,SE,national
+Sveriges Radio,https://api.sr.se/api/rss/program/2054,https://sverigesradio.se,-0.1,0.78,general,SE,national
+DR News Denmark,https://www.dr.dk/nyheder/service/feeds/allenyheder,https://www.dr.dk,-0.1,0.78,general,DK,national
+The Local Denmark,https://www.thelocal.dk/feed,https://www.thelocal.dk,0.0,0.74,general,DK,national
+The Copenhagen Post,https://cphpost.dk/feed/,https://cphpost.dk,0.0,0.7,general,DK,national
+NRK News Norway,https://www.nrk.no/toppsaker.rss,https://www.nrk.no,-0.1,0.78,general,NO,national
+The Local Norway,https://www.thelocal.no/feed,https://www.thelocal.no,0.0,0.74,general,NO,national
+Yle News Finland,https://feeds.yle.fi/uutiset/v1/recent.rss?publisherIds=YLE_NEWS,https://yle.fi/news,-0.1,0.78,general,FI,national
+Helsingin Sanomat English,https://www.hs.fi/rss/teasers/en.xml,https://www.hs.fi/english,-0.1,0.78,general,FI,national
+ERR News Estonia,https://news.err.ee/rss,https://news.err.ee,0.0,0.74,general,EE,national
+LRT English Lithuania,https://www.lrt.lt/en/rss,https://www.lrt.lt/en,0.0,0.74,general,LT,national
+Latvian Public Media LSM,https://eng.lsm.lv/feed/,https://eng.lsm.lv,0.0,0.74,general,LV,national
+Notes from Poland,https://notesfrompoland.com/feed/,https://notesfrompoland.com,0.0,0.78,general,PL,national
+Gazeta Wyborcza English,https://wyborcza.pl/pub/rss/wyborcza_en.xml,https://wyborcza.pl,-0.2,0.82,general,PL,national
+Onet News Poland,https://wiadomosci.onet.pl/.feed,https://wiadomosci.onet.pl,0.0,0.74,general,PL,national
+Visegrad Insight,https://visegradinsight.eu/feed/,https://visegradinsight.eu,-0.1,0.78,politics,PL,regional
+Telex Hungary English,https://telex.hu/rss/english,https://telex.hu/english,-0.2,0.78,general,HU,national
+HVG Hungary English,https://hvg.hu/rss.xml,https://hvg.hu,-0.1,0.74,general,HU,national
+Hungarian Conservative,https://www.hungarianconservative.com/feed/,https://www.hungarianconservative.com,0.4,0.7,politics,HU,national
+Budapest Business Journal,https://bbj.hu/rss,https://bbj.hu,0.0,0.74,business,HU,national
+Romania Insider,https://www.romania-insider.com/rss.xml,https://www.romania-insider.com,0.0,0.74,general,RO,national
+Bulgarian Presidency,https://www.president.bg/feed,https://www.president.bg,0.0,0.66,politics,BG,national
+N1 Serbian News,https://n1info.rs/feed/,https://n1info.rs,0.0,0.78,general,RS,national
+Balkan Insight,https://balkaninsight.com/feed/,https://balkaninsight.com,-0.1,0.82,world,RS,regional
+The Slovenia Times,https://sloveniatimes.com/feed/,https://sloveniatimes.com,0.0,0.7,general,SI,national
+HRT News Croatia,https://www.hrt.hr/rss/vijesti,https://www.hrt.hr,-0.1,0.74,general,HR,national
+Total Croatia News,https://www.total-croatia-news.com/?format=feed&type=rss,https://www.total-croatia-news.com,0.0,0.7,general,HR,national
+Kyiv Independent,https://kyivindependent.com/rss/,https://kyivindependent.com,-0.1,0.84,world,UA,national
+Kyiv Post,https://www.kyivpost.com/feed,https://www.kyivpost.com,-0.1,0.78,world,UA,national
+Ukrainska Pravda English,https://www.pravda.com.ua/eng/rss/,https://www.pravda.com.ua/eng,-0.1,0.78,world,UA,national
+The New Voice of Ukraine,https://english.nv.ua/rss.xml,https://english.nv.ua,-0.1,0.74,world,UA,national
+The Insider Russia,https://theins.ru/en/feed,https://theins.ru/en,-0.4,0.78,world,RU,national
+Novaya Gazeta Europe,https://novayagazeta.eu/feed,https://novayagazeta.eu,-0.4,0.78,world,DE,national
+Meduza English,https://meduza.io/en/rss/all,https://meduza.io/en,-0.2,0.82,world,LV,national
+Riddle Russia,https://ridl.io/feed/,https://ridl.io,-0.1,0.78,world,DE,national
+Russia Matters,https://www.russiamatters.org/rss.xml,https://www.russiamatters.org,0.0,0.82,world,US,national
+Yle News English,https://yle.fi/uutiset/rss/news.rss,https://yle.fi/news,-0.1,0.78,general,FI,national
+NOS News Netherlands,https://feeds.nos.nl/nosnieuwsalgemeen,https://nos.nl,-0.1,0.84,general,NL,national
+RTE News Ireland,https://www.rte.ie/news/rss/news-headlines.xml,https://www.rte.ie,-0.1,0.84,general,IE,national
+Irish Examiner,https://www.irishexaminer.com/?service=rss,https://www.irishexaminer.com,-0.1,0.78,general,IE,national
+The Currency Ireland,https://thecurrency.news/feed/,https://thecurrency.news,0.0,0.74,business,IE,national
+Globe and Mail,https://www.theglobeandmail.com/topic/national/?service=rss,https://www.theglobeandmail.com,0.0,0.84,general,CA,national
+National Post Canada,https://nationalpost.com/feed/,https://nationalpost.com,0.3,0.74,general,CA,national
+Toronto Star,https://www.thestar.com/feeds.articles.news.rss,https://www.thestar.com,-0.2,0.78,general,CA,national
+The Tyee,https://thetyee.ca/rss2.xml,https://thetyee.ca,-0.3,0.78,politics,CA,national
+The Walrus Canada,https://thewalrus.ca/feed/,https://thewalrus.ca,-0.2,0.78,general,CA,national
+Maclean's Canada,https://macleans.ca/feed/,https://macleans.ca,-0.1,0.78,general,CA,national
+The Narwhal Canada,https://thenarwhal.ca/feed/,https://thenarwhal.ca,-0.2,0.78,science,CA,national
+The Logic Canada,https://thelogic.co/feed/,https://thelogic.co,0.0,0.78,tech,CA,national
+Le Devoir Quebec,https://www.ledevoir.com/rss/section/actualites.xml,https://www.ledevoir.com,-0.2,0.78,general,CA,quebec
+Pivot Media Quebec,https://pivot.quebec/feed/,https://pivot.quebec,-0.3,0.74,politics,CA,quebec
+The Brazilian Report,https://brazilian.report/feed/,https://brazilian.report,0.0,0.78,world,BR,national
+Agencia Publica Brazil,https://apublica.org/feed/,https://apublica.org,-0.2,0.82,politics,BR,national
+Veja Brazil,https://veja.abril.com.br/feed/,https://veja.abril.com.br,0.2,0.74,general,BR,national
+Globo G1 Brazil,https://g1.globo.com/rss/g1/,https://g1.globo.com,0.0,0.78,general,BR,national
+Estadao Brazil,https://www.estadao.com.br/rss/ultimas.xml,https://www.estadao.com.br,0.1,0.78,general,BR,national
+Nexo Jornal,https://www.nexojornal.com.br/feed,https://www.nexojornal.com.br,-0.1,0.78,general,BR,national
+The Intercept Brasil,https://www.intercept.com.br/feed/,https://www.intercept.com.br,-0.4,0.78,politics,BR,national
+Pagina 12 Argentina,https://www.pagina12.com.ar/rss/portada,https://www.pagina12.com.ar,-0.4,0.74,general,AR,national
+La Nacion Argentina,https://www.lanacion.com.ar/arc/outboundfeeds/rss/?outputType=xml,https://www.lanacion.com.ar,0.2,0.78,general,AR,national
+Infobae Argentina,https://www.infobae.com/feeds/rss/,https://www.infobae.com,0.0,0.74,general,AR,national
+Chequeado Argentina,https://chequeado.com/feed/,https://chequeado.com,0.0,0.82,politics,AR,national
+El Mostrador Chile,https://www.elmostrador.cl/feed/,https://www.elmostrador.cl,-0.2,0.74,general,CL,national
+La Tercera Chile,https://www.latercera.com/arc/outboundfeeds/rss/?outputType=xml,https://www.latercera.com,0.1,0.78,general,CL,national
+CIPER Chile,https://www.ciperchile.cl/feed/,https://www.ciperchile.cl,-0.1,0.84,politics,CL,national
+El Tiempo Colombia,https://www.eltiempo.com/rss/colombia.xml,https://www.eltiempo.com,0.1,0.78,general,CO,national
+El Espectador Colombia,https://www.elespectador.com/arc/outboundfeeds/rss/?outputType=xml,https://www.elespectador.com,-0.1,0.78,general,CO,national
+La Silla Vacia Colombia,https://www.lasillavacia.com/rss,https://www.lasillavacia.com,-0.1,0.78,politics,CO,national
+Colombia Reports,https://colombiareports.com/feed/,https://colombiareports.com,0.0,0.7,world,CO,national
+Animal Politico Mexico,https://www.animalpolitico.com/feed,https://www.animalpolitico.com,-0.2,0.82,politics,MX,national
+Reforma Mexico,https://www.reforma.com/rss/portada.xml,https://www.reforma.com,0.1,0.78,general,MX,national
+Quinto Elemento Lab Mexico,https://quintoelab.org/feed,https://quintoelab.org,-0.1,0.78,politics,MX,national
+Aristegui Noticias,https://aristeguinoticias.com/feed/,https://aristeguinoticias.com,-0.2,0.74,general,MX,national
+Insight Crime LATAM,https://insightcrime.org/feed/,https://insightcrime.org,-0.1,0.82,world,US,regional
+Americas Quarterly Politics,https://www.americasquarterly.org/category/politics/feed/,https://www.americasquarterly.org,0.0,0.82,politics,US,national
+WOLA Washington Office on Latin America,https://www.wola.org/feed/,https://www.wola.org,-0.2,0.82,world,US,national
+Caracol Radio Colombia,https://caracol.com.co/rss/,https://caracol.com.co,0.0,0.74,general,CO,national
+La Nacion Costa Rica,https://www.nacion.com/arc/outboundfeeds/rss/?outputType=xml,https://www.nacion.com,0.0,0.78,general,CR,national
+The Tico Times Costa Rica,https://ticotimes.net/feed,https://ticotimes.net,0.0,0.74,general,CR,national
+Diario Libre Dominican Republic,https://www.diariolibre.com/arc/outboundfeeds/rss/?outputType=xml,https://www.diariolibre.com,0.0,0.7,general,DO,national
+Periodismo de Barrio Cuba,https://www.periodismodebarrio.org/feed/,https://www.periodismodebarrio.org,-0.2,0.74,general,CU,national
+14ymedio Cuba,https://www.14ymedio.com/rss/,https://www.14ymedio.com,-0.1,0.78,politics,CU,national
+ElToque Cuba,https://eltoque.com/feed,https://eltoque.com,-0.1,0.74,general,CU,national
+Caracas Chronicles,https://www.caracaschronicles.com/feed/,https://www.caracaschronicles.com,0.0,0.78,politics,VE,national
+Efecto Cocuyo Venezuela,https://efectococuyo.com/feed/,https://efectococuyo.com,-0.1,0.74,politics,VE,national
+Bolivia Crossroads,https://en.eju.tv/feed/,https://en.eju.tv,0.0,0.66,world,BO,national
+Asahi Shimbun English,https://www.asahi.com/ajw/rss20.xml,https://www.asahi.com/ajw,-0.1,0.84,world,JP,national
+Mainichi Japan English,https://mainichi.jp/english/rss/etc/mainichi-jp.rss,https://mainichi.jp/english,-0.1,0.82,world,JP,national
+NHK World News,https://www3.nhk.or.jp/nhkworld/en/news/feed/,https://www3.nhk.or.jp/nhkworld/en,0.0,0.84,world,JP,national
+Nikkei Asia Politics,https://asia.nikkei.com/rss/feed/politics,https://asia.nikkei.com/Politics,0.0,0.88,world,JP,regional
+Korea JoongAng Daily,https://koreajoongangdaily.joins.com/rss/all,https://koreajoongangdaily.joins.com,0.0,0.78,world,KR,national
+Korea Herald,https://www.koreaherald.com/common/rss_xml.php?ct=102,https://www.koreaherald.com,0.0,0.74,world,KR,national
+The Hankyoreh English,https://english.hani.co.kr/arti/rss/,https://english.hani.co.kr,-0.3,0.78,world,KR,national
+Yonhap News Korea,https://en.yna.co.kr/RSS/national.xml,https://en.yna.co.kr,0.0,0.78,world,KR,national
+East Asia Forum,https://www.eastasiaforum.org/feed/,https://www.eastasiaforum.org,0.0,0.84,world,AU,regional
+The China Project,https://thechinaproject.com/feed/,https://thechinaproject.com,0.0,0.78,world,US,national
+Sixth Tone China,https://www.sixthtone.com/feed,https://www.sixthtone.com,0.0,0.78,world,CN,national
+The Wire China,https://www.thewirechina.com/feed/,https://www.thewirechina.com,0.0,0.82,world,US,national
+ChinaFile Asia Society,https://www.chinafile.com/feed,https://www.chinafile.com,0.0,0.82,world,US,national
+Inkstone News,https://www.inkstonenews.com/rss/,https://www.inkstonenews.com,0.0,0.74,world,HK,national
+Taiwan Plus News,https://www.taiwanplus.com/index.xml,https://www.taiwanplus.com,0.0,0.74,world,TW,national
+Focus Taiwan,https://focustaiwan.tw/RSS,https://focustaiwan.tw,0.0,0.78,world,TW,national
+Taipei Times,https://www.taipeitimes.com/xml/news.rss,https://www.taipeitimes.com,0.0,0.74,world,TW,national
+News Lens International,https://international.thenewslens.com/feed,https://international.thenewslens.com,-0.1,0.74,world,TW,national
+Today Singapore,https://www.todayonline.com/feed,https://www.todayonline.com,0.0,0.74,general,SG,national
+Channel News Asia,https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml,https://www.channelnewsasia.com,0.0,0.82,world,SG,national
+The Edge Singapore,https://www.theedgesingapore.com/rss.xml,https://www.theedgesingapore.com,0.0,0.74,business,SG,national
+Khaosod English Thailand,https://www.khaosodenglish.com/feed/,https://www.khaosodenglish.com,0.0,0.7,general,TH,national
+Tempo English Indonesia,https://en.tempo.co/rss/news,https://en.tempo.co,-0.1,0.78,world,ID,national
+Jakarta Post,https://www.thejakartapost.com/feed,https://www.thejakartapost.com,0.0,0.78,world,ID,national
+Jakarta Globe,https://jakartaglobe.id/feed,https://jakartaglobe.id,0.0,0.74,general,ID,national
+Coconuts Jakarta,https://coconuts.co/jakarta/feed/,https://coconuts.co/jakarta,0.0,0.7,general,ID,jakarta
+The Straits Times Asia,https://www.straitstimes.com/news/asia/rss.xml,https://www.straitstimes.com/asia,0.0,0.78,world,SG,regional
+Malaysiakini,https://www.malaysiakini.com/rss,https://www.malaysiakini.com,-0.1,0.78,general,MY,national
+Free Malaysia Today,https://www.freemalaysiatoday.com/category/nation/feed/,https://www.freemalaysiatoday.com,0.0,0.74,general,MY,national
+Rappler Philippines,https://www.rappler.com/feed/,https://www.rappler.com,-0.2,0.82,general,PH,national
+Philippine Star,https://www.philstar.com/rss/headlines,https://www.philstar.com,0.0,0.74,general,PH,national
+Vera Files Philippines,https://verafiles.org/feed/,https://verafiles.org,-0.1,0.78,politics,PH,national
+PCIJ Philippines,https://pcij.org/feed/,https://pcij.org,-0.1,0.82,politics,PH,national
+Mongolian Mining Journal,https://www.mongolianminingjournal.com/index.xml,https://www.mongolianminingjournal.com,0.0,0.66,business,MN,national
+The UB Post Mongolia,https://www.theubposts.com/?format=feed&type=rss,https://www.theubposts.com,0.0,0.66,general,MN,national
+NZ Herald,https://www.nzherald.co.nz/arc/outboundfeeds/rss/curated/?outputType=xml,https://www.nzherald.co.nz,0.0,0.78,general,NZ,national
+The Spinoff NZ,https://thespinoff.co.nz/feed/,https://thespinoff.co.nz,-0.2,0.78,general,NZ,national
+Newsroom NZ,https://www.newsroom.co.nz/feed,https://www.newsroom.co.nz,-0.1,0.78,general,NZ,national
+The Guardian Australia,https://www.theguardian.com/australia-news/rss,https://www.theguardian.com/australia-news,-0.2,0.84,general,AU,national
+The Saturday Paper,https://www.thesaturdaypaper.com.au/feed/articles.rss,https://www.thesaturdaypaper.com.au,-0.2,0.78,general,AU,national
+The Monthly Australia,https://www.themonthly.com.au/rss.xml,https://www.themonthly.com.au,-0.2,0.78,general,AU,national
+Inside Story Australia,https://insidestory.org.au/feed/,https://insidestory.org.au,-0.1,0.78,politics,AU,national
+ABC News India,https://feeds.bbci.co.uk/news/world/south_asia/rss.xml,https://www.bbc.com/news/world/south_asia,0.0,0.84,world,GB,regional
+The Hindu,https://www.thehindu.com/news/feeder/default.rss,https://www.thehindu.com,-0.1,0.82,general,IN,national
+The Wire India,https://thewire.in/rss/posts,https://thewire.in,-0.3,0.82,politics,IN,national
+Scroll India,https://scroll.in/feed.rss,https://scroll.in,-0.2,0.78,general,IN,national
+Newslaundry India,https://www.newslaundry.com/feed/all,https://www.newslaundry.com,-0.2,0.78,politics,IN,national
+The News Minute India,https://www.thenewsminute.com/feed/,https://www.thenewsminute.com,-0.1,0.78,politics,IN,south
+Article 14 India,https://article-14.com/rss,https://article-14.com,-0.2,0.78,politics,IN,national
+Caravan Magazine India,https://caravanmagazine.in/rss/articles,https://caravanmagazine.in,-0.2,0.84,general,IN,national
+Hindustan Times,https://www.hindustantimes.com/feeds/rss/india-news/index.xml,https://www.hindustantimes.com,0.0,0.78,general,IN,national
+Economic Times India,https://economictimes.indiatimes.com/rssfeedstopstories.cms,https://economictimes.indiatimes.com,0.0,0.78,business,IN,national
+Down to Earth India,https://www.downtoearth.org.in/feeds/news.xml,https://www.downtoearth.org.in,-0.1,0.78,science,IN,national
+The Better India,https://www.thebetterindia.com/feed/,https://www.thebetterindia.com,-0.1,0.7,general,IN,national
+Mongabay India,https://india.mongabay.com/feed/,https://india.mongabay.com,-0.1,0.78,science,IN,national
+Daily Star Bangladesh,https://www.thedailystar.net/frontpage/rss.xml,https://www.thedailystar.net,0.0,0.74,general,BD,national
+Dhaka Tribune,https://www.dhakatribune.com/feed,https://www.dhakatribune.com,0.0,0.7,general,BD,national
+Prothom Alo English,https://en.prothomalo.com/feed,https://en.prothomalo.com,-0.1,0.74,general,BD,national
+Dawn Pakistan,https://www.dawn.com/feed,https://www.dawn.com,0.0,0.84,general,PK,national
+Geo News Pakistan,https://www.geo.tv/rss/1/1,https://www.geo.tv,0.0,0.74,general,PK,national
+The Express Tribune Pakistan,https://tribune.com.pk/feed/home,https://tribune.com.pk,0.0,0.74,general,PK,national
+The News International Pakistan,https://www.thenews.com.pk/rss/1/1,https://www.thenews.com.pk,0.0,0.7,general,PK,national
+Kathmandu Post Nepal,https://kathmandupost.com/rss,https://kathmandupost.com,0.0,0.74,general,NP,national
+The Himalayan Times,https://thehimalayantimes.com/feed,https://thehimalayantimes.com,0.0,0.7,general,NP,national
+Sri Lanka Daily Mirror,https://www.dailymirror.lk/RSS_Latest_News/352.xml,https://www.dailymirror.lk,0.0,0.7,general,LK,national
+Sri Lanka EconomyNext,https://economynext.com/feed,https://economynext.com,0.0,0.74,business,LK,national
+Frontier Myanmar,https://www.frontiermyanmar.net/en/feed/,https://www.frontiermyanmar.net,-0.1,0.78,general,MM,national
+Myanmar Now,https://myanmar-now.org/en/feed,https://myanmar-now.org/en,-0.2,0.74,politics,MM,national
+The Irrawaddy,https://www.irrawaddy.com/feed,https://www.irrawaddy.com,-0.2,0.78,general,MM,national
+Khmer Times Cambodia,https://www.khmertimeskh.com/feed/,https://www.khmertimeskh.com,0.0,0.7,general,KH,national
+VnExpress International Vietnam,https://e.vnexpress.net/rss/news.rss,https://e.vnexpress.net,0.0,0.74,world,VN,national
+Vietnam News Agency,https://en.vietnamplus.vn/RssView.vnp?lang=en,https://en.vietnamplus.vn,0.0,0.66,world,VN,national
+RFA Asia,https://www.rfa.org/english/RSS,https://www.rfa.org/english,0.0,0.78,world,US,regional
+VOA News English,https://www.voanews.com/api/zmgqoekvit,https://www.voanews.com,0.0,0.78,world,US,national
+Vanity Fair Hive,https://www.vanityfair.com/feed/section/news/rss,https://www.vanityfair.com,-0.2,0.78,politics,US,national
+Reuters Europe,https://www.reutersagency.com/feed/?best-regions=europe&post_type=best,https://www.reuters.com,0.0,0.84,world,GB,regional
+Platformer Casey Newton,https://www.platformer.news/feed,https://www.platformer.news,-0.1,0.84,tech,US,national
+Garbage Day Ryan Broderick,https://www.garbageday.email/feed,https://www.garbageday.email,-0.1,0.78,tech,US,national
+Today in Tabs Rusty Foster,https://www.todayintabs.com/feed,https://www.todayintabs.com,-0.2,0.74,tech,US,national
+Galaxy Brain Charlie Warzel,https://galaxybrain.substack.com/feed,https://galaxybrain.substack.com,-0.1,0.78,tech,US,national
+Last Week in AI,https://lastweekin.ai/feed,https://lastweekin.ai,0.0,0.78,tech,US,national
+Import AI Jack Clark,https://importai.substack.com/feed,https://importai.substack.com,0.0,0.82,tech,US,national
+AI Snake Oil Princeton,https://www.aisnakeoil.com/feed,https://www.aisnakeoil.com,-0.1,0.84,tech,US,national
+One Useful Thing Ethan Mollick,https://www.oneusefulthing.org/feed,https://www.oneusefulthing.org,0.0,0.84,tech,US,national
+Eugene Wei Remains,https://www.eugenewei.com/blog?format=rss,https://www.eugenewei.com,0.0,0.78,tech,US,national
+Astral Codex Ten Scott Alexander,https://www.astralcodexten.com/feed,https://www.astralcodexten.com,0.1,0.78,general,US,national
+The Diff Byrne Hobart,https://www.thediff.co/feed,https://www.thediff.co,0.1,0.84,business,US,national
+Not Boring Packy McCormick,https://www.notboring.co/feed,https://www.notboring.co,0.0,0.78,business,US,national
+Bits of Wonder Henry Shevlin,https://bitsofwonder.substack.com/feed,https://bitsofwonder.substack.com,0.0,0.7,tech,US,national
+Construction Physics Brian Potter,https://www.construction-physics.com/feed,https://www.construction-physics.com,0.0,0.84,science,US,national
+Works in Progress Magazine,https://worksinprogress.co/feed/,https://worksinprogress.co,0.0,0.84,science,US,national
+Asterisk Magazine,https://asteriskmag.com/feed,https://asteriskmag.com,0.0,0.78,science,US,national
+Asimov Press,https://press.asimov.com/feed,https://press.asimov.com,0.0,0.74,science,US,national
+The Browser,https://thebrowser.com/feed,https://thebrowser.com,0.0,0.78,general,US,national
+Lenny's Newsletter Product,https://www.lennysnewsletter.com/feed,https://www.lennysnewsletter.com,0.0,0.74,tech,US,national
+Money Stuff Matt Levine,https://newsletterhunt.com/rss/newsletters/money-stuff,https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine.rss,0.0,0.86,business,US,national
+Yet Another Value Blog,https://yetanothervalueblog.com/feed,https://yetanothervalueblog.com,0.0,0.74,business,US,national
+Net Interest Marc Rubinstein,https://www.netinterest.co/feed,https://www.netinterest.co,0.0,0.82,business,US,national
+Liberty Street Economics NY Fed,https://libertystreeteconomics.newyorkfed.org/feed/,https://libertystreeteconomics.newyorkfed.org,0.0,0.88,business,US,national
+Conversable Economist Timothy Taylor,https://conversableeconomist.com/feed/,https://conversableeconomist.com,0.0,0.78,business,US,national
+Noahpinion Noah Smith,https://www.noahpinion.blog/feed,https://www.noahpinion.blog,0.1,0.82,business,US,national
+Slow Boring Matt Yglesias,https://www.slowboring.com/feed,https://www.slowboring.com,0.0,0.84,politics,US,national
+Yascha Mounk Substack,https://yaschamounk.substack.com/feed,https://yaschamounk.substack.com,0.1,0.78,politics,US,national
+Heather Cox Richardson,https://heathercoxrichardson.substack.com/feed,https://heathercoxrichardson.substack.com,-0.3,0.78,politics,US,national
+Robert Reich Substack,https://robertreich.substack.com/feed,https://robertreich.substack.com,-0.4,0.74,politics,US,national
+Public Michael Shellenberger,https://public.substack.com/feed,https://public.substack.com,0.4,0.7,politics,US,national
+The Free Press Bari Weiss,https://www.thefp.com/feed,https://www.thefp.com,0.2,0.78,politics,US,national
+Glenn Greenwald System Update,https://greenwald.substack.com/feed,https://greenwald.substack.com,0.2,0.74,politics,US,national
+Andrew Sullivan Weekly Dish,https://andrewsullivan.substack.com/feed,https://andrewsullivan.substack.com,0.1,0.78,politics,US,national
+The Liberal Patriot,https://www.liberalpatriot.com/feed,https://www.liberalpatriot.com,0.0,0.78,politics,US,national
+Common Sense Bari Weiss Old,https://bariweiss.substack.com/feed,https://bariweiss.substack.com,0.2,0.74,politics,US,national
+Matt Taibbi Racket News,https://www.racket.news/feed,https://www.racket.news,0.3,0.74,politics,US,national
+Tangle News Isaac Saul,https://www.readtangle.com/feed,https://www.readtangle.com,0.0,0.78,politics,US,national
+Popular Information Judd Legum,https://popular.info/feed,https://popular.info,-0.4,0.78,politics,US,national
+Slate Star Codex Old,https://slatestarcodex.com/feed/,https://slatestarcodex.com,0.1,0.78,general,US,national
+Status Hunter Harris,https://hunterharris.substack.com/feed,https://hunterharris.substack.com,-0.1,0.74,general,US,national
+Sentiment Analysis Doree,https://doree.substack.com/feed,https://doree.substack.com,-0.1,0.7,general,US,national
+The Honest Broker Ted Gioia,https://www.honest-broker.com/feed,https://www.honest-broker.com,0.0,0.78,general,US,national
+The Audacity Roxane Gay,https://audacity.substack.com/feed,https://audacity.substack.com,-0.3,0.74,general,US,national
+Anne Helen Petersen Culture Study,https://annehelen.substack.com/feed,https://annehelen.substack.com,-0.3,0.78,general,US,national
+Heated Emily Atkin,https://heated.world/feed,https://heated.world,-0.3,0.78,science,US,national
+Volts David Roberts,https://www.volts.wtf/feed,https://www.volts.wtf,-0.3,0.82,science,US,national
+The Climate Brink,https://www.theclimatebrink.com/feed,https://www.theclimatebrink.com,-0.1,0.82,science,US,national
+Distilled Robinson Meyer,https://heatmap.news/rss.xml,https://heatmap.news,-0.1,0.78,science,US,national
+Cipher News Climate,https://www.ciphernews.com/feed/,https://www.ciphernews.com,-0.1,0.74,science,US,national
+Drilled Amy Westervelt,https://drilled.media/feed,https://drilled.media,-0.4,0.78,science,US,national
+Energy Institute UC Berkeley,https://energyathaas.wordpress.com/feed/,https://energyathaas.wordpress.com,-0.1,0.78,science,US,national
+Doomberg,https://doomberg.substack.com/feed,https://doomberg.substack.com,0.2,0.74,business,US,national
+Climateer Investing,https://climateerinvest.blogspot.com/feeds/posts/default,https://climateerinvest.blogspot.com,0.0,0.7,business,US,national
+Practical AI O'Reilly,https://www.oreilly.com/radar/topics/ai-ml/feed/,https://www.oreilly.com/radar,0.0,0.78,tech,US,national
+The Pragmatic Engineer Gergely,https://newsletter.pragmaticengineer.com/feed,https://newsletter.pragmaticengineer.com,0.0,0.82,tech,US,national
+High Growth Engineer Jordan,https://www.highgrowthengineer.com/feed,https://www.highgrowthengineer.com,0.0,0.74,tech,US,national
+Code Like a Girl Medium,https://medium.com/feed/code-like-a-girl,https://medium.com/code-like-a-girl,-0.1,0.7,tech,US,national
+Hacking Open Source Business,https://blog.opensauced.pizza/rss/,https://blog.opensauced.pizza,0.0,0.7,tech,US,national
+Daring Fireball Linked List,https://daringfireball.net/feeds/articles,https://daringfireball.net,0.0,0.82,tech,US,national
+Six Colors Jason Snell,https://sixcolors.com/feed/,https://sixcolors.com,0.0,0.78,tech,US,national
+Macstories Federico Viticci,https://www.macstories.net/feed/,https://www.macstories.net,0.0,0.78,tech,US,national
+TidBITS,https://tidbits.com/feed/,https://tidbits.com,0.0,0.78,tech,US,national
+Ben Evans Newsletter,https://www.ben-evans.com/newsletter?format=rss,https://www.ben-evans.com,0.0,0.84,tech,GB,national
+Exponential View Azeem Azhar,https://www.exponentialview.co/feed,https://www.exponentialview.co,0.0,0.82,tech,GB,national
+Big Technology Alex Kantrowitz,https://www.bigtechnology.com/feed,https://www.bigtechnology.com,0.0,0.78,tech,US,national
+Sharp Tech Stratechery,https://sharptech.fm/feed/free,https://sharptech.fm,0.0,0.74,tech,US,national
+Hyperdimensional Dean Ball,https://www.hyperdimensional.co/feed,https://www.hyperdimensional.co,0.1,0.78,tech,US,national
+Marginalia Search Notes,https://www.marginalia.nu/log/index.rss,https://www.marginalia.nu/log,0.0,0.7,tech,SE,national
+Computational Biology Jeff Leek,https://simplystatistics.org/index.xml,https://simplystatistics.org,0.0,0.78,science,US,national
+Statistical Modeling Andrew Gelman,https://statmodeling.stat.columbia.edu/feed/,https://statmodeling.stat.columbia.edu,-0.1,0.84,science,US,national
+Hard Reset Allison Schrager,https://www.bloomberg.com/opinion/authors/ARN6OdmkVR4/allison-schrager.rss,https://www.bloomberg.com,0.3,0.78,business,US,national
+The Honest Broker Climate Roger Pielke,https://rogerpielkejr.substack.com/feed,https://rogerpielkejr.substack.com,0.2,0.74,science,US,national
+Apricitas Economics Joey Politano,https://www.apricitas.io/feed,https://www.apricitas.io,0.0,0.78,business,US,national
+Conversation in Statistics Frank Harrell,https://discourse.datamethods.org/c/r/discussion.rss,https://discourse.datamethods.org,0.0,0.78,science,US,national
+Your Local Epidemiologist Katelyn Jetelina,https://yourlocalepidemiologist.substack.com/feed,https://yourlocalepidemiologist.substack.com,-0.1,0.86,science,US,national
+Eric Topol Ground Truths,https://erictopol.substack.com/feed,https://erictopol.substack.com,-0.1,0.86,science,US,national
+Inside Medicine Jeremy Faust,https://insidemedicine.substack.com/feed,https://insidemedicine.substack.com,-0.1,0.78,science,US,national
+Drug Channels Adam Fein,https://www.drugchannels.net/feeds/posts/default,https://www.drugchannels.net,0.0,0.78,business,US,national
+Healthy Skeptic Joe Selvaggi,https://healthy-skeptic.com/feed/,https://healthy-skeptic.com,0.2,0.66,science,US,national
+Diet Doctor Andreas Eenfeldt,https://www.dietdoctor.com/feed,https://www.dietdoctor.com,0.0,0.7,science,US,national
+Beth Mole Ars Technica Author,https://arstechnica.com/author/beth-mole/feed/,https://arstechnica.com/author/beth-mole,-0.1,0.78,science,US,national
+Asymco Horace Dediu,https://www.asymco.com/feed/,https://www.asymco.com,0.0,0.78,tech,US,national
+Reaction Wheel Jerry Neumann,https://reactionwheel.net/feed/,https://reactionwheel.net,0.0,0.74,business,US,national
+Stratechery Sharp China,https://sharpchina.com/feed/free,https://sharpchina.com,0.0,0.74,world,US,national
+Sinocism Bill Bishop,https://sinocism.com/feed,https://sinocism.com,0.1,0.86,world,US,national
+ChinaTalk Jordan Schneider,https://www.chinatalk.media/feed,https://www.chinatalk.media,0.0,0.82,world,US,national
+The Triton War on the Rocks,https://warontherocks.com/category/the-triton/feed/,https://warontherocks.com,0.0,0.78,world,US,national
+War On The Rocks Substack Texas National Security,https://tnsr.org/feed/,https://tnsr.org,0.0,0.82,world,US,national
+Silicon Curtain Jonathan Fink,https://siliconcurtain.substack.com/feed,https://siliconcurtain.substack.com,-0.1,0.74,world,US,national
+Phillips O'Brien Substack,https://phillipspobrien.substack.com/feed,https://phillipspobrien.substack.com,-0.1,0.78,world,US,national
+The Cunning of Geopolitical Reason,https://kamilkazani.substack.com/feed,https://kamilkazani.substack.com,-0.1,0.74,world,US,national
+War in Ukraine Live Updates ISW,https://understandingwar.org/feed,https://understandingwar.org,0.0,0.86,world,US,national
+War Translated,https://wartranslated.com/feed/,https://wartranslated.com,0.0,0.74,world,US,national
+Sarah Kendzior Substack,https://sarahkendzior.substack.com/feed,https://sarahkendzior.substack.com,-0.4,0.7,politics,US,national
+Joyce Vance Civil Discourse,https://joycevance.substack.com/feed,https://joycevance.substack.com,-0.3,0.74,politics,US,national
+Steady Dan Rather,https://steady.substack.com/feed,https://steady.substack.com,-0.3,0.74,politics,US,national
+Status Kafka Soothing Sounds Substack,https://www.statuspublishing.com/feed,https://www.statuspublishing.com,-0.1,0.74,general,US,national
+Lucid Brynn Tannehill,https://lucid.substack.com/feed,https://lucid.substack.com,-0.3,0.72,politics,US,national
+The Garrison Robert Hubbell,https://roberthubbell.substack.com/feed,https://roberthubbell.substack.com,-0.3,0.7,politics,US,national
+The Status Kuo Substack,https://statuskuo.substack.com/feed,https://statuskuo.substack.com,-0.3,0.7,politics,US,national
+Ann Telnaes Cartoons,https://anntelnaes.substack.com/feed,https://anntelnaes.substack.com,-0.3,0.74,politics,US,national
+Wonkette,https://www.wonkette.com/feed,https://www.wonkette.com,-0.5,0.66,politics,US,national
+Crooks and Liars,https://crooksandliars.com/rss.xml,https://crooksandliars.com,-0.5,0.66,politics,US,national
+Charlie Sykes Substack,https://charliesykes.substack.com/feed,https://charliesykes.substack.com,0.1,0.74,politics,US,national
+Jonathan V Last Newsletter,https://jvl.substack.com/feed,https://jvl.substack.com,0.1,0.74,politics,US,national
+The Cool Down Climate,https://www.thecooldown.com/feed/,https://www.thecooldown.com,-0.2,0.7,science,US,national
+Climate Forward NYT,https://www.nytimes.com/services/xml/rss/nyt/Climate.xml,https://www.nytimes.com/section/climate,-0.1,0.84,science,US,national
+TomDispatch,https://tomdispatch.com/feed/,https://tomdispatch.com,-0.5,0.74,politics,US,national
+Empire and Revolution Vincent Bevins,https://www.thefireworks.life/feed,https://www.thefireworks.life,-0.4,0.7,world,US,national
+The Convivial Society LM Sacasas,https://theconvivialsociety.substack.com/feed,https://theconvivialsociety.substack.com,0.0,0.78,tech,US,national
+Doomscroll Garbage Day,https://garbageintelligence.substack.com/feed,https://garbageintelligence.substack.com,0.0,0.7,tech,US,national
+Read Max Newsletter,https://maxread.substack.com/feed,https://maxread.substack.com,-0.1,0.74,tech,US,national
+Liz Lopatto Verge Newsletter,https://thecommandline.substack.com/feed,https://thecommandline.substack.com,-0.1,0.7,tech,US,national
+Programmable Mutter Henry Farrell,https://www.programmablemutter.com/feed,https://www.programmablemutter.com,-0.1,0.78,politics,US,national
+Crooked Timber,http://crookedtimber.org/feed/,http://crookedtimber.org,-0.3,0.74,politics,US,national
+Lawyers Guns and Money,https://www.lawyersgunsmoneyblog.com/feed,https://www.lawyersgunsmoneyblog.com,-0.4,0.7,politics,US,national
+Balloon Juice,https://balloon-juice.com/feed/,https://balloon-juice.com,-0.5,0.66,politics,US,national
+Hullabaloo Digby,https://digbysblog.net/feed/,https://digbysblog.net,-0.5,0.7,politics,US,national
+The Hartmann Report Thom Hartmann,https://hartmannreport.com/feed,https://hartmannreport.com,-0.5,0.7,politics,US,national
+The Borowitz Report,https://borowitzreport.substack.com/feed,https://borowitzreport.substack.com,-0.4,0.7,general,US,national
+Brian Tyler Cohen,https://briantylercohen.substack.com/feed,https://briantylercohen.substack.com,-0.4,0.66,politics,US,national
+Mike Pesca The Gist,https://thegist.substack.com/feed,https://thegist.substack.com,0.0,0.74,politics,US,national
+Useful Idiots Halper Taibbi,https://uselessidiots.substack.com/feed,https://uselessidiots.substack.com,0.2,0.66,politics,US,national
+Yair Rosenberg Atlantic Newsletter,https://www.theatlantic.com/feed/author/yair-rosenberg/,https://www.theatlantic.com/author/yair-rosenberg,0.0,0.78,politics,US,national
+Vox Recode,https://www.vox.com/rss/recode/index.xml,https://www.vox.com/recode,-0.2,0.74,tech,US,national
+Vox Future Perfect,https://www.vox.com/rss/future-perfect/index.xml,https://www.vox.com/future-perfect,-0.1,0.78,science,US,national
+Future Perfect EA Kelsey Piper,https://www.vox.com/authors/kelsey-piper/rss.xml,https://www.vox.com/authors/kelsey-piper,-0.1,0.78,science,US,national
+Vox Even Better,https://www.vox.com/rss/even-better/index.xml,https://www.vox.com/even-better,-0.1,0.7,general,US,national
+Vox The Highlight,https://www.vox.com/rss/the-highlight/index.xml,https://www.vox.com/the-highlight,-0.2,0.78,general,US,national
+Substack Notes Discover,https://substack.com/inbox/rss,https://substack.com,0.0,0.6,general,US,national
+The Yard Letter Substack David French,https://thefrenchpress.thedispatch.com/feed,https://thefrenchpress.thedispatch.com,0.1,0.78,politics,US,national
+David French Sunday Atlantic,https://www.theatlantic.com/feed/author/david-french/,https://www.theatlantic.com/author/david-french,0.1,0.78,politics,US,national
+Olúfẹ́mi Táíwò Eve Bog,https://oluwafemiwatch.substack.com/feed,https://oluwafemiwatch.substack.com,-0.5,0.66,politics,US,national
+Adam Tooze Chartbook,https://adamtooze.com/feed/,https://adamtooze.com,-0.2,0.86,business,US,national
+Phenomenal World,https://www.phenomenalworld.org/feed/,https://www.phenomenalworld.org,-0.3,0.78,business,US,national
+Odd Lots Bloomberg Tracy Joe,https://www.bloomberg.com/feeds/podcasts/etf_report.xml,https://www.bloomberg.com/podcasts/odd-lots,0.0,0.84,business,US,national
+The Generalist Mario Gabriele,https://www.generalist.com/feed,https://www.generalist.com,0.0,0.74,business,US,national
+Lance Lambert Resi Club,https://www.resiclubanalytics.com/feed,https://www.resiclubanalytics.com,0.0,0.74,business,US,national
+Tomas Pueyo Uncharted,https://unchartedterritories.tomaspueyo.com/feed,https://unchartedterritories.tomaspueyo.com,0.0,0.74,general,US,national
+Maybe Newsletter Wealth,https://www.maybe.co/blog/rss.xml,https://www.maybe.co,0.0,0.7,business,US,national
+Of Boys and Men Richard Reeves,https://richardreeves.substack.com/feed,https://richardreeves.substack.com,0.1,0.74,politics,US,national
+Maybe Baby Haley Nahman,https://haleynahman.substack.com/feed,https://haleynahman.substack.com,-0.2,0.7,general,US,national
+Jessica DeFino The Unpublishable,https://jessicadefino.substack.com/feed,https://jessicadefino.substack.com,-0.2,0.7,general,US,national
+Burnt Toast Virginia Sole-Smith,https://virginiasolesmith.substack.com/feed,https://virginiasolesmith.substack.com,-0.2,0.74,general,US,national
+The Cut Newsletter Read Receipts,https://nymag.com/tools/rss/feeds.xml,https://nymag.com,-0.2,0.78,general,US,national
+Ann Friedman Weekly,https://www.annfriedman.com/feed,https://www.annfriedman.com,-0.2,0.74,general,US,national
+Lyz Lenz Men Yell at Me,https://lyz.substack.com/feed,https://lyz.substack.com,-0.3,0.72,politics,US,national
+The Highlighter Mark Isero,https://www.thehighlighter.co/feed,https://www.thehighlighter.co,0.0,0.7,general,US,national
+Recomendo,https://newsletter.recomendo.com/feed,https://newsletter.recomendo.com,0.0,0.7,general,US,national
+Tedium,https://tedium.co/feed/,https://tedium.co,0.0,0.74,general,US,national
+Numlock News Walter Hickey,https://numlock.com/feed,https://numlock.com,0.0,0.78,general,US,national
+The Hustle,https://thehustle.co/feed/,https://thehustle.co,0.0,0.7,business,US,national
+The Skimm,https://www.theskimm.com/api/feeds/v3/news,https://www.theskimm.com,0.0,0.66,general,US,national
+Quartz Daily Brief,https://qz.com/feed,https://qz.com,-0.1,0.78,business,US,national
+Axios Daily Essentials,https://api.axios.com/feed/stream/all,https://www.axios.com,0.0,0.78,general,US,national
+Axios Codebook,https://api.axios.com/feed/newsletter/codebook,https://www.axios.com/codebook,0.0,0.78,tech,US,national
+Politico Playbook,https://www.politico.com/playbook/rss.xml,https://www.politico.com/playbook,0.0,0.84,politics,US,national
+Politico Morning Tech,https://rss.politico.com/morningtech.xml,https://www.politico.com/morningtech,0.0,0.82,tech,US,national
+Politico West Wing Playbook,https://www.politico.com/west-wing-playbook/rss.xml,https://www.politico.com/west-wing-playbook,0.0,0.82,politics,US,national
+Politico Nightly,https://www.politico.com/newsletters/politico-nightly/rss,https://www.politico.com/politico-nightly,0.0,0.78,politics,US,national
+Punchbowl News,https://punchbowl.news/feed/,https://punchbowl.news,0.0,0.82,politics,US,national
+The Daily Upside Markets,https://www.thedailyupside.com/feed/,https://www.thedailyupside.com,0.0,0.74,business,US,national
+Sherwood News,https://sherwood.news/feed/,https://sherwood.news,0.0,0.74,business,US,national
+Chartr Sherwood,https://www.chartr.co/feed,https://www.chartr.co,0.0,0.7,business,US,national
+The Generalist Lite,https://www.generalist.com/lite/feed,https://www.generalist.com/lite,0.0,0.66,business,US,national
+Web Worker Daily Old Newsletter,https://gigaom.com/feed/,https://gigaom.com,0.0,0.7,tech,US,national
+Tedium Subscriptions Sub,https://subs.tedium.co/feed,https://subs.tedium.co,0.0,0.66,general,US,national
+Drezner's World Daniel Drezner,https://danieldrezner.substack.com/feed,https://danieldrezner.substack.com,0.0,0.78,world,US,national
+Heath's Place Heath Mayo,https://heathmayo.com/feed,https://heathmayo.com,0.1,0.66,politics,US,national
+Polly Sigh Substack,https://pollysigh.substack.com/feed,https://pollysigh.substack.com,-0.3,0.66,politics,US,national
+Cal Newport Study Hacks,https://calnewport.com/feed/,https://calnewport.com,0.0,0.78,tech,US,national
+Marc Andreessen Substack,https://pmarca.substack.com/feed,https://pmarca.substack.com,0.3,0.74,tech,US,national
+Above the Crowd Bill Gurley,https://abovethecrowd.com/feed/,https://abovethecrowd.com,0.1,0.78,business,US,national
+Both Sides Asher Snyder,https://both.substack.com/feed,https://both.substack.com,0.0,0.7,politics,US,national
+Casey Newton Sidechannel,https://www.sidechannel.org/feed,https://www.sidechannel.org,-0.1,0.74,tech,US,national
+The Verge Vergecast,https://feeds.megaphone.fm/vergecast,https://www.theverge.com/podcasts,-0.1,0.78,tech,US,national
+This Week in Startups Calacanis,https://feeds.megaphone.fm/thisweekinstartups,https://thisweekinstartups.com,0.1,0.7,business,US,national
+First Round Review,https://review.firstround.com/rss/,https://review.firstround.com,0.0,0.74,business,US,national
+SignalFire Insights,https://www.signalfire.com/blog/rss.xml,https://www.signalfire.com,0.0,0.7,business,US,national
+A16Z Blog,https://a16z.com/feed/,https://a16z.com,0.1,0.78,tech,US,national
+Sequoia Capital Blog,https://www.sequoiacap.com/feed/,https://www.sequoiacap.com,0.0,0.74,business,US,national
+Y Combinator Blog,https://www.ycombinator.com/blog/rss,https://www.ycombinator.com/blog,0.0,0.78,tech,US,national
+Paul Graham Essays,http://www.aaronsw.com/2002/feeds/pgessays.rss,https://paulgraham.com,0.1,0.84,tech,US,national
+Hacker Noon,https://hackernoon.com/feed,https://hackernoon.com,0.0,0.7,tech,US,national
+DEV.to Top,https://dev.to/feed/,https://dev.to,0.0,0.7,tech,US,national
+Towards Data Science Medium,https://towardsdatascience.com/feed,https://towardsdatascience.com,0.0,0.74,tech,US,national
+Better Programming Medium,https://medium.com/feed/better-programming,https://medium.com/better-programming,0.0,0.7,tech,US,national
+freeCodeCamp News,https://www.freecodecamp.org/news/rss/,https://www.freecodecamp.org/news,0.0,0.78,tech,US,national
+Smashing Magazine,https://www.smashingmagazine.com/feed/,https://www.smashingmagazine.com,0.0,0.78,tech,US,national
+A List Apart,https://alistapart.com/main/feed/,https://alistapart.com,0.0,0.78,tech,US,national
+CSS-Tricks,https://css-tricks.com/feed/,https://css-tricks.com,0.0,0.74,tech,US,national
+Increment Stripe,https://increment.com/feed.xml,https://increment.com,0.0,0.78,tech,US,national
+Vercel Blog,https://vercel.com/atom,https://vercel.com/blog,0.0,0.74,tech,US,national
+Linear Blog,https://linear.app/rss.xml,https://linear.app/blog,0.0,0.7,tech,US,national
+Notion Newsroom,https://www.notion.so/blog/rss.xml,https://www.notion.so/blog,0.0,0.66,tech,US,national
+Figma Blog,https://www.figma.com/blog/rss/,https://www.figma.com/blog,0.0,0.7,tech,US,national
+Stripe Press,https://press.stripe.com/feed.xml,https://press.stripe.com,0.0,0.78,tech,US,national
+Fly.io Blog,https://fly.io/blog/feed.xml,https://fly.io/blog,0.0,0.74,tech,US,national
+Pinecone Engineering,https://www.pinecone.io/learn/rss.xml,https://www.pinecone.io/learn,0.0,0.7,tech,US,national
+Mistral AI News,https://mistral.ai/news/index.xml,https://mistral.ai/news,0.0,0.78,tech,FR,national
+Replicate Blog,https://replicate.com/blog/feed.xml,https://replicate.com/blog,0.0,0.7,tech,US,national
+LangChain Blog,https://blog.langchain.dev/rss/,https://blog.langchain.dev,0.0,0.7,tech,US,national
+Sebastian Raschka Magazine,https://magazine.sebastianraschka.com/feed,https://magazine.sebastianraschka.com,0.0,0.84,tech,US,national
+Lil'Log Lilian Weng,https://lilianweng.github.io/index.xml,https://lilianweng.github.io,0.0,0.84,tech,US,national
+Chip Huyen Blog,https://huyenchip.com/feed,https://huyenchip.com,0.0,0.84,tech,US,national
+Simon Willison Weblog,https://simonwillison.net/atom/everything/,https://simonwillison.net,0.0,0.86,tech,GB,national
+Andrej Karpathy Blog,https://karpathy.github.io/feed.xml,https://karpathy.github.io,0.0,0.88,tech,US,national
+Distill Pub Archive,https://distill.pub/rss.xml,https://distill.pub,0.0,0.86,tech,US,national
+Gradient Update The Gradient,https://thegradient.pub/rss/,https://thegradient.pub,0.0,0.82,tech,US,national
+Towards AI,https://pub.towardsai.net/feed,https://pub.towardsai.net,0.0,0.74,tech,US,national
+Jay Alammar Visualizations,https://jalammar.github.io/feed.xml,https://jalammar.github.io,0.0,0.82,tech,US,national
+Eric Jang Robotics,https://evjang.com/feed,https://evjang.com,0.0,0.78,tech,US,national
+Latent Space Swyx,https://www.latent.space/feed,https://www.latent.space,0.0,0.82,tech,US,national
+Interconnects Nathan Lambert,https://www.interconnects.ai/feed,https://www.interconnects.ai,0.0,0.82,tech,US,national
+The Pomp Letter Anthony Pompliano,https://pomp.substack.com/feed,https://pomp.substack.com,0.2,0.7,business,US,national
+Pragmatic Capitalism,https://www.pragcap.com/feed/,https://www.pragcap.com,0.0,0.74,business,US,national
+Wolf Street,https://wolfstreet.com/feed/,https://wolfstreet.com,0.1,0.74,business,US,national
+The Macro Tourist Kevin Muir,https://themacrotourist.substack.com/feed,https://themacrotourist.substack.com,0.0,0.74,business,US,national
+The Big Picture Barry Ritholtz,https://ritholtz.com/feed/,https://ritholtz.com,-0.1,0.78,business,US,national
+A Wealth of Common Sense Ben Carlson,https://awealthofcommonsense.com/feed/,https://awealthofcommonsense.com,0.0,0.78,business,US,national
+The Irrelevant Investor Michael Batnick,https://theirrelevantinvestor.com/feed/,https://theirrelevantinvestor.com,0.0,0.74,business,US,national
+Of Dollars and Data,https://ofdollarsanddata.com/feed/,https://ofdollarsanddata.com,0.0,0.78,business,US,national
+Tomas Pueyo Coronavirus,https://tomaspueyo.medium.com/feed,https://tomaspueyo.medium.com,0.0,0.7,science,US,national
+Pirate Wires Mike Solana,https://www.piratewires.com/feed,https://www.piratewires.com,0.3,0.74,politics,US,national
+Quillette,https://quillette.com/feed/,https://quillette.com,0.3,0.74,general,US,national
+Conservatism Substack Tikkun,https://www.thetikkun.com/feed,https://www.thetikkun.com,0.3,0.66,politics,US,national
+Razib Khan Unsupervised Learning,https://razib.substack.com/feed,https://razib.substack.com,0.2,0.74,science,US,national
+Rob Henderson Newsletter,https://robkhenderson.substack.com/feed,https://robkhenderson.substack.com,0.3,0.7,general,US,national
+The Carrington Newsletter,https://www.carringtontimes.com/feed,https://www.carringtontimes.com,0.0,0.66,general,US,national
+Inside Story Substack Texas,https://insidestory.substack.com/feed,https://insidestory.substack.com,0.0,0.66,general,US,national
+Anand Giridharadas The Ink,https://the.ink/feed,https://the.ink,-0.4,0.74,politics,US,national
+Letters from War Tim Mak,https://timmak.substack.com/feed,https://timmak.substack.com,0.0,0.74,world,US,national
+Jen Gerson The Line Canada Substack,https://www.readtheline.ca/feed,https://www.readtheline.ca,0.2,0.74,politics,CA,national
+Bonchie Substack,https://bonchie.substack.com/feed,https://bonchie.substack.com,0.4,0.6,politics,US,national
+The Calvert Journal Russia,https://www.calvertjournal.com/feed.xml,https://www.calvertjournal.com,-0.1,0.74,general,GB,national
+The Honest Broker Music Ted Gioia,https://tedgioia.substack.com/feed,https://tedgioia.substack.com,0.0,0.78,general,US,national
+Adam Tooze Chartbook Bonus,https://adamtooze.substack.com/feed,https://adamtooze.substack.com,-0.2,0.84,business,GB,national
+Spy Talk Jeff Stein,https://www.spytalk.co/feed,https://www.spytalk.co,0.0,0.74,world,US,national
+Bracing Views Bill Astore,https://bracingviews.com/feed/,https://bracingviews.com,-0.3,0.7,world,US,national
+Andrew McCabe Yale Talking Feds,https://www.talkingfeds.com/feed,https://www.talkingfeds.com,-0.2,0.74,politics,US,national
+The Reidout Joy Reid,https://www.msnbc.com/feeds/latest,https://www.msnbc.com,-0.4,0.74,politics,US,national
+The Recount,https://therecount.com/api/feeds/rss,https://therecount.com,-0.1,0.7,politics,US,national
+Meidas Touch News Substack,https://meidasplus.substack.com/feed,https://meidasplus.substack.com,-0.5,0.66,politics,US,national
+The Daily Poster Sirota Old,https://www.dailyposter.com/feed,https://www.dailyposter.com,-0.4,0.78,politics,US,national
+Code Red Anti-Trump Newsletter,https://www.coderedhq.com/feed,https://www.coderedhq.com,-0.4,0.66,politics,US,national
+The Editor's Notes Garry Kasparov Substack,https://kasparov.substack.com/feed,https://kasparov.substack.com,-0.1,0.74,world,US,national
+War on Facts Steve Schmidt,https://steveschmidt.substack.com/feed,https://steveschmidt.substack.com,-0.3,0.7,politics,US,national
+Five Reasons Five Things Russ Roberts,https://russroberts.substack.com/feed,https://russroberts.substack.com,0.1,0.78,business,US,national
+Cafe Hayek Don Boudreaux,https://cafehayek.com/feed,https://cafehayek.com,0.4,0.74,business,US,national
+Bryan Caplan Substack,https://betonit.substack.com/feed,https://betonit.substack.com,0.3,0.74,business,US,national
+Faye Flam Bloomberg Health,https://www.bloomberg.com/authors/ATu1xWE7AS0/faye-flam.rss,https://www.bloomberg.com/opinion/authors/ATu1xWE7AS0/faye-flam,0.0,0.78,science,US,national
+Sarah Zhang Atlantic Author,https://www.theatlantic.com/feed/author/sarah-zhang/,https://www.theatlantic.com/author/sarah-zhang,0.0,0.84,science,US,national
+Anil Dash A Whole Lotta Nothing,https://www.anildash.com/feed/,https://www.anildash.com,-0.1,0.74,tech,US,national
+Mike Masnick Techdirt,https://www.techdirt.com/feed/,https://www.techdirt.com,-0.1,0.82,tech,US,national
+Cory Doctorow Pluralistic,https://pluralistic.net/feed/,https://pluralistic.net,-0.3,0.84,tech,CA,national
+The Atlantic Newsletters,https://www.theatlantic.com/feed/newsletters/,https://www.theatlantic.com/newsletters,-0.1,0.78,general,US,national
+Quanta Magazine Computer Science,https://api.quantamagazine.org/feed/?sec=computer-science,https://www.quantamagazine.org/computer-science,-0.1,0.88,tech,US,national
+The Sample Newsletter,https://thesample.ai/feed,https://thesample.ai,0.0,0.66,general,US,national
+The Sunday Long Read,https://www.sundaylongread.com/feed/,https://www.sundaylongread.com,0.0,0.74,general,US,national
+The Pudding Visual Essays,https://pudding.cool/feed/,https://pudding.cool,0.0,0.84,general,US,national
+Datawrapper Blog,https://blog.datawrapper.de/feed/,https://blog.datawrapper.de,0.0,0.74,tech,DE,national
+The Whippet Curio,https://thewhippet.org/feed/,https://thewhippet.org,0.0,0.7,general,US,national
+Pocket Worthy,https://getpocket.com/explore/feed,https://getpocket.com/explore,0.0,0.7,general,US,national
+Climate Now Newsletter,https://climatenow.substack.com/feed,https://climatenow.substack.com,-0.1,0.7,science,US,national
+Sustainable by Numbers Hannah Ritchie,https://www.sustainabilitybynumbers.com/feed,https://www.sustainabilitybynumbers.com,-0.1,0.84,science,GB,national
+Climate Tech VC,https://climatetechvc.substack.com/feed,https://climatetechvc.substack.com,-0.1,0.74,tech,US,national
+Climate Drift,https://www.climatedrift.com/feed,https://www.climatedrift.com,-0.1,0.66,tech,US,national
+Carbon Switch Substack,https://carbonswitch.substack.com/feed,https://carbonswitch.substack.com,-0.1,0.7,science,US,national
+Canary Media,https://www.canarymedia.com/feed,https://www.canarymedia.com,-0.1,0.78,science,US,national
+E&E News,https://www.eenews.net/feed/section/all/,https://www.eenews.net,0.0,0.78,science,US,national
+Carbon Brief,https://www.carbonbrief.org/feed/,https://www.carbonbrief.org,-0.1,0.86,science,GB,national
+Yale Climate Connections,https://yaleclimateconnections.org/feed/,https://yaleclimateconnections.org,-0.1,0.78,science,US,national
+Defector Politics,https://defector.com/feeds/politics,https://defector.com,-0.3,0.74,politics,US,national
+Aftermath Games,https://aftermath.site/rss,https://aftermath.site,-0.1,0.74,tech,US,national
+GamesIndustry Biz,https://www.gamesindustry.biz/feed,https://www.gamesindustry.biz,0.0,0.78,business,GB,national
+The Verge Gaming,https://www.theverge.com/games/rss/index.xml,https://www.theverge.com/games,-0.1,0.74,tech,US,national
+Variety Tech,https://variety.com/v/digital/feed/,https://variety.com/v/digital,0.0,0.78,business,US,national
+Deadline Hollywood,https://deadline.com/feed/,https://deadline.com,-0.1,0.74,business,US,national
+Indiewire,https://www.indiewire.com/feed/,https://www.indiewire.com,-0.1,0.74,business,US,national
+Vulture NY Mag,https://www.vulture.com/rss/all.xml,https://www.vulture.com,-0.2,0.78,general,US,national
+The Hollywood Reporter Race,https://www.hollywoodreporter.com/c/awards/race/feed,https://www.hollywoodreporter.com,-0.1,0.74,general,US,national
+Pitchfork Reviews,https://pitchfork.com/rss/news/,https://pitchfork.com,-0.1,0.78,general,US,national
+Stereogum,https://www.stereogum.com/feed/,https://www.stereogum.com,-0.1,0.74,general,US,national
+The Quietus,https://thequietus.com/articles.atom,https://thequietus.com,-0.1,0.78,general,GB,national
+Bandcamp Daily,https://daily.bandcamp.com/feed/,https://daily.bandcamp.com,-0.1,0.74,general,US,national
+The Recording Academy Grammy News,https://www.grammy.com/news/rss.xml,https://www.grammy.com,0.0,0.66,general,US,national
+ARTNews,https://www.artnews.com/feed/,https://www.artnews.com,-0.1,0.78,general,US,national
+Artnet News,https://news.artnet.com/feed,https://news.artnet.com,-0.1,0.78,general,US,national
+Hyperallergic,https://hyperallergic.com/feed/,https://hyperallergic.com,-0.3,0.78,general,US,national
+The Art Newspaper,https://www.theartnewspaper.com/rss,https://www.theartnewspaper.com,0.0,0.78,general,GB,national
+Frieze Magazine,https://www.frieze.com/rss.xml,https://www.frieze.com,-0.1,0.78,general,GB,national
+ARTReview,https://artreview.com/feed/,https://artreview.com,-0.1,0.74,general,GB,national
+Dwell Magazine,https://www.dwell.com/rss/articles,https://www.dwell.com,0.0,0.74,general,US,national
+ArchDaily,https://www.archdaily.com/rss,https://www.archdaily.com,0.0,0.78,general,US,national
+Dezeen,https://www.dezeen.com/feed/,https://www.dezeen.com,0.0,0.78,general,GB,national
+Curbed,https://www.curbed.com/rss/index.xml,https://www.curbed.com,-0.1,0.74,general,US,national
+Strong Towns,https://www.strongtowns.org/journal?format=rss,https://www.strongtowns.org,0.0,0.78,general,US,national
+StreetsBlog USA,https://usa.streetsblog.org/feed/,https://usa.streetsblog.org,-0.2,0.78,general,US,national
+Bloomberg CityLab,https://www.bloomberg.com/feeds/citylab/articles.rss,https://www.bloomberg.com/citylab,-0.1,0.82,general,US,national
+The Daily Beast Cheat Sheet,https://www.thedailybeast.com/arc/outboundfeeds/rss/category/cheats/,https://www.thedailybeast.com/cheats,-0.3,0.7,politics,US,national
+Mediaite,https://www.mediaite.com/feed/,https://www.mediaite.com,0.0,0.7,politics,US,national
+Press Watch Dan Froomkin,https://presswatchers.org/feed/,https://presswatchers.org,-0.3,0.72,politics,US,national
+Public Notice Aaron Rupar,https://www.publicnotice.co/feed,https://www.publicnotice.co,-0.3,0.74,politics,US,national
+Press Run Eric Boehlert,https://pressrun.media/feed,https://pressrun.media,-0.3,0.7,politics,US,national
+The Cut Politics,https://www.thecut.com/rss/politics/index.xml,https://www.thecut.com,-0.2,0.74,politics,US,national
+Spotify Engineering,https://engineering.atspotify.com/feed/,https://engineering.atspotify.com,0.0,0.78,tech,US,national
+Netflix Tech Blog,https://netflixtechblog.com/feed,https://netflixtechblog.com,0.0,0.84,tech,US,national
+Slack Engineering,https://slack.engineering/feed/,https://slack.engineering,0.0,0.78,tech,US,national
+Uber Engineering,https://www.uber.com/blog/engineering/rss,https://www.uber.com/blog/engineering,0.0,0.78,tech,US,national
+Airbnb Engineering,https://medium.com/feed/airbnb-engineering,https://medium.com/airbnb-engineering,0.0,0.78,tech,US,national
+Dropbox Tech Blog,https://dropbox.tech/feed,https://dropbox.tech,0.0,0.78,tech,US,national
+Pinterest Engineering,https://medium.com/feed/pinterest-engineering,https://medium.com/pinterest-engineering,0.0,0.74,tech,US,national
+Etsy Code as Craft,https://www.etsy.com/codeascraft/feed,https://www.etsy.com/codeascraft,0.0,0.74,tech,US,national
+Stripe Engineering,https://stripe.com/blog/feed.rss,https://stripe.com/blog,0.0,0.78,tech,US,national
+Discord Engineering,https://discord.com/category/engineering/feed,https://discord.com/blog,0.0,0.74,tech,US,national
+LinkedIn Engineering,https://engineering.linkedin.com/blog.rss.html,https://engineering.linkedin.com,0.0,0.78,tech,US,national
+Meta Engineering,https://engineering.fb.com/feed/,https://engineering.fb.com,0.0,0.78,tech,US,national
+Amazon Science,https://www.amazon.science/index.rss,https://www.amazon.science,0.0,0.78,tech,US,national
+Apple Machine Learning Research,https://machinelearning.apple.com/rss.xml,https://machinelearning.apple.com,0.0,0.82,tech,US,national
+NVIDIA Developer Blog,https://developer.nvidia.com/blog/feed/,https://developer.nvidia.com,0.0,0.78,tech,US,national
+Berkeley AI Research BAIR Blog,https://bair.berkeley.edu/blog/feed.xml,https://bair.berkeley.edu/blog,0.0,0.84,tech,US,national
+Stanford AI Lab Blog,https://ai.stanford.edu/blog/feed.xml,https://ai.stanford.edu/blog,0.0,0.84,tech,US,national
+MIT CSAIL News,https://www.csail.mit.edu/rss.xml,https://www.csail.mit.edu,0.0,0.82,tech,US,national
+The Gradient AI Newsletter,https://thegradientpub.substack.com/feed,https://thegradientpub.substack.com,0.0,0.82,tech,US,national
+Tildes Tech,https://tildes.net/~tech.atom,https://tildes.net/~tech,0.0,0.66,tech,US,national
+Phoronix Linux,https://www.phoronix.com/rss.php,https://www.phoronix.com,0.0,0.74,tech,US,national
+LWN Linux Weekly News,https://lwn.net/headlines/rss,https://lwn.net,0.0,0.84,tech,US,national
+ACM TechNews,https://technews.acm.org/feed/,https://technews.acm.org,0.0,0.78,tech,US,national
+Make Magazine,https://makezine.com/feed/,https://makezine.com,0.0,0.74,tech,US,national
+SparkFun,https://www.sparkfun.com/feeds/news,https://www.sparkfun.com,0.0,0.7,tech,US,national
+Linus Tech Tips,https://linustechtips.com/?xfa-rss-feed=topics,https://linustechtips.com,0.0,0.66,tech,CA,national
+DigitalFoundry,https://www.eurogamer.net/digitalfoundry?format=rss,https://www.eurogamer.net/digitalfoundry,0.0,0.78,tech,GB,national
+9to5Linux,https://9to5linux.com/feed,https://9to5linux.com,0.0,0.7,tech,RO,national
+It's FOSS,https://itsfoss.com/feed/,https://itsfoss.com,0.0,0.72,tech,IN,national
+OMG Ubuntu,https://www.omgubuntu.co.uk/feed,https://www.omgubuntu.co.uk,0.0,0.7,tech,GB,national
+Linux Journal,https://www.linuxjournal.com/node/feed,https://www.linuxjournal.com,0.0,0.7,tech,US,national
+The New Stack,https://thenewstack.io/feed/,https://thenewstack.io,0.0,0.78,tech,US,national
+InfoQ,https://feed.infoq.com/,https://www.infoq.com,0.0,0.78,tech,US,national
+Container Journal,https://containerjournal.com/feed/,https://containerjournal.com,0.0,0.7,tech,US,national
+SDxCentral SDN NFV,https://www.sdxcentral.com/feed/,https://www.sdxcentral.com,0.0,0.7,tech,US,national
+Network World,https://www.networkworld.com/index.rss,https://www.networkworld.com,0.0,0.74,tech,US,national
+Computerworld,https://www.computerworld.com/index.rss,https://www.computerworld.com,0.0,0.74,tech,US,national
+PCWorld,https://www.pcworld.com/index.rss,https://www.pcworld.com,0.0,0.7,tech,US,national
+PCMag,https://www.pcmag.com/feeds/rss/latest,https://www.pcmag.com,0.0,0.74,tech,US,national
+Tom's Guide,https://www.tomsguide.com/feeds/all,https://www.tomsguide.com,0.0,0.7,tech,US,national
+Macworld,https://www.macworld.com/index.rss,https://www.macworld.com,0.0,0.74,tech,US,national
+The Mac Observer,https://www.macobserver.com/feed/,https://www.macobserver.com,0.0,0.7,tech,US,national
+AppleInsider,https://appleinsider.com/feed,https://appleinsider.com,0.0,0.72,tech,US,national
+MacRumors,https://www.macrumors.com/macrumors.xml,https://www.macrumors.com,0.0,0.74,tech,US,national
+Android Authority,https://www.androidauthority.com/feed,https://www.androidauthority.com,0.0,0.7,tech,US,national
+DPReview,https://www.dpreview.com/feeds/news.xml,https://www.dpreview.com,0.0,0.78,tech,US,national
+PetaPixel,https://petapixel.com/feed/,https://petapixel.com,0.0,0.74,general,US,national
+The Verge Reviews,https://www.theverge.com/reviews/rss/index.xml,https://www.theverge.com/reviews,-0.1,0.78,tech,US,national
+Wirecutter NYT,https://www.nytimes.com/wirecutter/rss/feed.xml,https://www.nytimes.com/wirecutter,-0.1,0.82,general,US,national
+The Strategist NY Mag,https://nymag.com/strategist/rss/index.xml,https://nymag.com/strategist,-0.1,0.74,general,US,national
+Pop Crave Substack Music Pop,https://popcrave.substack.com/feed,https://popcrave.substack.com,-0.1,0.66,general,US,national
+PerColumbia Journalism Review,https://www.cjr.org/api/rss,https://www.cjr.org,-0.1,0.84,general,US,national
+Nieman Reports,https://niemanreports.org/feed/,https://niemanreports.org,-0.1,0.78,general,US,national
+Poynter,https://www.poynter.org/feed/,https://www.poynter.org,-0.1,0.78,general,US,national
+Press Gazette,https://pressgazette.co.uk/feed/,https://pressgazette.co.uk,0.0,0.74,general,GB,national
+Editor & Publisher,https://www.editorandpublisher.com/feed/,https://www.editorandpublisher.com,0.0,0.66,general,US,national
+American Press Institute,https://americanpressinstitute.org/feed/,https://americanpressinstitute.org,-0.1,0.74,general,US,national
+Reuters Institute Oxford,https://reutersinstitute.politics.ox.ac.uk/rss.xml,https://reutersinstitute.politics.ox.ac.uk,0.0,0.84,general,GB,national
+Press Freedom Tracker,https://pressfreedomtracker.us/feeds/all/,https://pressfreedomtracker.us,-0.1,0.74,politics,US,national
+NiemanLab Journalism,https://www.niemanlab.org/feed/,https://www.niemanlab.org,-0.1,0.82,general,US,national
+Status Media Industry Newsletter,https://www.status.news/feed,https://www.status.news,-0.1,0.74,general,US,national
+Defector Substack,https://defector.com/feeds/rss,https://defector.com,-0.1,0.78,general,US,national
+The Audit by Brian Stelter,https://reliablesources.substack.com/feed,https://reliablesources.substack.com,-0.2,0.74,general,US,national
+Hot Pod by Nick Quah,https://www.hotpodnews.com/feed,https://www.hotpodnews.com,0.0,0.74,general,US,national
+Podnews,https://podnews.net/rss,https://podnews.net,0.0,0.74,tech,GB,national
+The Verge Podcasts,https://www.theverge.com/rss/podcasts/index.xml,https://www.theverge.com/podcasts,-0.1,0.78,tech,US,national
+The Atlantic Books,https://www.theatlantic.com/feed/channel/books/,https://www.theatlantic.com/books,-0.1,0.84,general,US,national
+Literary Hub,https://lithub.com/feed/,https://lithub.com,-0.1,0.78,general,US,national
+Los Angeles Review of Books,https://lareviewofbooks.org/feed/,https://lareviewofbooks.org,-0.2,0.78,general,US,national
+NYR Daily New York Review,https://www.nybooks.com/feed/,https://www.nybooks.com,-0.2,0.86,general,US,national
+The Paris Review,https://www.theparisreview.org/blog/feed/,https://www.theparisreview.org,-0.1,0.78,general,US,national
+The Yale Review,https://yalereview.org/rss/feed.xml,https://yalereview.org,-0.1,0.78,general,US,national
+Harvard Review,https://www.harvardreview.org/feed,https://www.harvardreview.org,-0.1,0.74,general,US,national
+A Public Space,https://apublicspace.org/feed,https://apublicspace.org,-0.1,0.74,general,US,national
+Granta Magazine,https://granta.com/feed/atom/,https://granta.com,-0.1,0.78,general,GB,national
+McSweeney's,https://www.mcsweeneys.net/articles.rss,https://www.mcsweeneys.net,-0.2,0.74,general,US,national
+The Believer,https://thebeliever.net/feed/,https://thebeliever.net,-0.2,0.74,general,US,national
+Aperture Magazine Photography,https://aperture.org/feed/,https://aperture.org,0.0,0.74,general,US,national
+National Geographic Adventure,https://www.nationalgeographic.com/content/natgeo/en_us/rss/topic/adventure.rss,https://www.nationalgeographic.com/adventure,-0.1,0.74,general,US,national
+Outside Magazine,https://www.outsideonline.com/feed/,https://www.outsideonline.com,0.0,0.74,general,US,national
+Backpacker Magazine,https://www.backpacker.com/feed/,https://www.backpacker.com,0.0,0.7,general,US,national
+Climbing Magazine,https://www.climbing.com/feed/,https://www.climbing.com,0.0,0.7,general,US,national
+Curbed Detective,https://archive.curbed.com/rss/index.xml,https://archive.curbed.com,-0.1,0.7,general,US,national
+The Marginalian Maria Popova,https://www.themarginalian.org/feed/,https://www.themarginalian.org,0.0,0.78,general,US,national
+Psyche Aeon,https://psyche.co/feed.rss,https://psyche.co,-0.1,0.78,science,US,national
+3 Quarks Daily,https://3quarksdaily.com/feed,https://3quarksdaily.com,-0.1,0.78,general,US,national
+Edge Org Annual Question,https://www.edge.org/rss.xml,https://www.edge.org,0.0,0.78,science,US,national
+SingularityHub,https://singularityhub.com/feed/,https://singularityhub.com,0.0,0.74,tech,US,national
+LessWrong,https://www.lesswrong.com/feed.xml,https://www.lesswrong.com,0.0,0.78,tech,US,national
+Effective Altruism Forum,https://forum.effectivealtruism.org/feed.xml,https://forum.effectivealtruism.org,-0.1,0.74,general,US,national
+Less Wrong The Sequences,https://www.alignmentforum.org/feed.xml,https://www.alignmentforum.org,0.0,0.84,tech,US,national
+Eli Dourado Subjective Q,https://www.elidourado.com/feed/,https://www.elidourado.com,0.2,0.78,politics,US,national
+Lyman Stone Family Studies,https://www.aei.org/profile/lyman-stone/feed/,https://www.aei.org/profile/lyman-stone,0.2,0.74,politics,US,national
+Andy Matuschak Notes,https://andymatuschak.org/rss/,https://andymatuschak.org,0.0,0.78,tech,US,national
+Patrick Collison Things,https://patrickcollison.com/rss.xml,https://patrickcollison.com,0.0,0.78,tech,US,national
+Sam Altman Personal Blog,https://blog.samaltman.com/feed,https://blog.samaltman.com,0.1,0.78,tech,US,national
+Tim Ferriss Show,https://tim.blog/feed/,https://tim.blog,0.1,0.74,business,US,national
+Ben Horowitz a16z,https://a16z.com/author/ben-horowitz/feed/,https://a16z.com,0.1,0.74,business,US,national
+The Diff Engine BNP,https://thediffengine.substack.com/feed,https://thediffengine.substack.com,0.0,0.66,business,US,national
+Capital Allocators,https://capitalallocators.com/feed/,https://capitalallocators.com,0.0,0.78,business,US,national
+Money Stuff Newsletter Bloomberg,https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine.rss,https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine,0.0,0.86,business,US,national
+Bill Bishop China Books Notes,https://www.billbishop.com/feed,https://www.billbishop.com,0.1,0.74,world,US,national
+What's Happening in China Substack,https://chinathatmatters.substack.com/feed,https://chinathatmatters.substack.com,0.0,0.74,world,US,national
+Tracking People's Daily Manya Koetse,https://www.whatsonweibo.com/feed/,https://www.whatsonweibo.com,0.0,0.74,world,NL,national
+Pekingnology Beijing,https://www.pekingnology.com/feed,https://www.pekingnology.com,0.0,0.74,world,CN,national
+Beijing Channel Substack,https://beijingchannel.substack.com/feed,https://beijingchannel.substack.com,0.0,0.66,world,US,national
+Inside China,https://www.insidechina.tech/feed,https://www.insidechina.tech,0.0,0.7,tech,US,national
+Made in China Journal,https://madeinchinajournal.com/feed/,https://madeinchinajournal.com,-0.1,0.78,world,AU,national
+China Books Review,https://chinabooksreview.com/feed/,https://chinabooksreview.com,0.0,0.74,general,US,national
+Tortoise Chinese Whispers,https://www.tortoisemedia.com/feed/?cat=china,https://www.tortoisemedia.com/category/china,-0.1,0.74,world,GB,national
+What's Happening in Korea Substack,https://koreaupclose.substack.com/feed,https://koreaupclose.substack.com,0.0,0.7,world,US,national
+The Soku-On Japan,https://substack.com/@japanoptimist/feed,https://japanoptimist.substack.com,0.0,0.66,world,JP,national
+Tokyo Vice,https://jaketadelstein.substack.com/feed,https://jaketadelstein.substack.com,0.0,0.74,world,JP,national
+Japanonomics Richard Katz,https://richardkatz.substack.com/feed,https://richardkatz.substack.com,0.0,0.74,business,US,national
+RNZ The Detail,https://www.rnz.co.nz/programmes/the-detail/feed,https://www.rnz.co.nz/programmes/the-detail,-0.1,0.78,general,NZ,national
+The Conversation NZ,https://theconversation.com/nz/articles.atom,https://theconversation.com/nz,-0.1,0.82,general,NZ,national
+Stuff The Press NZ,https://www.stuff.co.nz/the-press/rss,https://www.stuff.co.nz/the-press,-0.1,0.74,general,NZ,national
+Pearls and Irritations John Menadue,https://johnmenadue.com/feed/,https://johnmenadue.com,-0.3,0.74,politics,AU,national
+The Quicky Mamamia,https://www.mamamia.com.au/feed/,https://www.mamamia.com.au,-0.1,0.66,general,AU,national
+The Shot AU,https://theshot.net.au/feed/,https://theshot.net.au,-0.4,0.66,politics,AU,national
+Maclean's Politics Insider,https://macleans.ca/category/politics/feed/,https://macleans.ca/politics,-0.1,0.78,politics,CA,national
+The Logic Subscriber,https://thelogic.co/feed/?subscriber=1,https://thelogic.co,0.0,0.78,tech,CA,national
+The Hub Canada,https://thehub.ca/feed/,https://thehub.ca,0.2,0.74,politics,CA,national
+Out of Office UK Henry Mance,https://outofoffice.substack.com/feed,https://outofoffice.substack.com,-0.1,0.7,general,GB,national
+Stephen Bush FT Inside Politics,https://www.ft.com/rss/world/uk?format=xml,https://www.ft.com/world/uk,0.0,0.84,politics,GB,national
+The Critic Substack UK,https://thecritic.substack.com/feed,https://thecritic.substack.com,0.3,0.74,politics,GB,national
+What Britain Wants Steven Bush,https://stephenbush.substack.com/feed,https://stephenbush.substack.com,-0.1,0.74,politics,GB,national
+Inside Westminster Substack,https://insidewestminster.substack.com/feed,https://insidewestminster.substack.com,0.0,0.66,politics,GB,national
+Sam Freedman Comment Substack,https://samf.substack.com/feed,https://samf.substack.com,-0.1,0.78,politics,GB,national
+Stian Westlake Substack,https://westlake.substack.com/feed,https://westlake.substack.com,0.0,0.74,business,GB,national
+Aaron Bastani Novara Media,https://novaramedia.com/feed/,https://novaramedia.com,-0.5,0.7,politics,GB,national
+The Lead UK Local,https://www.thelead.uk/feed,https://www.thelead.uk,-0.1,0.7,general,GB,national
+Rest Is Politics Substack,https://restispolitics.substack.com/feed,https://restispolitics.substack.com,0.0,0.7,politics,GB,national
+Wisecrack Conversations Substack,https://wisecrack.substack.com/feed,https://wisecrack.substack.com,0.0,0.66,general,US,national
+Lex Fridman Newsletter,https://lexfridman.com/feed/podcast,https://lexfridman.com,0.1,0.74,tech,US,national
+Andrew Curry The Next Wave,https://thenextwavefutures.wordpress.com/feed/,https://thenextwavefutures.wordpress.com,-0.1,0.74,general,GB,national
+Faisal Islam Sky Substack,https://faisalislam.substack.com/feed,https://faisalislam.substack.com,0.0,0.74,business,GB,national
+Chris Cook Tortoise Substack,https://chriscook.substack.com/feed,https://chriscook.substack.com,0.0,0.7,politics,GB,national
+Helen Lewis Bluestocking,https://bluestocking.substack.com/feed,https://bluestocking.substack.com,0.1,0.78,politics,GB,national
+Ian Dunt Substack,https://iandunt.substack.com/feed,https://iandunt.substack.com,-0.3,0.74,politics,GB,national
+Aditya Chakrabortty Guardian Author,https://www.theguardian.com/profile/adityachakrabortty/rss,https://www.theguardian.com/profile/adityachakrabortty,-0.4,0.78,politics,GB,national
+Aditya Iyer The Diplomat Substack,https://www.thedrift.in/feed,https://www.thedrift.in,-0.1,0.66,general,IN,national
+Pratap Bhanu Mehta Indian Express,https://indianexpress.com/profile/columnist/pratap-bhanu-mehta/feed/,https://indianexpress.com,-0.1,0.82,politics,IN,national
+Yogendra Yadav India Substack,https://yogendrayadav.substack.com/feed,https://yogendrayadav.substack.com,-0.2,0.74,politics,IN,national
+Sruthijith Indians on Substack,https://sruthijith.substack.com/feed,https://sruthijith.substack.com,0.0,0.7,politics,IN,national
+The Plank India Newsletter,https://www.thepl.ink/feed,https://www.thepl.ink,-0.1,0.7,general,IN,national
+Splainer India,https://splainer.in/feed,https://splainer.in,0.0,0.74,general,IN,national
+The Ken India,https://the-ken.com/feed/,https://the-ken.com,0.0,0.78,business,IN,national
+The Morning Context India,https://themorningcontext.com/feed,https://themorningcontext.com,0.0,0.74,business,IN,national
+The Quint Web Story India,https://www.thequint.com/stories.rss,https://www.thequint.com,-0.2,0.74,general,IN,national
+ChinaTalk Newsletter Premium,https://chinatalk.substack.com/feed,https://chinatalk.substack.com,0.0,0.78,world,US,national
+The Sinocism China Wrap,https://sinocism.substack.com/feed,https://sinocism.substack.com,0.1,0.82,world,US,national
+Aliana Yang China Books,https://chinabooks.substack.com/feed,https://chinabooks.substack.com,0.0,0.66,world,US,national
+Politico Brussels Playbook,https://www.politico.eu/section/playbook/feed,https://www.politico.eu/section/playbook,0.0,0.84,politics,BE,regional
+Tortoise Brussels Bullet,https://www.tortoisemedia.com/feed/?cat=europe,https://www.tortoisemedia.com/category/europe,-0.1,0.74,politics,GB,regional
+Wolfgang Munchau Eurointelligence,https://www.eurointelligence.com/rss,https://www.eurointelligence.com,-0.1,0.84,politics,DE,regional
+Branko Marcetic Jacobin,https://jacobin.com/rss,https://jacobin.com,-0.5,0.78,politics,US,national
+Vanessa Beeley Substack Syria,https://vanessabeeley.substack.com/feed,https://vanessabeeley.substack.com,0.0,0.5,world,GB,national
+Russia After Newsletter,https://russia.substack.com/feed,https://russia.substack.com,-0.2,0.7,world,US,national
+Bridget Kendall Russia Newsletter,https://bridgetkendall.substack.com/feed,https://bridgetkendall.substack.com,-0.1,0.7,world,GB,national
+The Daily Maverick Africa,https://www.dailymaverick.co.za/category/maverick-citizen/feed/,https://www.dailymaverick.co.za/maverick-citizen,-0.1,0.78,general,ZA,national
+Stears Insights Substack Nigeria,https://www.stears.co/insights/feed/,https://www.stears.co/insights,0.0,0.74,business,NG,national
+The Continent Africa Weekly Substack,https://www.thecontinent.org/feed,https://www.thecontinent.org,-0.1,0.78,general,ZA,national
+Code Africa Sub-Saharan,https://codeafrica.org/feed/,https://codeafrica.org,-0.1,0.7,tech,KE,national
+Nigerian Politics Substack,https://www.naijapolitics.com/feed,https://www.naijapolitics.com,0.0,0.66,politics,NG,national
+Kenya Insights Substack,https://kenyainsights.substack.com/feed,https://kenyainsights.substack.com,0.0,0.66,politics,KE,national
+Daniel Munro Tech Africa,https://danielmunro.substack.com/feed,https://danielmunro.substack.com,0.0,0.66,tech,ZA,national
+Big Tech in Africa Quartz,https://qz.com/africa/feed,https://qz.com/africa,-0.1,0.78,tech,US,regional
+Rest of World Asia,https://restofworld.org/feed/asia/,https://restofworld.org/regions/asia,-0.1,0.84,tech,US,regional
+Rest of World Africa,https://restofworld.org/feed/africa/,https://restofworld.org/regions/africa,-0.1,0.84,tech,US,regional
+Rest of World Latam,https://restofworld.org/feed/latin-america/,https://restofworld.org/regions/latin-america,-0.1,0.84,tech,US,regional
+Patrick Mathangani Kenya,https://patrickmathangani.substack.com/feed,https://patrickmathangani.substack.com,0.0,0.66,general,KE,national
+The Continent Africa Substack,https://thecontinent.substack.com/feed,https://thecontinent.substack.com,-0.1,0.74,general,ZA,national
+Periodismo de Barrio Substack,https://periodismodebarrio.substack.com/feed,https://periodismodebarrio.substack.com,-0.2,0.66,politics,CU,national
+El Faro Centroamerica,https://elfaro.net/index.xml,https://elfaro.net,-0.2,0.84,general,SV,regional
+Confidencial Nicaragua,https://confidencial.digital/feed/,https://confidencial.digital,-0.2,0.78,politics,NI,national
+Distintas Latitudes,https://www.distintaslatitudes.net/feed,https://www.distintaslatitudes.net,-0.1,0.74,world,MX,regional
+Latinometrics Newsletter,https://www.latinometrics.com/feed,https://www.latinometrics.com,0.0,0.74,business,US,regional
+Americas Quarterly Subscriber,https://www.americasquarterly.org/feed/,https://www.americasquarterly.org,0.0,0.82,politics,US,regional
+Argentina Country Brief,https://argentinacountrybrief.substack.com/feed,https://argentinacountrybrief.substack.com,0.0,0.66,politics,AR,national
+Mexico Country Brief Substack,https://mexicocountrybrief.substack.com/feed,https://mexicocountrybrief.substack.com,0.0,0.66,politics,MX,national
+Cenital Argentina,https://cenital.com/feed/,https://cenital.com,-0.1,0.74,politics,AR,national
+Anfibia Argentina,https://www.anfibia.com.ar/feed/,https://www.anfibia.com.ar,-0.2,0.74,general,AR,national
+Razon Pública Colombia,https://razonpublica.com/feed/,https://razonpublica.com,-0.1,0.74,politics,CO,national
+Mexico Today Substack,https://mexicotoday.substack.com/feed,https://mexicotoday.substack.com,0.0,0.66,politics,MX,national
+The Yucatan Times,https://www.theyucatantimes.com/feed/,https://www.theyucatantimes.com,0.0,0.66,general,MX,regional
+Punto Final Brazil Substack,https://puntofinal.substack.com/feed,https://puntofinal.substack.com,0.0,0.66,politics,BR,national
+Le Grand Continent Europe,https://legrandcontinent.eu/en/feed/,https://legrandcontinent.eu/en,-0.1,0.84,world,FR,regional
+Voxeurop Europe Multilingual,https://voxeurop.eu/en/feed/,https://voxeurop.eu/en,-0.1,0.78,world,FR,regional
+Carnegie Europe Strategic Europe,https://carnegieeurope.eu/strategiceurope/index.xml,https://carnegieeurope.eu/strategiceurope,-0.1,0.84,world,BE,regional
+European Council on Foreign Relations,https://ecfr.eu/feed,https://ecfr.eu,-0.1,0.82,world,DE,regional
+Bruegel Brussels Think Tank,https://www.bruegel.org/rss.xml,https://www.bruegel.org,-0.1,0.84,business,BE,regional
+Centre for European Reform,https://www.cer.eu/rss.xml,https://www.cer.eu,-0.1,0.82,world,GB,regional
+Chatham House,https://www.chathamhouse.org/rss/all,https://www.chathamhouse.org,0.0,0.86,world,GB,national
+RUSI Royal United Services Institute,https://www.rusi.org/rss.xml,https://www.rusi.org,0.0,0.82,world,GB,national
+IISS International Strategic Studies,https://www.iiss.org/rss.xml,https://www.iiss.org,0.0,0.84,world,GB,national
+EIU Economist Intelligence Unit,https://www.eiu.com/n/rss-feeds/,https://www.eiu.com,0.0,0.84,business,GB,national
+European Pravda Substack,https://europeanpravda.substack.com/feed,https://europeanpravda.substack.com,-0.1,0.66,world,UA,regional
+Wartime Notes Substack Ukraine,https://wartimenotes.substack.com/feed,https://wartimenotes.substack.com,-0.1,0.7,world,UA,national
+The Kraken on Ukraine Substack,https://krakenonukraine.substack.com/feed,https://krakenonukraine.substack.com,-0.1,0.66,world,UA,national
+Sense and Sustainability,https://senseandsustainability.substack.com/feed,https://senseandsustainability.substack.com,-0.1,0.66,science,GB,national
+Lukasz Olejnik Cyber Policy Geopolitics,https://blog.lukaszolejnik.com/rss/,https://blog.lukaszolejnik.com,0.0,0.78,tech,PL,national
+Riley Walz Substack Mapping,https://rileywalz.substack.com/feed,https://rileywalz.substack.com,0.0,0.66,tech,US,national
+Marko Papic Geopolitics Substack,https://markopapic.substack.com/feed,https://markopapic.substack.com,0.1,0.74,world,US,national
+Eurasia Group Substack Bremmer,https://garybremmer.substack.com/feed,https://garybremmer.substack.com,0.0,0.74,world,US,national
+Foreign Policy GPS Substack,https://foreignpolicy.substack.com/feed,https://foreignpolicy.substack.com,-0.1,0.78,world,US,national
+Comparative Politics Sub Andre Mathieu,https://andremathieu.substack.com/feed,https://andremathieu.substack.com,0.0,0.66,politics,FR,national
+Le Grand Continent FR,https://legrandcontinent.eu/fr/feed/,https://legrandcontinent.eu/fr,-0.1,0.82,world,FR,regional
+NYRB Daily NY Review of Books,https://www.nybooks.com/daily/feed/,https://www.nybooks.com/daily,-0.2,0.86,general,US,national
+The Wire UK Substack,https://www.thewire.uk/feed,https://www.thewire.uk,-0.2,0.7,politics,GB,national
+Le Bonbon Newsletter Paris,https://www.lebonbon.fr/feed,https://www.lebonbon.fr,0.0,0.66,general,FR,paris
+Berlin Wartet Newsletter,https://berlinwartet.substack.com/feed,https://berlinwartet.substack.com,-0.1,0.66,general,DE,berlin
+The Local Vienna,https://www.thelocal.at/feed,https://www.thelocal.at,0.0,0.74,general,AT,national
+The Local Switzerland,https://www.thelocal.ch/feed,https://www.thelocal.ch,0.0,0.74,general,CH,national
+Swissinfo English,https://www.swissinfo.ch/eng/rss.xml,https://www.swissinfo.ch/eng,0.0,0.78,general,CH,national
+The Lithuania Tribune,https://lithuaniatribune.com/feed/,https://lithuaniatribune.com,0.0,0.7,general,LT,national
+The Baltic Course,https://www.baltic-course.com/rss/eng/news.xml,https://www.baltic-course.com,0.0,0.66,business,LV,regional
