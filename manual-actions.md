@@ -41,17 +41,17 @@ Sort **Open** newest-first. **Completed** newest-first.
 ## Open
 
 ### 2026-05-20 — Migration: algorithm_term_prefs (per-algorithm keyword mute & boost)
-**Status:** open · **PR:** (draft, this session) ·
+**Status:** open · **PR:** #82 (merged 2026-05-20) ·
 **Opened:** 2026-05-20 ·
 **File reference:** `news/seed/migrations/2026-05-20-algorithm-term-prefs.sql`
 
 Creates `algorithm_term_prefs`, backing the new "Keywords" tab on
 `/algo`. `routes/feed.py` reads it for the signed-in user's active
 algorithm on every feed load and unions the rows with `user_term_prefs`
-before scoring (**BUG-007 class** — a missing table 500s the signed-in
-feed; anon / `/firehose` / digest are unaffected). Apply this migration
-**before** the deploy that merges the PR, or have the PR held until the
-ALTER is confirmed run, mirroring the PR #77 sequencing.
+before scoring. **BUG-007 class — the merged code 500s the signed-in
+feed on a missing table** (anon / `/firehose` / digest unaffected).
+Run this SQL now and restart the Python App; this entry moves to
+Completed once you confirm.
 
 **Run in phpMyAdmin against `lt1ih6uyy2z6_news`:**
 
