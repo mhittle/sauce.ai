@@ -126,6 +126,26 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Shareable algorithm gallery v1 (PR #88).** Pri 8 / LOE 6,
+  new-feature/ui (theme C keystone). User: "an algorithm library
+  where users can pick and use other people's algos" with filterable
+  usage stats. Minimal v1 scope (publish / browse / adopt; admin-only
+  DB takedown — no public reporting UI). Three usage stats double as
+  sort axes: total adoptions, last-7d, active (distinct users whose
+  cloned profile still exists; the `ON DELETE SET NULL` on
+  `algorithm_adoptions.user_algorithm_id` is what makes "active"
+  self-maintain without a reconciliation job). New pure `app/gallery.py`
+  (`sort_order_by` is a closed literal map → no SQL-injection via
+  `?sort=`; `escape_like` for `?q=`), new `/gallery` blueprint
+  (publish / adopt / unpublish), template + append-only `.gallery-*`
+  CSS, one nav link. Adopt = clone-into-a-new-active-profile (atomic
+  clear-all-then-set, mirrors `algo._set_active`); preserves existing
+  profiles. 11 pure tests + a `"; DROP TABLE"` guard on the sort
+  fragment. *Server:* `2026-05-20-shared-algorithms.sql`
+  (`shared_algorithms` + `algorithm_adoptions`) applied on prod
+  2026-05-20 (`manual-actions.md` → Completed). NOT BUG-007 class —
+  tables are read-only at feed time, so a missing migration only
+  500s `/gallery` itself. Full detail: archive.
 - **Source catalog expansion +1151 sources (PR #91).** Pri 7 / LOE 3,
   ops/new-feature. Appended 1151 hand-curated high-quality sources to
   `seed/source_lean.csv` (768 → 1919). ~630 institutional outlets (US

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Algorithm gallery{% endblock %}
+{% block content %}
+<div class="gallery">
+  <header class="gallery-head">
+    <h1>Algorithm gallery</h1>
+    <p class="gallery-lede">
+      Browse algorithms other readers have published, sort by what other
+      people are actually using, and adopt one as your new active feed.
+      Adopting clones it as a new profile in
+      <a href="{{ url_for('algo.index') }}">Your Algo</a> &mdash; your
+      existing profiles are untouched.
+    </p>
+  </header>
+
+  <form class="gallery-controls" method="get" action="{{ url_for('gallery.index') }}">
+    <input type="search" name="q" value="{{ search }}"
+           placeholder="Search names &amp; descriptions"
+           aria-label="Search algorithm gallery"
+           maxlength="120" />
+    <label class="gallery-sort">
+      <span class="sort-label">Sort:</span>
+      <select name="sort" onchange="this.form.submit()" aria-label="Sort gallery">
+        {% for k in sort_keys %}
+          <option value="{{ k }}" {% if sort == k %}selected{% endif %}>
+            {{ sort_labels[k] }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="gallery-apply">Apply</button>
+  </form>
+
+  {% if current_user %}
+    {% if can_publish %}
+      <details class="gallery-publish">
+        <summary>Publish your active algorithm</summary>
+        <form method="post" action="{{ url_for('gallery.publish') }}" class="gallery-publish-form">
+          {{ csrf_field() }}
+          <label>
+            <span>Name</span>
+            <input type="text" name="name" value="{{ publish_default_name }}"
+                   maxlength="120" placeholder="My morning brief" />
+          </label>
+          <label>
+            <span>Description (optional)</span>
+            <textarea name="description" maxlength="500" rows="2"
+                      placeholder="What kind of reader is this for? Any quirks to know about?"></textarea>
+          </label>
+          <button type="submit">Publish snapshot</button>
+        </form>
+      </details>
+    {% else %}
+      <p class="gallery-hint muted">
+        You don&rsquo;t have an active algorithm yet. Build one on
+        <a href="{{ url_for('algo.index') }}">Your Algo</a> first.
+      </p>
+    {% endif %}
+  {% else %}
+    <p class="gallery-hint muted">
+      <a href="{{ url_for('auth.signup') }}">Sign up</a> or
+      <a href="{{ url_for('auth.login') }}">sign in</a> to publish your own
+      algorithm or adopt one.
+    </p>
+  {% endif %}
+
+  {% if listings %}
+    <ul class="gallery-list">
+      {% for L in listings %}
+      <li class="gallery-card">
+        <div class="gallery-card-head">
+          <h2 class="gallery-card-name">
+            {{ L.name }}
+            {% if L.is_owner %}<span class="gallery-badge">Yours</span>{% endif %}
+            {% if L.viewer_has_active_clone %}<span class="gallery-badge gallery-badge-adopted">Adopted</span>{% endif %}
+          </h2>
+          <div class="gallery-card-stats">
+            <span title="Total times this algorithm has been adopted">
+              <strong>{{ L.total_adoptions }}</strong> total
+            </span>
+            <span title="Adoptions in the last 7 days">
+              <strong>{{ L.recent_adoptions }}</strong> last 7d
+            </span>
+            <span title="Readers currently using a clone of this algorithm">
+              <strong>{{ L.active_adoptions }}</strong> active
+            </span>
+          </div>
+        </div>
+
+        {% if L.description %}
+          <p class="gallery-card-desc">{{ L.description }}</p>
+        {% endif %}
+
+        {% if L.weights_summary %}
+          <ul class="gallery-card-weights">
+            {% for label, w in L.weights_summary %}
+              <li><span class="w-name">{{ label }}</span><span class="w-val">{{ '%.1f'|format(w) }}</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <div class="gallery-card-actions">
+          {% if current_user %}
+            <form method="post" action="{{ url_for('gallery.adopt', lid=L.id) }}" class="inline">
+              {{ csrf_field() }}
+              <button type="submit" class="gallery-adopt">Adopt as my feed</button>
+            </form>
+            {% if L.is_owner %}
+              <form method="post" action="{{ url_for('gallery.unpublish', lid=L.id) }}" class="inline"
+                    onsubmit="return confirm('Remove this listing from the gallery? Other readers&rsquo; existing adoptions stay theirs.');">
+                {{ csrf_field() }}
+                <button type="submit" class="linkbtn gallery-unpublish">Unpublish</button>
+              </form>
+            {% endif %}
+          {% else %}
+            <a class="gallery-adopt" href="{{ url_for('auth.login', next=url_for('gallery.index')) }}">Sign in to adopt</a>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="gallery-empty muted">
+      {% if search %}
+        No published algorithms match &ldquo;{{ search }}&rdquo;.
+      {% else %}
+        Nothing in the gallery yet. Be the first to publish.
+      {% endif %}
+    </p>
+  {% endif %}
+</div>
+{% endblock %}
