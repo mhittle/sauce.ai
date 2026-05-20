@@ -156,14 +156,17 @@ parent merges.** Running children in parallel guarantees rework.
 
 ### 7.4 Tracking-doc conflicts
 
-`roadmap.md`, `engineering-history.md`, and `bugs.md` are touched by
-every session and are the highest-conflict files in the repo. If
-`.gitattributes` has them configured with `merge=union`, Git will
-auto-take both sides on conflict, which works well for append-style
-edits (new bug entries, new history sections) but can produce
-duplicate rows in the roadmap at-a-glance table after a union merge.
-**Scan the at-a-glance table on your branch after a rebase and clean
-up any duplicates in the same PR.**
+`roadmap.md`, `engineering-history.md`, `engineering-history-archive.md`,
+`bugs.md`, and `manual-actions.md` are touched by every session and are
+the highest-conflict files in the repo. `.gitattributes` configures all
+five with `merge=union` so Git auto-takes both sides on conflict instead
+of failing the rebase. Union merge works well for append-style edits
+(new bug entries, new history sections, new Open manual actions) but
+can interleave dated headers out of order and produce duplicate rows in
+the roadmap at-a-glance table. **After a rebase: scan the at-a-glance
+table for duplicate rows, scan the chronological history for
+out-of-order dated headers, and clean up any duplicates in the same
+PR.**
 
 ### 7.5 Central files require care
 
