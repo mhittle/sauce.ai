@@ -12,7 +12,19 @@ INSERT INTO feature_catalog (feature_key, label, type, range_min, range_max, des
   ('category',             'Category',               'categorical',   0, 0, 'politics / world / tech / business / science / sports / local / general', 1, 90),
   ('geography',            'Geography',              'categorical',   0, 0, 'Country and region of the source.', 1, 100),
   ('paywall',              'Paywall',                'scale',         0, 1, 'Per-article paywall score detected at classify time. 0 = free, 1 = subscription required, 0.5 = blocked/unknown.', 1, 110),
-  ('trending',             'Trending',               'scale',         0, 1, 'How strongly the article matches a topic trending in the news at large (Google Trends + Google News RSS), refreshed by trending_poll. Opt-in (default weight 0); drives the Trending sort.', 1, 115);
+  ('trending',             'Trending',               'scale',         0, 1, 'How strongly the article matches a topic trending in the news at large (Google Trends + Google News RSS), refreshed by trending_poll. Opt-in (default weight 0); drives the Trending sort.', 1, 115),
+  ('tone_calmness',        'Tone (calm)',            'scale',         0, 1, 'LLM judgment: 1 = calm, measured; 0 = alarmist, urgent.', 1, 120),
+  ('sensationalism',       'Sensationalism',         'scale',         0, 1, 'LLM judgment: 1 = sensational/clickbait phrasing; 0 = plain.', 1, 125),
+  ('analysis_depth',       'Analysis depth',         'scale',         0, 1, 'LLM judgment: 1 = analytical/explainer; 0 = breaking-news brief.', 1, 130),
+  ('emotional_charge',     'Emotional charge',       'scale',         0, 1, 'LLM judgment: 1 = emotionally loaded language; 0 = neutral.', 1, 135),
+  ('hedging',              'Hedging',                'scale',         0, 1, 'LLM judgment: 1 = heavy hedging ("may", "could"); 0 = confident assertion.', 1, 140),
+  ('solution_orientation', 'Solution orientation',   'scale',         0, 1, 'LLM judgment: 1 = solution-focused; 0 = problem-focused.', 1, 145),
+  ('headline_length',      'Headline length',        'scale',         0, 1, 'Rule-based: normalized title word count, capped at 24.', 1, 150),
+  ('caps_ratio',           'ALL-CAPS shouting',      'scale',         0, 1, 'Rule-based: uppercase letter ratio in title (shoutiness proxy).', 1, 155),
+  ('punctuation_intensity','Punctuation intensity',  'scale',         0, 1, 'Rule-based: !? density per word in title+summary.', 1, 160),
+  ('numeric_density',      'Data density',           'scale',         0, 1, 'Rule-based: digit-run density per word.', 1, 165),
+  ('question_headline',    'Question headline',      'scale',         0, 1, 'Rule-based: 1 if title ends with `?`, else 0.', 1, 170),
+  ('quote_present',        'Direct quote',           'scale',         0, 1, 'Rule-based: 1 if a direct quoted span appears in title or summary.', 1, 175);
 
 -- Default presets used by the onboarding picker. Stored as JSON in a user_algorithms-like row template;
 -- the app reads these constants from app/ranking.py PRESETS; no DB row needed.

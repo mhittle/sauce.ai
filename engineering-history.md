@@ -113,6 +113,117 @@ already includes these.
 
 ---
 
+## 2026-05-20 — Perceptual feature expansion: 12 new ranking features (PR #84)
+
+Roadmap "Perceptual feature expansion" (Pri 7 / LOE 5, algo/backend) —
+user-requested mid-session pivot from the original onboarding pick.
+Doubles the size of the `FEATURES` catalog (12 → 24) by adding 6
+LLM-judged perceptual signals and 6 rule-based structural ones, both
+batched into the existing classify pipeline (no new cron, no new
+LLM request).
+
+### What shipped
+
+- **`app/classifier/rules.py`** — 6 new pure scorers:
+  `headline_length_score` (normalized title word count, cap 24),
+  `caps_ratio_score` (uppercase ratio over letters in title),
+  `punctuation_intensity_score` (!? per word, scaled),
+  `numeric_density_score` (digit-runs per word, scaled),
+  `question_headline_score` (0/1), `quote_present_score` (0/1, straight
+  and smart quotes). Wired into `compute_rules_features` return dict.
+- **`app/classifier/schema.py` + `app/classifier/llm.py`** — extended
+  the Haiku system prompt to ask for 6 perceptual fields per article
+  (`tone_calmness`, `sensationalism`, `analysis_depth`,
+  `emotional_charge`, `hedging`, `solution_orientation`); parser
+  clamps each to [0,1], defaults missing fields to 0.5. New
+  `LLM_PERCEPTION_KEYS` constant + `LLM_PERCEPTION_DEFAULT = 0.5`.
+- **`jobs/classify_pending.py`** — `_run()` INSERT extended to write
+  all 12 new columns (LLM-unavailable rows get 0.5 across the 6
+  perceptual ones, mirroring how the existing fallback treats
+  `objectivity`); `_reclassify_nollm` UPDATE extended to also heal
+  the 6 LLM features when the bounded reclassify pass runs.
+- **`app/ranking.py`** — 12 new entries in `FEATURES` with modest
+  default weights (0.1–0.5) and sensible default_directions
+  (preferring calm/non-sensational/analytical/neutral; no preference
+  on hedging/headline-length/solution/data/quote). Because existing
+  `user_algorithms.weights_json` doesn't reference the new keys,
+  `build_score_sql` skips them for legacy users — opt-in via the
+  /algo editor, where the existing `{% for feat in features %}` loop
+  auto-renders the 12 new rows.
+- **`seed/schema.sql` + `seed/feature_catalog.sql`** — 12 new columns
+  on `article_features` and 12 new catalog rows.
+- **Migration** `seed/migrations/2026-05-20-perception-features.sql`
+  (ADD COLUMN x12 + INSERT x12).
+- **Tests** — `tests/test_rules.py` (15 new pure scorer cases,
+  in-sandbox green), `tests/test_ranking.py` (5 new — catalog
+  shape, SQL contribution, threshold, legacy compat),
+  `tests/test_llm_unavailable.py` (1 new — perception constants
+  shape), `tests/test_classify_pending.py` (existing reclassify
+  test updated to expect the 8-field UPDATE shape).
+- **INSTALL.txt §10** — new entry documenting the 12 features,
+  fallback semantics, cost delta (~3x prior per-article LLM cost,
+  still sub-$0.001/article), no-backfill behavior, and migration
+  dependency.
+
+### Server-side state touched
+
+- **One manual DB migration** logged Open in `manual-actions.md` with
+  full inline SQL: `2026-05-20-perception-features.sql`
+  (12 ADD COLUMN on `article_features` + 12 INSERT into
+  `feature_catalog`). **Load-bearing (BUG-007 class):**
+  `classify_pending` INSERTs into the new columns on every 5-min
+  tick after deploy and errors hard if they're missing. Apply
+  before merge / before the next deploy; restart the Python App on
+  deploy. Existing user feeds keep rendering normally throughout
+  (their algos don't reference the new keys); only the classify
+  cron breaks if the migration is missed.
+- No new cron / env-var / symlink / pip dep.
+
+### Verification
+
+- 84 sandbox-runnable tests in the changed area green
+  (`test_rules.py`, `test_ranking.py`, `test_llm_unavailable.py`,
+  `test_classify_pending.py`); 174 total in the full sandbox-runnable
+  subset green. The 6 collection errors are the documented
+  environmental sandbox limitation (no flask/feedparser — same
+  pattern as PR #50/#53/#59/#69/#70/#77). Changed Python files
+  `py_compile` clean.
+- Full route + browser exercise of the editor (12 new sliders
+  render, save+reload preserves them, scores reflect tuned values)
+  and a real classify_pending tick (writes non-default values for
+  the new LLM + rule fields) deferred to CI / real env.
+
+### Rebase / conflicts
+
+Rebased once mid-session onto `origin/main` after PRs #79 (Why This
+Article), #80, #81 (compact toggle), #82 (per-algorithm keyword
+mute/boost), and #83 landed. Tracking-doc conflicts hand-resolved
+(history/archive/roadmap/manual-actions/INSTALL.txt — both 2026-05-20
+entries kept; my Condensed-history archive entries dropped in favour
+of HEAD's already-condensed PR #77 entry). Code files
+(`app/classifier/*`, `app/ranking.py`, `jobs/classify_pending.py`,
+`seed/schema.sql`, `seed/feature_catalog.sql`, tests) auto-merged
+cleanly — no overlap with the algo/feed/explain/style changes in the
+upstream PRs.
+
+### PR
+
+- **PR #84** — Add 12 perceptual ranking features (draft 2026-05-20).
+  Migration in `manual-actions.md` Open; apply before merge.
+
+### Open items
+
+- Apply `2026-05-20-perception-features.sql` on prod before merge
+  (classify_pending errors on the missing columns from the first
+  post-deploy tick).
+- Doc-drift cleanup noticed but **not** fixed in this PR: `roadmap.md`
+  still shows "Multiple saved algorithms / profiles" as `in-progress`
+  even though it's merged on main and surfaced by `algo.html` (PR #65
+  per Condensed history). PR #61 (stale draft) is a rework of the
+  same feature. Worth a maintainer pass.
+
+---
+
 ## 2026-05-20 — Per-algorithm keyword mute & boost (PR #82)
 
 Roadmap "Per-algorithm keyword mute & boost (in the algo builder)"

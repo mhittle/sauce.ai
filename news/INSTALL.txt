@@ -569,5 +569,25 @@ K. /trending page is empty or 500s:
   the 2026-05-20-algorithm-term-prefs.sql migration
   (algorithm_term_prefs); a missing table 500s the signed-in feed,
   so apply it before deploying the code.
+- 12 perceptual features (added 2026-05-20): 6 LLM-judged
+  (tone_calmness, sensationalism, analysis_depth, emotional_charge,
+  hedging, solution_orientation) batched into the existing
+  classify_pending Haiku call -- adds ~80-120 output tokens per
+  article, ~3x prior per-article LLM cost (still well under
+  $0.001/article). When the LLM is unavailable the row falls back
+  to the neutral 0.5 midpoint across all 6, and the existing
+  -nollm reclassify pass heals these alongside political_lean +
+  objectivity. 6 rule-based (headline_length, caps_ratio,
+  punctuation_intensity, numeric_density, question_headline,
+  quote_present) computed in app/classifier/rules.py with no
+  network/LLM. All 12 are exposed in the /algo editor with
+  modest default weights; existing user_algorithms rows don't
+  reference the new keys so legacy scoring is byte-identical
+  until a user opts in. Pre-existing articles keep the column
+  defaults (0.5 LLM / 0 rule) -- no backfill; freshness rolls
+  over in ~7 days as new articles get classified. Requires the
+  2026-05-20-perception-features.sql migration (ADD COLUMN x12 on
+  article_features + 12 feature_catalog rows); classify_pending
+  errors on every tick until applied.
 
 You're done. Visit  https://sauce.ai/news .

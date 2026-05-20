@@ -40,7 +40,74 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-_None — all tracked migrations applied._
+### 2026-05-20 — Migration: 12 perceptual feature columns + catalog rows
+**Status:** open · **PR:** #84 (draft) ·
+**Opened:** 2026-05-20 ·
+**File reference:** `news/seed/migrations/2026-05-20-perception-features.sql`
+
+Adds 6 LLM-judged perceptual columns (`tone_calmness`, `sensationalism`,
+`analysis_depth`, `emotional_charge`, `hedging`, `solution_orientation`,
+all DEFAULT 0.5) and 6 rule-based structural columns (`headline_length`,
+`caps_ratio`, `punctuation_intensity`, `numeric_density`,
+`question_headline`, `quote_present`, all DEFAULT 0) to `article_features`,
+plus the matching 12 `feature_catalog` rows. **Load-bearing
+(BUG-007 class):** `jobs/classify_pending.py` INSERTs into all 12 new
+columns on every tick after this deploy and errors hard if they don't
+exist — runs every 5 min, so a missing column manifests within minutes.
+Existing user algorithms don't reference the new feature keys so
+signed-in `/`, `/firehose`, and `/algo` keep rendering normally; only
+the classify cron breaks. Apply this BEFORE merging / before the next
+deploy; restart the Python App on deploy.
+
+**SQL applied (phpMyAdmin against `lt1ih6uyy2z6_news`):**
+
+```sql
+ALTER TABLE article_features
+  ADD COLUMN tone_calmness         FLOAT NOT NULL DEFAULT 0.5 AFTER trending,
+  ADD COLUMN sensationalism        FLOAT NOT NULL DEFAULT 0.5 AFTER tone_calmness,
+  ADD COLUMN analysis_depth        FLOAT NOT NULL DEFAULT 0.5 AFTER sensationalism,
+  ADD COLUMN emotional_charge      FLOAT NOT NULL DEFAULT 0.5 AFTER analysis_depth,
+  ADD COLUMN hedging               FLOAT NOT NULL DEFAULT 0.5 AFTER emotional_charge,
+  ADD COLUMN solution_orientation  FLOAT NOT NULL DEFAULT 0.5 AFTER hedging,
+  ADD COLUMN headline_length       FLOAT NOT NULL DEFAULT 0   AFTER solution_orientation,
+  ADD COLUMN caps_ratio            FLOAT NOT NULL DEFAULT 0   AFTER headline_length,
+  ADD COLUMN punctuation_intensity FLOAT NOT NULL DEFAULT 0   AFTER caps_ratio,
+  ADD COLUMN numeric_density       FLOAT NOT NULL DEFAULT 0   AFTER punctuation_intensity,
+  ADD COLUMN question_headline     FLOAT NOT NULL DEFAULT 0   AFTER numeric_density,
+  ADD COLUMN quote_present         FLOAT NOT NULL DEFAULT 0   AFTER question_headline;
+
+INSERT INTO feature_catalog (feature_key, label, type, range_min, range_max, description, is_active, sort_order) VALUES
+  ('tone_calmness',        'Tone (calm)',           'scale', 0, 1, 'LLM judgment: 1 = calm, measured; 0 = alarmist, urgent.',          1, 120),
+  ('sensationalism',       'Sensationalism',        'scale', 0, 1, 'LLM judgment: 1 = sensational/clickbait phrasing; 0 = plain.',     1, 125),
+  ('analysis_depth',       'Analysis depth',        'scale', 0, 1, 'LLM judgment: 1 = analytical/explainer; 0 = breaking-news brief.', 1, 130),
+  ('emotional_charge',     'Emotional charge',      'scale', 0, 1, 'LLM judgment: 1 = emotionally loaded language; 0 = neutral.',      1, 135),
+  ('hedging',              'Hedging',               'scale', 0, 1, 'LLM judgment: 1 = heavy hedging ("may", "could"); 0 = confident assertion.', 1, 140),
+  ('solution_orientation', 'Solution orientation',  'scale', 0, 1, 'LLM judgment: 1 = solution-focused; 0 = problem-focused.',         1, 145),
+  ('headline_length',      'Headline length',       'scale', 0, 1, 'Rule-based: normalized title word count, capped at 24.',           1, 150),
+  ('caps_ratio',           'ALL-CAPS shouting',     'scale', 0, 1, 'Rule-based: uppercase letter ratio in title (shoutiness proxy).',  1, 155),
+  ('punctuation_intensity','Punctuation intensity', 'scale', 0, 1, 'Rule-based: !? density per word in title+summary.',                1, 160),
+  ('numeric_density',      'Data density',          'scale', 0, 1, 'Rule-based: digit-run density per word.',                          1, 165),
+  ('question_headline',    'Question headline',     'scale', 0, 1, 'Rule-based: 1 if title ends with `?`, else 0.',                    1, 170),
+  ('quote_present',        'Direct quote',          'scale', 0, 1, 'Rule-based: 1 if a direct quoted span appears in title or summary.', 1, 175);
+```
+
+**Verify (post-deploy):**
+
+```sql
+SHOW COLUMNS FROM article_features LIKE 'tone_calmness';        -- exists
+SHOW COLUMNS FROM article_features LIKE 'question_headline';    -- exists
+SELECT COUNT(*) FROM feature_catalog WHERE feature_key IN
+  ('tone_calmness','sensationalism','analysis_depth','emotional_charge',
+   'hedging','solution_orientation','headline_length','caps_ratio',
+   'punctuation_intensity','numeric_density','question_headline','quote_present');
+-- expect: 12
+```
+
+Then tail `logs/cron.log` for a `classify_pending` tick that writes a
+non-default value: e.g.
+`SELECT article_id, tone_calmness, sensationalism, caps_ratio
+   FROM article_features ORDER BY classified_at DESC LIMIT 5;`
+should show varied values once classify_pending has run after deploy.
 
 ---
 

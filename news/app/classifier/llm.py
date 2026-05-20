@@ -35,11 +35,21 @@ def _estimate_cost(usage) -> float:
     return cost
 
 
+LLM_PERCEPTION_KEYS = (
+    "tone_calmness", "sensationalism", "analysis_depth",
+    "emotional_charge", "hedging", "solution_orientation",
+)
+LLM_PERCEPTION_DEFAULT = 0.5
+
+
 def classify_batch_llm(api_key: str, model: str, articles: List[Tuple]) -> dict:
     """articles: list of (id, source_name, source_lean, title, summary).
 
-    Returns: {"by_id": {id: {political_lean, objectivity}}, "usage": {...}}
-    Raises LLMUnavailable on any failure; caller should fall back.
+    Returns: {"by_id": {id: {political_lean, objectivity, tone_calmness,
+        sensationalism, analysis_depth, emotional_charge, hedging,
+        solution_orientation}}, "usage": {...}}
+    Raises LLMUnavailable on any failure; caller should fall back. Each
+    perception field is clamped to [0,1]; missing fields default to 0.5.
     """
     if not api_key:
         raise LLMUnavailable("ANTHROPIC_API_KEY not configured")
@@ -92,17 +102,20 @@ def classify_batch_llm(api_key: str, model: str, articles: List[Tuple]) -> dict:
             aid = int(r["id"])
             lean = max(-1.0, min(1.0, float(r.get("political_lean", 0.0))))
             obj = max(0.0, min(1.0, float(r.get("objectivity", 0.5))))
-            loc = r.get("primary_location") or ""
-            if not isinstance(loc, str):
-                loc = ""
-            loc = loc.strip()[:120]
-            by_id[aid] = {
-                "political_lean": lean,
-                "objectivity": obj,
-                "primary_location": loc,
-            }
         except (KeyError, TypeError, ValueError):
             continue
+        loc = r.get("primary_location") or ""
+        if not isinstance(loc, str):
+            loc = ""
+        loc = loc.strip()[:120]
+        row = {"political_lean": lean, "objectivity": obj, "primary_location": loc}
+        for k in LLM_PERCEPTION_KEYS:
+            try:
+                v = float(r.get(k, LLM_PERCEPTION_DEFAULT))
+            except (TypeError, ValueError):
+                v = LLM_PERCEPTION_DEFAULT
+            row[k] = max(0.0, min(1.0, v))
+        by_id[aid] = row
 
     usage = {
         "input_tokens": getattr(resp.usage, "input_tokens", 0),

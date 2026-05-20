@@ -166,6 +166,79 @@ def info_density(text: str) -> float:
     return max(0.0, min(1.0, raw * 3.0))
 
 
+_TITLE_WORD_RE = re.compile(r"\S+")
+_LETTER_RE = re.compile(r"[A-Za-z]")
+_UPPER_RE = re.compile(r"[A-Z]")
+_DIGIT_RE = re.compile(r"\d")
+_PUNCT_INTENSITY_RE = re.compile(r"[!?]")
+_QUOTE_RE = re.compile(r'"[^"]{3,}"|“[^”]{3,}”|‘[^’]{3,}’')
+
+
+def headline_length_score(title: str) -> float:
+    """Normalized title word count, capped at 24 words.
+
+    0.0 = empty, ~0.25 = 6-word headline, ~0.5 = 12-word, 1.0 = 24+ words.
+    Long-explainer vs snappy is a real reader preference (e.g. NYT vs AP)."""
+    if not title:
+        return 0.0
+    n = len(_TITLE_WORD_RE.findall(title))
+    return max(0.0, min(1.0, n / 24.0))
+
+
+def caps_ratio_score(title: str) -> float:
+    """Uppercase ratio among letters in the title. ALL-CAPS = 1.0, normal title
+    case = ~0.1-0.2 (each word's first letter). Proxy for shoutiness."""
+    if not title:
+        return 0.0
+    letters = _LETTER_RE.findall(title)
+    if not letters:
+        return 0.0
+    uppers = _UPPER_RE.findall("".join(letters))
+    return max(0.0, min(1.0, len(uppers) / len(letters)))
+
+
+def punctuation_intensity_score(text: str) -> float:
+    """`!?` count per word in title+summary, scaled so 1 punct/10 words ≈ 1.0.
+    Catches breathless headlines and exclamation-heavy summaries."""
+    if not text:
+        return 0.0
+    words = _WORD_RE.findall(text)
+    if not words:
+        return 0.0
+    puncts = len(_PUNCT_INTENSITY_RE.findall(text))
+    raw = puncts / len(words)
+    return max(0.0, min(1.0, raw * 10.0))
+
+
+def numeric_density_score(text: str) -> float:
+    """Digit-run count per word, scaled so 1 number/10 words ≈ 0.5, 1/5 ≈ 1.0.
+    Proxy for data-heavy reporting (stats, charts, prices)."""
+    if not text:
+        return 0.0
+    words = _WORD_RE.findall(text)
+    if not words:
+        return 0.0
+    nums = len(_NUM_RE.findall(text))
+    raw = nums / len(words)
+    return max(0.0, min(1.0, raw * 5.0))
+
+
+def question_headline_score(title: str) -> float:
+    """1.0 if title ends with `?`, else 0.0. Question headlines correlate
+    with engagement-bait ('Is X really Y?')."""
+    if not title:
+        return 0.0
+    return 1.0 if title.rstrip().endswith("?") else 0.0
+
+
+def quote_present_score(title: str, summary: str = "") -> float:
+    """1.0 if a direct quoted span (>=3 chars inside quotes) appears in title
+    or summary. Proxy for sourced reporting / on-record statements. Handles
+    both straight (\") and smart (“” ‘’) quotes."""
+    body = f"{title or ''} {_strip_html(summary or '')}"
+    return 1.0 if _QUOTE_RE.search(body) else 0.0
+
+
 def normalize_byline(s: str) -> str:
     if not s:
         return ""
@@ -188,7 +261,9 @@ def split_bylines(s: str):
 
 def compute_rules_features(article: dict, source: dict) -> dict:
     """article: {title, summary}.  source: {source_lean, source_reputation, category, country, region}."""
-    text = f"{article.get('title','')}. {_strip_html(article.get('summary',''))}"
+    title = article.get("title", "") or ""
+    summary = _strip_html(article.get("summary", "") or "")
+    text = f"{title}. {summary}"
     return {
         "reading_level": normalized_reading_level(text),
         "info_density": info_density(text),
@@ -198,4 +273,10 @@ def compute_rules_features(article: dict, source: dict) -> dict:
         "country": source.get("country", "US"),
         "region": source.get("region", "national"),
         "journalist_reputation": float(source.get("source_reputation", 0.5)),  # placeholder; maintenance.py refines
+        "headline_length": headline_length_score(title),
+        "caps_ratio": caps_ratio_score(title),
+        "punctuation_intensity": punctuation_intensity_score(text),
+        "numeric_density": numeric_density_score(text),
+        "question_headline": question_headline_score(title),
+        "quote_present": quote_present_score(title, summary),
     }
