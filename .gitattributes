@@ -1,0 +1,11 @@
+# High-conflict tracking docs — every session appends to these at the same
+# anchor (top of the chronological log / Open section / At-a-glance table),
+# so parallel sessions always conflict on a plain rebase. `merge=union`
+# auto-takes both sides; the rebasing session then re-sorts dated headers
+# and dedupes any at-a-glance rows in the same PR.
+# See: new-engineering-session-instructions.md §7.4.
+engineering-history.md          merge=union
+engineering-history-archive.md  merge=union
+roadmap.md                      merge=union
+bugs.md                         merge=union
+manual-actions.md               merge=union

@@ -126,6 +126,18 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **`.gitattributes` `merge=union` for high-conflict tracking docs.**
+  Ad-hoc / infra. User pain point: every parallel session appends to
+  `engineering-history.md` at the same top-of-log anchor, forcing a
+  manual conflict resolution on every rebase. Added `.gitattributes`
+  marking `engineering-history.md` + `engineering-history-archive.md` +
+  `roadmap.md` + `bugs.md` + `manual-actions.md` `merge=union` so Git
+  auto-takes both sides instead of failing the rebase. Trade-off (now
+  explicit in `new-engineering-session-instructions.md` §7.4):
+  out-of-order dated headers and duplicate at-a-glance rows can appear
+  after a union merge and must be cleaned up in the same PR — but the
+  rebase no longer *blocks* on these files. Docs-only; no
+  server/cron/dep/migration change.
 - **Per-profile "Publish to gallery" button (PR #94).** Small UX
   follow-on to PR #88: each row in `/algo` Profiles tab now carries
   a "Publish to gallery" form that snapshots that specific profile.
