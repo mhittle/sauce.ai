@@ -1,9 +1,9 @@
-"""Per-user keyword mute & boost — pure SQL-fragment builders.
+"""Per-algorithm keyword mute & boost — pure SQL-fragment builders.
 
 Flask-free (mirrors `app.discussion` / `app.trending` / `app.ranking`):
 no DB, no request context, so it unit-tests like `build_filters_sql`.
 
-A user keeps two disjoint term lists:
+Each algorithm profile keeps two disjoint term lists:
   - **mute**  — a hard filter: any article whose title+summary contains
     the term is dropped from the feed entirely.
   - **boost** — a score multiplier: a matching article's score is

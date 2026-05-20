@@ -13,11 +13,26 @@ The gallery surfaces three v1 usage stats per listing:
 `SORT_ORDER_BY` maps a normalized sort key to a fixed SQL ORDER BY
 fragment. The map is closed (the route looks the key up by exact match)
 so the caller can never inject SQL via `?sort=`.
+
+`snapshot_keywords` / `parse_keywords` serialize the algorithm's
+`algorithm_term_prefs` rows into the `shared_algorithms.keywords_json`
+snapshot at publish time and re-hydrate them at adopt time, sanitized
+through `term_prefs.normalize_term` / `clamp_boost` so a malformed
+listing can never poison the adopter's keyword table.
 """
+import json
+
+from .term_prefs import (
+    normalize_term,
+    clamp_boost,
+    BOOST_DEFAULT,
+    VALID_MODES,
+)
 
 MAX_NAME_LEN = 120
 MAX_DESCRIPTION_LEN = 500
 MAX_SEARCH_LEN = MAX_NAME_LEN
+MAX_KEYWORDS_IN_SNAPSHOT = 100
 
 NAME_FALLBACK = "Untitled algorithm"
 
@@ -68,3 +83,67 @@ def escape_like(term):
         .replace("%", "\\%")
         .replace("_", "\\_")
     )
+
+
+def snapshot_keywords(rows):
+    """Serialize an algorithm's `algorithm_term_prefs` rows into the JSON
+    blob stored on `shared_algorithms.keywords_json`.
+
+    Each input row is a mapping with `term`, `mode`, and (for boosts)
+    `weight`. The output is a list of `{term, mode, weight}` dicts —
+    normalized through `term_prefs` so a published listing never carries
+    a malformed term, and capped so a runaway listing can't bloat the
+    snapshot. Mute rows store `weight=BOOST_DEFAULT` for shape
+    consistency (the value is ignored by the feed builder for mute).
+    Returns a JSON string ready to insert."""
+    out = []
+    seen = set()
+    for r in rows or ():
+        mode = (r.get("mode") or "").lower()
+        if mode not in VALID_MODES:
+            continue
+        term = normalize_term(r.get("term"))
+        if term is None or term in seen:
+            continue
+        seen.add(term)
+        weight = clamp_boost(r.get("weight")) if mode == "boost" else BOOST_DEFAULT
+        out.append({"term": term, "mode": mode, "weight": weight})
+        if len(out) >= MAX_KEYWORDS_IN_SNAPSHOT:
+            break
+    return json.dumps(out)
+
+
+def parse_keywords(raw):
+    """Re-hydrate a `shared_algorithms.keywords_json` snapshot into a
+    sanitized list of keyword rows ready for INSERT into
+    `algorithm_term_prefs`.
+
+    Any malformed entry (bad mode, too-short term, non-JSON blob) is
+    dropped — the snapshot is untrusted input from the publisher.
+    Duplicates by term keep the first occurrence (matches the publish
+    behavior). Output is capped at `MAX_KEYWORDS_IN_SNAPSHOT`."""
+    if not raw:
+        return []
+    try:
+        items = json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(items, list):
+        return []
+    out = []
+    seen = set()
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        mode = (it.get("mode") or "").lower() if isinstance(it.get("mode"), str) else ""
+        if mode not in VALID_MODES:
+            continue
+        term = normalize_term(it.get("term"))
+        if term is None or term in seen:
+            continue
+        seen.add(term)
+        weight = clamp_boost(it.get("weight")) if mode == "boost" else BOOST_DEFAULT
+        out.append({"term": term, "mode": mode, "weight": weight})
+        if len(out) >= MAX_KEYWORDS_IN_SNAPSHOT:
+            break
+    return out

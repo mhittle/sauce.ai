@@ -40,7 +40,62 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
+### 2026-05-20 — Migration: keywords-on-algo (drop user_term_prefs, add shared_algorithms.keywords_json)
+**Status:** open · **PR:** (drafted this session) ·
+**Opened:** 2026-05-20 ·
+**File reference:** `news/seed/migrations/2026-05-20-keywords-on-algo.sql`
+
+Removes the account-wide `/terms` surface: keywords now live ONLY on
+each algorithm profile (`algorithm_term_prefs`). Gallery publish
+snapshots the algorithm's keywords into a new
+`shared_algorithms.keywords_json` column; adopt clones them into the
+new profile.
+
+**Load-bearing (BUG-007 class):** the merged code drops the
+`user_term_prefs` SELECT in `routes/feed.py` (safe — the new query path
+is `algorithm_term_prefs` only) and SELECTs `keywords_json` in
+`routes/gallery.adopt()`. A missing `keywords_json` column would 500
+gallery adopts; a lingering `user_term_prefs` table is harmless but
+clutter. Apply this then restart the Python App.
+
+**SQL (run in phpMyAdmin against `lt1ih6uyy2z6_news`, in order):**
+
+```sql
+-- 1. Preserve existing per-user keywords by copying them into each
+-- user's currently-active algorithm. INSERT IGNORE keeps any
+-- pre-existing per-algo term on a (algorithm_id, term) collision.
+INSERT IGNORE INTO algorithm_term_prefs (algorithm_id, term, mode, weight)
+SELECT ua.id, utp.term, utp.mode, utp.weight
+FROM user_term_prefs utp
+JOIN user_algorithms ua
+  ON ua.user_id = utp.user_id
+ AND ua.is_active = 1;
+
+-- 2. Add the snapshot column on gallery listings. Added nullable +
+-- backfilled + tightened so strict-mode MySQL doesn't reject a NOT NULL
+-- TEXT ADD COLUMN on a populated table.
+ALTER TABLE shared_algorithms
+  ADD COLUMN keywords_json TEXT NULL AFTER weights_json;
+
+UPDATE shared_algorithms SET keywords_json = '[]' WHERE keywords_json IS NULL;
+
+ALTER TABLE shared_algorithms
+  MODIFY COLUMN keywords_json TEXT NOT NULL;
+
+-- 3. Drop the now-unused account-wide keywords table.
+DROP TABLE user_term_prefs;
+```
+
+**Then:** Restart the Python App in cPanel (Passenger import cache).
+
+**Verify:**
+- `/terms` returns 404 (route is removed).
+- `/algo` Keywords tab still works on the active profile.
+- Publishing an algorithm with keywords sets a non-`[]`
+  `shared_algorithms.keywords_json`.
+- Adopting that listing inserts rows into `algorithm_term_prefs`
+  attached to the cloned profile.
+- `SHOW TABLES LIKE 'user_term_prefs';` returns empty.
 
 ---
 

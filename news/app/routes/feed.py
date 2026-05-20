@@ -118,20 +118,16 @@ def index():
         pref_score_mult = " * COALESCE(usp.weight, 1.0)"
         pref_params["_pref_uid"] = u["id"]
 
-        # Account-wide keywords (managed at /terms) + per-algorithm keywords
-        # for the currently active profile (managed on /algo's Keywords tab).
-        # The pure builder dedupes by term and lets mute win over boost, so
-        # the union is just list concatenation — no merge helper needed.
-        term_rows = list(query(
-            "SELECT term, mode, weight FROM user_term_prefs WHERE user_id = %s",
-            (u["id"],),
-        ) or [])
+        # Per-algorithm keywords for the currently active profile (managed
+        # on /algo's Keywords tab). The builder dedupes terms and lets mute
+        # win over boost.
+        term_rows = []
         if active_algo_id:
-            term_rows.extend(query(
+            term_rows = query(
                 "SELECT term, mode, weight FROM algorithm_term_prefs "
                 "WHERE algorithm_id = %s",
                 (active_algo_id,),
-            ) or [])
+            ) or []
         term_mute_sql, term_boost_expr, term_params = build_term_clauses(term_rows)
         if term_boost_expr:
             term_boost_mult = f" * ({term_boost_expr})"

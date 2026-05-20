@@ -213,11 +213,10 @@
     <p class="muted">Add keywords or short phrases that matter to this
     algorithm. <strong>Mute</strong> hides any article whose headline or
     summary contains the term; <strong>Boost</strong> multiplies a
-    matching article's score so it surfaces higher. These attach to your
-    <strong>active profile</strong>{% if profiles and active_algo_id %} (<em>{{ (profiles|selectattr('id','equalto',active_algo_id)|first).name }}</em>){% endif %} &mdash;
-    switch profiles on the Profiles tab to edit a different one. Account-wide
-    keywords live on <a href="{{ url_for('term_prefs.index') }}">Your keywords</a>;
-    both apply, and mute always wins over boost.</p>
+    matching article's score so it surfaces higher. Keywords attach to
+    your <strong>active profile</strong>{% if profiles and active_algo_id %} (<em>{{ (profiles|selectattr('id','equalto',active_algo_id)|first).name }}</em>){% endif %} &mdash;
+    switch profiles on the Profiles tab to edit a different one. If two
+    terms collide, mute wins over boost.</p>
 
     {% if kw_error %}<div class="kw-error">{{ kw_error }}</div>{% endif %}
 

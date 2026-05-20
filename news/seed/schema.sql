@@ -241,32 +241,14 @@ CREATE TABLE IF NOT EXISTS user_saves (
   CONSTRAINT fk_saves_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Per-user keyword mute & boost. `mode='mute'` hard-filters any article
--- whose title+summary contains `term`; `mode='boost'` multiplies a
--- matching article's score by `weight` (the strongest matching boost
--- wins; boosts don't compound). UNIQUE(user_id, term) keeps a term in
--- exactly one mode per user — re-adding it in the other mode moves it.
--- `weight` is unused for mute rows.
-CREATE TABLE IF NOT EXISTS user_term_prefs (
-  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  user_id    INT UNSIGNED NOT NULL,
-  term       VARCHAR(128) NOT NULL,
-  mode       ENUM('mute','boost') NOT NULL,
-  weight     FLOAT NOT NULL DEFAULT 1.5,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uk_term_pref (user_id, term),
-  KEY idx_term_pref_user (user_id),
-  CONSTRAINT fk_term_pref_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Per-algorithm keyword mute & boost. Same mute/boost model as
--- `user_term_prefs` but scoped to one `user_algorithms` row so different
--- saved profiles carry their own keyword intent. routes/feed.py reads
--- this for the active algorithm and merges with `user_term_prefs` before
--- calling `app.term_prefs.build_term_clauses` (the merger is just
--- list concatenation — the builder already dedupes terms and lets mute
--- beat boost, so a term muted at either level always wins).
+-- Per-algorithm keyword mute & boost. `mode='mute'` hard-filters any
+-- article whose title+summary contains `term`; `mode='boost'` multiplies
+-- a matching article's score by `weight` (the strongest matching boost
+-- wins; boosts don't compound). Scoped to one `user_algorithms` row so
+-- different saved profiles carry their own keyword intent.
+-- `routes/feed.py` reads this for the active algorithm and feeds the
+-- rows into `app.term_prefs.build_term_clauses` (the builder already
+-- dedupes terms and lets mute beat boost).
 CREATE TABLE IF NOT EXISTS algorithm_term_prefs (
   id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   algorithm_id INT UNSIGNED NOT NULL,
@@ -401,6 +383,7 @@ CREATE TABLE IF NOT EXISTS shared_algorithms (
   name          VARCHAR(120) NOT NULL,
   description   VARCHAR(500) NOT NULL DEFAULT '',
   weights_json  TEXT NOT NULL,
+  keywords_json TEXT NOT NULL,
   is_public     TINYINT(1) NOT NULL DEFAULT 1,
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
