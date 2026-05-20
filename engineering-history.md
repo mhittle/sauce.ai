@@ -114,8 +114,13 @@ applied 2026-05-20, BUG-007 class for `classify_pending` every 5-min
 tick); `shared_algorithms.keywords_json` column added + `user_term_prefs`
 table dropped (PR drafted 2026-05-20, keywords-on-algo only — migration
 pending on prod, see `manual-actions.md` Open; BUG-007 class for
-`gallery.adopt()` SELECTing the new column). A DB rebuild from
-`seed/schema.sql` already includes these.
+`gallery.adopt()` SELECTing the new column); new `lab_concept_votes`
+table (PR drafted 2026-05-20, root-domain landing page voting —
+migration pending on prod, see `manual-actions.md` Open; **NOT**
+BUG-007 class — only the new `/news/labvotes/*` endpoints touch it,
+the landing page hides the vote UI on tally failure so the cards
+still render). A DB rebuild from `seed/schema.sql` already includes
+these.
 
 ---
 
@@ -129,6 +134,51 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Lab landing expansion — 10 more radical concepts + anon up/down
+  voting (PR drafted this session).** Roadmap Pri 6 / LOE 3,
+  ui/new-feature/backend. User on PR #101 (merged earlier this
+  session): "These ideas are kind of mid. Add some more radical
+  consumer-focused concepts, like jar.ai and other high&#8209;leverage
+  tools for people. Add another 10 concepts to this along with a way
+  to vote them up or down." Two coupled changes:
+  - **+10 concepts.** Total card grid is now 1 live + 17 coming&#8209;soon.
+    New keys, ordered radical-first: `jar` (AI memory jar / second
+    brain), `negotiate` (success-fee bill negotiator), `doctor`
+    (calibrated health triage), `legal` (contracts / leases / small
+    claims), `clone` (your voice + reasoning, trained), `tax`
+    (year&#8209;round agent), `decide` (big&#8209;call structurer),
+    `friend` (relationship&#8209;maintenance nudger), `estate`
+    (wills + digital legacy), `mirror` (weekly self&#8209;debrief).
+    Re-ordered the 7 first&#8209;wave concepts after the new wave so
+    the radical picks lead.
+  - **Anonymous voting.** Each coming&#8209;soon card now has ▲/▼
+    buttons and an HN&#8209;style net score, populated from a new
+    Flask endpoint on the news app (`GET /news/labvotes/tally`,
+    `POST /news/labvotes/vote`). Anon identity is a 40&#8209;hex
+    token in a `lab_voter_token` cookie set by the tally response
+    with `Path=/`, so the static root page (`sauce.ai/`) and the
+    news app (`sauce.ai/news/`) share the same voter token (same
+    host). Optimistic UI, error&#8209;tolerant (a 500 from the API
+    hides the vote bars and leaves the cards otherwise rendered).
+  *Code:* new pure `app/lab_concepts.py` (concept&#8209;key allowlist
+  + `normalize_vote` + `is_valid_voter_token` + `tally_with_you`),
+  new `app/routes/lab.py` blueprint (no auth, no CSRF — added to
+  `_EXEMPT_ENDPOINTS` next to `account.unsubscribe`; rationale is
+  symmetric — anon endpoint, low&#8209;stakes, per&#8209;voter
+  UNIQUE index caps abuse from any one cookie), blueprint registered
+  in `app/__init__.py`, root `index.html` rewritten (18 cards +
+  ~50&#8209;line vanilla&#8209;JS voting handler, no framework, no
+  extra HTTP request), `seed/schema.sql` appended,
+  `seed/migrations/2026-05-20-lab-votes.sql` new, 12 new pure tests
+  in `tests/test_lab_concepts.py` (12/12 pass in sandbox).
+  *Server:* one Open `manual-actions.md` entry —
+  `2026-05-20-lab-votes.sql`: `CREATE TABLE lab_concept_votes`. **Not
+  BUG-007 class:** only the `/labvotes/*` endpoints touch the table;
+  the rest of the news app is unaffected, and the landing page
+  catches a tally fetch error and hides the vote UI silently if the
+  migration is missing — so the cards still render. Python App
+  restart on deploy so the new blueprint registers. Schema.sql + the
+  load-bearing "Applied prod schema migrations" line updated.
 - **Root sauce.ai/ landing page (product-lab positioning, PR drafted
   this session).** Roadmap Pri 6 / LOE 1, ui/ops/docs. User: "the root
   site of sauce.ai will state that sauce.ai is an autonomous ai product

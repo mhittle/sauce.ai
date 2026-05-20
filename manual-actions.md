@@ -40,6 +40,50 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-20 — Migration: lab_concept_votes (root-domain landing page voting)
+**Status:** open · **PR:** (drafted this session) ·
+**Opened:** 2026-05-20 ·
+**File reference:** `news/seed/migrations/2026-05-20-lab-votes.sql`
+
+Backs the anonymous up/down voting controls on each "Coming soon"
+card on the root-domain lab landing page (`https://sauce.ai/`). New
+`/news/labvotes/tally` (GET) and `/news/labvotes/vote` (POST)
+endpoints read/write this table; the static `index.html` JS calls
+them. **NOT BUG-007 class:** only the new `/labvotes/*` endpoints
+touch the table, and the landing page's JS catches a tally fetch
+error and hides the vote UI silently — so a missing migration leaves
+the cards rendering normally, just without scores. The rest of the
+news app (feed, search, gallery, etc.) is unaffected. Apply this
+then restart the Python App so the new `lab_bp` blueprint registers.
+
+**SQL (run in phpMyAdmin against `lt1ih6uyy2z6_news`):**
+
+```sql
+CREATE TABLE IF NOT EXISTS lab_concept_votes (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  concept_key  VARCHAR(64) NOT NULL,
+  voter_token  CHAR(40) NOT NULL,
+  vote         TINYINT NOT NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_concept_voter (concept_key, voter_token),
+  KEY idx_concept (concept_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Then:** Restart the Python App in cPanel (Passenger import cache).
+
+**Verify:**
+- `curl -s https://sauce.ai/news/labvotes/tally | head` returns JSON
+  like `{"tally": {...17 keys...}, "voter_token": "<40 hex>"}` and
+  sets a `lab_voter_token` cookie.
+- Voting from the landing page in a browser updates the score and
+  highlights the chosen ▲/▼; reloading preserves the vote.
+- `SELECT COUNT(*) FROM lab_concept_votes;` ticks up as votes come in.
+
+---
+
 ### 2026-05-20 — Migration: keywords-on-algo (drop user_term_prefs, add shared_algorithms.keywords_json)
 **Status:** open · **PR:** (drafted this session) ·
 **Opened:** 2026-05-20 ·
