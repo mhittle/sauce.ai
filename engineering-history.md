@@ -106,6 +106,70 @@ rebuild from `seed/schema.sql` already includes these.
 
 ---
 
+## 2026-05-20 — Compact / density toggle (PR #81)
+
+User-requested mid-session: a Techmeme-style density toggle that strips
+images and chrome from the home feed.
+
+### What shipped
+
+- **`base.html`**: extended the existing `<head>` IIFE to also read
+  `localStorage.density` and set `data-density="compact"` on `<html>`
+  pre-stylesheet (no FOUC, mirrors the dark-mode init from PR #63). New
+  `<button id="density-toggle">` in the topnav next to `theme-toggle`;
+  paired click-handler IIFE flips the attribute + writes localStorage
+  + syncs `Compact ↔ Comfortable` label and `aria-pressed`.
+- **`style.css`**: appended `:root[data-density="compact"] #feed-cards …`
+  block — collapses the grid to single-column, tightens card padding,
+  hides `.thumb` / `.summary` / `.feature-bars` / `.byline`. Source,
+  lean dot, category, timestamp, thumbs/save, `+N angles`, `Read →`,
+  discussion line, and the auto-hide-when-empty `.spectrum-peek` all
+  stay.
+- **`roadmap.md`**: new "Compact / density toggle (Techmeme-style)"
+  entry (Pri 6 / LOE 2, ui), status `in-progress`.
+
+### Scope choices (user-confirmed via AskUserQuestion at session start)
+
+- **Persistence = localStorage only** (per-device, no DB). Matches
+  dark-mode exactly — lowest-conflict path for parallel sessions.
+- **Scope = home feed `/` only**. CSS is keyed on `#feed-cards` (unique
+  to `feed.html`), so `/search`, `/saved`, `/firehose` are deliberately
+  untouched. Future expansion to those pages is just removing the
+  `#feed-cards` prefix.
+- Toggle button itself is **global in the topnav** (mirrors the
+  dark-mode toggle UX); flipping it from a non-`/` page just primes the
+  preference for the next visit to `/`.
+
+### Server-side state touched
+
+None. No DB / cron / env / pip / symlink change. **No `manual-actions.md`
+entry.** Standard Python App restart on deploy.
+
+### Verification
+
+`base.html`, `feed.html`, `partials/feed_cards.html` Jinja-parse clean.
+Sandbox lacks pytest (documented limit) but no Python changed — there
+is no test surface. Real-env / browser verification deferred to CI /
+maintainer: toggle flips label + persists; compact mode strips
+image/feature-bars/summary/byline on `/`; other pages unaffected; HTMX
+"Load more" rows honor compact via global CSS; `+N angles` still
+expands `.spectrum-peek` inline.
+
+### PR
+
+- **PR #81** — Compact / density toggle (draft, branch
+  `claude/onboard-news-aggregator-ReNpA`).
+
+### Doc-drift noted during onboarding (not in this PR)
+
+- Roadmap still marks **"Multiple saved algorithms / profiles"** as
+  `in-progress` though `engineering-history.md` Condensed history
+  records it as shipped in **PR #65** (app-layer only). Open draft
+  **PR #61** implements the same feature from a separate older session
+  and is very likely superseded — flagged to the user; left alone here.
+
+---
+
 ## 2026-05-18 — Why This Article: ranking explainer (PR #79)
 
 Roadmap Pri 7 / LOE 3 (ui). A "Why?" toggle on each feed card lazily
