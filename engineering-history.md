@@ -126,37 +126,26 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
-- **Per-profile "Publish to gallery" button (PR #94).** Small
-  UX follow-on to the gallery v1 (PR #88): each row in `/algo`
-  Profiles tab now carries a "Publish to gallery" form that
-  snapshots that specific profile, not just whichever one happens
-  to be active. `gallery.publish` extended to accept an optional
-  `algo_id` form param (ownership-checked via
-  `WHERE id = %s AND user_id = %s`); when absent it falls back to
-  the active profile, so the gallery page's existing
-  "Publish your active algorithm" details form keeps working
-  unchanged. Same `MAX_PUBLISHED_PER_USER` cap, same
-  `clean_listing_name`/`clean_description` sanitization, same
-  redirect target. Existing 11 pure tests still green; the new
-  if/else branch reuses already-tested helpers. *Server:* none —
-  no migration/cron/dep/env/symlink.
-- **Gallery — Copy link + Email share buttons (PR pending).** Tiny
-  follow-on to PR #88 (gallery v1). Each `/gallery` card now has two
-  new actions next to Adopt/Unpublish: **Copy link** (button writes
-  a permalink to the clipboard via `navigator.clipboard.writeText`,
-  falls back to `window.prompt` on non-secure contexts / older
-  browsers — degrades gracefully, never errors) and **Email** (plain
-  `<a href="mailto:?subject=…&body=…">` so it works without JS and
-  hooks the user's native mail client). Permalink is
-  `url_for('gallery.index', _external=True) ~ '#listing-<id>'`, and
-  each card now has an `id="listing-<id>"` anchor with a `:target`
-  CSS rule that highlights the card when followed. Subject/body
-  composed in the template; Jinja `|urlencode` handles
-  spaces/newlines/`&`/`#`. Available to anonymous viewers too —
-  sharing shouldn't require sign-in. Template/CSS only — no route,
-  no DB, no migration, no cron, no env, no pip dep. *Server:* none
-  (Python App restart on deploy for the new template/CSS to load,
-  but Jinja autoreloads templates so even that is optional).
+- **Per-profile "Publish to gallery" button (PR #94).** Small UX
+  follow-on to PR #88: each row in `/algo` Profiles tab now carries
+  a "Publish to gallery" form that snapshots that specific profile.
+  `gallery.publish` accepts an optional `algo_id` form param
+  (ownership-checked), falls back to the active profile when
+  absent — so the gallery page's existing details form keeps
+  working unchanged. Same cap/sanitization/redirect. *Server:* none.
+- **Gallery — Copy link + Email share buttons (PR #95, merged 2026-05-20).**
+  Tiny follow-on to PR #88. Each `/gallery` card now has **Copy link**
+  (writes a permalink to clipboard via `navigator.clipboard.writeText`,
+  falls back to `window.prompt` on non-secure contexts) and **Email**
+  (`<a href="mailto:?subject=…&body=…">`, no JS needed) next to
+  Adopt/Unpublish. Permalink =
+  `url_for('gallery.index', _external=True) ~ '#listing-<id>'`; each
+  card carries `id="listing-<id>"` + a `:target` CSS rule that
+  highlights the card when followed. Jinja `|urlencode` handles
+  spaces/newlines/`&`/`#` in the mailto body. Available to anonymous
+  viewers too. Template + CSS only — no route, DB, migration, cron,
+  env, or pip dep. *Server:* none (Python App restart on deploy for
+  the new template/CSS to load, but Jinja autoreloads templates).
 - **Source catalog admin re-import on prod (PR #91 follow-up).** User
   ran the `/admin/feeds` → "Re-import seed CSV" action on prod
   2026-05-20 (idempotent upsert on `feed_url`), loading the +1151
@@ -450,98 +439,66 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-13
 
-- **BUG-012 — refresh-shuffle via score jitter (PR #46).** Feed was
-  deterministic so reloads showed the same top-30; added an opt-in
-  `jitter` kwarg to `build_score_sql` wrapping the score in
-  `* (1 + RAND()*jitter)`, live feed passes `FEED_JITTER` (default
-  0.10); digest / firehose / algo-preview stay deterministic.
-  *Server:* none; `FEED_JITTER` env-var has a working default. Full
-  detail: `bugs.md` BUG-012.
-- **English-only article filter at fetch time (PR #42).** Pure
-  `app/language.py is_english(title,summary,feed_language)` — stage 1
-  trusts a non-English feed `<language>` tag, stage 2 rejects when
-  >25% of letters fall outside Latin script ranges; wired into
-  `fetch_feeds` before insert with a `skipped_lang` counter. Existing
-  non-English rows left to age out (no backfill purge). Known gap:
-  Latin-script European content leaked through — later closed by
-  BUG-013/014 (py3langid stage 3, PR #50). *Server:* none (cron
-  picks up the new module on its next tick).
-- **Story dossier v1 — `/story/<id>` (PR #43).** Multi-source view of a
-  deduped story group across the lean spectrum; new `story_dossiers`
-  table caches a Haiku framing summary keyed by member-signature,
-  cost-gated to clusters with 3+ members and 2+ lean buckets; "+N
-  angles" pill on multi-source feed cards. *Server:* `story_dossiers`
-  migration; reuses the existing anthropic dep; restart post-merge.
-- **Mobile / responsive polish (PR #40).** Single additive
-  `@media (max-width:640px)` block + `.table-scroll` utility in
-  `style.css`; desktop layout untouched. *Server:* none (CSS-only).
-- **Automated source discovery — Reddit/HN + LLM agent (PR #38).** New
-  `candidate_sources` table; 3 cron jobs (`discover_harvest` hourly,
-  `discover_promote` nightly 04:00, `discover_llm` weekly Mon 05:00);
-  `/admin/discovery` approve/reject/blacklist queue; pure helpers in
-  `app/discovery.py`. *Server:* `candidate_sources` migration + the 3
-  cron entries; no new pip dep.
-- **BUG-011 — multiplicative recency gate (PR #34).** Ranking was
-  additive so stale high-quality articles dominated forever; changed
-  `recency` to a multiplicative freshness gate
-  `score = quality * EXP(-r*h/24)` (`recency=0` = legacy behavior).
-  *Server:* none; restart. Full root cause: `bugs.md` BUG-011.
-- **BUG-010 — feature bars all rendered identically (PR #35).** Template
-  wrote `style="width:NN%"` but `.feature-bars i` is a flex child and
-  the CSS reads a `--w` custom property; switched to `style="--w:NN%"`.
-  *Server:* none.
-- **BUG-008/009 — classify_pending stalled prod (PR #32).** GoDaddy
-  shared MySQL drops idle sockets during the long LLM/HTTP gap before
-  the write block → added `conn.ping(reconnect=True)` at every idle
-  point in `classify_pending` / `popularity_poll` / `fetch_feeds`;
-  parallelized paywall + body HTTP via `ThreadPoolExecutor(10)`;
-  `CLASSIFY_BUDGET_SECONDS` 90→240; throughput 10→180/tick. Lesson:
-  ping-reconnect any cron that does HTTP between writes. *Server:* no
-  schema change; `jobs/*.bak-*` on prod are stale (safe to delete).
-  Full detail: `bugs.md` BUG-008/009.
-- **BUG-007 recovery + wrap-up (PRs #30, #31).** Merged code referenced
-  `sources.owner_id` + `user_source_prefs` before those migrations were
-  run, 500'ing every reader route; ran them, restarted, drained the
-  queue, confirmed prod schema synced, installed trafilatura.
-  *Process learning:* treat `manual-actions.md` Open as a load-bearing
-  blocker — run a migration before merging the next one. Full detail:
-  `bugs.md` BUG-007.
-- **Article deduplication across sources (PR #24).** `articles.simhash`
-  + `articles.story_id` + `(story_id,published_at)` index; `fetch_feeds`
-  computes a 64-bit SimHash and seeds `story_id=id`; `classify_pending`
-  `_assign_story_id` clusters via exact `title_hash` or Hamming≤8 over a
-  48h window, canonical = highest `source_reputation`; feed dedupes by
-  `story_id`, firehose stays un-deduped; `maintenance` heals orphans.
-  Heavy paraphrase not clustered (v2 = embeddings). *Server:* dedup
-  migration; restart.
-- **Manual-actions tracker (PR #22).** Added `manual-actions.md`
-  (Open/Completed, full SQL inline) + the session-start/wrap-up
-  lifecycle hooks. *Server:* none.
-- **User-added RSS feed subscriptions (PR #29).** `/sources` page;
-  signed-in users add personal feeds scoped by `sources.owner_id`;
-  feed/firehose visibility filter; `app/feed_validation.py`. *Server:*
+All entries below are condensed; archive has full verbatim detail.
+Load-bearing server state is already folded into "Applied prod schema
+migrations" above where relevant.
+
+- **BUG-012 (PR #46)** — feed was deterministic; added opt-in `jitter`
+  kwarg to `build_score_sql` (live feed reads `FEED_JITTER`, default
+  0.10; digest/firehose/preview stay deterministic). No server change.
+- **English-only fetch-time filter (PR #42)** — pure
+  `app/language.py is_english`: stage 1 trusts non-English `<language>`
+  tag, stage 2 rejects >25% non-Latin letters. Latin-script EU gap later
+  closed by BUG-013/014. No server change.
+- **Story dossier v1 — `/story/<id>` (PR #43)** — multi-source view of a
+  deduped cluster; `story_dossiers` caches a Haiku framing summary
+  keyed by member-signature, gated 3+ members / 2+ lean buckets;
+  "+N angles" pill on feed cards. *Server:* `story_dossiers` migration.
+- **Mobile / responsive polish (PR #40)** — single `@media (max-width:640px)`
+  block + `.table-scroll`; desktop untouched. CSS only.
+- **Automated source discovery — Reddit/HN + LLM (PR #38)** —
+  `candidate_sources` + 3 crons (`discover_harvest` hourly,
+  `discover_promote` 04:00, `discover_llm` Mon 05:00) +
+  `/admin/discovery` queue. *Server:* migration + 3 cron entries.
+- **BUG-011 — multiplicative recency gate (PR #34)** — additive ranking
+  let stale-but-quality dominate; switched recency to
+  `score = quality * EXP(-r*h/24)` (recency=0 = legacy).
+- **BUG-010 — feature bars (PR #35)** — template wrote
+  `style="width:NN%"` but CSS reads `--w` custom property; switched to
+  `style="--w:NN%"`.
+- **BUG-008/009 — classify_pending stall (PR #32)** — GoDaddy MySQL
+  drops idle sockets during LLM/HTTP gaps → `conn.ping(reconnect=True)`
+  at every idle point in classify/popularity/fetch; parallelized
+  paywall+body HTTP (10 workers); `CLASSIFY_BUDGET_SECONDS` 90→240;
+  throughput 10→180/tick. Lesson: ping-reconnect any cron HTTP-between-writes.
+- **BUG-007 recovery (PRs #30/#31)** — merged code referenced
+  `sources.owner_id` + `user_source_prefs` before migrations ran →
+  500s on every reader route. Lesson: treat Open `manual-actions.md`
+  as a merge blocker.
+- **Article deduplication (PR #24)** — `articles.simhash` +
+  `articles.story_id` + `(story_id,published_at)` index; SimHash
+  Hamming≤8 over 48h, canonical = highest reputation; feed dedupes by
+  cluster, firehose doesn't. v2 = embeddings. *Server:* dedup migration.
+- **Manual-actions tracker (PR #22)** — added `manual-actions.md`
+  lifecycle. Docs-only.
+- **User-added RSS feeds (PR #29)** — `/sources`; `sources.owner_id`
+  scopes personal feeds; visibility filter in feed/firehose. *Server:*
   `sources.owner_id` migration.
-- **In-app reader view + body extraction (PR #21).** `article_bodies`
-  table; `app/extractor.py` (lazy `trafilatura`, 1 MB cap,
-  `MIN_WORDS=60`) wired into `classify_pending` (paywall-aware, shares
-  the cron wallclock budget); `/read/<id>` + reader template; nightly
-  `BODY_RETENTION_DAYS` prune. *Server:* `article_bodies` migration +
-  `pip install` (trafilatura); restart.
-- **Thumbs up/down + signal foundation (PR #19).** Generic
-  `user_signals` table (forward-compat for Signal Learning) +
-  `user_source_prefs`; `/signal` blueprint (toggle thumbs,
-  3-downs-from-source prompt); feed query splices the per-user-source
-  weight. *Server:* signals migration.
-- **Daily personalized email digest (PR #23).** Opt-in
-  `users.digest_enabled` + unsub token; noon-UTC `send_digest` cron
-  reusing the feed ranking SQL; stdlib `smtplib` (localhost MTA by
-  default; `SMTP_*` env vars for a real relay). *Server:* digest
-  migration + the noon-UTC cron; optional `SMTP_*` env vars.
-- **Cron hardening + PyMySQL timeouts (PR #15).** `job_lock(name)`
-  fcntl mutex in `_bootstrap.py` wrapping each `main()`; `requests`
-  timeouts on RSS/Reddit/HN; anthropic `timeout=30`; PyMySQL timeouts
-  (web `(5,15,10)`, cron `(5,30,15)`); `FEED_FETCH_BATCH` 80→20.
-  *Server:* none; restart; lockfiles appear in `news/logs/`.
+- **In-app reader view (PR #21)** — `article_bodies` + `app/extractor.py`
+  (lazy trafilatura, 1 MB cap, MIN_WORDS=60) in `classify_pending`;
+  `/read/<id>`; nightly `BODY_RETENTION_DAYS` prune. *Server:* migration
+  + `pip install trafilatura`.
+- **Thumbs up/down + signal foundation (PR #19)** — `user_signals`
+  (forward-compat for Signal Learning) + `user_source_prefs`;
+  `/signal` blueprint. *Server:* signals migration.
+- **Daily email digest (PR #23)** — opt-in `users.digest_enabled` +
+  unsub token; noon-UTC `send_digest` cron; stdlib `smtplib`
+  (localhost MTA default; `SMTP_*` env vars for a relay). *Server:*
+  digest migration + noon-UTC cron.
+- **Cron hardening + PyMySQL timeouts (PR #15)** — `job_lock(name)`
+  fcntl mutex; `requests` timeouts; anthropic `timeout=30`; PyMySQL
+  timeouts (web `(5,15,10)`, cron `(5,30,15)`); `FEED_FETCH_BATCH`
+  80→20.
 
 ### 2026-05-12
 
