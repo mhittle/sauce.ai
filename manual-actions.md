@@ -40,62 +40,6 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-20 — Migration: shared_algorithms + algorithm_adoptions (algorithm gallery)
-**Status:** open · **PR:** #TBD (draft this session) ·
-**Opened:** 2026-05-20 ·
-**File reference:** `news/seed/migrations/2026-05-20-shared-algorithms.sql`
-
-Backs the new `/gallery` page (publish active algorithm + browse + adopt
-+ usage stats). Tables are read-only at feed time — only the `/gallery`
-routes touch them — so a missing table does NOT 500 the signed-in feed
-(unlike BUG-007 class migrations). Safe to merge code first and apply
-the migration shortly after; only `/gallery` itself 500s in the interval.
-Apply via phpMyAdmin against `lt1ih6uyy2z6_news`, then Python App
-restart so the new blueprint + nav link load.
-
-**SQL to apply:**
-
-```sql
-CREATE TABLE IF NOT EXISTS shared_algorithms (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  owner_id      INT UNSIGNED NOT NULL,
-  name          VARCHAR(120) NOT NULL,
-  description   VARCHAR(500) NOT NULL DEFAULT '',
-  weights_json  TEXT NOT NULL,
-  is_public     TINYINT(1) NOT NULL DEFAULT 1,
-  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_sa_owner (owner_id),
-  KEY idx_sa_public_created (is_public, created_at),
-  CONSTRAINT fk_sa_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS algorithm_adoptions (
-  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  shared_algorithm_id BIGINT UNSIGNED NOT NULL,
-  user_id             INT UNSIGNED NOT NULL,
-  user_algorithm_id   INT UNSIGNED DEFAULT NULL,
-  created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_aa_shared_created (shared_algorithm_id, created_at),
-  KEY idx_aa_user (user_id),
-  KEY idx_aa_active (shared_algorithm_id, user_algorithm_id),
-  CONSTRAINT fk_aa_shared FOREIGN KEY (shared_algorithm_id)
-    REFERENCES shared_algorithms (id) ON DELETE CASCADE,
-  CONSTRAINT fk_aa_user FOREIGN KEY (user_id)
-    REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT fk_aa_user_algo FOREIGN KEY (user_algorithm_id)
-    REFERENCES user_algorithms (id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
-
-**Verify:**
-- `SHOW TABLES LIKE 'shared_algorithms';` and `LIKE 'algorithm_adoptions';` both return one row.
-- `/gallery` returns 200 (empty state until someone publishes).
-- A signed-in user clicking "Publish your active algorithm" creates a row in `shared_algorithms`.
-- Clicking "Adopt as my feed" on a listing creates a new active row in `user_algorithms` and one row in `algorithm_adoptions`.
-
 ### 2026-05-20 — Source catalog import (+1151 new sources)
 **Status:** open · **PR:** #91 (merged 2026-05-20) · **Opened:** 2026-05-20
 
@@ -135,6 +79,61 @@ few new sources for fresh articles on `/firehose`.
 ---
 
 ## Completed
+
+### 2026-05-20 — Migration: shared_algorithms + algorithm_adoptions (algorithm gallery)
+**Status:** completed · **PR:** #88 (draft) ·
+**Opened:** 2026-05-20 · **Completed:** 2026-05-20 ·
+**File reference:** `news/seed/migrations/2026-05-20-shared-algorithms.sql`
+
+Backs the new `/gallery` page (publish active algorithm + browse +
+adopt + usage stats). Tables are read-only at feed time — only the
+`/gallery` routes touch them — so a missing table did NOT risk the
+signed-in feed (unlike BUG-007-class migrations); only `/gallery`
+itself would have 500'd. User confirmed the SQL was run via phpMyAdmin
+against `lt1ih6uyy2z6_news` and the Python App restarted (2026-05-20).
+`/gallery` is now safe to load.
+
+**SQL applied:**
+
+```sql
+CREATE TABLE IF NOT EXISTS shared_algorithms (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_id      INT UNSIGNED NOT NULL,
+  name          VARCHAR(120) NOT NULL,
+  description   VARCHAR(500) NOT NULL DEFAULT '',
+  weights_json  TEXT NOT NULL,
+  is_public     TINYINT(1) NOT NULL DEFAULT 1,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_sa_owner (owner_id),
+  KEY idx_sa_public_created (is_public, created_at),
+  CONSTRAINT fk_sa_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS algorithm_adoptions (
+  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  shared_algorithm_id BIGINT UNSIGNED NOT NULL,
+  user_id             INT UNSIGNED NOT NULL,
+  user_algorithm_id   INT UNSIGNED DEFAULT NULL,
+  created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_aa_shared_created (shared_algorithm_id, created_at),
+  KEY idx_aa_user (user_id),
+  KEY idx_aa_active (shared_algorithm_id, user_algorithm_id),
+  CONSTRAINT fk_aa_shared FOREIGN KEY (shared_algorithm_id)
+    REFERENCES shared_algorithms (id) ON DELETE CASCADE,
+  CONSTRAINT fk_aa_user FOREIGN KEY (user_id)
+    REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_aa_user_algo FOREIGN KEY (user_algorithm_id)
+    REFERENCES user_algorithms (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Verify:** `/gallery` returns 200 (empty until someone publishes);
+"Publish your active algorithm" inserts a row in `shared_algorithms`;
+"Adopt as my feed" inserts a new active `user_algorithms` row +
+one `algorithm_adoptions` event.
 
 ### 2026-05-20 — Migration: 12 perceptual feature columns + catalog rows
 **Status:** completed · **PR:** #84 (merged 2026-05-20) ·

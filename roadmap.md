@@ -475,14 +475,14 @@ admin takedown), and adopt = clone into the user's own `user_algorithms`
 (pairs with Multiple saved algorithms, which it depends on for clean
 adopt/fork semantics).
 
-**v1 status (PR #TBD, 2026-05-20):** minimal scope landed — publish
+**v1 status (PR #88, 2026-05-20):** minimal scope landed — publish
 snapshot, browse, adopt = clone-into-a-new-active-profile, three usage
 stats (total adoptions / last 7d / currently active) usable as sort
 axes plus a substring search. Moderation/reporting is deliberately
 **out of scope** for v1 (takedowns are admin-only via DB). v2 = report
 button + `/admin/gallery` moderation queue. New `shared_algorithms` +
-`algorithm_adoptions` tables (migration in `manual-actions.md` Open);
-the page lives at `/gallery`.
+`algorithm_adoptions` tables (migration applied on prod 2026-05-20;
+`manual-actions.md` → Completed); the page lives at `/gallery`.
 
 ### Community source-quality overlay
 **Priority:** 7 · **LOE:** 5 · **Category:** algo, backend · **Status:** backlog
