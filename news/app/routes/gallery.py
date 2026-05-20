@@ -27,6 +27,8 @@ from ..gallery import (
     sort_order_by,
     normalize_search,
     escape_like,
+    snapshot_keywords,
+    parse_keywords,
     SORT_KEYS,
     SORT_LABELS,
     DEFAULT_SORT,
@@ -179,10 +181,18 @@ def publish():
     )
     description = clean_description(request.form.get("description"))
 
+    keyword_rows = query(
+        "SELECT term, mode, weight FROM algorithm_term_prefs "
+        "WHERE algorithm_id = %s ORDER BY mode, term",
+        (source["id"],),
+    ) or []
+    keywords_json = snapshot_keywords(keyword_rows)
+
     execute(
-        "INSERT INTO shared_algorithms (owner_id, name, description, weights_json) "
-        "VALUES (%s, %s, %s, %s)",
-        (uid, name, description, source["weights_json"]),
+        "INSERT INTO shared_algorithms "
+        "(owner_id, name, description, weights_json, keywords_json) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (uid, name, description, source["weights_json"], keywords_json),
     )
     get_conn().commit()
     return redirect(url_for("gallery.index"))
@@ -193,7 +203,7 @@ def publish():
 def adopt(lid):
     uid = g.user["id"]
     listing = query(
-        "SELECT id, name, weights_json FROM shared_algorithms "
+        "SELECT id, name, weights_json, keywords_json FROM shared_algorithms "
         "WHERE id = %s AND is_public = 1",
         (lid,), one=True,
     )
@@ -201,6 +211,7 @@ def adopt(lid):
         abort(404)
 
     weights = parse_weights_json(listing["weights_json"])
+    keywords = parse_keywords(listing.get("keywords_json"))
     # The single-active invariant every reader resolver depends on:
     # clear-all then set one. Mirrors `algo._set_active`, kept local so
     # we don't import a private helper across blueprints.
@@ -219,6 +230,13 @@ def adopt(lid):
             weights_to_expression(weights),
         ),
     )
+    for kw in keywords:
+        execute(
+            "INSERT INTO algorithm_term_prefs "
+            "(algorithm_id, term, mode, weight) "
+            "VALUES (%s, %s, %s, %s)",
+            (new_id, kw["term"], kw["mode"], kw["weight"]),
+        )
     execute(
         "INSERT INTO algorithm_adoptions "
         "(shared_algorithm_id, user_id, user_algorithm_id) "

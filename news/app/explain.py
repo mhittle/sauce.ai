@@ -12,10 +12,11 @@ article for that user.
 Parity is load-bearing: `_direction_from_weights` and `_scale_width` are
 imported from `app.ranking` rather than re-derived so a future change to
 direction/scale resolution can't silently desync the explainer from the
-scorer. The per-user source/term multipliers (`user_source_prefs`,
-`user_term_prefs`) feed.py applies *outside* the feature sum are
-deliberately not modeled here — this panel explains feature contributions
-and recency, which is what the roadmap item asks for.
+scorer. The per-user source multiplier (`user_source_prefs`) and the
+per-algorithm keyword boost (`algorithm_term_prefs`) feed.py applies
+*outside* the feature sum are deliberately not modeled here — this panel
+explains feature contributions and recency, which is what the roadmap
+item asks for.
 """
 import math
 

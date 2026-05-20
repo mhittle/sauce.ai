@@ -52,6 +52,7 @@ shipped.
 | 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
 | 7 | 3 | algo, ui | Per-algorithm keyword mute & boost (in the algo builder) | done |
+| 6 | 3 | algo, ui, new-feature | Keywords-on-algo only (drop /terms; travel with gallery publish/adopt) | done |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
@@ -516,6 +517,23 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-20
 
+- **Keywords-on-algo only (drop /terms; travel with gallery publish/adopt)** —
+  Pri 6, LOE 3, algo/ui/new-feature. PR drafted 2026-05-20 (migration
+  pending on prod — see `manual-actions.md` Open). Account-wide
+  `/terms` surface removed: keywords now live ONLY on each algorithm
+  profile (`algorithm_term_prefs`). The deprecated `user_term_prefs`
+  table is dropped; its rows are folded into each user's active
+  profile by the migration so no work is lost. Gallery publish now
+  snapshots the algorithm's keywords into a new
+  `shared_algorithms.keywords_json` column; gallery adopt clones them
+  into the cloned profile (sanitized via `parse_keywords` →
+  `normalize_term` / `clamp_boost` so an untrusted listing can never
+  poison the adopter's keyword table). New pure helpers
+  `snapshot_keywords` / `parse_keywords` in `app/gallery.py` (8 tests
+  + 7 union tests that no longer applied were removed from
+  `test_term_prefs.py`). `routes/feed.py` reads only
+  `algorithm_term_prefs` for the active profile. Blueprint
+  `/terms` + `me_terms.html` deleted; "Your Keywords" nav link removed.
 - **Source catalog expansion (+1151 sources)** — Pri 7, LOE 3, ops /
   new-feature. PR #91 (draft 2026-05-20; admin re-import pending on prod
   — see `manual-actions.md` Open). Appended 1151 hand-curated

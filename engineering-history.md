@@ -111,8 +111,11 @@ load — BUG-007 class if absent); new `algorithm_term_prefs` table
 feed load, same BUG-007 class); 12 new `article_features` columns
 (PR #84, perceptual feature expansion — 6 LLM-judged + 6 rule-based;
 applied 2026-05-20, BUG-007 class for `classify_pending` every 5-min
-tick). A DB rebuild from `seed/schema.sql`
-already includes these.
+tick); `shared_algorithms.keywords_json` column added + `user_term_prefs`
+table dropped (PR drafted 2026-05-20, keywords-on-algo only — migration
+pending on prod, see `manual-actions.md` Open; BUG-007 class for
+`gallery.adopt()` SELECTing the new column). A DB rebuild from
+`seed/schema.sql` already includes these.
 
 ---
 
@@ -126,6 +129,40 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-20
 
+- **Keywords-on-algo only — drop /terms, travel with gallery publish/adopt
+  (PR drafted).** Pri 6 / LOE 3, algo/ui/new-feature. User: "keywords
+  should be part of each algo." Two coupled changes:
+  - **Account-wide `/terms` surface removed.** Deleted
+    `app/routes/term_prefs.py` + `templates/me_terms.html`,
+    unregistered the blueprint, dropped the "Your Keywords" nav link.
+    `routes/feed.py` no longer SELECTs `user_term_prefs`; the term-row
+    list is only `algorithm_term_prefs` for the active profile. Pure
+    `app/term_prefs.py` builder stays (still the SQL fragment-maker for
+    the algo-scoped path); docstring rewritten to drop the "per-user"
+    framing, and the 5 obsolete "union" tests in
+    `test_term_prefs.py` were removed.
+  - **Gallery publish/adopt carry keywords.** New
+    `shared_algorithms.keywords_json TEXT NOT NULL` column;
+    `gallery.publish()` snapshots the algorithm's
+    `algorithm_term_prefs` rows into it; `gallery.adopt()` parses the
+    snapshot and inserts the rows into the cloned profile's
+    `algorithm_term_prefs`. New pure helpers `snapshot_keywords` /
+    `parse_keywords` in `app/gallery.py` sanitize through
+    `normalize_term` / `clamp_boost` / `VALID_MODES` so an untrusted
+    listing (a publisher could hand-craft `keywords_json`) cannot
+    poison the adopter's keyword table. 100-keyword snapshot cap. 8
+    new tests in `test_gallery.py` (cap, sanitization, round-trip,
+    malformed-blob rejection).
+  *Server:* one Open `manual-actions.md` entry (BUG-007 class) —
+  `2026-05-20-keywords-on-algo.sql`: (1) `INSERT IGNORE INTO
+  algorithm_term_prefs ... FROM user_term_prefs JOIN user_algorithms
+  ON is_active=1` to preserve existing /terms data on each user's
+  active profile; (2) `ALTER TABLE shared_algorithms ADD COLUMN
+  keywords_json TEXT NULL → backfill '[]' → MODIFY NOT NULL` (the
+  nullable-then-tighten pattern avoids the strict-mode rejection of a
+  NOT NULL TEXT ADD COLUMN on a populated table); (3) `DROP TABLE
+  user_term_prefs`. Python App restart on deploy. Schema.sql + the
+  load-bearing "Applied prod schema migrations" line updated.
 - **`.gitattributes` `merge=union` for high-conflict tracking docs.**
   Ad-hoc / infra. User pain point: every parallel session appends to
   `engineering-history.md` at the same top-of-log anchor, forcing a
