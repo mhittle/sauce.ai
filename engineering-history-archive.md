@@ -20,6 +20,200 @@ for current prod state.
 
 ---
 
+## 2026-05-17 — BUG-020: firehose accumulates instead of churning (PR #72)
+
+### Context
+
+User: "firehose doesn't actually show everything." `/firehose` polled
+`/stream` every 4s with `hx-swap="innerHTML"`, replacing the table
+with only the newest ≤25 classified rows each tick (no "Load more";
+the route's `since` cursor was never sent). Everything past the newest
+25 was dropped on every poll. User chose **"make it accumulate"**
+(keep classified-only; stop the churn).
+
+### What shipped
+
+- **`app/firehose_cursor.py`** (new, pure/Flask-free/DB-free, mirrors
+  `app/trending.py`): `firehose_cursor_clause()` builds a **keyset
+  `(classified_at, id)`** WHERE fragment. Timestamp-only skips rows —
+  `classified_at` is second-granularity and `classify_pending` writes
+  same-second bursts (the real data-loss mechanism). Malformed id →
+  no-cursor (never 500s).
+- **`app/routes/firehose.py`** `stream()`: drops the unused `since`;
+  three modes (no cursor → newest page; `after_*` → strictly newer,
+  prepend; `before_*` → strictly older, "Load more"). `ORDER BY
+  f.classified_at DESC, a.id DESC`; `classified_at_iso` space-form for
+  an unambiguous string→DATETIME compare.
+- **`firehose.html`**: stable `<tbody>`; poll prepends
+  (`afterbegin`, `limit=100`), "Load more" appends (`beforeend`);
+  cursors read live from DOM. Reuses the existing `.load-more` class —
+  **no `style.css` change** (avoids the in-flight profiles PR).
+  `firehose_rows.html` emits `<tr>`s only.
+- **`tests/test_firehose_cursor.py`** — 9 sandbox-run cases.
+
+### Server-side state touched
+
+None. No DB/cron/env/symlink/pip change. Python App restart on deploy.
+
+### Verification
+
+Helper 9/9 in-sandbox; templates Jinja-parse; changed Python
+`py_compile` clean. Route/browser (prepend, Load-more, pause/resume)
+deferred to a real env / CI (no Flask/PyMySQL/browser in sandbox).
+Caveats in `bugs.md` BUG-020: >100 classifications inside one 4s tick
+leaves a gap until "Load more" (not reachable at the real write rate);
+a later-reclassified row can re-appear at top (a dup, not a loss).
+
+### PR
+
+- **PR #72** — BUG-020 firehose accumulation (draft).
+
+---
+
+## 2026-05-17 — Across-the-spectrum in-feed (PR #69)
+
+Roadmap Pri 7 / LOE 3 (ui, algo). The "+N angles" pill (added with the
+story dossier, PR #43) previously navigated to `/story/<id>`. It now
+**expands inline** on the feed card to show a few sibling outlets'
+coverage of the same deduped story, with a "Full dossier →" link for
+the deep dive — the ambient everyday cousin of the dossier. Reuses
+existing dossier infra (story_id clustering, visibility rules); no new
+data, no DB migration, no LLM call.
+
+### What shipped
+
+- **`app/spectrum.py`** (new, pure/Flask-free, mirrors
+  `discussion.py`/`trending.py`): `pick_spectrum_sample(members,
+  exclude_id, limit=3)` — drops the card's own article, round-robins
+  across left/center/right so the sample spans the spectrum even when
+  one side dominates, one article per source, newest-first,
+  deterministic. `lean_bucket` thresholds mirror `story.py` (commented).
+- **`app/routes/story.py`**: extracted the canonical-guard +
+  visibility-scoped member query into `_fetch_cluster()` (shared,
+  behavior-identical to the old inline `view()` code); new
+  `GET /story/<id>/peek` renders a partial via the shared fetch +
+  `pick_spectrum_sample`.
+- **`partials/spectrum_peek.html`** (new): compact sibling list (lean
+  dot, source, title w/ click-tracking, short lead) + "Full dossier →"
+  + framework-free "Hide" (`onclick` clears the container, matches the
+  existing inline-onclick convention).
+- **`partials/feed_cards.html`**: the pill is now progressively
+  enhanced — keeps its `href` to the full dossier (no-JS / no-HTMX
+  fallback = today's exact behavior) and adds `hx-get`/`hx-target`/
+  `hx-swap` to load the peek into a per-card `#spectrum-<id>`
+  container. GET = no CSRF needed.
+- **`style.css`**: append-only `.spectrum-*` block (palette matches
+  `.dossier-discussion`); `.spectrum-peek:empty { display:none }` so
+  the container is invisible until expanded.
+- **Tests**: `tests/test_spectrum.py` (new, 10 pure cases — run green
+  in-sandbox) + 5 `tests/test_story.py` peek-route cases (404 guards,
+  sibling render excludes the card article, partial has no base
+  chrome).
+
+### Code touched
+
+- `news/app/spectrum.py` (new), `news/app/routes/story.py`,
+  `news/app/templates/partials/spectrum_peek.html` (new),
+  `news/app/templates/partials/feed_cards.html`,
+  `news/app/static/style.css`,
+  `news/tests/test_spectrum.py` (new), `news/tests/test_story.py`,
+  `roadmap.md`.
+
+### Server-side state touched
+
+None. No DB migration, cron, env-var, symlink, or pip dep. Standard
+Python App restart on deploy so the new `story.peek` route + templates
+load. **No `manual-actions.md` entry.**
+
+### Verification
+
+- `test_spectrum.py` 10/10 pass in-sandbox; `app/spectrum.py` +
+  `app/routes/story.py` `py_compile` clean; all touched templates
+  Jinja-parse. Route/browser testing of `/story/<id>/peek` and the
+  in-feed expansion is deferred to CI / a real env (sandbox has no
+  Flask/pymysql/pytest — same documented limit as PR #50/#53/#59).
+
+### PR / Open items
+
+- **PR #69** — merged 2026-05-17. Rebased twice (behind PRs #56/#62/
+  #64/#66, then #65/#67/#68/#71); `feed.py` deliberately untouched
+  (zero overlap with the algo-profiles work, merged as PR #65),
+  `style.css` append-only, `story.py` not in any other PR's scope.
+- This wrap-up ran the archive procedure (4 oldest full entries →
+  `engineering-history-archive.md` + Condensed history).
+- Maintainer/CI: click a multi-source card's "+N angles", confirm the
+  inline panel loads sibling angles + "Full dossier →", Hide clears
+  it, and no-JS still navigates to `/story/<id>`.
+
+---
+
+## 2026-05-17 — Full-text article search (PR #70)
+
+Roadmap "Search across articles" (Pri 6, LOE 6). v1 = MySQL InnoDB
+FULLTEXT, no new dependency.
+
+### What shipped
+
+- **`app/routes/search.py`** (new blueprint, no url_prefix) —
+  `GET /search?q=&page=`. Pure helpers `clean_query`
+  (trim/collapse-ws/200-char cap) + `parse_page` (sandbox-testable
+  like feed.py's `_normalize_sort`). Query bound as a parameter into
+  `MATCH (a.title, a.summary) AGAINST (%(q)s)` (NATURAL LANGUAGE
+  MODE — boolean operators are literal, no injection surface).
+  Results deduped by story cluster and scoped by the exact
+  source-visibility (`owner_id`) + per-user mute
+  (`COALESCE(usp.weight,1.0)>0`) rules the feed uses; `ORDER BY
+  relevance DESC, a.published_at DESC`; fetches `PAGE_SIZE+1` to
+  drive Load-more without a COUNT.
+- **Schema** — `FULLTEXT KEY ft_articles_search (title, summary)`
+  in `seed/schema.sql` + migration
+  `seed/migrations/2026-05-17-search-fulltext.sql`.
+- **Templates** — `search.html` + `partials/search_results.html`
+  (lighter card than feed_cards, reuses `.card` CSS, self-replacing
+  HX Load-more, no `hx-select`); `base.html` nav gets a compact GET
+  search box (value persisted via `request.args.get('q')`).
+- **`app/static/style.css`** — appended `.nav-search` /
+  `.search-page-form` block at EOF (no existing rule touched).
+- **Tests/docs** — `tests/test_search.py` (pure helpers; same
+  Flask-less sandbox limit as test_feed_sort.py, run on CI);
+  INSTALL.txt §10 FULLTEXT limits.
+
+### Server-side state touched
+
+One **manual prod migration** (`manual-actions.md` Open, full
+inline SQL): `ALTER TABLE articles ADD FULLTEXT INDEX
+ft_articles_search (title, summary);`. `/search` 500s until applied;
+all other routes unaffected. No cron/env/symlink/pip change.
+Standard Python App restart on deploy.
+
+### Verification
+
+Helper assertions pass (stubbed import); `py_compile` +
+Jinja-parse clean. Route SQL / in-browser UX deferred to CI / real
+env (sandbox has no Flask/pymysql/pytest — documented limit, same
+as PR #50/#59). Rebased onto `origin/main` twice as parallel PRs
+landed (#56/#62/#64/#65, then #67/#68/#71 trending); conflicts
+resolved in `__init__.py` (all blueprints), `style.css` /
+`INSTALL.txt` (append both blocks), `manual-actions.md` (two Open
+entries), `engineering-history.md` (took main's base, re-inserted
+this entry).
+
+### PR
+
+- **PR #70** — Full-text article search (merged 2026-05-17). Branch
+  `claude/onboard-news-aggregator-j0JdN`. FULLTEXT migration applied
+  on prod 2026-05-17 (manual-actions.md Completed).
+
+### Open items
+
+- Merged + FULLTEXT migration applied on prod. Maintainer spot-check
+  when convenient: `/search` via the nav box → results → Load more,
+  confirm muted-source/visibility scoping in a real env.
+- v2: search extracted `article_bodies` text; blended
+  relevance×recency score; boolean/phrase mode.
+
+---
+
 ## 2026-05-17 — Trending topics view (/trending page, PR #71)
 
 Roadmap Pri 7 / LOE 5. New `/trending` page ranking topics by
