@@ -392,3 +392,38 @@ CREATE TABLE IF NOT EXISTS llm_usage (
   PRIMARY KEY (id),
   KEY idx_llm_ts (ts)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Shareable algorithm gallery: published snapshots of `user_algorithms`
+-- + the per-adoption event log. See migrations/2026-05-20-shared-algorithms.sql.
+CREATE TABLE IF NOT EXISTS shared_algorithms (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_id      INT UNSIGNED NOT NULL,
+  name          VARCHAR(120) NOT NULL,
+  description   VARCHAR(500) NOT NULL DEFAULT '',
+  weights_json  TEXT NOT NULL,
+  is_public     TINYINT(1) NOT NULL DEFAULT 1,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_sa_owner (owner_id),
+  KEY idx_sa_public_created (is_public, created_at),
+  CONSTRAINT fk_sa_owner FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS algorithm_adoptions (
+  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  shared_algorithm_id BIGINT UNSIGNED NOT NULL,
+  user_id             INT UNSIGNED NOT NULL,
+  user_algorithm_id   INT UNSIGNED DEFAULT NULL,
+  created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_aa_shared_created (shared_algorithm_id, created_at),
+  KEY idx_aa_user (user_id),
+  KEY idx_aa_active (shared_algorithm_id, user_algorithm_id),
+  CONSTRAINT fk_aa_shared FOREIGN KEY (shared_algorithm_id)
+    REFERENCES shared_algorithms (id) ON DELETE CASCADE,
+  CONSTRAINT fk_aa_user FOREIGN KEY (user_id)
+    REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_aa_user_algo FOREIGN KEY (user_algorithm_id)
+    REFERENCES user_algorithms (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

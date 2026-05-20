@@ -602,5 +602,20 @@ K. /trending page is empty or 500s:
   2026-05-20-perception-features.sql migration (ADD COLUMN x12 on
   article_features + 12 feature_catalog rows); classify_pending
   errors on every tick until applied.
+- Shareable algorithm gallery (/gallery) lets a signed-in user publish
+  a snapshot of their active algorithm and lets any reader (anon or
+  signed-in) browse the catalog. Adopt = clone-into-a-new-active
+  profile in the adopter's user_algorithms (preserves existing
+  profiles). Three v1 usage stats double as sort axes: total
+  adoptions, last-7d adoptions, and active adoptions (distinct users
+  whose cloned profile still exists). Search is plain LIKE substring
+  over name + description (escaped). v1 is deliberately minimal:
+  NO public reporting UI and NO admin moderation queue -- takedowns
+  are admin-only via DB (UPDATE shared_algorithms SET is_public=0
+  WHERE id=...;). Per-user publish cap = 20 listings. Requires the
+  2026-05-20-shared-algorithms.sql migration (shared_algorithms +
+  algorithm_adoptions); a missing table 500s ONLY /gallery itself,
+  not the signed-in feed (the tables are not read at feed time, so
+  this is NOT a BUG-007-class migration).
 
 You're done. Visit  https://sauce.ai/news .

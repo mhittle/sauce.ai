@@ -49,6 +49,7 @@ def create_app():
     from .routes.saves import bp as saves_bp
     from .routes.trending import bp as trending_bp
     from .routes.search import bp as search_bp
+    from .routes.gallery import bp as gallery_bp
 
     app.register_blueprint(feed_bp)
     app.register_blueprint(algo_bp, url_prefix="/algo")
@@ -64,5 +65,6 @@ def create_app():
     app.register_blueprint(saves_bp)
     app.register_blueprint(trending_bp)
     app.register_blueprint(search_bp)
+    app.register_blueprint(gallery_bp, url_prefix="/gallery")
 
     return app

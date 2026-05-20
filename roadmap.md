@@ -59,7 +59,7 @@ shipped.
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
 | 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
-| 8 | 6 | new-feature, ui | Shareable algorithm gallery | backlog |
+| 8 | 6 | new-feature, ui | Shareable algorithm gallery | in-progress |
 | 7 | 5 | algo, backend | Community source-quality overlay | backlog |
 | 6 | 5 | new-feature | Community "add a source" on dossiers | backlog |
 | 7 | 5 | algo, backend | Perceptual feature expansion (12 new ranking features) | done |
@@ -463,7 +463,7 @@ rate-limited per user so it never nags. New
 `feed_feedback(user_id, score, note, created_at)` table.
 
 ### Shareable algorithm gallery
-**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui · **Status:** backlog
+**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui · **Status:** in-progress
 
 Users publish an algorithm with a name + short description; others
 browse a gallery and one-click **adopt** or **fork** it. Network effect
@@ -474,6 +474,15 @@ Needs a `shared_algorithms` table, a moderation/abuse story (report +
 admin takedown), and adopt = clone into the user's own `user_algorithms`
 (pairs with Multiple saved algorithms, which it depends on for clean
 adopt/fork semantics).
+
+**v1 status (PR #TBD, 2026-05-20):** minimal scope landed — publish
+snapshot, browse, adopt = clone-into-a-new-active-profile, three usage
+stats (total adoptions / last 7d / currently active) usable as sort
+axes plus a substring search. Moderation/reporting is deliberately
+**out of scope** for v1 (takedowns are admin-only via DB). v2 = report
+button + `/admin/gallery` moderation queue. New `shared_algorithms` +
+`algorithm_adoptions` tables (migration in `manual-actions.md` Open);
+the page lives at `/gallery`.
 
 ### Community source-quality overlay
 **Priority:** 7 · **LOE:** 5 · **Category:** algo, backend · **Status:** backlog

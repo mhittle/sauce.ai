@@ -20,6 +20,69 @@ for current prod state.
 
 ---
 
+## 2026-05-20 — Shareable algorithm gallery v1 (PR #88)
+
+Migration `2026-05-20-shared-algorithms.sql` applied on prod 2026-05-20
+(user-confirmed; `manual-actions.md` → Completed). `/gallery` is live.
+
+Roadmap **Pri 8 / LOE 6 — "Shareable algorithm gallery"** (theme C
+keystone). User: "an algorithm library where users can pick and use
+other people's algos" with filterable usage stats. v1 scope chosen
+via AskUserQuestion: **Minimal** (publish / browse / adopt; no
+reporting UI, no admin moderation queue — takedowns are admin-only
+via DB). Three v1 usage stats double as sort axes: total adoptions,
+last-7d adoptions, active adoptions (distinct users whose cloned
+profile still exists).
+
+### What shipped
+
+- **`app/gallery.py`** (new, Flask-free / DB-free, mirrors
+  `app/term_prefs.py`): `clean_listing_name`, `clean_description`,
+  `normalize_sort` + `sort_order_by` (closed literal map — no
+  SQL-injection surface via `?sort=`), `normalize_search`,
+  `escape_like`. 11 pure tests in `tests/test_gallery.py` (incl. a
+  `"; DROP TABLE"` guard on the sort fragment).
+- **`app/routes/gallery.py`** (new blueprint at `/gallery`):
+  `GET /` list with `?sort=` (popular / trending / active / newest)
+  + `?q=` substring filter; `POST /publish` snapshots the active
+  algo (per-user cap 20); `POST /<id>/adopt` atomic
+  clear-all-then-set into a new active `user_algorithms` row + one
+  `algorithm_adoptions` event row; `POST /<id>/unpublish`
+  owner-only delete (adoption rows cascade-delete with the listing,
+  adopters' cloned profiles persist).
+- **`app/templates/gallery.html`** + append-only `.gallery-*` CSS:
+  cards show 3 stats, optional description, top-3 weights summary,
+  "Yours" / "Adopted" badges; anon gets a sign-in CTA.
+- **`app/__init__.py`** blueprint registration; **`base.html`** one
+  nav link between Firehose and search.
+
+### Server-side state
+
+**New tables — load-bearing for `/gallery` only.** `shared_algorithms`
++ `algorithm_adoptions`; **not** read at feed time, so a missing
+migration 500s ONLY `/gallery` (not BUG-007 class). Applied on prod
+2026-05-20. `ON DELETE SET NULL` on
+`algorithm_adoptions.user_algorithm_id` is the trick that makes
+"active count" work without a reconciliation job — when an adopter
+deletes their cloned profile the row stays for total / 7d counts but
+drops out of active. No cron / env / pip / symlink. Python App
+restart on deploy.
+
+### Verification + rebases
+
+`tests/test_gallery.py` 11/11 + `test_ranking.py` green in-sandbox;
+`.py` `py_compile` clean; templates Jinja-parse. Route + DB behavior
+deferred to CI / browser. Rebased four times as PRs #82, #84,
+#85/#86/#87, #89/#91 landed in parallel — only append-only conflicts
+in tracking docs + INSTALL.txt + style.css; gallery touches no
+classifier/ranking/algo/feed code, so `.py` files auto-merged.
+
+### PR
+
+- **PR #88** — Shareable algorithm gallery v1 (draft).
+
+---
+
 ## 2026-05-20 — Source catalog expansion (+1151 sources) (PR #91)
 
 User-requested: 1000 more high-quality sources, including Substack /
@@ -285,14 +348,11 @@ upstream PRs.
 ### PR
 
 - **PR #84** — Add 12 perceptual ranking features (merged 2026-05-20).
-  Migration `2026-05-20-perception-features.sql` still **Open** in
-  `manual-actions.md` — `classify_pending` errors on the missing
-  columns every 5-min tick until applied on prod. Apply + restart
-  Python App + move tracker to Completed.
+  Migration `2026-05-20-perception-features.sql` applied on prod
+  2026-05-20 (`manual-actions.md` → Completed).
 
 ### Open items / next session
 
-- Apply the migration above (load-bearing).
 - Doc-drift noticed but **not** fixed here: `roadmap.md` still shows
   "Multiple saved algorithms / profiles" as `in-progress` even though
   it's merged on main and surfaced by `algo.html` (PR #65 per
