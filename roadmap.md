@@ -51,6 +51,7 @@ shipped.
 | 3 | 2 | ui | Dark mode | done |
 | 8 | 5 | ui, algo, new-feature | Natural-language algorithm builder | done |
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
+| 7 | 3 | algo, ui | Per-algorithm keyword mute & boost (in the algo builder) | in-progress |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
@@ -387,6 +388,24 @@ Shipped v1 (PR #77, merged 2026-05-17; migration applied on prod
 same day). v2 = phrase/entity-aware matching (shared with topic
 extraction); also fold in `article_bodies` text (`_MATCH_EXPR` is the
 single point to change).
+
+### Per-algorithm keyword mute & boost (in the algo builder)
+**Priority:** 7 · **LOE:** 3 · **Category:** algo, ui · **Status:** in-progress
+
+Extension of the shipped per-user keyword mute & boost (PR #77). Today
+keywords live at `/terms` and are scoped to the user — they apply to
+every saved profile equally. This adds a parallel surface inside the
+`/algo` builder where keywords attach to a specific `user_algorithms`
+row, so different profiles can carry different keyword intent (e.g.
+"Morning brief" boosts AI/local tech; "Weekend deep-dive" mutes
+politics). New `algorithm_term_prefs(algorithm_id, term, mode, weight)`
+table; new `/algo/keywords/add` and `/algo/keywords/<id>/delete`
+routes; new "Keywords" tab on the algo builder. `routes/feed.py`
+unions `user_term_prefs` + the active algorithm's
+`algorithm_term_prefs` and feeds the combined list into the existing
+pure `app/term_prefs.build_term_clauses` builder — the builder's
+dedupe + mute-wins rules carry the merge semantics, so no new helper.
+`/terms` stays as the power-user account-wide surface.
 
 ### Multiple saved algorithms / profiles
 **Priority:** 7 · **LOE:** 4 · **Category:** backend, ui · **Status:** in-progress

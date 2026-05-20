@@ -17,6 +17,9 @@ from ..ranking import (
     default_weights, parse_weights_json, weights_to_expression,
     build_score_sql, build_filters_sql, resolved_weights_for_view,
 )
+from ..term_prefs import normalize_term, clamp_boost, BOOST_DEFAULT, VALID_MODES
+
+MAX_KEYWORDS_PER_ALGO = 100
 
 bp = Blueprint("algo", __name__)
 
@@ -91,9 +94,27 @@ def _parse_form_weights(form):
     return weights
 
 
-def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None):
+def _load_algo_terms(algo_id):
+    """Return (muted, boosted) rows for an algorithm, or two empty lists if
+    the user has no active algorithm yet (pre-onboarding)."""
+    if not algo_id:
+        return [], []
+    rows = query(
+        "SELECT id, term, mode, weight, created_at "
+        "FROM algorithm_term_prefs WHERE algorithm_id = %s ORDER BY mode, term",
+        (algo_id,),
+    ) or []
+    return (
+        [r for r in rows if r["mode"] == "mute"],
+        [r for r in rows if r["mode"] == "boost"],
+    )
+
+
+def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None,
+                   kw_error=None):
     profiles = _list_profiles(g.user["id"])
     active_id = next((p["id"] for p in profiles if p["is_active"]), None)
+    algo_muted, algo_boosted = _load_algo_terms(active_id)
     return render_template(
         "algo.html",
         weights=resolved_weights_for_view(weights),
@@ -108,6 +129,11 @@ def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None):
         nl_description=nl_description,
         nl_notes=nl_notes,
         nl_error=nl_error,
+        algo_muted=algo_muted,
+        algo_boosted=algo_boosted,
+        max_keywords=MAX_KEYWORDS_PER_ALGO,
+        boost_default=BOOST_DEFAULT,
+        kw_error=kw_error,
     )
 
 
@@ -339,6 +365,100 @@ def _preview_partial(weights):
     rows = query(sql, params)
     expression = weights_to_expression(weights)
     return render_template("partials/preview.html", preview=rows, expression=expression)
+
+
+def _owned_algo_id(user_id, algo_id):
+    """Confirm a user owns this algorithm before mutating its keywords —
+    a forged `algo_id` from the form must never reach `algorithm_term_prefs`."""
+    row = query(
+        "SELECT id FROM user_algorithms WHERE id = %s AND user_id = %s",
+        (algo_id, user_id), one=True,
+    )
+    return row["id"] if row else None
+
+
+@bp.route("/keywords/add", methods=["POST"])
+@login_required
+def add_keyword():
+    """Attach a mute/boost term to one of the user's algorithms. Defaults to
+    the active algorithm; the form can pass `algo_id` to target a specific
+    profile (validated via ownership)."""
+    uid = g.user["id"]
+    try:
+        algo_id = int(request.form.get("algo_id", 0) or 0)
+    except (TypeError, ValueError):
+        algo_id = 0
+    if not algo_id:
+        algo_id, _ = _get_active(uid)
+    target = _owned_algo_id(uid, algo_id) if algo_id else None
+    if not target:
+        weights = _active_weights_for_view(uid)
+        return _render_editor(
+            weights, kw_error="Save an algorithm first, then add keywords."
+        )
+
+    mode = (request.form.get("mode") or "").strip().lower()
+    if mode not in VALID_MODES:
+        weights = _active_weights_for_view(uid)
+        return _render_editor(weights, kw_error="Pick mute or boost.")
+
+    term = normalize_term(request.form.get("term"))
+    if term is None:
+        weights = _active_weights_for_view(uid)
+        return _render_editor(
+            weights,
+            kw_error="Enter a keyword or phrase (at least 2 characters).",
+        )
+
+    weight = clamp_boost(request.form.get("weight")) if mode == "boost" else BOOST_DEFAULT
+
+    count_row = query(
+        "SELECT COUNT(*) AS n FROM algorithm_term_prefs WHERE algorithm_id = %s",
+        (target,), one=True,
+    )
+    existing = query(
+        "SELECT id FROM algorithm_term_prefs WHERE algorithm_id = %s AND term = %s",
+        (target, term), one=True,
+    )
+    if not existing and count_row and count_row["n"] >= MAX_KEYWORDS_PER_ALGO:
+        weights = _active_weights_for_view(uid)
+        return _render_editor(
+            weights,
+            kw_error=f"This profile is at the keyword cap ({MAX_KEYWORDS_PER_ALGO}). "
+                     f"Remove one before adding another.",
+        )
+
+    # A term has exactly one mode per algorithm; re-adding it in the other
+    # mode just moves it (mirrors user_term_prefs semantics).
+    execute(
+        "INSERT INTO algorithm_term_prefs (algorithm_id, term, mode, weight) "
+        "VALUES (%s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE mode = VALUES(mode), weight = VALUES(weight)",
+        (target, term, mode, weight),
+    )
+    get_conn().commit()
+    return redirect(url_for("algo.index"))
+
+
+@bp.route("/keywords/<int:tid>/delete", methods=["POST"])
+@login_required
+def delete_keyword(tid):
+    """Delete via a JOIN against `user_algorithms` so an attacker can't
+    remove someone else's keyword by guessing an id."""
+    uid = g.user["id"]
+    execute(
+        "DELETE atp FROM algorithm_term_prefs atp "
+        "JOIN user_algorithms ua ON ua.id = atp.algorithm_id "
+        "WHERE atp.id = %s AND ua.user_id = %s",
+        (tid, uid),
+    )
+    get_conn().commit()
+    return redirect(url_for("algo.index"))
+
+
+def _active_weights_for_view(user_id):
+    _, weights = _get_active(user_id)
+    return weights
 
 
 @bp.route("/use_preset/<key>", methods=["POST"])

@@ -556,5 +556,18 @@ K. /trending page is empty or 500s:
   default, matching the feed). No DB migration / cron / dep / env
   change -- just the standard Python App restart on deploy so the new
   route + partial load.
+- Per-algorithm keyword mute & boost (managed on the Keywords tab
+  of /algo) layers on top of the per-user list above: keywords here
+  attach to a single user_algorithms row instead of the user, so
+  different saved profiles ("Morning brief", "Weekend deep-dive") can
+  carry their own keyword intent. The feed unions both lists for the
+  active profile and pipes them through the same shared SQL builder,
+  so a mute at EITHER scope hides the article and the strongest
+  matching boost wins. Same v1 substring-match caveat as above
+  (entity-aware matching is the shared v2). Same scoping: signed-in
+  main feed only; anon / /firehose / digest are unaffected. Requires
+  the 2026-05-20-algorithm-term-prefs.sql migration
+  (algorithm_term_prefs); a missing table 500s the signed-in feed,
+  so apply it before deploying the code.
 
 You're done. Visit  https://sauce.ai/news .

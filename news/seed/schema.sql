@@ -242,6 +242,26 @@ CREATE TABLE IF NOT EXISTS user_term_prefs (
   CONSTRAINT fk_term_pref_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Per-algorithm keyword mute & boost. Same mute/boost model as
+-- `user_term_prefs` but scoped to one `user_algorithms` row so different
+-- saved profiles carry their own keyword intent. routes/feed.py reads
+-- this for the active algorithm and merges with `user_term_prefs` before
+-- calling `app.term_prefs.build_term_clauses` (the merger is just
+-- list concatenation — the builder already dedupes terms and lets mute
+-- beat boost, so a term muted at either level always wins).
+CREATE TABLE IF NOT EXISTS algorithm_term_prefs (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  algorithm_id INT UNSIGNED NOT NULL,
+  term         VARCHAR(128) NOT NULL,
+  mode         ENUM('mute','boost') NOT NULL,
+  weight       FLOAT NOT NULL DEFAULT 1.5,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_algo_term (algorithm_id, term),
+  KEY idx_algo_term_algo (algorithm_id),
+  CONSTRAINT fk_algo_term_algo FOREIGN KEY (algorithm_id) REFERENCES user_algorithms (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Automated source-discovery candidate pool. One row per unknown domain
 -- surfaced by `jobs/discover_harvest.py` (Reddit/HN), `discover_llm.py`
 -- (Claude suggestions), or future social-firehose jobs. `score` is the

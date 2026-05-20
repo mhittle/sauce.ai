@@ -40,7 +40,43 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-_None — all tracked migrations applied._
+### 2026-05-20 — Migration: algorithm_term_prefs (per-algorithm keyword mute & boost)
+**Status:** open · **PR:** (draft, this session) ·
+**Opened:** 2026-05-20 ·
+**File reference:** `news/seed/migrations/2026-05-20-algorithm-term-prefs.sql`
+
+Creates `algorithm_term_prefs`, backing the new "Keywords" tab on
+`/algo`. `routes/feed.py` reads it for the signed-in user's active
+algorithm on every feed load and unions the rows with `user_term_prefs`
+before scoring (**BUG-007 class** — a missing table 500s the signed-in
+feed; anon / `/firehose` / digest are unaffected). Apply this migration
+**before** the deploy that merges the PR, or have the PR held until the
+ALTER is confirmed run, mirroring the PR #77 sequencing.
+
+**Run in phpMyAdmin against `lt1ih6uyy2z6_news`:**
+
+```sql
+CREATE TABLE IF NOT EXISTS algorithm_term_prefs (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  algorithm_id INT UNSIGNED NOT NULL,
+  term         VARCHAR(128) NOT NULL,
+  mode         ENUM('mute','boost') NOT NULL,
+  weight       FLOAT NOT NULL DEFAULT 1.5,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_algo_term (algorithm_id, term),
+  KEY idx_algo_term_algo (algorithm_id),
+  CONSTRAINT fk_algo_term_algo FOREIGN KEY (algorithm_id)
+    REFERENCES user_algorithms (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+Then restart the Python App in cPanel so the new routes register.
+
+**Verify:** `/algo` Keywords tab renders for a signed-in user; adding a
+mute term hides matching articles on `/`; adding a boost term raises
+them. `SHOW CREATE TABLE algorithm_term_prefs\G` lists the FK to
+`user_algorithms`.
 
 ---
 

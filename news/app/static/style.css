@@ -488,3 +488,24 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .why-item-row { display: flex; justify-content: space-between; gap: 0.6em; font-size: 0.85em; }
 .why-empty { font-size: 0.82em; margin: 0.2em 0; }
 .why-tune { display: inline-block; margin-top: 0.5em; font-size: 0.82em; font-weight: 600; }
+
+/* Per-algorithm keyword mute/boost panel on /algo. Mirrors the
+   /terms layout but lives inside the algorithm builder so each profile
+   can carry its own keywords. */
+.algo form.add-keyword { display: flex; gap: .5rem; margin: .25rem 0 .5rem; flex-wrap: wrap; align-items: center; }
+.algo form.add-keyword input[type=text] { flex: 1; min-width: 240px; padding: .55rem .7rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+.algo form.add-keyword select,
+.algo form.add-keyword input[type=number] { padding: .55rem .5rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+.algo form.add-keyword input[type=number] { width: 5.5rem; }
+.algo form.add-keyword button { padding: .55rem 1rem; border: 0; background: #222; color: #fff; border-radius: 4px; cursor: pointer; }
+.algo .kw-error { padding: .6rem .8rem; border-radius: 4px; margin-bottom: 1rem; background: #fdecea; color: #61231b; }
+.algo .kw-cap { color: #888; font-size: .82rem; text-align: right; margin-bottom: 1rem; }
+.algo .kw-cols { display: flex; gap: 2rem; flex-wrap: wrap; }
+.algo .kw-col { flex: 1; min-width: 280px; }
+.algo .kw-col h2 { font-size: 1rem; font-weight: 600; margin: 0 0 .5rem; }
+.algo .kw-col .hint { color: #888; font-size: .82rem; margin: 0 0 .8rem; }
+.algo .kw-col ul { list-style: none; padding: 0; margin: 0; }
+.algo .kw-col li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .45rem .2rem; border-bottom: 1px solid #eee; }
+.algo .kw-col .term { font-size: .95rem; }
+.algo .kw-col .wt { color: #2e7d32; font-size: .8rem; margin-left: .4rem; }
+.algo .kw-col .empty { color: #888; font-style: italic; padding: .8rem 0; }
