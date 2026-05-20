@@ -40,20 +40,30 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+_None — all tracked migrations applied._
+
+---
+
+## Completed
+
 ### 2026-05-20 — Migration: algorithm_term_prefs (per-algorithm keyword mute & boost)
-**Status:** open · **PR:** #82 (merged 2026-05-20) ·
-**Opened:** 2026-05-20 ·
+**Status:** completed · **PR:** #82 (merged 2026-05-20) ·
+**Opened:** 2026-05-20 · **Completed:** 2026-05-20 ·
 **File reference:** `news/seed/migrations/2026-05-20-algorithm-term-prefs.sql`
 
-Creates `algorithm_term_prefs`, backing the new "Keywords" tab on
+Created `algorithm_term_prefs`, backing the new "Keywords" tab on
 `/algo`. `routes/feed.py` reads it for the signed-in user's active
 algorithm on every feed load and unions the rows with `user_term_prefs`
-before scoring. **BUG-007 class — the merged code 500s the signed-in
-feed on a missing table** (anon / `/firehose` / digest unaffected).
-Run this SQL now and restart the Python App; this entry moves to
-Completed once you confirm.
+before scoring. **BUG-007 class** — the merged code 500'd the signed-in
+feed on a missing table (anon / `/firehose` / digest unaffected) for
+the gap between deploy and migration. User confirmed the `CREATE TABLE`
+was run via phpMyAdmin against `lt1ih6uyy2z6_news` and the Python App
+restarted (2026-05-20), so the signed-in feed + new Keywords tab are
+safe. In the repo via `schema.sql` + the migration file so fresh
+installs replay it. Folded into the load-bearing "Applied prod schema
+migrations" line in `engineering-history.md`.
 
-**Run in phpMyAdmin against `lt1ih6uyy2z6_news`:**
+**SQL applied:**
 
 ```sql
 CREATE TABLE IF NOT EXISTS algorithm_term_prefs (
@@ -71,16 +81,10 @@ CREATE TABLE IF NOT EXISTS algorithm_term_prefs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-Then restart the Python App in cPanel so the new routes register.
-
 **Verify:** `/algo` Keywords tab renders for a signed-in user; adding a
 mute term hides matching articles on `/`; adding a boost term raises
 them. `SHOW CREATE TABLE algorithm_term_prefs\G` lists the FK to
 `user_algorithms`.
-
----
-
-## Completed
 
 ### 2026-05-17 — Migration: user_term_prefs (keyword mute & boost)
 **Status:** completed · **PR:** #77 (merged 2026-05-17) ·
