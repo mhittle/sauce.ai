@@ -68,7 +68,7 @@ shipped.
 | 6 | 5 | new-feature | Community "add a source" on dossiers | backlog |
 | 7 | 5 | algo, backend | Perceptual feature expansion (12 new ranking features) | done |
 | 8 | 3 | infra, ops, skunkworks | Agent infra: Unattended dev-agent dispatcher | in-progress |
-| 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | backlog |
+| 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | in-progress |
 | 8 | 4 | infra, ops | Agent infra: Post-deploy verification | backlog |
 | 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | backlog |
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | backlog |
@@ -622,7 +622,7 @@ matrix invokes `anthropics/claude-code-action@v1` with
 `--model claude-opus-4-7 --max-turns 80 --max-budget-usd 8`.
 
 ### Agent infra: Pre-merge QA + BUG-007 gate
-**Priority:** 9 · **LOE:** 2 · **Category:** infra, security · **Status:** backlog
+**Priority:** 9 · **LOE:** 2 · **Category:** infra, security · **Status:** in-progress
 
 Phase 2. Every PR runs tests + a Claude-Sonnet BUG-007 reviewer
 before merge. The single most expensive recurring failure mode in
