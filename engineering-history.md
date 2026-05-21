@@ -168,7 +168,21 @@ server-side migration referenced below was applied on prod and is in
   step the human does in repo settings): require `tests` green;
   require `bug007-gate` green once `AGENTS_ENABLED=true`. *Server:*
   none — infra-only, no app code, no schema, no manual prod action
-  required.
+  required. **Two pre-existing breakages surfaced by the new `tests`
+  job on first CI run and fixed in the PR:** (1) `pip install -r
+  news/requirements.txt` failed because `sgmllib3k` (transitive via
+  `feedparser==6.0.11`) can't build under PEP 517 isolation against
+  modern setuptools — same failure class as `INSTALL.txt` §2c; fixed by
+  upgrading pip/setuptools/wheel and pre-installing feedparser with
+  `--no-build-isolation`. (2)
+  `tests/test_csrf.py::test_unsubscribe_endpoint_is_csrf_exempt`
+  asserted `b"CSRF" not in r.data`, but `base.html` embeds the literal
+  `X-CSRF-Token` header name in its JS, so every base-template render
+  (including the 404 the test triggers) contains "CSRF" — the assertion
+  was stale and would also have failed to catch a real regression.
+  Tightened to match the actual rejection phrase
+  `b"CSRF validation failed"`. Full suite 487/487 green locally after
+  both fixes.
 - **Agent infrastructure cluster opened; Phase 1 — Unattended dev-agent
   dispatcher (PR drafted this session).** Infra/ops/skunkworks Pri 8 /
   LOE 3. Six-phase plan to replace the "5 Claude Code terminals open at

@@ -122,4 +122,7 @@ def test_unsubscribe_endpoint_is_csrf_exempt(app, monkeypatch):
     monkeypatch.setattr("app.routes.account.query", lambda *a, **k: None)
     r = app.test_client().post("/account/unsubscribe/" + "z" * 24)
     assert r.status_code != 400
-    assert b"CSRF" not in r.data
+    # Match the rejection message specifically, not the bare token "CSRF":
+    # base.html embeds the literal "X-CSRF-Token" header name in its JS, so
+    # any page that renders the base template legitimately contains "CSRF".
+    assert b"CSRF validation failed" not in r.data
