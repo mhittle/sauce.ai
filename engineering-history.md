@@ -133,6 +133,61 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-21
 
+- **Agent infra Phase 4 — Migration / restart executor (PR drafted this
+  session).** Infra/ops/backend Pri 10 / LOE 5. Highest-blast-radius
+  phase: a small HMAC-authenticated Flask service running INSIDE the
+  news app executes whitelisted prod ops triggered by GitHub Actions,
+  so `manual-actions.md` migrations no longer have to be hand-run in
+  phpMyAdmin. *App code:* new blueprint
+  `news/app/routes/agent_ops.py` at `/agent-ops/*`, all three endpoints
+  authenticated by HMAC-SHA256 over the raw request body keyed by
+  `AGENT_OPS_SECRET` with a ±300s freshness window (replay protection):
+  `POST /run-migration` (filename whitelist — basename only, `*.sql`,
+  resolved path must live under `news/seed/migrations/`; reads the
+  file, splits on `;` dropping comment-only fragments, runs each
+  statement in one transaction, rolls back on any failure),
+  `POST /restart-app` (touches the Passenger `<app_root>/../tmp/
+  restart.txt`, env-overridable via `AGENT_OPS_RESTART_FILE`),
+  `POST /verify-schema` (read-only parameterized SELECT against
+  `information_schema.columns`, table/column identifier-validated — can
+  never run caller SQL). Pure helpers (`compute_signature`,
+  `verify_signature`, `safe_migration_name`, `is_identifier`,
+  `split_sql_statements`) are Flask-free + unit-tested. Secret unset →
+  503 (fail-closed). Blueprint registered in `app/__init__.py` at
+  `/agent-ops`; the three endpoints added to `security._EXEMPT_ENDPOINTS`
+  (HMAC auth replaces the CSRF cookie a machine caller can't carry).
+  `AGENT_OPS_SECRET` + `AGENT_OPS_RESTART_FILE` added to `config.py`.
+  19 new tests in `tests/test_agent_ops.py` (signature
+  valid/invalid/missing/stale/tampered, filename traversal + nested-path
+  + whitelist, verify-schema rejects non-identifier + runs only the
+  parameterized information_schema SELECT, run-migration applies a real
+  repo migration + rolls back on error). Full suite 512/512 green
+  locally. **Known limitation (documented in the PR threat model):**
+  MySQL implicitly commits DDL, so the single-transaction wrapper gives
+  true rollback only for DML — keep migrations idempotent
+  (`CREATE TABLE IF NOT EXISTS`, nullable-then-tighten ALTERs) so a
+  mid-migration failure is replay-safe. *Workflow:* new
+  `.github/workflows/migration-executor.yml` on `pull_request`
+  `labeled` (gated by `vars.AGENTS_ENABLED == 'true'` AND
+  `github.event.label.name == 'needs-migration'`). Job `apply` finds
+  `news/seed/migrations/*.sql` files in the PR diff (base..head),
+  HMAC-signs each `{"filename": ...}` body with the Actions secret
+  `AGENT_OPS_SECRET`, POSTs to `/agent-ops/run-migration` (fails loud on
+  any non-200 or non-`ok` status), then POSTs `/agent-ops/restart-app`.
+  Job `finalize` (Haiku 4.5, budget $0.50) moves the matching
+  `manual-actions.md` Open entry to Completed with today's date,
+  comments "Migration applied, app restarted. Ready to merge." on the
+  PR, and swaps label `needs-migration` → `migration-applied`. Phase 1
+  `dev-warmup.md` updated: dev-agent draft PRs that add a migration
+  self-label `needs-migration` after opening so the executor picks them
+  up (and still write the Open `manual-actions.md` entry the executor
+  reads). *Server:* two new Open `manual-actions.md` entries — set
+  `AGENT_OPS_SECRET` (32 hex bytes) in BOTH cPanel Setup-Python-App env
+  (lands in the app `.htaccess`) AND as a GitHub Actions repo secret,
+  identical values, quarterly rotation; plus the Phase 3 admin_ops
+  restart. No schema change in this PR (the blueprint defines no
+  tables). New repo secret `AGENT_OPS_SECRET` must match the prod env
+  value.
 - **Agent infra Phase 3 — Post-deploy verification (PR drafted this
   session).** Infra/ops Pri 8 / LOE 4. After each deploy (and on a
   30-min safety-net cron) the live site is smoke-tested and a bug is

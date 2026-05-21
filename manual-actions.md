@@ -40,6 +40,66 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-21 — Secret: AGENT_OPS_SECRET for the HMAC migration executor
+**Status:** open · **PR:** (Phase 4, drafted this session) ·
+**Opened:** 2026-05-21
+
+Phase 4 adds the `agent_ops` blueprint (`/agent-ops/*`), which executes
+whitelisted prod operations (run a migration, restart the app, verify a
+column) authenticated by an HMAC-SHA256 signature over the request body
+keyed by `AGENT_OPS_SECRET`. Until this secret is set on prod, every
+`/agent-ops/*` endpoint returns **503** (fail-closed) — so the
+migration-executor workflow simply can't act, which is the safe default.
+
+**The same secret value must exist in TWO places, identical:**
+
+1. **Prod app env** (so the Flask app can verify signatures). Secrets on
+   this host live in cPanel "Setup Python App" env vars (canonical
+   source of truth — cPanel materializes them into the app's
+   `.htaccess` as Passenger env vars; see the load-bearing notes /
+   INSTALL.txt §9). Add a new variable named `AGENT_OPS_SECRET`.
+2. **GitHub Actions repo secret** named `AGENT_OPS_SECRET` (so the
+   `migration-executor.yml` workflow can sign requests). Settings →
+   Secrets and variables → Actions → New repository secret.
+
+**Generate the value (32 random bytes hex) — do NOT paste it into chat,
+a PR, or a commit:**
+
+```bash
+openssl rand -hex 32
+```
+
+**Set on prod (cPanel):** Setup Python App → the `sauce.ai/news` app →
+Environment variables → add `AGENT_OPS_SECRET = <the hex value>` → Save
+→ **Restart**. (If you edit the app's `.htaccess` directly instead, the
+Passenger env line is:
+`PassengerAppEnv AGENT_OPS_SECRET <the hex value>` in
+`/home/lt1ih6uyy2z6/public_html/sauce.ai/news/.htaccess` — but the
+cPanel UI is preferred since cPanel rewrites that file.)
+
+**Set the matching GitHub secret:** paste the same hex value as the
+`AGENT_OPS_SECRET` repository secret.
+
+**Rotation policy: quarterly.** To rotate, generate a new value, update
+both places (cPanel env + GitHub secret) in the same sitting, and
+restart the Python App. There is no in-flight state to drain — the
+executor signs each request fresh, so a brief mismatch only causes 401s
+until both sides carry the new value.
+
+**Verify (no secret needed — confirms fail-closed wiring):**
+
+```bash
+# 401 = blueprint live and rejecting unsigned requests (good once the
+# secret is set); 503 = secret not yet configured; 404 = restart needed.
+curl -s -o /dev/null -w "%{http_code}\n" -X POST https://sauce.ai/news/agent-ops/verify-schema -d '{}'
+```
+
+After the secret is set on both sides, the Phase 4 PR description's
+end-to-end test (a throwaway create-then-drop dummy-table migration)
+confirms the full path.
+
+---
+
 ### 2026-05-21 — Python App restart: admin_ops blueprint (post-deploy verification)
 **Status:** open · **PR:** (Phase 3, drafted this session) ·
 **Opened:** 2026-05-21
