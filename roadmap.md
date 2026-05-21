@@ -74,6 +74,7 @@ shipped.
 | 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | done |
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
+| 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | ready-for-agent |
 
 ---
 
@@ -723,6 +724,60 @@ paragraph citing specific data. Opens one PR titled
 the at-a-glance table — human folds in when promoting). Empty weeks
 are fine; if nothing meaningful surfaces, no PR is opened. New
 `.github/agents/pm-agent.md` prompt.
+
+---
+
+## PM proposals (2026-05-21)
+
+PM-agent suggestions from the 2026-05-21 cycle (run manually). Each is
+`status: proposed` — not yet authorized for dev. The human promotes a
+proposal to `ready-for-agent` (and folds its row into the at-a-glance
+table) to dispatch it. This cycle ran on repo-doc signals only;
+production telemetry (`/admin/cron-health`, `/admin/usage-summary`) was
+unavailable, so rationales cite history/bugs/roadmap data.
+
+### Schema-drift sentinel (clear failure instead of a 500 storm)
+**Priority:** 7 · **LOE:** 3 · **Category:** backend, infra, ops · **Status:** proposed
+
+**Rationale:** BUG-007 is the most expensive recurring failure mode in
+this repo — it fired twice (original PRs #30/#31, 2026-05-13; recurrence
+on PR #64, 2026-05-17). The symptom each time: a migration lagging the
+deploy makes *every* signed-in request 500 with an opaque PyMySQL
+"Unknown column" error until a human notices. Phase 2's pre-merge gate
+(PR #104) now blocks merge-before-migration and Phase 4's executor
+(PR #106) applies migrations — but there is still **no runtime guard**:
+if a column is missing at request time, the failure is a silent 500
+storm, not a diagnosable signal.
+
+Propose a schema-drift sentinel: on app start (and on demand via a new
+`GET /admin/schema-health`), diff the expected columns — derivable from
+`seed/schema.sql`, or a tracked schema-version — against
+`information_schema`, reusing the Phase 4 `agent_ops.verify_schema`
+building block. Surface one clear readout plus a logged warning naming
+the missing table/column, instead of per-request 500s. Turns the worst
+recurring outage into an immediately actionable banner. Scope: one
+read-only admin route + an init-time check; no sharp-edge infra, no new
+dependency.
+
+### Agent fleet observability — weekly cost + activity rollup
+**Priority:** 6 · **LOE:** 3 · **Category:** infra, ops · **Status:** ready-for-agent
+
+**Rationale:** The six-phase agent fleet shipped 2026-05-21 (PRs
+#103–#108), each workflow carrying a per-run budget cap ($8 dev / $1 QA
+/ $2 post-deploy / $0.50 executor-finalize / $1 triage / $4 PM). But
+nothing aggregates what the fleet actually *did*: there is no record of
+weekly spend, run counts, success/failure rates, or how many post-deploy
+auto-filed bugs turned out to be real. A per-run cap bounds a single run
+but does not catch a workflow that fails or loops repeatedly, nor tell
+you whether the fleet earns its cost.
+
+Propose a lightweight agent-activity log (an append-only `agent_runs`
+row per workflow run, mirroring the existing `llm_usage` table pattern)
+plus a read-only `GET /admin/agent-activity` 14-day summary, fed by a
+final reporting step each agent workflow appends. The Phase 6 PM agent
+can then cite real fleet telemetry instead of inferring from PRs. Scope:
+one small table + one admin route + a per-workflow reporting step; no
+app-behavior change.
 
 ---
 
