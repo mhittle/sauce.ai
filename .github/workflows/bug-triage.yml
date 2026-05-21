@@ -1,0 +1,51 @@
+name: Bug auto-triage
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: bug-triage-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    if: vars.AGENTS_ENABLED == 'true' && github.event.label.name == 'agent:qa-filed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compose triage prompt
+        id: prompt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          tpl = pathlib.Path(".github/agents/bug-triage.md").read_text(encoding="utf-8")
+          for k in ("PR_NUMBER", "PR_BASE_SHA", "PR_HEAD_SHA", "REPO"):
+              tpl = tpl.replace("{{" + k + "}}", os.environ[k])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write("prompt<<__PROMPT_EOF__\n")
+              fh.write(tpl)
+              if not tpl.endswith("\n"):
+                  fh.write("\n")
+              fh.write("__PROMPT_EOF__\n")
+          PY
+      - name: Run triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: ${{ steps.prompt.outputs.prompt }}
+          claude_args: "--model claude-sonnet-4-6 --max-turns 25 --max-budget-usd 1"

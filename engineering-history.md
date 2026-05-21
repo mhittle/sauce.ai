@@ -133,6 +133,29 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-21
 
+- **Agent infra Phase 5 — Bug auto-triage (PR drafted this session).**
+  Infra/ops Pri 6 / LOE 2. Bugs auto-filed by the Phase 3 post-deploy
+  QA agent get an automatic suitability assessment for the unattended
+  dev-agent fleet — but the human stays in the loop for the
+  "promote to `ready-for-agent`" step. New
+  `.github/workflows/bug-triage.yml` on `pull_request: [labeled]`,
+  gated by `vars.AGENTS_ENABLED == 'true'` AND
+  `github.event.label.name == 'agent:qa-filed'`. Single Sonnet 4.6 job
+  (budget $1): reads the PR diff to find the new `BUG-NNN` entry,
+  estimates scope, and posts ONE verdict comment —
+  `AUTO_FIX_ELIGIBLE` only if the likely fix touches <3 files, the bug
+  has a clear/deterministic repro, and it is NOT in a sharp-edge area
+  (passenger_wsgi.py, the load-bearing symlinks, .htaccess, cPanel /
+  venv infra, the deploy workflow, or anything in
+  `new-engineering-session-instructions.md` Step 10); otherwise
+  `NEEDS_HUMAN` with the failing criterion. The agent is read-only +
+  one comment: it does NOT label the bug ready, edit roadmap.md/bugs.md,
+  or spawn a dev run — promotion to `ready-for-agent` is a human
+  decision (which then feeds the Phase 1 dispatcher). New
+  `.github/agents/bug-triage.md` system prompt encodes the criteria,
+  the "prefer NEEDS_HUMAN when uncertain" bias, idempotency on
+  re-label, and the comment format. *Server:* none — infra-only, no
+  app code, no schema, no manual prod action required.
 - **Agent infra Phase 4 — Migration / restart executor (PR drafted this
   session).** Infra/ops/backend Pri 10 / LOE 5. Highest-blast-radius
   phase: a small HMAC-authenticated Flask service running INSIDE the

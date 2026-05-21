@@ -71,7 +71,7 @@ shipped.
 | 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | in-progress |
 | 8 | 4 | infra, ops | Agent infra: Post-deploy verification | in-progress |
 | 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | in-progress |
-| 6 | 2 | infra, ops | Agent infra: Bug auto-triage | backlog |
+| 6 | 2 | infra, ops | Agent infra: Bug auto-triage | in-progress |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | backlog |
 
 ---
@@ -691,7 +691,7 @@ Open entry. PR description includes threat model, prod test plan
 rollback procedure.
 
 ### Agent infra: Bug auto-triage
-**Priority:** 6 · **LOE:** 2 · **Category:** infra, ops · **Status:** backlog
+**Priority:** 6 · **LOE:** 2 · **Category:** infra, ops · **Status:** in-progress
 
 Phase 5. Bugs filed by the Phase 3 post-deploy QA agent get a
 suitability assessment for the unattended dev fleet — but a human
