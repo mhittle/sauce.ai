@@ -104,4 +104,5 @@ jobs:
           claude_args: >-
             --model claude-sonnet-4-6
             --max-budget-usd 2
+            --permission-mode bypassPermissions
             --mcp-config /tmp/mcp.json

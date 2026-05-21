@@ -77,7 +77,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.prompt.outputs.prompt }}
-          claude_args: "--model claude-sonnet-4-6 --max-budget-usd 1"
+          claude_args: '--model claude-sonnet-4-6 --max-budget-usd 1 --permission-mode dontAsk --allowedTools "Read,Write,Edit,Grep,Glob,Bash(git:*),Bash(gh:*)"'
       - name: Enforce verdict
         run: |
           if [ ! -f /tmp/bug007-verdict.txt ]; then
