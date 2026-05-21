@@ -40,9 +40,15 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-20 — Migration: lab_concept_votes (root-domain landing page voting)
-**Status:** open · **PR:** (drafted this session) ·
-**Opened:** 2026-05-20 ·
+(none currently)
+
+---
+
+## Completed
+
+### 2026-05-21 — Migration: lab_concept_votes (root-domain landing page voting)
+**Status:** completed · **PR:** #102 (merged 2026-05-20) ·
+**Opened:** 2026-05-20 · **Completed:** 2026-05-21 ·
 **File reference:** `news/seed/migrations/2026-05-20-lab-votes.sql`
 
 Backs the anonymous up/down voting controls on each "Coming soon"
@@ -51,12 +57,13 @@ card on the root-domain lab landing page (`https://sauce.ai/`). New
 endpoints read/write this table; the static `index.html` JS calls
 them. **NOT BUG-007 class:** only the new `/labvotes/*` endpoints
 touch the table, and the landing page's JS catches a tally fetch
-error and hides the vote UI silently — so a missing migration leaves
-the cards rendering normally, just without scores. The rest of the
-news app (feed, search, gallery, etc.) is unaffected. Apply this
-then restart the Python App so the new `lab_bp` blueprint registers.
+error and hides the vote UI silently — so the cards rendered
+normally throughout the gap, just without scores. User confirmed
+the `CREATE TABLE` was run via phpMyAdmin against `lt1ih6uyy2z6_news`
+and the Python App restarted (2026-05-21), so the `lab_bp` blueprint
+and the voting UI are now live.
 
-**SQL (run in phpMyAdmin against `lt1ih6uyy2z6_news`):**
+**SQL applied:**
 
 ```sql
 CREATE TABLE IF NOT EXISTS lab_concept_votes (
@@ -72,8 +79,6 @@ CREATE TABLE IF NOT EXISTS lab_concept_votes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-**Then:** Restart the Python App in cPanel (Passenger import cache).
-
 **Verify:**
 - `curl -s https://sauce.ai/news/labvotes/tally | head` returns JSON
   like `{"tally": {...17 keys...}, "voter_token": "<40 hex>"}` and
@@ -84,25 +89,23 @@ CREATE TABLE IF NOT EXISTS lab_concept_votes (
 
 ---
 
-### 2026-05-20 — Migration: keywords-on-algo (drop user_term_prefs, add shared_algorithms.keywords_json)
-**Status:** open · **PR:** (drafted this session) ·
-**Opened:** 2026-05-20 ·
+### 2026-05-21 — Migration: keywords-on-algo (drop user_term_prefs, add shared_algorithms.keywords_json)
+**Status:** completed · **PR:** (drafted 2026-05-20) ·
+**Opened:** 2026-05-20 · **Completed:** 2026-05-21 ·
 **File reference:** `news/seed/migrations/2026-05-20-keywords-on-algo.sql`
 
 Removes the account-wide `/terms` surface: keywords now live ONLY on
 each algorithm profile (`algorithm_term_prefs`). Gallery publish
 snapshots the algorithm's keywords into a new
 `shared_algorithms.keywords_json` column; adopt clones them into the
-new profile.
+new profile. **Load-bearing (BUG-007 class):** the merged code drops
+the `user_term_prefs` SELECT in `routes/feed.py` and SELECTs
+`keywords_json` in `routes/gallery.adopt()`. User confirmed the three
+SQL steps were run via phpMyAdmin against `lt1ih6uyy2z6_news` and the
+Python App restarted (2026-05-21), so signed-in feed + gallery adopt
+are safe and the deprecated `/terms` route is gone.
 
-**Load-bearing (BUG-007 class):** the merged code drops the
-`user_term_prefs` SELECT in `routes/feed.py` (safe — the new query path
-is `algorithm_term_prefs` only) and SELECTs `keywords_json` in
-`routes/gallery.adopt()`. A missing `keywords_json` column would 500
-gallery adopts; a lingering `user_term_prefs` table is harmless but
-clutter. Apply this then restart the Python App.
-
-**SQL (run in phpMyAdmin against `lt1ih6uyy2z6_news`, in order):**
+**SQL applied (in order):**
 
 ```sql
 -- 1. Preserve existing per-user keywords by copying them into each
@@ -130,8 +133,6 @@ ALTER TABLE shared_algorithms
 DROP TABLE user_term_prefs;
 ```
 
-**Then:** Restart the Python App in cPanel (Passenger import cache).
-
 **Verify:**
 - `/terms` returns 404 (route is removed).
 - `/algo` Keywords tab still works on the active profile.
@@ -142,8 +143,6 @@ DROP TABLE user_term_prefs;
 - `SHOW TABLES LIKE 'user_term_prefs';` returns empty.
 
 ---
-
-## Completed
 
 ### 2026-05-20 — Source catalog import (+1151 new sources)
 **Status:** completed · **PR:** #91 (merged 2026-05-20) ·

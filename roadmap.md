@@ -12,7 +12,8 @@ Each item is rated on three axes:
 - **LOE** (1–10): rough effort estimate. 1 = under an hour, 10 = multi-week project.
 - **Category**: one or more of `infra`, `new-feature`, `ui`, `backend`, `algo`, `security`, `ops`, `skunkworks`, `docs`. Add new categories as needed; document them here.
 
-Status values: `backlog` (default), `in-progress`, `done`, `dropped`.
+Status values: `backlog` (default), `ready-for-agent` (queued for the
+unattended dev workflow), `in-progress`, `done`, `dropped`.
 
 Add new items at the bottom of the appropriate section. When you move an item
 to `done`, also append a section to `engineering-history.md` describing what
@@ -66,6 +67,12 @@ shipped.
 | 7 | 5 | algo, backend | Community source-quality overlay | backlog |
 | 6 | 5 | new-feature | Community "add a source" on dossiers | backlog |
 | 7 | 5 | algo, backend | Perceptual feature expansion (12 new ranking features) | done |
+| 8 | 3 | infra, ops, skunkworks | Agent infra: Unattended dev-agent dispatcher | in-progress |
+| 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | backlog |
+| 8 | 4 | infra, ops | Agent infra: Post-deploy verification | backlog |
+| 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | backlog |
+| 6 | 2 | infra, ops | Agent infra: Bug auto-triage | backlog |
+| 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | backlog |
 
 ---
 
@@ -574,6 +581,147 @@ already a known source, just attach the article to the cluster).
 Crowdsources coverage breadth exactly where missing perspectives are
 most visible. Depends on Story dossier (done) and the discovery
 pipeline's `candidate_sources` table (done).
+
+---
+
+## Agent infrastructure cluster (added 2026-05-21)
+
+Six-phase build-out that replaces the "5 Claude Code terminals open at
+once" workflow with an unattended agent fleet triggered by GitHub
+Actions. Each phase is its own feature branch + draft PR; the human
+merges between phases so each lands cleanly and is tested in prod
+before the next starts. All workflows are gated by the repo variable
+`AGENTS_ENABLED` (boolean string) and share a fine-grained PAT
+`AGENT_PUSH_TOKEN` (contents:write + pull-requests:write) plus
+`ANTHROPIC_API_KEY`. Dev/PM agents run on Opus 4.7
+(`claude-opus-4-7`), QA/review on Sonnet 4.6 (`claude-sonnet-4-6`),
+triage on Haiku 4.5 (`claude-haiku-4-5`).
+
+### Agent infra: Unattended dev-agent dispatcher
+**Priority:** 8 · **LOE:** 3 · **Category:** infra, ops, skunkworks · **Status:** in-progress
+
+Phase 1. Marking a roadmap item's status `ready-for-agent` triggers
+an unattended Claude Code session via GitHub Actions that produces a
+draft PR — replacing the habit of manually launching terminals. New
+`.github/agents/dev-warmup.md` system prompt (near-copy of the
+standard manual warmup, adapted: assignment passed in an ASSIGNMENT
+block; manual-actions.md Open entries treated as untouched and never
+moved to Completed; output is always a DRAFT PR; hard budget $8 /
+45 min wallclock; PARTIAL: ... draft commit if approaching either;
+matrix max-parallel 3 with rebase-before-PR; blocked-by-dependency
+and blocked-by-open-action escape hatches). New
+`.github/scripts/pick_ready_items.py` (pure stdlib) scans roadmap.md
+for `ready-for-agent` items, flips them to `in-progress` in both the
+at-a-glance row and the detail-section Status line, commits with
+`[skip ci]`, and emits the picked titles to GITHUB_OUTPUT. New
+`.github/workflows/dev-agent.yml` (push-to-main on `roadmap.md` or
+workflow_dispatch with `title` input) gated by
+`vars.AGENTS_ENABLED == 'true'`, concurrency group
+`dev-agent-picker`, three jobs (pick / manual / implement), implement
+matrix invokes `anthropics/claude-code-action@v1` with
+`--model claude-opus-4-7 --max-turns 80 --max-budget-usd 8`.
+
+### Agent infra: Pre-merge QA + BUG-007 gate
+**Priority:** 9 · **LOE:** 2 · **Category:** infra, security · **Status:** backlog
+
+Phase 2. Every PR runs tests + a Claude-Sonnet BUG-007 reviewer
+before merge. The single most expensive recurring failure mode in
+this repo is "PR merged before migration applied → signed-in feed
+500s" (BUG-007 + 2026-05-17 recurrence on PR #64); this gate
+prevents it. New `.github/workflows/qa-code.yml` on pull_request
+{opened, synchronize, ready_for_review}: a `tests` job (pip install,
+boot check, `python -m pytest news/tests/ -q`) and a `bug007-gate`
+Sonnet job that diffs against main and flags (a) new SQL table/
+column refs in app/jobs code without seed/schema.sql + matching Open
+manual-actions.md entry, (b) modifications to passenger_wsgi.py /
+app/__init__.py / app/config.py / jobs/*.py / requirements.txt
+without a same-PR INSTALL.txt update, (c) `dangerous-clean-slate: true`
+anywhere (HARD FAIL). Inline comments + BUG007_OK / BUG007_BLOCK
+status + `blocked-pre-merge` label on block. Budget $1. New
+`.github/agents/qa-reviewer.md` system prompt. Branch protection
+update (require both checks) called out in the PR description as a
+manual step.
+
+### Agent infra: Post-deploy verification
+**Priority:** 8 · **LOE:** 4 · **Category:** infra, ops · **Status:** backlog
+
+Phase 3. After each deploy, smoke-test prod and file bugs if
+anything regressed. Two new admin endpoints in
+`news/app/routes/admin_ops.py` (admin-auth required) feed the
+verifier: `GET /admin/cron-health` returns last 200 lines of
+`logs/cron.log`; `GET /admin/usage-summary` returns 14-day signup /
+DAU / signal counts JSON. New
+`.github/workflows/post-deploy.yml` triggers on push-to-main (120s
+sleep so the FTP deploy finishes) + cron `*/30 * * * *` safety net.
+Two steps: curl smoke (/, /firehose, /algo, /trending,
+/search?q=test, /gallery — fail on any 5xx), then a Sonnet Playwright
+MCP agent (budget $2) that signs in with SMOKE_TEST_USER /
+SMOKE_TEST_PASS, toggles a thumb, reloads, checks persistence;
+inspects /admin/cron-health for known bad patterns; for each new
+issue appends a BUG-NNN to bugs.md and opens a draft PR labeled
+`agent:qa-filed`. New `.github/agents/post-deploy-qa.md` prompt.
+**One-time exception to "infra-only" before Phase 4:** ships the
+two admin endpoints (with unit tests) so the agent has something to
+query; admin blueprint adds a `manual-actions.md` Open entry (new
+blueprint needs a Python App restart).
+
+### Agent infra: Migration / restart executor
+**Priority:** 10 · **LOE:** 5 · **Category:** infra, ops, backend · **Status:** backlog
+
+Phase 4. Highest-blast-radius phase. New
+`news/app/routes/agent_ops.py` blueprint at `/agent-ops/*` runs
+HMAC-SHA256-signed whitelisted operations from GitHub Actions:
+`POST /agent-ops/run-migration` (filename whitelist under
+`news/seed/migrations/`, single transaction, rollback on failure),
+`POST /agent-ops/restart-app` (Passenger `tmp/restart.txt` touch),
+`POST /agent-ops/verify-schema` (read-only SELECT against
+information_schema). New
+`.github/workflows/migration-executor.yml` triggers on PRs labeled
+`needs-migration`: discovers migration files in the diff, signs +
+POSTs each to /agent-ops/run-migration, then /agent-ops/restart-app,
+then a small Haiku agent (budget $0.50) moves the matching
+manual-actions.md entry from Open to Completed, comments on the PR,
+swaps the `needs-migration` label for `migration-applied`. Phase 1's
+dev-warmup updated so dev-agent draft PRs that include a migration
+self-label `needs-migration` after opening. New secret
+`AGENT_OPS_SECRET` (32+ random hex bytes) added to .htaccess on
+prod with quarterly rotation policy; matching `manual-actions.md`
+Open entry. PR description includes threat model, prod test plan
+(throwaway create-then-drop dummy table end-to-end), and a manual
+rollback procedure.
+
+### Agent infra: Bug auto-triage
+**Priority:** 6 · **LOE:** 2 · **Category:** infra, ops · **Status:** backlog
+
+Phase 5. Bugs filed by the Phase 3 post-deploy QA agent get a
+suitability assessment for the unattended dev fleet — but a human
+still decides whether to promote to `ready-for-agent`. New
+`.github/workflows/bug-triage.yml` on pull_request labeled
+`agent:qa-filed`: a single Sonnet job (budget $1) reads bugs.md,
+finds the new BUG-NNN, estimates scope, and verdicts
+`AUTO_FIX_ELIGIBLE` (touches <3 files, clear repro, NOT in
+sharp-edge areas: passenger_wsgi.py, symlinks, .htaccess, cPanel
+infra) or `NEEDS_HUMAN`. Posts the verdict as a PR comment; never
+labels the bug ready or spawns a dev agent on its own. New
+`.github/agents/bug-triage.md` prompt.
+
+### Agent infra: PM agent (weekly proposals)
+**Priority:** 5 · **LOE:** 3 · **Category:** infra, skunkworks · **Status:** backlog
+
+Phase 6. Weekly cadence Opus agent reads production signals and
+proposes new roadmap items as `status: proposed`. Adds `proposed`
+to the roadmap.md Conventions ("PM agent suggestion; not yet
+authorized for dev"). New `.github/workflows/pm-agent.yml` on cron
+`0 14 * * 1` + workflow_dispatch: single Opus job (budget $4) reads
+engineering-history.md (last 14 days) + bugs.md + roadmap.md (Done
+last 14d + backlog), fetches /admin/cron-health and
+/admin/usage-summary, proposes AT MOST 3 new items each with
+Priority / LOE / Category / Status `proposed` + a Rationale
+paragraph citing specific data. Opens one PR titled
+"PM proposals: <date>" that touches only the detail sections (not
+the at-a-glance table — human folds in when promoting). Empty weeks
+are fine; if nothing meaningful surfaces, no PR is opened. New
+`.github/agents/pm-agent.md` prompt.
 
 ---
 
