@@ -112,14 +112,13 @@ feed load, same BUG-007 class); 12 new `article_features` columns
 (PR #84, perceptual feature expansion — 6 LLM-judged + 6 rule-based;
 applied 2026-05-20, BUG-007 class for `classify_pending` every 5-min
 tick); `shared_algorithms.keywords_json` column added + `user_term_prefs`
-table dropped (PR drafted 2026-05-20, keywords-on-algo only — migration
-pending on prod, see `manual-actions.md` Open; BUG-007 class for
-`gallery.adopt()` SELECTing the new column); new `lab_concept_votes`
-table (PR drafted 2026-05-20, root-domain landing page voting —
-migration pending on prod, see `manual-actions.md` Open; **NOT**
-BUG-007 class — only the new `/news/labvotes/*` endpoints touch it,
-the landing page hides the vote UI on tally failure so the cards
-still render). A DB rebuild from `seed/schema.sql` already includes
+table dropped (PR drafted 2026-05-20, keywords-on-algo only; applied
+2026-05-21 — BUG-007 class for `gallery.adopt()` SELECTing the new
+column); new `lab_concept_votes` table (PR drafted 2026-05-20,
+root-domain landing page voting; applied 2026-05-21 — **NOT** BUG-007
+class, only the new `/news/labvotes/*` endpoints touch it and the
+landing page hides the vote UI on tally failure so the cards still
+render). A DB rebuild from `seed/schema.sql` already includes
 these.
 
 ---
@@ -131,6 +130,53 @@ Older entries, summarized. **Full verbatim text is in
 the deep context (root causes, calibration notes, file lists). Every
 server-side migration referenced below was applied on prod and is in
 `manual-actions.md` → Completed; bug root causes are in `bugs.md`.
+
+### 2026-05-21
+
+- **Agent infrastructure cluster opened; Phase 1 — Unattended dev-agent
+  dispatcher (PR drafted this session).** Infra/ops/skunkworks Pri 8 /
+  LOE 3. Six-phase plan to replace the "5 Claude Code terminals open at
+  once" workflow with an unattended agent fleet triggered by GitHub
+  Actions, all gated by repo variable `AGENTS_ENABLED` and authed by a
+  fine-grained PAT `AGENT_PUSH_TOKEN`. Each phase ships on its own
+  branch + draft PR; the human merges between phases. Roadmap got a new
+  top-level "Agent infrastructure cluster" with six items + six new
+  at-a-glance rows; `ready-for-agent` added to the Status values list.
+  **Phase 1 deliverables (this PR):** (a) `.github/agents/dev-warmup.md`
+  — system prompt for unattended dev runs, near-copy of the human
+  warmup adapted: assignment in an `ASSIGNMENT` block with
+  `{{ASSIGNMENT_TITLE}}` placeholder; manual-actions.md Open entries
+  treated as untouched and never moved to Completed; output is always a
+  DRAFT PR; hard budget $8 / 45 min wallclock with a `PARTIAL:` escape
+  hatch; matrix max-parallel 3 with rebase-before-PR; BLOCKED protocol
+  for Open-action conflicts and dependency-chain children; bugs the
+  agent discovers itself logged to `bugs.md` with reporter `agent
+  (unattended)`. (b) `.github/scripts/pick_ready_items.py` — pure-stdlib
+  picker that scans `roadmap.md` for `ready-for-agent` rows, flips both
+  the at-a-glance row and the matching detail-section
+  `**Status:**` line to `in-progress`, commits with `[skip ci]`, pushes
+  to main, and emits the picked titles as a JSON array to
+  `GITHUB_OUTPUT` (`items=[...]`). Idempotent (no picks → `items=[]`);
+  warns (does not fail) on table-vs-detail title mismatches. Verified
+  end-to-end with a local dry-run: one row flipped, idempotent
+  re-run, revert clean. (c) `.github/workflows/dev-agent.yml` — push
+  to main on `roadmap.md` or `workflow_dispatch` with a `title` input;
+  gated by `vars.AGENTS_ENABLED == 'true'`; concurrency group
+  `dev-agent-picker` (queue, don't cancel); three jobs (`pick` /
+  `manual` / `implement`); implement matrix `max-parallel: 3`,
+  `fail-fast: false`, invokes `anthropics/claude-code-action@v1` with
+  `--model claude-opus-4-7 --max-turns 80 --max-budget-usd 8`. Manual
+  dispatch passes the input title straight to the matrix without
+  flipping any roadmap row (escape hatch for ad-hoc / off-roadmap
+  runs). *Setup steps the human must do before this PR is useful:*
+  create a fine-grained PAT `AGENT_PUSH_TOKEN` (contents:write +
+  pull-requests:write), add it as a repo secret; create
+  `ANTHROPIC_API_KEY` repo secret; set repo variable `AGENTS_ENABLED`
+  (start at `false`, flip to `true` after a first dry-run). *Server:*
+  none — infra-only PR, no app code touched, no schema change, no
+  manual prod action required. Two previously-Open
+  `manual-actions.md` migrations (lab-votes, keywords-on-algo) moved
+  to Completed (user confirmed both ran on prod 2026-05-21).
 
 ### 2026-05-20
 

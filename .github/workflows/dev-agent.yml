@@ -1,0 +1,102 @@
+name: Unattended dev-agent dispatcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - roadmap.md
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Roadmap item title to dispatch (exact match). Used verbatim as the agent's assignment; not flipped in roadmap.md."
+        required: true
+        type: string
+
+concurrency:
+  group: dev-agent-picker
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  pick:
+    if: vars.AGENTS_ENABLED == 'true' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      items: ${{ steps.picker.outputs.items }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Pick ready-for-agent items
+        id: picker
+        run: python .github/scripts/pick_ready_items.py
+
+  manual:
+    if: vars.AGENTS_ENABLED == 'true' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      items: ${{ steps.title.outputs.items }}
+    steps:
+      - name: Wrap title as JSON array
+        id: title
+        env:
+          DISPATCH_TITLE: ${{ github.event.inputs.title }}
+        run: |
+          python - <<'PY'
+          import json, os
+          title = os.environ["DISPATCH_TITLE"]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write("items=" + json.dumps([title]) + "\n")
+          PY
+
+  implement:
+    needs: [pick, manual]
+    if: |
+      always() && vars.AGENTS_ENABLED == 'true' && (
+        (github.event_name == 'push' && needs.pick.result == 'success' && needs.pick.outputs.items != '[]') ||
+        (github.event_name == 'workflow_dispatch' && needs.manual.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        title: ${{ fromJSON(github.event_name == 'push' && needs.pick.outputs.items || needs.manual.outputs.items) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          fetch-depth: 0
+      - name: Compose prompt
+        id: prompt
+        env:
+          ASSIGNMENT_TITLE: ${{ matrix.title }}
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          tpl = pathlib.Path(".github/agents/dev-warmup.md").read_text(encoding="utf-8")
+          prompt = tpl.replace("{{ASSIGNMENT_TITLE}}", os.environ["ASSIGNMENT_TITLE"])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write("prompt<<__PROMPT_EOF__\n")
+              fh.write(prompt)
+              if not prompt.endswith("\n"):
+                  fh.write("\n")
+              fh.write("__PROMPT_EOF__\n")
+          PY
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          prompt: ${{ steps.prompt.outputs.prompt }}
+          claude_args: "--model claude-opus-4-7 --max-turns 80 --max-budget-usd 8"
