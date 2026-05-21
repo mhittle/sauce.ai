@@ -20,6 +20,435 @@ for current prod state.
 
 ---
 
+## Condensed-in-bulk on 2026-05-21 — verbatim 2026-05-20 + 2026-05-17 live entries
+
+These dated sections were moved here verbatim when the live
+`engineering-history.md` was condensed on 2026-05-21 (it had grown
+past its single-read budget). The live file keeps one-line summaries
+of each; load-bearing prod state is in the live file's "Load-bearing production state" section.
+
+### 2026-05-20
+
+- **Lab landing expansion — 10 more radical concepts + anon up/down
+  voting (PR drafted this session).** Roadmap Pri 6 / LOE 3,
+  ui/new-feature/backend. User on PR #101 (merged earlier this
+  session): "These ideas are kind of mid. Add some more radical
+  consumer-focused concepts, like jar.ai and other high&#8209;leverage
+  tools for people. Add another 10 concepts to this along with a way
+  to vote them up or down." Two coupled changes:
+  - **+10 concepts.** Total card grid is now 1 live + 17 coming&#8209;soon.
+    New keys, ordered radical-first: `jar` (AI memory jar / second
+    brain), `negotiate` (success-fee bill negotiator), `doctor`
+    (calibrated health triage), `legal` (contracts / leases / small
+    claims), `clone` (your voice + reasoning, trained), `tax`
+    (year&#8209;round agent), `decide` (big&#8209;call structurer),
+    `friend` (relationship&#8209;maintenance nudger), `estate`
+    (wills + digital legacy), `mirror` (weekly self&#8209;debrief).
+    Re-ordered the 7 first&#8209;wave concepts after the new wave so
+    the radical picks lead.
+  - **Anonymous voting.** Each coming&#8209;soon card now has ▲/▼
+    buttons and an HN&#8209;style net score, populated from a new
+    Flask endpoint on the news app (`GET /news/labvotes/tally`,
+    `POST /news/labvotes/vote`). Anon identity is a 40&#8209;hex
+    token in a `lab_voter_token` cookie set by the tally response
+    with `Path=/`, so the static root page (`sauce.ai/`) and the
+    news app (`sauce.ai/news/`) share the same voter token (same
+    host). Optimistic UI, error&#8209;tolerant (a 500 from the API
+    hides the vote bars and leaves the cards otherwise rendered).
+  *Code:* new pure `app/lab_concepts.py` (concept&#8209;key allowlist
+  + `normalize_vote` + `is_valid_voter_token` + `tally_with_you`),
+  new `app/routes/lab.py` blueprint (no auth, no CSRF — added to
+  `_EXEMPT_ENDPOINTS` next to `account.unsubscribe`; rationale is
+  symmetric — anon endpoint, low&#8209;stakes, per&#8209;voter
+  UNIQUE index caps abuse from any one cookie), blueprint registered
+  in `app/__init__.py`, root `index.html` rewritten (18 cards +
+  ~50&#8209;line vanilla&#8209;JS voting handler, no framework, no
+  extra HTTP request), `seed/schema.sql` appended,
+  `seed/migrations/2026-05-20-lab-votes.sql` new, 12 new pure tests
+  in `tests/test_lab_concepts.py` (12/12 pass in sandbox).
+  *Server:* one Open `manual-actions.md` entry —
+  `2026-05-20-lab-votes.sql`: `CREATE TABLE lab_concept_votes`. **Not
+  BUG-007 class:** only the `/labvotes/*` endpoints touch the table;
+  the rest of the news app is unaffected, and the landing page
+  catches a tally fetch error and hides the vote UI silently if the
+  migration is missing — so the cards still render. Python App
+  restart on deploy so the new blueprint registers. Schema.sql + the
+  load-bearing "Applied prod schema migrations" line updated.
+- **Root sauce.ai/ landing page (product-lab positioning, PR drafted
+  this session).** Roadmap Pri 6 / LOE 1, ui/ops/docs. User: "the root
+  site of sauce.ai will state that sauce.ai is an autonomous ai product
+  development and engineering lab... the first product is Sauce.ai
+  news. Make a few other cards for consumer products that we could
+  start to autonomously engineer next." Until now the repo root carried
+  no HTML — anything at `https://sauce.ai/` was a cPanel default. The
+  existing GitHub Actions FTP workflow (`local-dir: ./`,
+  `server-dir: /`, `dangerous-clean-slate: false`, FTP user
+  `sauce@sauce.ai` → `~/public_html/sauce.ai/`) already publishes
+  whatever's at the repo root, so a single new `index.html` is enough.
+  *Code:* one new file, `/index.html` — self-contained (inline CSS, no
+  framework, no extra HTTP request, no build step); matches the news
+  app's editorial-serif wordmark (`ui-serif` family, italic for the
+  product noun) and warm-neutral palette (`--bg #fafaf7`, surfaces,
+  same accent feel); `prefers-color-scheme: dark` handles dark theme
+  with no JS toggle in v1 (news has its own toggle on its subdomain
+  surface). Hero states the thesis; 8-card grid: 1 live card
+  (`sauce.ai/news`, links to `/news`, "Live" badge) plus 7 "Coming
+  soon" concepts — Recipes (taste-aware meal planner), Travel (vibe →
+  bookable itinerary), Money (personal CFO), Fit (wearable-aware
+  coach), Learn (30-min daily course generator), Inbox (voice-matching
+  triage), Stage (live music/theatre/comedy radar). Footer: "built by
+  agents, supervised by humans" — owns the thesis. *Server:* none — no
+  migration, no cron, no env var, no pip dep, no symlink, no Python
+  App restart needed. **Deploy caveat:** on first push to `main`, the
+  FTP sync will *overwrite* whatever `index.html` currently lives at
+  `~/public_html/sauce.ai/index.html` (cPanel default or prior
+  placeholder). The news app at `/news` is untouched (separate dir,
+  separate `.htaccess`).
+- **Keywords-on-algo only — drop /terms, travel with gallery publish/adopt
+  (PR drafted).** Pri 6 / LOE 3, algo/ui/new-feature. User: "keywords
+  should be part of each algo." Two coupled changes:
+  - **Account-wide `/terms` surface removed.** Deleted
+    `app/routes/term_prefs.py` + `templates/me_terms.html`,
+    unregistered the blueprint, dropped the "Your Keywords" nav link.
+    `routes/feed.py` no longer SELECTs `user_term_prefs`; the term-row
+    list is only `algorithm_term_prefs` for the active profile. Pure
+    `app/term_prefs.py` builder stays (still the SQL fragment-maker for
+    the algo-scoped path); docstring rewritten to drop the "per-user"
+    framing, and the 5 obsolete "union" tests in
+    `test_term_prefs.py` were removed.
+  - **Gallery publish/adopt carry keywords.** New
+    `shared_algorithms.keywords_json TEXT NOT NULL` column;
+    `gallery.publish()` snapshots the algorithm's
+    `algorithm_term_prefs` rows into it; `gallery.adopt()` parses the
+    snapshot and inserts the rows into the cloned profile's
+    `algorithm_term_prefs`. New pure helpers `snapshot_keywords` /
+    `parse_keywords` in `app/gallery.py` sanitize through
+    `normalize_term` / `clamp_boost` / `VALID_MODES` so an untrusted
+    listing (a publisher could hand-craft `keywords_json`) cannot
+    poison the adopter's keyword table. 100-keyword snapshot cap. 8
+    new tests in `test_gallery.py` (cap, sanitization, round-trip,
+    malformed-blob rejection).
+  *Server:* one Open `manual-actions.md` entry (BUG-007 class) —
+  `2026-05-20-keywords-on-algo.sql`: (1) `INSERT IGNORE INTO
+  algorithm_term_prefs ... FROM user_term_prefs JOIN user_algorithms
+  ON is_active=1` to preserve existing /terms data on each user's
+  active profile; (2) `ALTER TABLE shared_algorithms ADD COLUMN
+  keywords_json TEXT NULL → backfill '[]' → MODIFY NOT NULL` (the
+  nullable-then-tighten pattern avoids the strict-mode rejection of a
+  NOT NULL TEXT ADD COLUMN on a populated table); (3) `DROP TABLE
+  user_term_prefs`. Python App restart on deploy. Schema.sql + the
+  load-bearing "Applied prod schema migrations" line updated.
+- **`.gitattributes` `merge=union` for high-conflict tracking docs.**
+  Ad-hoc / infra. User pain point: every parallel session appends to
+  `engineering-history.md` at the same top-of-log anchor, forcing a
+  manual conflict resolution on every rebase. Added `.gitattributes`
+  marking `engineering-history.md` + `engineering-history-archive.md` +
+  `roadmap.md` + `bugs.md` + `manual-actions.md` `merge=union` so Git
+  auto-takes both sides instead of failing the rebase. Trade-off (now
+  explicit in `new-engineering-session-instructions.md` §7.4):
+  out-of-order dated headers and duplicate at-a-glance rows can appear
+  after a union merge and must be cleaned up in the same PR — but the
+  rebase no longer *blocks* on these files. Docs-only; no
+  server/cron/dep/migration change.
+- **Per-profile "Publish to gallery" button (PR #94).** Small UX
+  follow-on to PR #88: each row in `/algo` Profiles tab now carries
+  a "Publish to gallery" form that snapshots that specific profile.
+  `gallery.publish` accepts an optional `algo_id` form param
+  (ownership-checked), falls back to the active profile when
+  absent — so the gallery page's existing details form keeps
+  working unchanged. Same cap/sanitization/redirect. *Server:* none.
+- **Gallery — Copy link + Email share buttons (PR #95, merged 2026-05-20).**
+  Tiny follow-on to PR #88. Each `/gallery` card now has **Copy link**
+  (writes a permalink to clipboard via `navigator.clipboard.writeText`,
+  falls back to `window.prompt` on non-secure contexts) and **Email**
+  (`<a href="mailto:?subject=…&body=…">`, no JS needed) next to
+  Adopt/Unpublish. Permalink =
+  `url_for('gallery.index', _external=True) ~ '#listing-<id>'`; each
+  card carries `id="listing-<id>"` + a `:target` CSS rule that
+  highlights the card when followed. Jinja `|urlencode` handles
+  spaces/newlines/`&`/`#` in the mailto body. Available to anonymous
+  viewers too. Template + CSS only — no route, DB, migration, cron,
+  env, or pip dep. *Server:* none (Python App restart on deploy for
+  the new template/CSS to load, but Jinja autoreloads templates).
+- **Source catalog admin re-import on prod (PR #91 follow-up).** User
+  ran the `/admin/feeds` → "Re-import seed CSV" action on prod
+  2026-05-20 (idempotent upsert on `feed_url`), loading the +1151
+  new sources from `seed/source_lean.csv` (768 → 1919). Dead URLs
+  will self-deactivate at `error_count=10` over the next few days.
+  `manual-actions.md` entry moved to Completed.
+- **BUG-022 topnav text overflows page width (PR pending).** User
+  reported the topnav extended past the main page. Root cause:
+  `.topnav` had `font-size:1em` + `gap:1.2em` + no `flex-wrap` on
+  desktop; signed-in users carry ~10 links + a 14em search box +
+  Compact/Dark toggles, so the row ran off the right edge instead of
+  wrapping. Fix: shrink `.topnav` to `font-size:0.88em`, tighten
+  `gap` to `0.9em`, add `flex-wrap:wrap`; bump brand to `1.15em` so
+  the wordmark stays a touch larger than the link row (net absolute
+  brand size roughly unchanged). Mobile `@media (max-width:640px)`
+  overrides still win below that breakpoint. *Server:* none — CSS-
+  only; restart on deploy. Full detail: `bugs.md` BUG-022.
+- **Shareable algorithm gallery v1 (PR #88).** Pri 8 / LOE 6,
+  new-feature/ui (theme C keystone). User: "an algorithm library
+  where users can pick and use other people's algos" with filterable
+  usage stats. Minimal v1 scope (publish / browse / adopt; admin-only
+  DB takedown — no public reporting UI). Three usage stats double as
+  sort axes: total adoptions, last-7d, active (distinct users whose
+  cloned profile still exists; the `ON DELETE SET NULL` on
+  `algorithm_adoptions.user_algorithm_id` is what makes "active"
+  self-maintain without a reconciliation job). New pure `app/gallery.py`
+  (`sort_order_by` is a closed literal map → no SQL-injection via
+  `?sort=`; `escape_like` for `?q=`), new `/gallery` blueprint
+  (publish / adopt / unpublish), template + append-only `.gallery-*`
+  CSS, one nav link. Adopt = clone-into-a-new-active-profile (atomic
+  clear-all-then-set, mirrors `algo._set_active`); preserves existing
+  profiles. 11 pure tests + a `"; DROP TABLE"` guard on the sort
+  fragment. *Server:* `2026-05-20-shared-algorithms.sql`
+  (`shared_algorithms` + `algorithm_adoptions`) applied on prod
+  2026-05-20 (`manual-actions.md` → Completed). NOT BUG-007 class —
+  tables are read-only at feed time, so a missing migration only
+  500s `/gallery` itself. Full detail: archive.
+- **Source catalog expansion +1151 sources (PR #91).** Pri 7 / LOE 3,
+  ops/new-feature. Appended 1151 hand-curated high-quality sources to
+  `seed/source_lean.csv` (768 → 1919). ~630 institutional outlets (US
+  regional papers, state-capital press, States-Newsroom nonprofits, NPR
+  affiliates, trade pubs, magazines, think tanks; intl — UK/EU/LATAM/
+  Africa/MENA/Asia-Pacific). ~520 individual writers / Substacks /
+  Medium / engineering blogs (Stratechery, Platformer, Slow Boring,
+  HCR, Money Stuff, Marginal Revolution, Volts, Heatmap, Latent Space,
+  Karpathy, Simon Willison, Sinocism, ChinaTalk, Le Grand Continent,
+  corporate eng blogs from Netflix/Stripe/Cloudflare/GitHub/OpenAI/
+  Anthropic/HuggingFace/BAIR). 47+ countries; US share 69%; honest
+  source_lean -0.5..+0.5, reputation 0.66–0.92. 0 dup `feed_url`. No
+  code change. *Server:* one Open `manual-actions.md` entry —
+  admin clicks "Re-import seed CSV" on `/admin/feeds` (idempotent
+  upsert; no migration, no cron change, no restart). Dead/wrong URLs
+  self-deactivate via the PR #11 `error_count=10` gate (~5–15%
+  expected tail). Full detail: archive.
+- **BUG-021 single-source feed domination (per-source cap, PR #89).**
+  User-reported "weird recency bias" — the `/` feed showed mostly
+  Philadelphia Inquirer under different algorithms. Root cause: no
+  per-source diversification; feed dedup was per-`story_id` only, so
+  a source with a fetch burst (or high `source_reputation` × BUG-011
+  recency multiplier hitting many rows) legitimately swept all 30
+  slots until ~24h decay broke it up. Fix: new pure
+  `app/feed_diversify.py` (`cap_per_source` / `fetch_budget` /
+  `page_slice`); `feed.py index()` over-fetches, caps in Python AFTER
+  the existing ORDER BY (preserving rank within source), then slices
+  the page. New `FEED_MAX_PER_SOURCE` config (default 3,
+  env-tunable; 0 disables — kill-switch w/o deploy). `/` only;
+  `/firehose`/`/search`/`/saved`/digest unchanged. 14 pure tests.
+  *Server:* none. Full detail: archive / `bugs.md` BUG-021. PRs #87
+  (BUG-021 log) + #89 (fix).
+- **Perceptual feature expansion — 12 new ranking features (PR #84).**
+  Roadmap Pri 7 / LOE 5, algo/backend. Doubled `FEATURES` (12→24):
+  6 LLM-judged (`tone_calmness`, `sensationalism`, `analysis_depth`,
+  `emotional_charge`, `hedging`, `solution_orientation`) batched into
+  the existing `classify_pending` Haiku call (one extra JSON object
+  per article, ~3× prior per-article LLM cost, still
+  sub-$0.001/article) + 6 rule-based (`headline_length`, `caps_ratio`,
+  `punctuation_intensity`, `numeric_density`, `question_headline`,
+  `quote_present`) computed in `app/classifier/rules.py` with no
+  network/LLM. LLM-unavailable rows get 0.5 across the 6 perceptual
+  ones; `_reclassify_nollm` heals them. Existing user algos
+  unaffected — their `weights_json` doesn't reference the new keys,
+  `build_score_sql` skips them until a user opts in via /algo
+  (template loop auto-renders the 12 new sliders). 21 new pure tests.
+  *Server:* `2026-05-20-perception-features.sql` (12 ADD COLUMN + 12
+  feature_catalog INSERT) applied on prod 2026-05-20
+  (`manual-actions.md` → Completed; folded into the load-bearing
+  "Applied prod schema migrations" line above); BUG-007 class
+  (`classify_pending` writes the new columns every 5-min tick;
+  Python App restart required to load the updated `FEATURES`
+  catalog). Full detail: archive.
+- **Per-algorithm keyword mute & boost (PR #82).** Pri 7 / LOE 3,
+  algo/ui. Extends PR #77's per-user `user_term_prefs` with a parallel
+  **per-profile** surface inside the `/algo` builder: new
+  `algorithm_term_prefs(algorithm_id, term, mode, weight)` table FK'd
+  to `user_algorithms` (CASCADE), two new `POST /algo/keywords/*`
+  routes (ownership-validated, 100/profile cap, mode-move upsert),
+  new "Keywords" tab in the algo Alpine switcher. `routes/feed.py`
+  reads both tables for the active profile and unions the rows
+  through the existing pure `build_term_clauses` builder — mute at
+  EITHER scope wins, strongest matching boost wins. 5 new cross-scope
+  tests. Same v1 substring caveat as PR #77; same scope (signed-in
+  main feed only; anon/firehose/digest untouched). *Server:*
+  `2026-05-20-algorithm-term-prefs.sql` (CREATE TABLE) applied on
+  prod 2026-05-20 (`manual-actions.md` → Completed; folded into the
+  load-bearing "Applied prod schema migrations" line above); BUG-007
+  class if absent. Full detail: archive.
+- **Compact / density toggle (PR #81).** Pri 6 / LOE 2, ui. Techmeme-
+  style toggle on the home feed: extends `base.html`'s existing
+  dark-mode IIFE to also init `data-density` pre-stylesheet from
+  `localStorage` (no FOUC); new `#density-toggle` button in the
+  topnav. Append-only `style.css` block keyed on
+  `:root[data-density="compact"] #feed-cards …` collapses to single
+  column, tightens padding, hides `.thumb`/`.summary`/`.feature-bars`/
+  `.byline` — source/lean dot/category/timestamp/`+N angles`/`Read →`
+  all stay. Persistence per-device (no DB); scope `/` only. *Server:*
+  none. Full detail: archive.
+
+### 2026-05-17
+
+- **Keyword / topic mute & boost (PR #77).** Pri 8 / LOE 4, user-
+  empowerment Theme A. Content-level lever distinct from
+  `user_source_prefs` (whole-source weights): **mute** = hard filter,
+  **boost** = score multiplier (strongest match wins, no compounding,
+  term-in-both → mute wins). New Flask-free `app/term_prefs.py`
+  builder (escaped LIKE, `GREATEST` boost — 17 pure tests, injection-
+  proof); new `user_term_prefs` table + `/terms` blueprint + nav;
+  `feed.py` reads it on every signed-in feed load and threads it
+  through the `if u:` block. Scope = `/` feed, signed-in only
+  (anon/firehose/digest untouched). v1 = substring match; phrase/
+  entity-aware is v2. *Server:* `2026-05-17-term-prefs.sql`
+  (`CREATE TABLE user_term_prefs`) applied on prod 2026-05-17 — folded
+  into the load-bearing "Applied prod schema migrations" line above;
+  BUG-007 class if absent. Full detail: archive.
+- **BUG-020 firehose accumulation (PR #72).** `/firehose` was a
+  refreshing snapshot — its 4s `innerHTML` poll replaced the table with
+  only the newest ≤25 classified rows, dropping everything else. Now
+  *accumulates*: stable `<tbody>`, poll prepends newer rows, "Load more"
+  appends older, paginated by a new pure `app/firehose_cursor.py` keyset
+  on `(classified_at, id)` (timestamp-only skipped same-second bursts —
+  the real data-loss mechanism). 9 pure tests; no `style.css` change.
+  *Server:* none. Full detail: archive / `bugs.md` BUG-020.
+- **Across-the-spectrum in-feed (PR #69).** Pri 7 / LOE 3. The "+N
+  angles" pill now **expands inline** to a few sibling outlets' coverage
+  (round-robined across the lean spectrum, one per source) with a "Full
+  dossier →" link, instead of navigating away. New pure
+  `app/spectrum.py` (`pick_spectrum_sample`); `GET /story/<id>/peek`
+  partial reusing the dossier's canonical+visibility fetch (extracted to
+  `_fetch_cluster`); pill progressively enhanced (keeps `href` for
+  no-JS). 10+5 tests. *Server:* none — no migration/cron/dep. Full
+  detail: archive.
+- **Full-text article search (PR #70).** Pri 6 / LOE 6. New `/search`
+  route + nav box backed by a MySQL InnoDB FULLTEXT index on
+  `articles(title, summary)` (NATURAL LANGUAGE MODE, query bound as a
+  param — no injection). Results deduped by story cluster, scoped by the
+  feed's source-visibility + per-user mute rules. *Server:*
+  `2026-05-17-search-fulltext.sql` FULLTEXT ALTER applied on prod
+  2026-05-17 (`manual-actions.md` → Completed); no cron/dep. Full
+  detail: archive / INSTALL §10.
+- **Trending topics view — /trending (PR #71).** Pri 7 / LOE 5. New
+  `/trending` page ranking topics by distinct-outlet count, each
+  linking to the dossier(s) under it. Conflict-free route (PR #56 was
+  rewriting `classify_pending`): reuse the Google Trends/News topic
+  index `trending_poll` already builds every 30 min — no LLM, no
+  `classify_pending` edit. `trending_poll` now also rebuilds
+  `trending_topics`/`trending_topic_articles` each tick (same txn as
+  the `article_features.trending` scalar). Pure helpers in
+  `app/trending.py` (+14 tests). *Server:* `trending_topics` +
+  `trending_topic_articles` tables applied on prod 2026-05-17
+  (`manual-actions.md` → Completed); no new cron/pip/env. Full detail:
+  archive / INSTALL §8K/§10.
+- **Multiple saved algorithms / profiles (PR #65).** User-empowerment
+  Theme A (Pri 7). `user_algorithms` already had `name`/`is_active`,
+  so app-layer only (**no migration**): `app/routes/algo.py` gains
+  `_list_profiles`/`_set_active` (deactivate-all-then-activate-one —
+  the single-active invariant every resolver depends on)/`_clean_name`
+  + create/activate/rename/delete POSTs (delete refuses the last,
+  promotes a survivor); `/algo` Profiles tab; feed-header `<select>`
+  switcher at ≥2 profiles; appended `.profile-*` CSS.
+  `save`/`use_preset`/`onboarding` behavior preserved. *Server:* none.
+  Full detail: archive.
+- **Dark mode (PR #63).** Client-only theme: `style.css` `:root`
+  semantic surface vars (light values unchanged byte-for-byte) + a
+  `:root[data-theme="dark"]` palette override with ~30 hardcoded
+  literals repointed at vars; `base.html` no-FOUC head init from
+  `localStorage.theme`/`prefers-color-scheme` + a nav toggle. *Server:*
+  none (CSS/template only; restart on deploy). Full detail:
+  `engineering-history-archive.md`.
+- **Article save / bookmark (PR #64).** New `user_saves` table;
+  `app/routes/saves.py` (`POST /save/<id>` toggle, `/save/<id>/read`,
+  `GET /saved`); ☆/★ on signed-in cards via the `cardSignals` Alpine
+  component; `maintenance.py` exempts saved articles from both
+  retention prunes so the reader-view copy is a durable archive.
+  *Server (applied 2026-05-17 post-merge, `manual-actions.md` →
+  Completed; folded into "Applied prod schema migrations"; BUG-007
+  recurrence — trailed the merge):* `2026-05-17-user-saves.sql`
+  `CREATE TABLE`; restart. Full detail: `engineering-history-archive.md`.
+- **Onboarding interview / cold-start (PR #62).** Upgraded the bare
+  4-preset `/algo/onboarding` picker into a real cold-start interview:
+  new Flask-free `app/onboarding.py` (`normalize_categories`,
+  `lean_direction`, `build_onboarding_weights` layering
+  `category_filter` + `political_lean_direction` onto the `balanced`
+  preset, `top_trusted_sources`). `onboarding()` route now idempotent
+  (redirects to editor if the user already has an algorithm), inserts
+  one "My starting feed" `user_algorithms` row + `user_source_prefs`
+  boosts (weight 1.5); signup redirects here. *Server:* none — no
+  migration/cron/dep/env (`user_algorithms`/`user_source_prefs`
+  already on prod). Full detail: `engineering-history-archive.md`.
+- **Classifier/feature review — fixed BUG-016..019 (PR #56).**
+  Review of the classifier/feature/ranking surface (11 findings, 4
+  high fixed). BUG-016 popularity under-count (shared
+  `popularity_score()`; `classify_pending` seeds from prior signals;
+  nightly `maintenance` SQL reconciliation). BUG-017 journalist rep
+  penalized bylined articles (`first_seen_at` from `published_at`;
+  upside-only rep floor). BUG-018 `simhash==0` megacluster (skip
+  branch when falsy; store NULL for 0). BUG-019 LLM-fallback
+  contamination (`-nollm` version tag + bounded `_reclassify_nollm`
+  heal). Code-only in cron scripts + a pure helper; full suite 245
+  passing. *Server:* none — no migration/cron/env/pip/symlink; M/L
+  review findings (M5–M8, L9–L11, perf) still open. Full detail:
+  `engineering-history-archive.md`.
+- **CSRF protection + auth rate limiting (PR #58).** Hand-rolled
+  signed double-submit-cookie CSRF (stdlib `hmac`/`secrets`, zero new
+  dependency) enforced app-wide on every unsafe-method route via
+  `before_request`; token delivered to forms via `csrf_field()`, to
+  HTMX via an `htmx:configRequest` header hook, to plain `fetch()`
+  POSTs via a `<meta>` tag + `window.csrfToken`. `account.unsubscribe`
+  exempt (RFC 8058 URL-token auth). `CSRF_ENABLED` config (conftest
+  disables suite-wide; `test_csrf.py` re-enables). Sliding-window
+  in-process rate limit on `/auth/login`+`/auth/signup` (10 POSTs/
+  5 min/IP, env-tunable; per-worker caveat). *Server:* none — new env
+  vars have working defaults; restart on deploy. Full detail:
+  `engineering-history-archive.md`.
+- **Natural-language algorithm builder + user-empowerment cluster (PR #59).**
+  Plain-English feed description → one Claude Haiku call → the existing
+  3-axis `FEATURES` weight vector, pre-filling the `/algo` editor for
+  review (never applied silently; reuses `/save`, **no DB migration**).
+  New Flask-free `app/algo_nl.py` (lazy `anthropic`, `LLMUnavailable`
+  fail-soft, every value clamped, unknown keys dropped); `POST
+  /algo/describe` re-renders the editor. Shipped with a 10-item
+  user-empowerment roadmap cluster (themes A/B/C). No cron/env/dep/
+  symlink change. Full detail: `engineering-history-archive.md`.
+- **BUG-015 — external trending sort: Google Trends/News (PR #53).**
+  Popularity sort was HN-only; added pure `app/trending.py` +
+  `jobs/trending_poll.py` cron filling `article_features.trending`
+  from Google Trends + Google News RSS. Renamed the `popularity`
+  sort to **Trending** (`ORDER BY f.trending DESC, score DESC`;
+  legacy `?sort=popularity` aliased). Opt-in `trending` FEATURES
+  entry (default weight 0). *Server (applied 2026-05-17, `manual-actions.md` → Completed):* `2026-05-17-trending.sql` ALTER +
+  a new every-30-min `trending_poll` cron; restart. Full detail:
+  `engineering-history-archive.md` / `bugs.md` BUG-015.
+- **Techmeme-style discussion links — Reddit/HN (PR #52).**
+  `popularity_poll` already matched Reddit/HN threads but discarded
+  the permalink; now persists `permalink`+`subreddit` on
+  `popularity_signals` and renders a `Discussion: Hacker News (142)
+  · r/tech (89)` line on feed cards + a story-dossier panel (pure
+  `app/discussion.py`). No new dep/API cost. *Server (applied
+  2026-05-17, `manual-actions.md` → Completed):* one nullable-column
+  migration (`2026-05-17-discussion-links.sql`); restart.
+- **Engineering-history archive process (PR #51).** Introduced the
+  ~14K-token / ~34 KB budget for this file plus
+  `engineering-history-archive.md` (verbatim, on-demand) and the
+  durable "Load-bearing production state" section that never ages
+  out. Procedure lives in `engineering-session-wrapup.md` Step 1b.
+  Docs-only; no server-side change.
+- **BUG-013 + BUG-014 — Latin-script filter via py3langid (PR #50).**
+  Added stage 3 to `app/language.py is_english`: when text clears
+  stages 1+2 and has ≥24 Latin letters, run a cached `py3langid`
+  detector and reject only on a confident non-English call
+  (`top_prob ≥ 0.85` AND `english_prob < 0.10`) — deliberately biased
+  to keep English. Replaced the briefly-shipped `langdetect==1.0.9`
+  (BUG-014: sdist-only, won't build on the cPanel venv) with
+  wheel-distributed `py3langid==0.3.0` (+`numpy`); import fails soft
+  so it's not a site-down risk. *Server:* `pip install -r
+  requirements.txt` run on prod 2026-05-17 (no wheel build —
+  `manual-actions.md` → Completed); no DB/cron/env-var change. Full
+  detail: `bugs.md` BUG-013/014.
+
+---
+
 ## 2026-05-20 — Shareable algorithm gallery v1 (PR #88)
 
 Migration `2026-05-20-shared-algorithms.sql` applied on prod 2026-05-20
