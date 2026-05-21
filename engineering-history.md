@@ -133,690 +133,214 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-21
 
-- **Agent infra Phase 6 — PM agent (PR drafted this session).
-  Completes the six-phase agent-infrastructure cluster.**
-  Infra/skunkworks Pri 5 / LOE 3. A weekly-cadence Opus agent reads
-  production signals and proposes new roadmap items as
-  `status: proposed`; the human promotes `proposed` → `ready-for-agent`
-  (which feeds the Phase 1 dispatcher), closing the autonomous loop.
-  `roadmap.md` Conventions gained the `proposed` status value
-  ("PM agent suggestion; not yet authorized for dev"). New
-  `.github/workflows/pm-agent.yml` on cron `0 14 * * 1` (Mondays 14:00
-  UTC) + `workflow_dispatch`, gated by `vars.AGENTS_ENABLED == 'true'`.
-  Single Opus 4.7 job (budget $4) reads `engineering-history.md` (last
-  14 days), `bugs.md` (open + attempted), `roadmap.md` (Done last 14d +
-  backlog), and fetches the Phase 3 admin endpoints
-  (`/admin/cron-health`, `/admin/usage-summary`) by logging in with
-  `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` (curl + cookie jar + CSRF token
-  from the login page) — degrading gracefully to repo-doc signals if
-  the account can't authenticate. Proposes AT MOST 3 items, each with
-  Priority / LOE / Category / `Status: proposed` + a Rationale citing
-  specific data, and opens ONE draft PR `PM proposals: <date>` that
-  adds them to `roadmap.md` detail sections only (NOT the at-a-glance
-  table — the human folds an item in when promoting it). Empty weeks
-  are explicitly fine: nothing meaningful → no PR, no comment. New
-  `.github/agents/pm-agent.md` encodes the signal sources, the
-  "ground every proposal in observed data" rule, the don't-re-propose
-  guard, and the hard max-3-per-week rate limit. *Server:* none —
-  infra-only, no app code, no schema, no manual prod action required.
-  Uses the existing `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` secrets from
-  Phase 3 (admin account recommended so telemetry is available).
-- **Agent infra Phase 5 — Bug auto-triage (PR drafted this session).**
-  Infra/ops Pri 6 / LOE 2. Bugs auto-filed by the Phase 3 post-deploy
-  QA agent get an automatic suitability assessment for the unattended
-  dev-agent fleet — but the human stays in the loop for the
-  "promote to `ready-for-agent`" step. New
-  `.github/workflows/bug-triage.yml` on `pull_request: [labeled]`,
-  gated by `vars.AGENTS_ENABLED == 'true'` AND
-  `github.event.label.name == 'agent:qa-filed'`. Single Sonnet 4.6 job
-  (budget $1): reads the PR diff to find the new `BUG-NNN` entry,
-  estimates scope, and posts ONE verdict comment —
-  `AUTO_FIX_ELIGIBLE` only if the likely fix touches <3 files, the bug
-  has a clear/deterministic repro, and it is NOT in a sharp-edge area
-  (passenger_wsgi.py, the load-bearing symlinks, .htaccess, cPanel /
-  venv infra, the deploy workflow, or anything in
-  `new-engineering-session-instructions.md` Step 10); otherwise
-  `NEEDS_HUMAN` with the failing criterion. The agent is read-only +
-  one comment: it does NOT label the bug ready, edit roadmap.md/bugs.md,
-  or spawn a dev run — promotion to `ready-for-agent` is a human
-  decision (which then feeds the Phase 1 dispatcher). New
-  `.github/agents/bug-triage.md` system prompt encodes the criteria,
-  the "prefer NEEDS_HUMAN when uncertain" bias, idempotency on
-  re-label, and the comment format. *Server:* none — infra-only, no
-  app code, no schema, no manual prod action required.
-- **Agent infra Phase 4 — Migration / restart executor (PR drafted this
-  session).** Infra/ops/backend Pri 10 / LOE 5. Highest-blast-radius
-  phase: a small HMAC-authenticated Flask service running INSIDE the
-  news app executes whitelisted prod ops triggered by GitHub Actions,
-  so `manual-actions.md` migrations no longer have to be hand-run in
-  phpMyAdmin. *App code:* new blueprint
-  `news/app/routes/agent_ops.py` at `/agent-ops/*`, all three endpoints
-  authenticated by HMAC-SHA256 over the raw request body keyed by
-  `AGENT_OPS_SECRET` with a ±300s freshness window (replay protection):
-  `POST /run-migration` (filename whitelist — basename only, `*.sql`,
-  resolved path must live under `news/seed/migrations/`; reads the
-  file, splits on `;` dropping comment-only fragments, runs each
-  statement in one transaction, rolls back on any failure),
-  `POST /restart-app` (touches the Passenger `<app_root>/../tmp/
-  restart.txt`, env-overridable via `AGENT_OPS_RESTART_FILE`),
-  `POST /verify-schema` (read-only parameterized SELECT against
-  `information_schema.columns`, table/column identifier-validated — can
-  never run caller SQL). Pure helpers (`compute_signature`,
-  `verify_signature`, `safe_migration_name`, `is_identifier`,
-  `split_sql_statements`) are Flask-free + unit-tested. Secret unset →
-  503 (fail-closed). Blueprint registered in `app/__init__.py` at
-  `/agent-ops`; the three endpoints added to `security._EXEMPT_ENDPOINTS`
-  (HMAC auth replaces the CSRF cookie a machine caller can't carry).
-  `AGENT_OPS_SECRET` + `AGENT_OPS_RESTART_FILE` added to `config.py`.
-  19 new tests in `tests/test_agent_ops.py` (signature
-  valid/invalid/missing/stale/tampered, filename traversal + nested-path
-  + whitelist, verify-schema rejects non-identifier + runs only the
-  parameterized information_schema SELECT, run-migration applies a real
-  repo migration + rolls back on error). Full suite 512/512 green
-  locally. **Known limitation (documented in the PR threat model):**
-  MySQL implicitly commits DDL, so the single-transaction wrapper gives
-  true rollback only for DML — keep migrations idempotent
-  (`CREATE TABLE IF NOT EXISTS`, nullable-then-tighten ALTERs) so a
-  mid-migration failure is replay-safe. *Workflow:* new
-  `.github/workflows/migration-executor.yml` on `pull_request`
-  `labeled` (gated by `vars.AGENTS_ENABLED == 'true'` AND
-  `github.event.label.name == 'needs-migration'`). Job `apply` finds
-  `news/seed/migrations/*.sql` files in the PR diff (base..head),
-  HMAC-signs each `{"filename": ...}` body with the Actions secret
-  `AGENT_OPS_SECRET`, POSTs to `/agent-ops/run-migration` (fails loud on
-  any non-200 or non-`ok` status), then POSTs `/agent-ops/restart-app`.
-  Job `finalize` (Haiku 4.5, budget $0.50) moves the matching
-  `manual-actions.md` Open entry to Completed with today's date,
-  comments "Migration applied, app restarted. Ready to merge." on the
-  PR, and swaps label `needs-migration` → `migration-applied`. Phase 1
-  `dev-warmup.md` updated: dev-agent draft PRs that add a migration
-  self-label `needs-migration` after opening so the executor picks them
-  up (and still write the Open `manual-actions.md` entry the executor
-  reads). *Server:* two new Open `manual-actions.md` entries — set
-  `AGENT_OPS_SECRET` (32 hex bytes) in BOTH cPanel Setup-Python-App env
-  (lands in the app `.htaccess`) AND as a GitHub Actions repo secret,
-  identical values, quarterly rotation; plus the Phase 3 admin_ops
-  restart. No schema change in this PR (the blueprint defines no
-  tables). New repo secret `AGENT_OPS_SECRET` must match the prod env
-  value.
-- **Agent infra Phase 3 — Post-deploy verification (PR drafted this
-  session).** Infra/ops Pri 8 / LOE 4. After each deploy (and on a
-  30-min safety-net cron) the live site is smoke-tested and a bug is
-  auto-filed if anything regressed. **This is the one exception to
-  "infra-only before Phase 4"** — it ships two new admin endpoints the
-  deployed-app agent queries. *App code:* new read-only, admin-only
-  blueprint `news/app/routes/admin_ops.py` registered at `/admin`
-  (registered in `app/__init__.py` right after the existing `admin`
-  blueprint): `GET /admin/cron-health` tails the last 200 lines of
-  `logs/cron.log` as text/plain (memory-safe `deque` tail, graceful
-  message if the file is absent, `CRON_LOG_PATH` env override);
-  `GET /admin/usage-summary` returns a 14-day series of signups
-  (`users.created_at`), DAU (distinct users with a `user_clicks` or
-  `user_signals` event that day), and signal counts
-  (`user_signals.created_at`) as JSON, zero-filled per day, all
-  read-only SELECTs against tables already on prod — **no DB
-  migration**. 6 new unit tests in `tests/test_admin_ops.py` (auth
-  gating 302/403, log tail truncation to 200 lines, missing-file
-  handling, usage JSON shape + per-day merge + zero-fill). Full suite
-  493/493 green locally. *Workflow:* new
-  `.github/workflows/post-deploy.yml` on push-to-main (120s sleep so
-  the FTP deploy in `main.yml` settles first) + cron `*/30 * * * *`,
-  gated by `vars.AGENTS_ENABLED == 'true'`. Two jobs: `smoke` (curl
-  `/`, `/firehose`, `/algo`, `/trending`, `/search?q=test`, `/gallery`
-  on `sauce.ai/news`, fail on any 5xx or connection failure) and
-  `agent-qa` (Sonnet 4.6, budget $2, runs `always()` after smoke so a
-  smoke failure still gets investigated). The agent drives a Playwright
-  MCP browser (config written to `/tmp/mcp.json` and passed via
-  `--mcp-config` — a file, not inline JSON, to dodge bash brace
-  expansion of the JSON commas): anon load, sign in with
-  `SMOKE_TEST_USER`/`SMOKE_TEST_PASS`, toggle a thumb + reload to
-  confirm persistence, open `/algo` Keywords tab, check `/firehose`,
-  then fetch `/admin/cron-health` and scan for known-bad patterns
-  (`fork: Resource temporarily unavailable`, fetch/classify/popularity
-  tracebacks, 5xx, `MySQL server has gone away`). On a *new*
-  (deduped against open `agent:qa-filed` PRs + `bugs.md`) issue it
-  appends `BUG-NNN` to `bugs.md` and opens a draft PR
-  `auto-file: BUG-NNN <title>` labeled `agent:qa-filed`. New
-  `.github/agents/post-deploy-qa.md` system prompt encodes the checks,
-  the dedup rule (it runs every 30 min — must not re-file), and the
-  graceful-skip when the test account lacks admin. *Server:* one Open
-  `manual-actions.md` entry — Python App restart after deploy so the
-  `admin_ops` blueprint registers (NOT BUG-007 class; missing restart
-  just 404s the two new routes). New repo secrets to add:
-  `SMOKE_TEST_USER` / `SMOKE_TEST_PASS` (dedicated prod test account;
-  make it admin for the cron-health scan, else the agent skips that
-  check). Open question for the human: whether to grant the smoke
-  account admin (read-only admin reads only) vs. keep it least-priv.
-- **Agent infra Phase 2 — Pre-merge QA + BUG-007 gate (PR drafted this
-  session).** Infra/security Pri 9 / LOE 2. Every PR now runs tests
-  plus a Claude-Sonnet reviewer before it can merge — the single most
-  expensive recurring failure mode in this repo is "PR merged before
-  its migration is applied on prod → signed-in feed 500s" (BUG-007
-  original 2026-05-13 plus 2026-05-17 PR #64 recurrence). New
-  `.github/workflows/qa-code.yml` on pull_request
-  `{opened, synchronize, ready_for_review}` with two jobs: `tests`
-  (setup-python 3.11, `pip install -r news/requirements.txt`,
-  `python -c "from app import create_app; create_app()"` from `news/`,
-  `python -m pytest news/tests/ -q`) and `bug007-gate` (Sonnet 4.6,
-  budget $1). Gate checks three things: (a) **phantom-schema** — new
-  SQL table/column refs in `news/app/**` or `news/jobs/*.py` missing
-  from both `seed/schema.sql` and any Open `manual-actions.md` entry;
-  (b) **deploy-process drift** — modifications to
-  `news/passenger_wsgi.py`, `news/app/__init__.py`,
-  `news/app/config.py`, `news/jobs/*.py`, or `news/requirements.txt`
-  without a same-PR update to `news/INSTALL.txt`; (c) **HARD FAIL** on
-  `dangerous-clean-slate: true` anywhere. Each violation gets an
-  inline PR review comment via `gh api .../pulls/.../comments`; a
-  final summary issue comment is posted (`BUG007_OK — N notes` or
-  `BUG007_BLOCK — N violations`); on block the agent adds label
-  `blocked-pre-merge` (creating it on first use if absent). Agent
-  writes `BUG007_OK` or `BUG007_BLOCK` to `/tmp/bug007-verdict.txt`;
-  the workflow's post-step exits 0/1 from that file so the check
-  status turns green/red. New `.github/agents/qa-reviewer.md`
-  encodes the three checks, idempotency rules (skip duplicate inline
-  comments on re-runs after a synchronize event), and the
-  read-only-no-formal-review constraint. **Scope decision:** the
-  `tests` job runs unconditionally; only `bug007-gate` is gated by
-  `vars.AGENTS_ENABLED == 'true'`, so pytest still protects PRs when
-  the agent fleet is disabled. Required branch protection (manual
-  step the human does in repo settings): require `tests` green;
-  require `bug007-gate` green once `AGENTS_ENABLED=true`. *Server:*
-  none — infra-only, no app code, no schema, no manual prod action
-  required. **Two pre-existing breakages surfaced by the new `tests`
-  job on first CI run and fixed in the PR:** (1) `pip install -r
-  news/requirements.txt` failed because `sgmllib3k` (transitive via
-  `feedparser==6.0.11`) can't build under PEP 517 isolation against
-  modern setuptools — same failure class as `INSTALL.txt` §2c; fixed by
-  upgrading pip/setuptools/wheel and pre-installing feedparser with
-  `--no-build-isolation`. (2)
-  `tests/test_csrf.py::test_unsubscribe_endpoint_is_csrf_exempt`
-  asserted `b"CSRF" not in r.data`, but `base.html` embeds the literal
-  `X-CSRF-Token` header name in its JS, so every base-template render
-  (including the 404 the test triggers) contains "CSRF" — the assertion
-  was stale and would also have failed to catch a real regression.
-  Tightened to match the actual rejection phrase
-  `b"CSRF validation failed"`. Full suite 487/487 green locally after
-  both fixes.
-- **Agent infrastructure cluster opened; Phase 1 — Unattended dev-agent
-  dispatcher (PR drafted this session).** Infra/ops/skunkworks Pri 8 /
-  LOE 3. Six-phase plan to replace the "5 Claude Code terminals open at
-  once" workflow with an unattended agent fleet triggered by GitHub
-  Actions, all gated by repo variable `AGENTS_ENABLED` and authed by a
-  fine-grained PAT `AGENT_PUSH_TOKEN`. Each phase ships on its own
-  branch + draft PR; the human merges between phases. Roadmap got a new
-  top-level "Agent infrastructure cluster" with six items + six new
-  at-a-glance rows; `ready-for-agent` added to the Status values list.
-  **Phase 1 deliverables (this PR):** (a) `.github/agents/dev-warmup.md`
-  — system prompt for unattended dev runs, near-copy of the human
-  warmup adapted: assignment in an `ASSIGNMENT` block with
-  `{{ASSIGNMENT_TITLE}}` placeholder; manual-actions.md Open entries
-  treated as untouched and never moved to Completed; output is always a
-  DRAFT PR; hard budget $8 / 45 min wallclock with a `PARTIAL:` escape
-  hatch; matrix max-parallel 3 with rebase-before-PR; BLOCKED protocol
-  for Open-action conflicts and dependency-chain children; bugs the
-  agent discovers itself logged to `bugs.md` with reporter `agent
-  (unattended)`. (b) `.github/scripts/pick_ready_items.py` — pure-stdlib
-  picker that scans `roadmap.md` for `ready-for-agent` rows, flips both
-  the at-a-glance row and the matching detail-section
-  `**Status:**` line to `in-progress`, commits with `[skip ci]`, pushes
-  to main, and emits the picked titles as a JSON array to
-  `GITHUB_OUTPUT` (`items=[...]`). Idempotent (no picks → `items=[]`);
-  warns (does not fail) on table-vs-detail title mismatches. Verified
-  end-to-end with a local dry-run: one row flipped, idempotent
-  re-run, revert clean. (c) `.github/workflows/dev-agent.yml` — push
-  to main on `roadmap.md` or `workflow_dispatch` with a `title` input;
-  gated by `vars.AGENTS_ENABLED == 'true'`; concurrency group
-  `dev-agent-picker` (queue, don't cancel); three jobs (`pick` /
-  `manual` / `implement`); implement matrix `max-parallel: 3`,
-  `fail-fast: false`, invokes `anthropics/claude-code-action@v1` with
-  `--model claude-opus-4-7 --max-turns 80 --max-budget-usd 8`. Manual
-  dispatch passes the input title straight to the matrix without
-  flipping any roadmap row (escape hatch for ad-hoc / off-roadmap
-  runs). *Setup steps the human must do before this PR is useful:*
-  create a fine-grained PAT `AGENT_PUSH_TOKEN` (contents:write +
-  pull-requests:write), add it as a repo secret; create
-  `ANTHROPIC_API_KEY` repo secret; set repo variable `AGENTS_ENABLED`
-  (start at `false`, flip to `true` after a first dry-run). *Server:*
-  none — infra-only PR, no app code touched, no schema change, no
-  manual prod action required. Two previously-Open
-  `manual-actions.md` migrations (lab-votes, keywords-on-algo) moved
-  to Completed (user confirmed both ran on prod 2026-05-21).
+- **Agent infrastructure cluster — six phases, all merged this day.**
+  The unattended agent fleet that replaces "5 Claude Code terminals
+  per session." Every workflow is gated by repo variable
+  `AGENTS_ENABLED`; agents push/PR via fine-grained PAT
+  `AGENT_PUSH_TOKEN`; LLM calls use `ANTHROPIC_API_KEY`. Dev/PM = Opus
+  4.7, QA/review/triage = Sonnet 4.6, executor-finalize = Haiku 4.5.
+  Full detail per phase in the PRs; only load-bearing + setup state is
+  kept here.
+  - **P1 Dispatcher (PR #103).** `ready-for-agent` roadmap item →
+    unattended Opus dev session → draft PR. Files:
+    `.github/agents/dev-warmup.md` (unattended warmup; ASSIGNMENT block
+    with `{{ASSIGNMENT_TITLE}}`; never moves manual-actions Open→Completed;
+    draft-PR only; $8/45min budget; BLOCKED + PARTIAL protocols;
+    self-labels `needs-migration` when it produces a migration),
+    `.github/scripts/pick_ready_items.py` (stdlib picker: flips
+    `ready-for-agent`→`in-progress` in the at-a-glance row + detail
+    Status line, `[skip ci]` commit, emits `items=[...]`; idempotent),
+    `.github/workflows/dev-agent.yml` (push-to-`roadmap.md` /
+    workflow_dispatch; concurrency `dev-agent-picker`; implement matrix
+    max-parallel 3).
+  - **P2 Pre-merge QA + BUG-007 gate (PR #104).**
+    `.github/workflows/qa-code.yml` on pull_request: `tests` job
+    (always: pip install, `create_app()` boot, pytest) +
+    `bug007-gate` (Sonnet $1, gated by AGENTS_ENABLED). Gate flags
+    (a) new SQL refs in `news/app/**` or `jobs/*.py` absent from both
+    `seed/schema.sql` and an Open manual-actions entry, (b) changes to
+    passenger_wsgi/app `__init__`/config/jobs/requirements without a
+    same-PR INSTALL.txt update, (c) HARD FAIL on
+    `dangerous-clean-slate: true`. Verdict via `/tmp/bug007-verdict.txt`
+    → 0/1 exit; `blocked-pre-merge` label on block.
+    `.github/agents/qa-reviewer.md`. **Branch protection (manual):**
+    require `tests`; require `bug007-gate` once AGENTS_ENABLED=true.
+    Also fixed two pre-existing breakages the new `tests` job surfaced:
+    `sgmllib3k` PEP-517 build failure (workaround: upgrade
+    pip/setuptools/wheel + `--no-build-isolation feedparser`, per
+    INSTALL.txt §2c) and a stale `test_csrf.py` assertion (`b"CSRF"` →
+    `b"CSRF validation failed"`, since base.html now embeds
+    `X-CSRF-Token` in JS).
+  - **P3 Post-deploy verification (PR #105).** *App code (the one
+    pre-Phase-4 exception):* new read-only admin blueprint
+    `news/app/routes/admin_ops.py` — `GET /admin/cron-health` (last 200
+    lines of `logs/cron.log`, `deque` tail, `CRON_LOG_PATH` override)
+    and `GET /admin/usage-summary` (14-day signups/DAU/signals JSON,
+    read-only SELECTs on existing tables — **no migration**). 6 tests.
+    *Workflow:* `.github/workflows/post-deploy.yml` (push-to-main +120s
+    sleep + cron `*/30`): `smoke` curl of /, /firehose, /algo,
+    /trending, /search?q=test, /gallery (fail on 5xx) + `agent-qa`
+    (Sonnet $2 Playwright MCP: sign in, thumb-persist, Keywords tab,
+    firehose, cron-health scan; auto-files deduped `agent:qa-filed` bug
+    PRs). `.github/agents/post-deploy-qa.md`. *Server:* Open
+    manual-actions entry — Python App restart so `admin_ops` registers
+    (NOT BUG-007 class). Needs secrets `SMOKE_TEST_USER` /
+    `SMOKE_TEST_PASS` (admin account recommended for the cron-health
+    scan).
+  - **P4 Migration / restart executor (PR #106).** *App code:* new
+    blueprint `news/app/routes/agent_ops.py` at `/agent-ops/*`, all
+    HMAC-SHA256 authenticated over the request body keyed by
+    `AGENT_OPS_SECRET` (±300s freshness; unset → 503 fail-closed):
+    `run-migration` (filename whitelist basename-only `*.sql` resolved
+    under `news/seed/migrations/`; split on `;`; one transaction;
+    rollback on failure), `restart-app` (touch
+    `<app_root>/../tmp/restart.txt`, `AGENT_OPS_RESTART_FILE` override),
+    `verify-schema` (read-only parameterized information_schema SELECT,
+    identifier-validated). Endpoints added to
+    `security._EXEMPT_ENDPOINTS`; `AGENT_OPS_SECRET` /
+    `AGENT_OPS_RESTART_FILE` in `config.py`. 19 tests. **DDL is not
+    transactional in MySQL** — wrapper gives true rollback only for DML;
+    keep migrations idempotent. *Workflow:*
+    `.github/workflows/migration-executor.yml` on PR labeled
+    `needs-migration`: `apply` (sign + POST each diffed migration +
+    restart, fail loud) + `finalize` (Haiku $0.50: move manual-actions
+    entry Open→Completed, comment, swap label →`migration-applied`).
+    *Server:* Open manual-actions entry — set `AGENT_OPS_SECRET`
+    (`openssl rand -hex 32`) in BOTH cPanel Setup-Python-App env AND a
+    GitHub Actions repo secret, identical, quarterly rotation. No schema
+    change.
+  - **P5 Bug auto-triage (PR #107).**
+    `.github/workflows/bug-triage.yml` on PR labeled `agent:qa-filed`
+    (Sonnet $1): reads the new BUG-NNN, posts ONE verdict —
+    `AUTO_FIX_ELIGIBLE` (fix <3 files, clear repro, not a sharp-edge
+    area) or `NEEDS_HUMAN`; biased to NEEDS_HUMAN when unsure; read-only
+    + one comment, never promotes. `.github/agents/bug-triage.md`. No
+    server change.
+  - **P6 PM agent (PR #108).** `.github/workflows/pm-agent.yml` on cron
+    `0 14 * * 1` + workflow_dispatch (Opus $4): reads 14-day
+    history/bugs/roadmap + the P3 admin endpoints (curl login with
+    SMOKE_TEST_* , degrades gracefully), proposes ≤3 `status: proposed`
+    roadmap items (data-cited Rationale) in ONE draft PR
+    `PM proposals: <date>` touching detail sections only (never the
+    at-a-glance table); empty weeks open nothing.
+    `.github/agents/pm-agent.md`. Added `proposed` to roadmap status
+    conventions. No server change.
+  - **Setup the human must do before the loop is live:** create secrets
+    `AGENT_PUSH_TOKEN` (contents+PR write PAT), `ANTHROPIC_API_KEY`,
+    `AGENT_OPS_SECRET` (also in cPanel env), `SMOKE_TEST_USER` /
+    `SMOKE_TEST_PASS`; set variable `AGENTS_ENABLED=true`; add branch
+    protection (require `tests` + `bug007-gate`); restart the Python App
+    twice (admin_ops blueprint + the AGENT_OPS_SECRET env). Tracked in
+    `manual-actions.md` Open. Also moved two prior migrations
+    (lab-votes, keywords-on-algo) to Completed (user-confirmed applied
+    on prod 2026-05-21).
 
 ### 2026-05-20
 
-- **Lab landing expansion — 10 more radical concepts + anon up/down
-  voting (PR drafted this session).** Roadmap Pri 6 / LOE 3,
-  ui/new-feature/backend. User on PR #101 (merged earlier this
-  session): "These ideas are kind of mid. Add some more radical
-  consumer-focused concepts, like jar.ai and other high&#8209;leverage
-  tools for people. Add another 10 concepts to this along with a way
-  to vote them up or down." Two coupled changes:
-  - **+10 concepts.** Total card grid is now 1 live + 17 coming&#8209;soon.
-    New keys, ordered radical-first: `jar` (AI memory jar / second
-    brain), `negotiate` (success-fee bill negotiator), `doctor`
-    (calibrated health triage), `legal` (contracts / leases / small
-    claims), `clone` (your voice + reasoning, trained), `tax`
-    (year&#8209;round agent), `decide` (big&#8209;call structurer),
-    `friend` (relationship&#8209;maintenance nudger), `estate`
-    (wills + digital legacy), `mirror` (weekly self&#8209;debrief).
-    Re-ordered the 7 first&#8209;wave concepts after the new wave so
-    the radical picks lead.
-  - **Anonymous voting.** Each coming&#8209;soon card now has ▲/▼
-    buttons and an HN&#8209;style net score, populated from a new
-    Flask endpoint on the news app (`GET /news/labvotes/tally`,
-    `POST /news/labvotes/vote`). Anon identity is a 40&#8209;hex
-    token in a `lab_voter_token` cookie set by the tally response
-    with `Path=/`, so the static root page (`sauce.ai/`) and the
-    news app (`sauce.ai/news/`) share the same voter token (same
-    host). Optimistic UI, error&#8209;tolerant (a 500 from the API
-    hides the vote bars and leaves the cards otherwise rendered).
-  *Code:* new pure `app/lab_concepts.py` (concept&#8209;key allowlist
-  + `normalize_vote` + `is_valid_voter_token` + `tally_with_you`),
-  new `app/routes/lab.py` blueprint (no auth, no CSRF — added to
-  `_EXEMPT_ENDPOINTS` next to `account.unsubscribe`; rationale is
-  symmetric — anon endpoint, low&#8209;stakes, per&#8209;voter
-  UNIQUE index caps abuse from any one cookie), blueprint registered
-  in `app/__init__.py`, root `index.html` rewritten (18 cards +
-  ~50&#8209;line vanilla&#8209;JS voting handler, no framework, no
-  extra HTTP request), `seed/schema.sql` appended,
-  `seed/migrations/2026-05-20-lab-votes.sql` new, 12 new pure tests
-  in `tests/test_lab_concepts.py` (12/12 pass in sandbox).
-  *Server:* one Open `manual-actions.md` entry —
-  `2026-05-20-lab-votes.sql`: `CREATE TABLE lab_concept_votes`. **Not
-  BUG-007 class:** only the `/labvotes/*` endpoints touch the table;
-  the rest of the news app is unaffected, and the landing page
-  catches a tally fetch error and hides the vote UI silently if the
-  migration is missing — so the cards still render. Python App
-  restart on deploy so the new blueprint registers. Schema.sql + the
-  load-bearing "Applied prod schema migrations" line updated.
-- **Root sauce.ai/ landing page (product-lab positioning, PR drafted
-  this session).** Roadmap Pri 6 / LOE 1, ui/ops/docs. User: "the root
-  site of sauce.ai will state that sauce.ai is an autonomous ai product
-  development and engineering lab... the first product is Sauce.ai
-  news. Make a few other cards for consumer products that we could
-  start to autonomously engineer next." Until now the repo root carried
-  no HTML — anything at `https://sauce.ai/` was a cPanel default. The
-  existing GitHub Actions FTP workflow (`local-dir: ./`,
-  `server-dir: /`, `dangerous-clean-slate: false`, FTP user
-  `sauce@sauce.ai` → `~/public_html/sauce.ai/`) already publishes
-  whatever's at the repo root, so a single new `index.html` is enough.
-  *Code:* one new file, `/index.html` — self-contained (inline CSS, no
-  framework, no extra HTTP request, no build step); matches the news
-  app's editorial-serif wordmark (`ui-serif` family, italic for the
-  product noun) and warm-neutral palette (`--bg #fafaf7`, surfaces,
-  same accent feel); `prefers-color-scheme: dark` handles dark theme
-  with no JS toggle in v1 (news has its own toggle on its subdomain
-  surface). Hero states the thesis; 8-card grid: 1 live card
-  (`sauce.ai/news`, links to `/news`, "Live" badge) plus 7 "Coming
-  soon" concepts — Recipes (taste-aware meal planner), Travel (vibe →
-  bookable itinerary), Money (personal CFO), Fit (wearable-aware
-  coach), Learn (30-min daily course generator), Inbox (voice-matching
-  triage), Stage (live music/theatre/comedy radar). Footer: "built by
-  agents, supervised by humans" — owns the thesis. *Server:* none — no
-  migration, no cron, no env var, no pip dep, no symlink, no Python
-  App restart needed. **Deploy caveat:** on first push to `main`, the
-  FTP sync will *overwrite* whatever `index.html` currently lives at
-  `~/public_html/sauce.ai/index.html` (cPanel default or prior
-  placeholder). The news app at `/news` is untouched (separate dir,
-  separate `.htaccess`).
-- **Keywords-on-algo only — drop /terms, travel with gallery publish/adopt
-  (PR drafted).** Pri 6 / LOE 3, algo/ui/new-feature. User: "keywords
-  should be part of each algo." Two coupled changes:
-  - **Account-wide `/terms` surface removed.** Deleted
-    `app/routes/term_prefs.py` + `templates/me_terms.html`,
-    unregistered the blueprint, dropped the "Your Keywords" nav link.
-    `routes/feed.py` no longer SELECTs `user_term_prefs`; the term-row
-    list is only `algorithm_term_prefs` for the active profile. Pure
-    `app/term_prefs.py` builder stays (still the SQL fragment-maker for
-    the algo-scoped path); docstring rewritten to drop the "per-user"
-    framing, and the 5 obsolete "union" tests in
-    `test_term_prefs.py` were removed.
-  - **Gallery publish/adopt carry keywords.** New
-    `shared_algorithms.keywords_json TEXT NOT NULL` column;
-    `gallery.publish()` snapshots the algorithm's
-    `algorithm_term_prefs` rows into it; `gallery.adopt()` parses the
-    snapshot and inserts the rows into the cloned profile's
-    `algorithm_term_prefs`. New pure helpers `snapshot_keywords` /
-    `parse_keywords` in `app/gallery.py` sanitize through
-    `normalize_term` / `clamp_boost` / `VALID_MODES` so an untrusted
-    listing (a publisher could hand-craft `keywords_json`) cannot
-    poison the adopter's keyword table. 100-keyword snapshot cap. 8
-    new tests in `test_gallery.py` (cap, sanitization, round-trip,
-    malformed-blob rejection).
-  *Server:* one Open `manual-actions.md` entry (BUG-007 class) —
-  `2026-05-20-keywords-on-algo.sql`: (1) `INSERT IGNORE INTO
-  algorithm_term_prefs ... FROM user_term_prefs JOIN user_algorithms
-  ON is_active=1` to preserve existing /terms data on each user's
-  active profile; (2) `ALTER TABLE shared_algorithms ADD COLUMN
-  keywords_json TEXT NULL → backfill '[]' → MODIFY NOT NULL` (the
-  nullable-then-tighten pattern avoids the strict-mode rejection of a
-  NOT NULL TEXT ADD COLUMN on a populated table); (3) `DROP TABLE
-  user_term_prefs`. Python App restart on deploy. Schema.sql + the
-  load-bearing "Applied prod schema migrations" line updated.
-- **`.gitattributes` `merge=union` for high-conflict tracking docs.**
-  Ad-hoc / infra. User pain point: every parallel session appends to
-  `engineering-history.md` at the same top-of-log anchor, forcing a
-  manual conflict resolution on every rebase. Added `.gitattributes`
-  marking `engineering-history.md` + `engineering-history-archive.md` +
-  `roadmap.md` + `bugs.md` + `manual-actions.md` `merge=union` so Git
-  auto-takes both sides instead of failing the rebase. Trade-off (now
-  explicit in `new-engineering-session-instructions.md` §7.4):
-  out-of-order dated headers and duplicate at-a-glance rows can appear
-  after a union merge and must be cleaned up in the same PR — but the
-  rebase no longer *blocks* on these files. Docs-only; no
-  server/cron/dep/migration change.
-- **Per-profile "Publish to gallery" button (PR #94).** Small UX
-  follow-on to PR #88: each row in `/algo` Profiles tab now carries
-  a "Publish to gallery" form that snapshots that specific profile.
-  `gallery.publish` accepts an optional `algo_id` form param
-  (ownership-checked), falls back to the active profile when
-  absent — so the gallery page's existing details form keeps
-  working unchanged. Same cap/sanitization/redirect. *Server:* none.
-- **Gallery — Copy link + Email share buttons (PR #95, merged 2026-05-20).**
-  Tiny follow-on to PR #88. Each `/gallery` card now has **Copy link**
-  (writes a permalink to clipboard via `navigator.clipboard.writeText`,
-  falls back to `window.prompt` on non-secure contexts) and **Email**
-  (`<a href="mailto:?subject=…&body=…">`, no JS needed) next to
-  Adopt/Unpublish. Permalink =
-  `url_for('gallery.index', _external=True) ~ '#listing-<id>'`; each
-  card carries `id="listing-<id>"` + a `:target` CSS rule that
-  highlights the card when followed. Jinja `|urlencode` handles
-  spaces/newlines/`&`/`#` in the mailto body. Available to anonymous
-  viewers too. Template + CSS only — no route, DB, migration, cron,
-  env, or pip dep. *Server:* none (Python App restart on deploy for
-  the new template/CSS to load, but Jinja autoreloads templates).
-- **Source catalog admin re-import on prod (PR #91 follow-up).** User
-  ran the `/admin/feeds` → "Re-import seed CSV" action on prod
-  2026-05-20 (idempotent upsert on `feed_url`), loading the +1151
-  new sources from `seed/source_lean.csv` (768 → 1919). Dead URLs
-  will self-deactivate at `error_count=10` over the next few days.
-  `manual-actions.md` entry moved to Completed.
-- **BUG-022 topnav text overflows page width (PR pending).** User
-  reported the topnav extended past the main page. Root cause:
-  `.topnav` had `font-size:1em` + `gap:1.2em` + no `flex-wrap` on
-  desktop; signed-in users carry ~10 links + a 14em search box +
-  Compact/Dark toggles, so the row ran off the right edge instead of
-  wrapping. Fix: shrink `.topnav` to `font-size:0.88em`, tighten
-  `gap` to `0.9em`, add `flex-wrap:wrap`; bump brand to `1.15em` so
-  the wordmark stays a touch larger than the link row (net absolute
-  brand size roughly unchanged). Mobile `@media (max-width:640px)`
-  overrides still win below that breakpoint. *Server:* none — CSS-
-  only; restart on deploy. Full detail: `bugs.md` BUG-022.
-- **Shareable algorithm gallery v1 (PR #88).** Pri 8 / LOE 6,
-  new-feature/ui (theme C keystone). User: "an algorithm library
-  where users can pick and use other people's algos" with filterable
-  usage stats. Minimal v1 scope (publish / browse / adopt; admin-only
-  DB takedown — no public reporting UI). Three usage stats double as
-  sort axes: total adoptions, last-7d, active (distinct users whose
-  cloned profile still exists; the `ON DELETE SET NULL` on
-  `algorithm_adoptions.user_algorithm_id` is what makes "active"
-  self-maintain without a reconciliation job). New pure `app/gallery.py`
-  (`sort_order_by` is a closed literal map → no SQL-injection via
-  `?sort=`; `escape_like` for `?q=`), new `/gallery` blueprint
-  (publish / adopt / unpublish), template + append-only `.gallery-*`
-  CSS, one nav link. Adopt = clone-into-a-new-active-profile (atomic
-  clear-all-then-set, mirrors `algo._set_active`); preserves existing
-  profiles. 11 pure tests + a `"; DROP TABLE"` guard on the sort
-  fragment. *Server:* `2026-05-20-shared-algorithms.sql`
-  (`shared_algorithms` + `algorithm_adoptions`) applied on prod
-  2026-05-20 (`manual-actions.md` → Completed). NOT BUG-007 class —
-  tables are read-only at feed time, so a missing migration only
-  500s `/gallery` itself. Full detail: archive.
-- **Source catalog expansion +1151 sources (PR #91).** Pri 7 / LOE 3,
-  ops/new-feature. Appended 1151 hand-curated high-quality sources to
-  `seed/source_lean.csv` (768 → 1919). ~630 institutional outlets (US
-  regional papers, state-capital press, States-Newsroom nonprofits, NPR
-  affiliates, trade pubs, magazines, think tanks; intl — UK/EU/LATAM/
-  Africa/MENA/Asia-Pacific). ~520 individual writers / Substacks /
-  Medium / engineering blogs (Stratechery, Platformer, Slow Boring,
-  HCR, Money Stuff, Marginal Revolution, Volts, Heatmap, Latent Space,
-  Karpathy, Simon Willison, Sinocism, ChinaTalk, Le Grand Continent,
-  corporate eng blogs from Netflix/Stripe/Cloudflare/GitHub/OpenAI/
-  Anthropic/HuggingFace/BAIR). 47+ countries; US share 69%; honest
-  source_lean -0.5..+0.5, reputation 0.66–0.92. 0 dup `feed_url`. No
-  code change. *Server:* one Open `manual-actions.md` entry —
-  admin clicks "Re-import seed CSV" on `/admin/feeds` (idempotent
-  upsert; no migration, no cron change, no restart). Dead/wrong URLs
-  self-deactivate via the PR #11 `error_count=10` gate (~5–15%
-  expected tail). Full detail: archive.
-- **BUG-021 single-source feed domination (per-source cap, PR #89).**
-  User-reported "weird recency bias" — the `/` feed showed mostly
-  Philadelphia Inquirer under different algorithms. Root cause: no
-  per-source diversification; feed dedup was per-`story_id` only, so
-  a source with a fetch burst (or high `source_reputation` × BUG-011
-  recency multiplier hitting many rows) legitimately swept all 30
-  slots until ~24h decay broke it up. Fix: new pure
-  `app/feed_diversify.py` (`cap_per_source` / `fetch_budget` /
-  `page_slice`); `feed.py index()` over-fetches, caps in Python AFTER
-  the existing ORDER BY (preserving rank within source), then slices
-  the page. New `FEED_MAX_PER_SOURCE` config (default 3,
-  env-tunable; 0 disables — kill-switch w/o deploy). `/` only;
-  `/firehose`/`/search`/`/saved`/digest unchanged. 14 pure tests.
-  *Server:* none. Full detail: archive / `bugs.md` BUG-021. PRs #87
-  (BUG-021 log) + #89 (fix).
-- **Perceptual feature expansion — 12 new ranking features (PR #84).**
-  Roadmap Pri 7 / LOE 5, algo/backend. Doubled `FEATURES` (12→24):
-  6 LLM-judged (`tone_calmness`, `sensationalism`, `analysis_depth`,
-  `emotional_charge`, `hedging`, `solution_orientation`) batched into
-  the existing `classify_pending` Haiku call (one extra JSON object
-  per article, ~3× prior per-article LLM cost, still
-  sub-$0.001/article) + 6 rule-based (`headline_length`, `caps_ratio`,
-  `punctuation_intensity`, `numeric_density`, `question_headline`,
-  `quote_present`) computed in `app/classifier/rules.py` with no
-  network/LLM. LLM-unavailable rows get 0.5 across the 6 perceptual
-  ones; `_reclassify_nollm` heals them. Existing user algos
-  unaffected — their `weights_json` doesn't reference the new keys,
-  `build_score_sql` skips them until a user opts in via /algo
-  (template loop auto-renders the 12 new sliders). 21 new pure tests.
-  *Server:* `2026-05-20-perception-features.sql` (12 ADD COLUMN + 12
-  feature_catalog INSERT) applied on prod 2026-05-20
-  (`manual-actions.md` → Completed; folded into the load-bearing
-  "Applied prod schema migrations" line above); BUG-007 class
-  (`classify_pending` writes the new columns every 5-min tick;
-  Python App restart required to load the updated `FEATURES`
-  catalog). Full detail: archive.
-- **Per-algorithm keyword mute & boost (PR #82).** Pri 7 / LOE 3,
-  algo/ui. Extends PR #77's per-user `user_term_prefs` with a parallel
-  **per-profile** surface inside the `/algo` builder: new
-  `algorithm_term_prefs(algorithm_id, term, mode, weight)` table FK'd
-  to `user_algorithms` (CASCADE), two new `POST /algo/keywords/*`
-  routes (ownership-validated, 100/profile cap, mode-move upsert),
-  new "Keywords" tab in the algo Alpine switcher. `routes/feed.py`
-  reads both tables for the active profile and unions the rows
-  through the existing pure `build_term_clauses` builder — mute at
-  EITHER scope wins, strongest matching boost wins. 5 new cross-scope
-  tests. Same v1 substring caveat as PR #77; same scope (signed-in
-  main feed only; anon/firehose/digest untouched). *Server:*
-  `2026-05-20-algorithm-term-prefs.sql` (CREATE TABLE) applied on
-  prod 2026-05-20 (`manual-actions.md` → Completed; folded into the
-  load-bearing "Applied prod schema migrations" line above); BUG-007
-  class if absent. Full detail: archive.
-- **Compact / density toggle (PR #81).** Pri 6 / LOE 2, ui. Techmeme-
-  style toggle on the home feed: extends `base.html`'s existing
-  dark-mode IIFE to also init `data-density` pre-stylesheet from
-  `localStorage` (no FOUC); new `#density-toggle` button in the
-  topnav. Append-only `style.css` block keyed on
-  `:root[data-density="compact"] #feed-cards …` collapses to single
-  column, tightens padding, hides `.thumb`/`.summary`/`.feature-bars`/
-  `.byline` — source/lean dot/category/timestamp/`+N angles`/`Read →`
-  all stay. Persistence per-device (no DB); scope `/` only. *Server:*
-  none. Full detail: archive.
+All entries condensed; full verbatim in `engineering-history-archive.md`
+(grep by PR#). Migrations are folded into "Applied prod schema
+migrations" above.
+
+- **Lab landing expansion +10 concepts + anon voting (PR drafted)** —
+  root `index.html` grew to 1 live + 17 coming-soon cards with HN-style
+  ▲/▼ voting; new pure `app/lab_concepts.py` + `app/routes/lab.py`
+  (`/labvotes/tally`+`/vote`, CSRF-exempt), `lab_concept_votes` table
+  (NOT BUG-007 class). Migration applied 2026-05-21.
+- **Root sauce.ai/ landing page (PR drafted)** — first in-repo
+  `index.html` at the domain root (FTP-published by main.yml);
+  product-lab positioning + 8 product cards. No server state.
+- **Keywords-on-algo only — drop /terms (PR drafted)** — keywords now
+  live only on each algorithm profile; `user_term_prefs` dropped, rows
+  folded into the active profile; gallery publish/adopt carry keywords
+  via new `shared_algorithms.keywords_json` (sanitized). Migration
+  applied 2026-05-21 (BUG-007 class).
+- **`.gitattributes` `merge=union`** for the 5 high-conflict tracking
+  docs; trade-off (dup rows / out-of-order headers) documented in the
+  instructions §7.4. Docs-only.
+- **Gallery follow-ons** — per-profile "Publish to gallery" button
+  (PR #94); Copy-link + Email share buttons (PR #95). Template/route
+  only, no server state.
+- **Source catalog re-import on prod (PR #91 follow-up)** — admin
+  "Re-import seed CSV" run on prod (768→1919 sources). manual-actions
+  Completed.
+- **BUG-022 topnav overflow** — `.topnav` `flex-wrap` + smaller font/gap.
+  CSS-only.
+- **Shareable algorithm gallery v1 (PR #88)** — publish / browse /
+  adopt-as-new-active-profile + 3 usage stats; `shared_algorithms` +
+  `algorithm_adoptions` (migration applied 2026-05-20; NOT BUG-007
+  class). `/gallery`.
+- **Source catalog +1151 (PR #91)** — `seed/source_lean.csv` 768→1919;
+  idempotent admin import. No code change.
+- **BUG-021 single-source feed domination (PR #89)** — new pure
+  `app/feed_diversify.py` caps N per source on `/` (`FEED_MAX_PER_SOURCE`
+  default 3). No server change.
+- **Perceptual feature expansion +12 features (PR #84)** — 6 LLM + 6
+  rule-based features into `FEATURES`/`article_features`; migration
+  applied 2026-05-20 (BUG-007 class for `classify_pending`).
+- **Per-algorithm keyword mute & boost (PR #82)** —
+  `algorithm_term_prefs` table + `/algo` Keywords tab; migration applied
+  2026-05-20 (BUG-007 class).
+- **Compact / density toggle (PR #81)** — client-only `data-density`
+  localStorage toggle on `/`. No server change.
 
 ### 2026-05-18
 
-- **Why This Article ranking explainer (PR #79).** Pri 7 / LOE 3, ui.
-  "Why?" toggle on each feed card lazily loads an inline per-feature
-  score breakdown for the viewer's active algorithm (anon → balanced).
-  New pure `app/explain.py` reproduces `build_score_sql`'s per-feature
-  term + recency gate in Python and **imports** the direction/scale
-  helpers from `ranking.py` so the explainer can't desync from the
-  scorer (18 parity tests). New `feed.explain` `GET /article/<id>/
-  explain` partial with feed visibility scoping; HTMX progressive
-  enhancement, no no-JS fallback; append-only dark-mode-aware CSS.
-  *Server:* none — no DB/cron/dep/env/symlink. Per-user source/term
-  multipliers applied outside the feature sum are deliberately not
-  modeled in v1; learned-model line waits on Signal Learning. Full
-  detail: archive.
+- **Why This Article ranking explainer (PR #79).** "Why?" toggle lazily
+  loads a per-feature score breakdown; new pure `app/explain.py` imports
+  the direction/scale helpers from `ranking.py` so it can't desync (18
+  parity tests). No server change. Full detail: archive.
 
 ### 2026-05-17
 
-- **Keyword / topic mute & boost (PR #77).** Pri 8 / LOE 4, user-
-  empowerment Theme A. Content-level lever distinct from
-  `user_source_prefs` (whole-source weights): **mute** = hard filter,
-  **boost** = score multiplier (strongest match wins, no compounding,
-  term-in-both → mute wins). New Flask-free `app/term_prefs.py`
-  builder (escaped LIKE, `GREATEST` boost — 17 pure tests, injection-
-  proof); new `user_term_prefs` table + `/terms` blueprint + nav;
-  `feed.py` reads it on every signed-in feed load and threads it
-  through the `if u:` block. Scope = `/` feed, signed-in only
-  (anon/firehose/digest untouched). v1 = substring match; phrase/
-  entity-aware is v2. *Server:* `2026-05-17-term-prefs.sql`
-  (`CREATE TABLE user_term_prefs`) applied on prod 2026-05-17 — folded
-  into the load-bearing "Applied prod schema migrations" line above;
-  BUG-007 class if absent. Full detail: archive.
-- **BUG-020 firehose accumulation (PR #72).** `/firehose` was a
-  refreshing snapshot — its 4s `innerHTML` poll replaced the table with
-  only the newest ≤25 classified rows, dropping everything else. Now
-  *accumulates*: stable `<tbody>`, poll prepends newer rows, "Load more"
-  appends older, paginated by a new pure `app/firehose_cursor.py` keyset
-  on `(classified_at, id)` (timestamp-only skipped same-second bursts —
-  the real data-loss mechanism). 9 pure tests; no `style.css` change.
-  *Server:* none. Full detail: archive / `bugs.md` BUG-020.
-- **Across-the-spectrum in-feed (PR #69).** Pri 7 / LOE 3. The "+N
-  angles" pill now **expands inline** to a few sibling outlets' coverage
-  (round-robined across the lean spectrum, one per source) with a "Full
-  dossier →" link, instead of navigating away. New pure
-  `app/spectrum.py` (`pick_spectrum_sample`); `GET /story/<id>/peek`
-  partial reusing the dossier's canonical+visibility fetch (extracted to
-  `_fetch_cluster`); pill progressively enhanced (keeps `href` for
-  no-JS). 10+5 tests. *Server:* none — no migration/cron/dep. Full
-  detail: archive.
-- **Full-text article search (PR #70).** Pri 6 / LOE 6. New `/search`
-  route + nav box backed by a MySQL InnoDB FULLTEXT index on
-  `articles(title, summary)` (NATURAL LANGUAGE MODE, query bound as a
-  param — no injection). Results deduped by story cluster, scoped by the
-  feed's source-visibility + per-user mute rules. *Server:*
-  `2026-05-17-search-fulltext.sql` FULLTEXT ALTER applied on prod
-  2026-05-17 (`manual-actions.md` → Completed); no cron/dep. Full
-  detail: archive / INSTALL §10.
-- **Trending topics view — /trending (PR #71).** Pri 7 / LOE 5. New
-  `/trending` page ranking topics by distinct-outlet count, each
-  linking to the dossier(s) under it. Conflict-free route (PR #56 was
-  rewriting `classify_pending`): reuse the Google Trends/News topic
-  index `trending_poll` already builds every 30 min — no LLM, no
-  `classify_pending` edit. `trending_poll` now also rebuilds
-  `trending_topics`/`trending_topic_articles` each tick (same txn as
-  the `article_features.trending` scalar). Pure helpers in
-  `app/trending.py` (+14 tests). *Server:* `trending_topics` +
-  `trending_topic_articles` tables applied on prod 2026-05-17
-  (`manual-actions.md` → Completed); no new cron/pip/env. Full detail:
-  archive / INSTALL §8K/§10.
-- **Multiple saved algorithms / profiles (PR #65).** User-empowerment
-  Theme A (Pri 7). `user_algorithms` already had `name`/`is_active`,
-  so app-layer only (**no migration**): `app/routes/algo.py` gains
-  `_list_profiles`/`_set_active` (deactivate-all-then-activate-one —
-  the single-active invariant every resolver depends on)/`_clean_name`
-  + create/activate/rename/delete POSTs (delete refuses the last,
-  promotes a survivor); `/algo` Profiles tab; feed-header `<select>`
-  switcher at ≥2 profiles; appended `.profile-*` CSS.
-  `save`/`use_preset`/`onboarding` behavior preserved. *Server:* none.
-  Full detail: archive.
-- **Dark mode (PR #63).** Client-only theme: `style.css` `:root`
-  semantic surface vars (light values unchanged byte-for-byte) + a
-  `:root[data-theme="dark"]` palette override with ~30 hardcoded
-  literals repointed at vars; `base.html` no-FOUC head init from
-  `localStorage.theme`/`prefers-color-scheme` + a nav toggle. *Server:*
-  none (CSS/template only; restart on deploy). Full detail:
-  `engineering-history-archive.md`.
-- **Article save / bookmark (PR #64).** New `user_saves` table;
-  `app/routes/saves.py` (`POST /save/<id>` toggle, `/save/<id>/read`,
-  `GET /saved`); ☆/★ on signed-in cards via the `cardSignals` Alpine
-  component; `maintenance.py` exempts saved articles from both
-  retention prunes so the reader-view copy is a durable archive.
-  *Server (applied 2026-05-17 post-merge, `manual-actions.md` →
-  Completed; folded into "Applied prod schema migrations"; BUG-007
-  recurrence — trailed the merge):* `2026-05-17-user-saves.sql`
-  `CREATE TABLE`; restart. Full detail: `engineering-history-archive.md`.
-- **Onboarding interview / cold-start (PR #62).** Upgraded the bare
-  4-preset `/algo/onboarding` picker into a real cold-start interview:
-  new Flask-free `app/onboarding.py` (`normalize_categories`,
-  `lean_direction`, `build_onboarding_weights` layering
-  `category_filter` + `political_lean_direction` onto the `balanced`
-  preset, `top_trusted_sources`). `onboarding()` route now idempotent
-  (redirects to editor if the user already has an algorithm), inserts
-  one "My starting feed" `user_algorithms` row + `user_source_prefs`
-  boosts (weight 1.5); signup redirects here. *Server:* none — no
-  migration/cron/dep/env (`user_algorithms`/`user_source_prefs`
-  already on prod). Full detail: `engineering-history-archive.md`.
-- **Classifier/feature review — fixed BUG-016..019 (PR #56).**
-  Review of the classifier/feature/ranking surface (11 findings, 4
-  high fixed). BUG-016 popularity under-count (shared
-  `popularity_score()`; `classify_pending` seeds from prior signals;
-  nightly `maintenance` SQL reconciliation). BUG-017 journalist rep
-  penalized bylined articles (`first_seen_at` from `published_at`;
-  upside-only rep floor). BUG-018 `simhash==0` megacluster (skip
-  branch when falsy; store NULL for 0). BUG-019 LLM-fallback
-  contamination (`-nollm` version tag + bounded `_reclassify_nollm`
-  heal). Code-only in cron scripts + a pure helper; full suite 245
-  passing. *Server:* none — no migration/cron/env/pip/symlink; M/L
-  review findings (M5–M8, L9–L11, perf) still open. Full detail:
-  `engineering-history-archive.md`.
-- **CSRF protection + auth rate limiting (PR #58).** Hand-rolled
-  signed double-submit-cookie CSRF (stdlib `hmac`/`secrets`, zero new
-  dependency) enforced app-wide on every unsafe-method route via
-  `before_request`; token delivered to forms via `csrf_field()`, to
-  HTMX via an `htmx:configRequest` header hook, to plain `fetch()`
-  POSTs via a `<meta>` tag + `window.csrfToken`. `account.unsubscribe`
-  exempt (RFC 8058 URL-token auth). `CSRF_ENABLED` config (conftest
-  disables suite-wide; `test_csrf.py` re-enables). Sliding-window
-  in-process rate limit on `/auth/login`+`/auth/signup` (10 POSTs/
-  5 min/IP, env-tunable; per-worker caveat). *Server:* none — new env
-  vars have working defaults; restart on deploy. Full detail:
-  `engineering-history-archive.md`.
-- **Natural-language algorithm builder + user-empowerment cluster (PR #59).**
-  Plain-English feed description → one Claude Haiku call → the existing
-  3-axis `FEATURES` weight vector, pre-filling the `/algo` editor for
-  review (never applied silently; reuses `/save`, **no DB migration**).
-  New Flask-free `app/algo_nl.py` (lazy `anthropic`, `LLMUnavailable`
-  fail-soft, every value clamped, unknown keys dropped); `POST
-  /algo/describe` re-renders the editor. Shipped with a 10-item
-  user-empowerment roadmap cluster (themes A/B/C). No cron/env/dep/
-  symlink change. Full detail: `engineering-history-archive.md`.
-- **BUG-015 — external trending sort: Google Trends/News (PR #53).**
-  Popularity sort was HN-only; added pure `app/trending.py` +
-  `jobs/trending_poll.py` cron filling `article_features.trending`
-  from Google Trends + Google News RSS. Renamed the `popularity`
-  sort to **Trending** (`ORDER BY f.trending DESC, score DESC`;
-  legacy `?sort=popularity` aliased). Opt-in `trending` FEATURES
-  entry (default weight 0). *Server (applied 2026-05-17, `manual-actions.md` → Completed):* `2026-05-17-trending.sql` ALTER +
-  a new every-30-min `trending_poll` cron; restart. Full detail:
-  `engineering-history-archive.md` / `bugs.md` BUG-015.
-- **Techmeme-style discussion links — Reddit/HN (PR #52).**
-  `popularity_poll` already matched Reddit/HN threads but discarded
-  the permalink; now persists `permalink`+`subreddit` on
-  `popularity_signals` and renders a `Discussion: Hacker News (142)
-  · r/tech (89)` line on feed cards + a story-dossier panel (pure
-  `app/discussion.py`). No new dep/API cost. *Server (applied
-  2026-05-17, `manual-actions.md` → Completed):* one nullable-column
-  migration (`2026-05-17-discussion-links.sql`); restart.
-- **Engineering-history archive process (PR #51).** Introduced the
-  ~14K-token / ~34 KB budget for this file plus
-  `engineering-history-archive.md` (verbatim, on-demand) and the
-  durable "Load-bearing production state" section that never ages
-  out. Procedure lives in `engineering-session-wrapup.md` Step 1b.
-  Docs-only; no server-side change.
-- **BUG-013 + BUG-014 — Latin-script filter via py3langid (PR #50).**
-  Added stage 3 to `app/language.py is_english`: when text clears
-  stages 1+2 and has ≥24 Latin letters, run a cached `py3langid`
-  detector and reject only on a confident non-English call
-  (`top_prob ≥ 0.85` AND `english_prob < 0.10`) — deliberately biased
-  to keep English. Replaced the briefly-shipped `langdetect==1.0.9`
-  (BUG-014: sdist-only, won't build on the cPanel venv) with
-  wheel-distributed `py3langid==0.3.0` (+`numpy`); import fails soft
-  so it's not a site-down risk. *Server:* `pip install -r
-  requirements.txt` run on prod 2026-05-17 (no wheel build —
-  `manual-actions.md` → Completed); no DB/cron/env-var change. Full
-  detail: `bugs.md` BUG-013/014.
+All entries condensed; full verbatim in `engineering-history-archive.md`
+(grep by PR#). Migrations folded into "Applied prod schema migrations".
+
+- **Keyword/topic mute & boost (PR #77)** — per-user `user_term_prefs`
+  (mute = filter, boost = multiplier); pure `app/term_prefs.py`;
+  migration applied 2026-05-17 (BUG-007 class). Later superseded by
+  keywords-on-algo (2026-05-20).
+- **BUG-020 firehose accumulation (PR #72)** — firehose now accumulates
+  via a keyset cursor on `(classified_at, id)`; pure
+  `app/firehose_cursor.py`. No server change.
+- **Across-the-spectrum in-feed (PR #69)** — "+N angles" pill expands
+  inline to sibling-outlet coverage; pure `app/spectrum.py`. No server
+  change.
+- **Full-text article search (PR #70)** — `/search` + nav box on a
+  MySQL FULLTEXT index over `articles(title, summary)`; FULLTEXT
+  migration applied 2026-05-17.
+- **Trending topics view /trending (PR #71)** — ranks topics by
+  distinct-outlet count, reusing the `trending_poll` index;
+  `trending_topics` + `trending_topic_articles` applied 2026-05-17.
+- **Multiple saved algorithms / profiles (PR #65)** — app-layer only
+  (no migration); profile switcher on `/`.
+- **Dark mode (PR #63)** — client-only `data-theme` toggle, no-FOUC head
+  init. No server change.
+- **Article save / bookmark (PR #64)** — `user_saves` + `/saved`;
+  maintenance exempts saved from retention prune; migration applied
+  2026-05-17 (BUG-007 recurrence — trailed the merge).
+- **Onboarding interview / cold-start (PR #62)** — real cold-start
+  interview; pure `app/onboarding.py`; no migration.
+- **Classifier/feature review BUG-016..019 (PR #56)** — popularity
+  under-count, byline rep penalty, simhash==0 megacluster, LLM-fallback
+  contamination. Cron-script + helper only; no server change.
+- **CSRF + auth rate limiting (PR #58)** — hand-rolled signed
+  double-submit CSRF app-wide; sliding-window login/signup limit. No
+  migration.
+- **Natural-language algorithm builder (PR #59)** — plain-English →
+  `FEATURES` weights via one Haiku call, pre-fills `/algo`; pure
+  `app/algo_nl.py`; no migration. Shipped the user-empowerment cluster.
+- **BUG-015 external trending sort (PR #53)** — `app/trending.py` +
+  `trending_poll` cron fill `article_features.trending`; "Trending"
+  sort. Migration + 30-min cron applied 2026-05-17.
+- **Discussion links Reddit/HN (PR #52)** — persist permalink+subreddit
+  on `popularity_signals`; pure `app/discussion.py`. Migration applied
+  2026-05-17.
+- **Engineering-history archive process (PR #51)** — introduced this
+  archive + the ~14K-token budget + the durable load-bearing section.
+  Docs-only.
+- **BUG-013/014 Latin-script language filter (PR #50)** — stage-3
+  `py3langid` detector in `app/language.py`; swapped langdetect→py3langid
+  (wheel). `pip install` run on prod 2026-05-17.
 
 ### 2026-05-14
 

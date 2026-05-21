@@ -68,12 +68,12 @@ shipped.
 | 7 | 5 | algo, backend | Community source-quality overlay | backlog |
 | 6 | 5 | new-feature | Community "add a source" on dossiers | backlog |
 | 7 | 5 | algo, backend | Perceptual feature expansion (12 new ranking features) | done |
-| 8 | 3 | infra, ops, skunkworks | Agent infra: Unattended dev-agent dispatcher | in-progress |
-| 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | in-progress |
-| 8 | 4 | infra, ops | Agent infra: Post-deploy verification | in-progress |
-| 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | in-progress |
-| 6 | 2 | infra, ops | Agent infra: Bug auto-triage | in-progress |
-| 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | in-progress |
+| 8 | 3 | infra, ops, skunkworks | Agent infra: Unattended dev-agent dispatcher | done |
+| 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | done |
+| 8 | 4 | infra, ops | Agent infra: Post-deploy verification | done |
+| 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | done |
+| 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
+| 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
 
 ---
 
@@ -599,7 +599,7 @@ before the next starts. All workflows are gated by the repo variable
 triage on Haiku 4.5 (`claude-haiku-4-5`).
 
 ### Agent infra: Unattended dev-agent dispatcher
-**Priority:** 8 · **LOE:** 3 · **Category:** infra, ops, skunkworks · **Status:** in-progress
+**Priority:** 8 · **LOE:** 3 · **Category:** infra, ops, skunkworks · **Status:** done (PR #103)
 
 Phase 1. Marking a roadmap item's status `ready-for-agent` triggers
 an unattended Claude Code session via GitHub Actions that produces a
@@ -623,7 +623,7 @@ matrix invokes `anthropics/claude-code-action@v1` with
 `--model claude-opus-4-7 --max-turns 80 --max-budget-usd 8`.
 
 ### Agent infra: Pre-merge QA + BUG-007 gate
-**Priority:** 9 · **LOE:** 2 · **Category:** infra, security · **Status:** in-progress
+**Priority:** 9 · **LOE:** 2 · **Category:** infra, security · **Status:** done (PR #104)
 
 Phase 2. Every PR runs tests + a Claude-Sonnet BUG-007 reviewer
 before merge. The single most expensive recurring failure mode in
@@ -644,7 +644,7 @@ update (require both checks) called out in the PR description as a
 manual step.
 
 ### Agent infra: Post-deploy verification
-**Priority:** 8 · **LOE:** 4 · **Category:** infra, ops · **Status:** in-progress
+**Priority:** 8 · **LOE:** 4 · **Category:** infra, ops · **Status:** done (PR #105)
 
 Phase 3. After each deploy, smoke-test prod and file bugs if
 anything regressed. Two new admin endpoints in
@@ -667,7 +667,7 @@ query; admin blueprint adds a `manual-actions.md` Open entry (new
 blueprint needs a Python App restart).
 
 ### Agent infra: Migration / restart executor
-**Priority:** 10 · **LOE:** 5 · **Category:** infra, ops, backend · **Status:** in-progress
+**Priority:** 10 · **LOE:** 5 · **Category:** infra, ops, backend · **Status:** done (PR #106)
 
 Phase 4. Highest-blast-radius phase. New
 `news/app/routes/agent_ops.py` blueprint at `/agent-ops/*` runs
@@ -692,7 +692,7 @@ Open entry. PR description includes threat model, prod test plan
 rollback procedure.
 
 ### Agent infra: Bug auto-triage
-**Priority:** 6 · **LOE:** 2 · **Category:** infra, ops · **Status:** in-progress
+**Priority:** 6 · **LOE:** 2 · **Category:** infra, ops · **Status:** done (PR #107)
 
 Phase 5. Bugs filed by the Phase 3 post-deploy QA agent get a
 suitability assessment for the unattended dev fleet — but a human
@@ -707,7 +707,7 @@ labels the bug ready or spawns a dev agent on its own. New
 `.github/agents/bug-triage.md` prompt.
 
 ### Agent infra: PM agent (weekly proposals)
-**Priority:** 5 · **LOE:** 3 · **Category:** infra, skunkworks · **Status:** in-progress
+**Priority:** 5 · **LOE:** 3 · **Category:** infra, skunkworks · **Status:** done (PR #108)
 
 Phase 6. Weekly cadence Opus agent reads production signals and
 proposes new roadmap items as `status: proposed`. Adds `proposed`
@@ -730,6 +730,32 @@ are fine; if nothing meaningful surfaces, no PR is opened. New
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-21
+
+- **Agent infrastructure cluster (six phases)** — infra/ops/security/
+  skunkworks. The unattended agent fleet that replaces manually
+  launching terminals. All six merged 2026-05-21; the loop goes live
+  once the human sets the secrets/variable and does the prod restarts
+  (see `manual-actions.md` Open). PRs:
+  - **Phase 1 — Unattended dev-agent dispatcher** (Pri 8, LOE 3, PR
+    #103). `ready-for-agent` roadmap item → unattended Opus dev session
+    → draft PR. `dev-warmup.md` + `pick_ready_items.py` + `dev-agent.yml`.
+  - **Phase 2 — Pre-merge QA + BUG-007 gate** (Pri 9, LOE 2, PR #104).
+    pytest + Sonnet BUG-007 reviewer on every PR. `qa-code.yml` +
+    `qa-reviewer.md`. (Also fixed a sgmllib3k CI install break + a
+    stale CSRF test.)
+  - **Phase 3 — Post-deploy verification** (Pri 8, LOE 4, PR #105).
+    curl smoke + Sonnet Playwright check + cron-health scan →
+    auto-files bugs. Ships the `admin_ops` blueprint
+    (`/admin/cron-health`, `/admin/usage-summary`).
+  - **Phase 4 — Migration / restart executor** (Pri 10, LOE 5, PR
+    #106). HMAC-signed `/agent-ops/*` prod DDL + restart, label-driven.
+  - **Phase 5 — Bug auto-triage** (Pri 6, LOE 2, PR #107). Sonnet
+    verdict (`AUTO_FIX_ELIGIBLE`/`NEEDS_HUMAN`) on `agent:qa-filed`
+    bug PRs; human keeps the promote decision.
+  - **Phase 6 — PM agent** (Pri 5, LOE 3, PR #108). Weekly Opus reads
+    signals → proposes ≤3 `proposed` roadmap items; human promotes.
 
 ### 2026-05-20
 
