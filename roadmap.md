@@ -74,7 +74,7 @@ shipped.
 | 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | done |
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
-| 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | ready-for-agent |
+| 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | in-progress |
 
 ---
 
@@ -760,7 +760,7 @@ read-only admin route + an init-time check; no sharp-edge infra, no new
 dependency.
 
 ### Agent fleet observability — weekly cost + activity rollup
-**Priority:** 6 · **LOE:** 3 · **Category:** infra, ops · **Status:** ready-for-agent · **Dispatched:** 2026-05-21
+**Priority:** 6 · **LOE:** 3 · **Category:** infra, ops · **Status:** in-progress · **Dispatched:** 2026-05-21
 
 **Rationale:** The six-phase agent fleet shipped 2026-05-21 (PRs
 #103–#108), each workflow carrying a per-run budget cap ($8 dev / $1 QA
