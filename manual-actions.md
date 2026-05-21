@@ -40,9 +40,15 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+(none currently)
+
+---
+
+## Completed
+
 ### 2026-05-21 — Secret: AGENT_OPS_SECRET for the HMAC migration executor
-**Status:** open · **PR:** (Phase 4, drafted this session) ·
-**Opened:** 2026-05-21
+**Status:** completed · **PR:** #106 (merged 2026-05-21) ·
+**Opened:** 2026-05-21 · **Completed:** 2026-05-21
 
 Phase 4 adds the `agent_ops` blueprint (`/agent-ops/*`), which executes
 whitelisted prod operations (run a migration, restart the app, verify a
@@ -101,8 +107,8 @@ confirms the full path.
 ---
 
 ### 2026-05-21 — Python App restart: admin_ops blueprint (post-deploy verification)
-**Status:** open · **PR:** (Phase 3, drafted this session) ·
-**Opened:** 2026-05-21
+**Status:** completed · **PR:** #105 (merged 2026-05-21) ·
+**Opened:** 2026-05-21 · **Completed:** 2026-05-21
 
 Phase 3 adds a new Flask blueprint `admin_ops` (`news/app/routes/admin_ops.py`)
 registered at `/admin`, exposing two **read-only, admin-only**
@@ -137,7 +143,7 @@ plain text; `/admin/usage-summary` returns a JSON object with a
 
 ---
 
-## Completed
+---
 
 ### 2026-05-21 — Migration: lab_concept_votes (root-domain landing page voting)
 **Status:** completed · **PR:** #102 (merged 2026-05-20) ·
