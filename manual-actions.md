@@ -40,7 +40,40 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
+### 2026-05-21 — Python App restart: admin_ops blueprint (post-deploy verification)
+**Status:** open · **PR:** (Phase 3, drafted this session) ·
+**Opened:** 2026-05-21
+
+Phase 3 adds a new Flask blueprint `admin_ops` (`news/app/routes/admin_ops.py`)
+registered at `/admin`, exposing two **read-only, admin-only**
+endpoints the post-deploy QA workflow hits:
+`GET /admin/cron-health` (last 200 lines of `logs/cron.log` as
+text/plain) and `GET /admin/usage-summary` (14-day signups / DAU /
+signal-count JSON, read-only SELECTs against existing tables). **No DB
+migration** — both endpoints only read tables already on prod
+(`users`, `user_clicks`, `user_signals`) and the cron log file. **Not
+BUG-007 class:** a missing restart just leaves the two new routes
+404'ing until Passenger reloads; the rest of the app is unaffected.
+After the deploy lands, restart the Python App so Passenger registers
+the new blueprint.
+
+**Action (cPanel):** Setup Python App → the `sauce.ai/news` app →
+**Restart**. (This is the same restart used for every prior
+blueprint/template deploy; Passenger caches imports until restart.)
+
+**Verify (no admin creds needed — confirms the routes are registered):**
+
+```bash
+# 302 (redirect to login) = blueprint registered + auth-gated, good.
+# 404 = restart didn't take; restart again.
+curl -s -o /dev/null -w "%{http_code}\n" https://sauce.ai/news/admin/cron-health
+curl -s -o /dev/null -w "%{http_code}\n" https://sauce.ai/news/admin/usage-summary
+```
+
+To exercise them fully, sign in as an admin and load each in a
+browser: `/admin/cron-health` returns the tail of `logs/cron.log` as
+plain text; `/admin/usage-summary` returns a JSON object with a
+14-element `days` array.
 
 ---
 

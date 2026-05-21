@@ -39,6 +39,7 @@ def create_app():
     from .routes.algo import bp as algo_bp
     from .routes.firehose import bp as firehose_bp
     from .routes.admin import bp as admin_bp
+    from .routes.admin_ops import bp as admin_ops_bp
     from .routes.auth_routes import bp as auth_bp
     from .routes.account import bp as account_bp
     from .routes.signals import bp as signals_bp
@@ -55,6 +56,7 @@ def create_app():
     app.register_blueprint(algo_bp, url_prefix="/algo")
     app.register_blueprint(firehose_bp, url_prefix="/firehose")
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(admin_ops_bp, url_prefix="/admin")
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(account_bp, url_prefix="/account")
     app.register_blueprint(signals_bp, url_prefix="/signal")
