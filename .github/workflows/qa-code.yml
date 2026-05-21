@@ -26,7 +26,17 @@ jobs:
           cache: pip
           cache-dependency-path: news/requirements.txt
       - name: Install dependencies
-        run: pip install -r news/requirements.txt
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          # sgmllib3k (transitive via feedparser==6.0.11) won't build under
+          # PEP 517 build isolation against modern setuptools — the package
+          # is old enough to reference setuptools internals that were
+          # removed. INSTALL.txt §2c documents this and the workaround:
+          # install feedparser without build isolation first so its
+          # sgmllib3k dep resolves; the main requirements install then
+          # finds it satisfied.
+          pip install --no-build-isolation feedparser==6.0.11
+          pip install -r news/requirements.txt
       - name: Boot check
         working-directory: news
         run: python -c "from app import create_app; create_app()"
