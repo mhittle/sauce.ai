@@ -1,0 +1,93 @@
+name: Pre-merge QA
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: qa-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: news/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          # sgmllib3k (transitive via feedparser==6.0.11) won't build under
+          # PEP 517 build isolation against modern setuptools — the package
+          # is old enough to reference setuptools internals that were
+          # removed. INSTALL.txt §2c documents this and the workaround:
+          # install feedparser without build isolation first so its
+          # sgmllib3k dep resolves; the main requirements install then
+          # finds it satisfied.
+          pip install --no-build-isolation feedparser==6.0.11
+          pip install -r news/requirements.txt
+      - name: Boot check
+        working-directory: news
+        run: python -c "from app import create_app; create_app()"
+      - name: Pytest
+        run: python -m pytest news/tests/ -q
+
+  bug007-gate:
+    if: vars.AGENTS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compose review prompt
+        id: prompt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          tpl = pathlib.Path(".github/agents/qa-reviewer.md").read_text(encoding="utf-8")
+          for k in ("PR_NUMBER", "PR_BASE_SHA", "PR_HEAD_SHA", "REPO"):
+              tpl = tpl.replace("{{" + k + "}}", os.environ[k])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write("prompt<<__PROMPT_EOF__\n")
+              fh.write(tpl)
+              if not tpl.endswith("\n"):
+                  fh.write("\n")
+              fh.write("__PROMPT_EOF__\n")
+          PY
+      - name: Run BUG-007 review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: ${{ steps.prompt.outputs.prompt }}
+          claude_args: "--model claude-sonnet-4-6 --max-turns 30 --max-budget-usd 1"
+      - name: Enforce verdict
+        run: |
+          if [ ! -f /tmp/bug007-verdict.txt ]; then
+            echo "ERROR: agent did not write /tmp/bug007-verdict.txt"
+            exit 1
+          fi
+          verdict=$(tr -d '[:space:]' < /tmp/bug007-verdict.txt)
+          echo "verdict=$verdict"
+          case "$verdict" in
+            BUG007_OK)    exit 0 ;;
+            BUG007_BLOCK) exit 1 ;;
+            *) echo "ERROR: unknown verdict '$verdict'"; exit 1 ;;
+          esac

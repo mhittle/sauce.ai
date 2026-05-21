@@ -133,6 +133,56 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-21
 
+- **Agent infra Phase 2 — Pre-merge QA + BUG-007 gate (PR drafted this
+  session).** Infra/security Pri 9 / LOE 2. Every PR now runs tests
+  plus a Claude-Sonnet reviewer before it can merge — the single most
+  expensive recurring failure mode in this repo is "PR merged before
+  its migration is applied on prod → signed-in feed 500s" (BUG-007
+  original 2026-05-13 plus 2026-05-17 PR #64 recurrence). New
+  `.github/workflows/qa-code.yml` on pull_request
+  `{opened, synchronize, ready_for_review}` with two jobs: `tests`
+  (setup-python 3.11, `pip install -r news/requirements.txt`,
+  `python -c "from app import create_app; create_app()"` from `news/`,
+  `python -m pytest news/tests/ -q`) and `bug007-gate` (Sonnet 4.6,
+  budget $1). Gate checks three things: (a) **phantom-schema** — new
+  SQL table/column refs in `news/app/**` or `news/jobs/*.py` missing
+  from both `seed/schema.sql` and any Open `manual-actions.md` entry;
+  (b) **deploy-process drift** — modifications to
+  `news/passenger_wsgi.py`, `news/app/__init__.py`,
+  `news/app/config.py`, `news/jobs/*.py`, or `news/requirements.txt`
+  without a same-PR update to `news/INSTALL.txt`; (c) **HARD FAIL** on
+  `dangerous-clean-slate: true` anywhere. Each violation gets an
+  inline PR review comment via `gh api .../pulls/.../comments`; a
+  final summary issue comment is posted (`BUG007_OK — N notes` or
+  `BUG007_BLOCK — N violations`); on block the agent adds label
+  `blocked-pre-merge` (creating it on first use if absent). Agent
+  writes `BUG007_OK` or `BUG007_BLOCK` to `/tmp/bug007-verdict.txt`;
+  the workflow's post-step exits 0/1 from that file so the check
+  status turns green/red. New `.github/agents/qa-reviewer.md`
+  encodes the three checks, idempotency rules (skip duplicate inline
+  comments on re-runs after a synchronize event), and the
+  read-only-no-formal-review constraint. **Scope decision:** the
+  `tests` job runs unconditionally; only `bug007-gate` is gated by
+  `vars.AGENTS_ENABLED == 'true'`, so pytest still protects PRs when
+  the agent fleet is disabled. Required branch protection (manual
+  step the human does in repo settings): require `tests` green;
+  require `bug007-gate` green once `AGENTS_ENABLED=true`. *Server:*
+  none — infra-only, no app code, no schema, no manual prod action
+  required. **Two pre-existing breakages surfaced by the new `tests`
+  job on first CI run and fixed in the PR:** (1) `pip install -r
+  news/requirements.txt` failed because `sgmllib3k` (transitive via
+  `feedparser==6.0.11`) can't build under PEP 517 isolation against
+  modern setuptools — same failure class as `INSTALL.txt` §2c; fixed by
+  upgrading pip/setuptools/wheel and pre-installing feedparser with
+  `--no-build-isolation`. (2)
+  `tests/test_csrf.py::test_unsubscribe_endpoint_is_csrf_exempt`
+  asserted `b"CSRF" not in r.data`, but `base.html` embeds the literal
+  `X-CSRF-Token` header name in its JS, so every base-template render
+  (including the 404 the test triggers) contains "CSRF" — the assertion
+  was stale and would also have failed to catch a real regression.
+  Tightened to match the actual rejection phrase
+  `b"CSRF validation failed"`. Full suite 487/487 green locally after
+  both fixes.
 - **Agent infrastructure cluster opened; Phase 1 — Unattended dev-agent
   dispatcher (PR drafted this session).** Infra/ops/skunkworks Pri 8 /
   LOE 3. Six-phase plan to replace the "5 Claude Code terminals open at
