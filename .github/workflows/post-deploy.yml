@@ -1,0 +1,108 @@
+name: Post-deploy verification
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: post-deploy
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://sauce.ai/news
+
+jobs:
+  smoke:
+    if: vars.AGENTS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for FTP deploy to settle
+        if: github.event_name == 'push'
+        run: sleep 120
+      - name: Curl smoke (fail on any 5xx)
+        run: |
+          base="${SITE_URL%/}"
+          paths=("/" "/firehose" "/algo" "/trending" "/search?q=test" "/gallery")
+          fail=0
+          for p in "${paths[@]}"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${base}${p}" || echo 000)
+            echo "${p} -> ${code}"
+            if [ "$code" -ge 500 ] || [ "$code" = "000" ]; then
+              echo "::error::${p} returned ${code}"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  agent-qa:
+    needs: smoke
+    if: always() && vars.AGENTS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          fetch-depth: 0
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Playwright (Chromium)
+        run: npx --yes playwright install --with-deps chromium
+      - name: Write Playwright MCP config
+        run: |
+          cat > /tmp/mcp.json <<'JSON'
+          {
+            "mcpServers": {
+              "playwright": {
+                "command": "npx",
+                "args": ["@playwright/mcp@latest", "--headless", "--isolated"]
+              }
+            }
+          }
+          JSON
+      - name: Compose prompt
+        id: prompt
+        env:
+          REPO: ${{ github.repository }}
+          SMOKE_RESULT: ${{ needs.smoke.result }}
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          tpl = pathlib.Path(".github/agents/post-deploy-qa.md").read_text(encoding="utf-8")
+          repl = {
+              "SITE_URL": os.environ["SITE_URL"],
+              "REPO": os.environ["REPO"],
+              "SMOKE_RESULT": os.environ["SMOKE_RESULT"],
+          }
+          for k, v in repl.items():
+              tpl = tpl.replace("{{" + k + "}}", v)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write("prompt<<__PROMPT_EOF__\n")
+              fh.write(tpl)
+              if not tpl.endswith("\n"):
+                  fh.write("\n")
+              fh.write("__PROMPT_EOF__\n")
+          PY
+      - name: Run post-deploy QA
+        uses: anthropics/claude-code-action@v1
+        env:
+          SMOKE_TEST_USER: ${{ secrets.SMOKE_TEST_USER }}
+          SMOKE_TEST_PASS: ${{ secrets.SMOKE_TEST_PASS }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          prompt: ${{ steps.prompt.outputs.prompt }}
+          claude_args: >-
+            --model claude-sonnet-4-6
+            --max-turns 40
+            --max-budget-usd 2
+            --mcp-config /tmp/mcp.json

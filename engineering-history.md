@@ -133,6 +133,54 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-21
 
+- **Agent infra Phase 3 — Post-deploy verification (PR drafted this
+  session).** Infra/ops Pri 8 / LOE 4. After each deploy (and on a
+  30-min safety-net cron) the live site is smoke-tested and a bug is
+  auto-filed if anything regressed. **This is the one exception to
+  "infra-only before Phase 4"** — it ships two new admin endpoints the
+  deployed-app agent queries. *App code:* new read-only, admin-only
+  blueprint `news/app/routes/admin_ops.py` registered at `/admin`
+  (registered in `app/__init__.py` right after the existing `admin`
+  blueprint): `GET /admin/cron-health` tails the last 200 lines of
+  `logs/cron.log` as text/plain (memory-safe `deque` tail, graceful
+  message if the file is absent, `CRON_LOG_PATH` env override);
+  `GET /admin/usage-summary` returns a 14-day series of signups
+  (`users.created_at`), DAU (distinct users with a `user_clicks` or
+  `user_signals` event that day), and signal counts
+  (`user_signals.created_at`) as JSON, zero-filled per day, all
+  read-only SELECTs against tables already on prod — **no DB
+  migration**. 6 new unit tests in `tests/test_admin_ops.py` (auth
+  gating 302/403, log tail truncation to 200 lines, missing-file
+  handling, usage JSON shape + per-day merge + zero-fill). Full suite
+  493/493 green locally. *Workflow:* new
+  `.github/workflows/post-deploy.yml` on push-to-main (120s sleep so
+  the FTP deploy in `main.yml` settles first) + cron `*/30 * * * *`,
+  gated by `vars.AGENTS_ENABLED == 'true'`. Two jobs: `smoke` (curl
+  `/`, `/firehose`, `/algo`, `/trending`, `/search?q=test`, `/gallery`
+  on `sauce.ai/news`, fail on any 5xx or connection failure) and
+  `agent-qa` (Sonnet 4.6, budget $2, runs `always()` after smoke so a
+  smoke failure still gets investigated). The agent drives a Playwright
+  MCP browser (config written to `/tmp/mcp.json` and passed via
+  `--mcp-config` — a file, not inline JSON, to dodge bash brace
+  expansion of the JSON commas): anon load, sign in with
+  `SMOKE_TEST_USER`/`SMOKE_TEST_PASS`, toggle a thumb + reload to
+  confirm persistence, open `/algo` Keywords tab, check `/firehose`,
+  then fetch `/admin/cron-health` and scan for known-bad patterns
+  (`fork: Resource temporarily unavailable`, fetch/classify/popularity
+  tracebacks, 5xx, `MySQL server has gone away`). On a *new*
+  (deduped against open `agent:qa-filed` PRs + `bugs.md`) issue it
+  appends `BUG-NNN` to `bugs.md` and opens a draft PR
+  `auto-file: BUG-NNN <title>` labeled `agent:qa-filed`. New
+  `.github/agents/post-deploy-qa.md` system prompt encodes the checks,
+  the dedup rule (it runs every 30 min — must not re-file), and the
+  graceful-skip when the test account lacks admin. *Server:* one Open
+  `manual-actions.md` entry — Python App restart after deploy so the
+  `admin_ops` blueprint registers (NOT BUG-007 class; missing restart
+  just 404s the two new routes). New repo secrets to add:
+  `SMOKE_TEST_USER` / `SMOKE_TEST_PASS` (dedicated prod test account;
+  make it admin for the cron-health scan, else the agent skips that
+  check). Open question for the human: whether to grant the smoke
+  account admin (read-only admin reads only) vs. keep it least-priv.
 - **Agent infra Phase 2 — Pre-merge QA + BUG-007 gate (PR drafted this
   session).** Infra/security Pri 9 / LOE 2. Every PR now runs tests
   plus a Claude-Sonnet reviewer before it can merge — the single most

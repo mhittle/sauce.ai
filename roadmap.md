@@ -69,7 +69,7 @@ shipped.
 | 7 | 5 | algo, backend | Perceptual feature expansion (12 new ranking features) | done |
 | 8 | 3 | infra, ops, skunkworks | Agent infra: Unattended dev-agent dispatcher | in-progress |
 | 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | in-progress |
-| 8 | 4 | infra, ops | Agent infra: Post-deploy verification | backlog |
+| 8 | 4 | infra, ops | Agent infra: Post-deploy verification | in-progress |
 | 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | backlog |
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | backlog |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | backlog |
@@ -643,7 +643,7 @@ update (require both checks) called out in the PR description as a
 manual step.
 
 ### Agent infra: Post-deploy verification
-**Priority:** 8 · **LOE:** 4 · **Category:** infra, ops · **Status:** backlog
+**Priority:** 8 · **LOE:** 4 · **Category:** infra, ops · **Status:** in-progress
 
 Phase 3. After each deploy, smoke-test prod and file bugs if
 anything regressed. Two new admin endpoints in
