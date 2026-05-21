@@ -133,6 +133,34 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-21
 
+- **Agent infra Phase 6 — PM agent (PR drafted this session).
+  Completes the six-phase agent-infrastructure cluster.**
+  Infra/skunkworks Pri 5 / LOE 3. A weekly-cadence Opus agent reads
+  production signals and proposes new roadmap items as
+  `status: proposed`; the human promotes `proposed` → `ready-for-agent`
+  (which feeds the Phase 1 dispatcher), closing the autonomous loop.
+  `roadmap.md` Conventions gained the `proposed` status value
+  ("PM agent suggestion; not yet authorized for dev"). New
+  `.github/workflows/pm-agent.yml` on cron `0 14 * * 1` (Mondays 14:00
+  UTC) + `workflow_dispatch`, gated by `vars.AGENTS_ENABLED == 'true'`.
+  Single Opus 4.7 job (budget $4) reads `engineering-history.md` (last
+  14 days), `bugs.md` (open + attempted), `roadmap.md` (Done last 14d +
+  backlog), and fetches the Phase 3 admin endpoints
+  (`/admin/cron-health`, `/admin/usage-summary`) by logging in with
+  `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` (curl + cookie jar + CSRF token
+  from the login page) — degrading gracefully to repo-doc signals if
+  the account can't authenticate. Proposes AT MOST 3 items, each with
+  Priority / LOE / Category / `Status: proposed` + a Rationale citing
+  specific data, and opens ONE draft PR `PM proposals: <date>` that
+  adds them to `roadmap.md` detail sections only (NOT the at-a-glance
+  table — the human folds an item in when promoting it). Empty weeks
+  are explicitly fine: nothing meaningful → no PR, no comment. New
+  `.github/agents/pm-agent.md` encodes the signal sources, the
+  "ground every proposal in observed data" rule, the don't-re-propose
+  guard, and the hard max-3-per-week rate limit. *Server:* none —
+  infra-only, no app code, no schema, no manual prod action required.
+  Uses the existing `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` secrets from
+  Phase 3 (admin account recommended so telemetry is available).
 - **Agent infra Phase 5 — Bug auto-triage (PR drafted this session).**
   Infra/ops Pri 6 / LOE 2. Bugs auto-filed by the Phase 3 post-deploy
   QA agent get an automatic suitability assessment for the unattended

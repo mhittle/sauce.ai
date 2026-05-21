@@ -12,7 +12,8 @@ Each item is rated on three axes:
 - **LOE** (1–10): rough effort estimate. 1 = under an hour, 10 = multi-week project.
 - **Category**: one or more of `infra`, `new-feature`, `ui`, `backend`, `algo`, `security`, `ops`, `skunkworks`, `docs`. Add new categories as needed; document them here.
 
-Status values: `backlog` (default), `ready-for-agent` (queued for the
+Status values: `backlog` (default), `proposed` (PM agent suggestion;
+not yet authorized for dev), `ready-for-agent` (queued for the
 unattended dev workflow), `in-progress`, `done`, `dropped`.
 
 Add new items at the bottom of the appropriate section. When you move an item
@@ -72,7 +73,7 @@ shipped.
 | 8 | 4 | infra, ops | Agent infra: Post-deploy verification | in-progress |
 | 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | in-progress |
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | in-progress |
-| 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | backlog |
+| 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | in-progress |
 
 ---
 
@@ -706,7 +707,7 @@ labels the bug ready or spawns a dev agent on its own. New
 `.github/agents/bug-triage.md` prompt.
 
 ### Agent infra: PM agent (weekly proposals)
-**Priority:** 5 · **LOE:** 3 · **Category:** infra, skunkworks · **Status:** backlog
+**Priority:** 5 · **LOE:** 3 · **Category:** infra, skunkworks · **Status:** in-progress
 
 Phase 6. Weekly cadence Opus agent reads production signals and
 proposes new roadmap items as `status: proposed`. Adds `proposed`
