@@ -38,7 +38,19 @@ _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 #   the news app's CSRF cookie (different rendering path), and the
 #   endpoint is anon-only with a per-voter UNIQUE index — a forged vote
 #   on someone else's behalf just flips one anonymous concept vote.
-_EXEMPT_ENDPOINTS = frozenset({"account.unsubscribe", "lab.vote"})
+# - The `agent_ops.*` endpoints are the HMAC-authenticated prod-ops
+#   executor (Phase 4). They carry no session cookie and are
+#   authenticated by an HMAC-SHA256 signature over the request body
+#   (keyed by AGENT_OPS_SECRET) with a freshness window — a far
+#   stronger guarantee than the double-submit cookie, which a machine
+#   caller can't carry anyway.
+_EXEMPT_ENDPOINTS = frozenset({
+    "account.unsubscribe",
+    "lab.vote",
+    "agent_ops.run_migration",
+    "agent_ops.restart_app",
+    "agent_ops.verify_schema",
+})
 
 
 def _sign(secret: str, nonce: str) -> str:

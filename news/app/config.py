@@ -35,6 +35,11 @@ class Config:
     TRENDING_PAGE_LIMIT = int(os.environ.get("TRENDING_PAGE_LIMIT", "40"))
     TRENDING_STORIES_PER_TOPIC = int(os.environ.get("TRENDING_STORIES_PER_TOPIC", "3"))
 
+    # HMAC executor (agent_ops blueprint). Empty = endpoints return 503.
+    # Set via .htaccess on prod (32+ random hex bytes); rotate quarterly.
+    AGENT_OPS_SECRET = os.environ.get("AGENT_OPS_SECRET", "")
+    AGENT_OPS_RESTART_FILE = os.environ.get("AGENT_OPS_RESTART_FILE", "")
+
     CSRF_ENABLED = os.environ.get("CSRF_ENABLED", "1") not in ("0", "false", "False")
     AUTH_RATELIMIT_MAX = int(os.environ.get("AUTH_RATELIMIT_MAX", "10"))
     AUTH_RATELIMIT_WINDOW_SECONDS = int(os.environ.get("AUTH_RATELIMIT_WINDOW_SECONDS", "300"))

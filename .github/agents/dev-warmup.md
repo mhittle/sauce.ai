@@ -87,6 +87,17 @@ draft→ready and merges, and the wrap-up entry you append to
 - **AGENT MODE — draft PR only.** Open a **draft** pull request.
   Never mark it ready-for-review; the human reviewer flips
   draft→ready after audit.
+- **AGENT MODE — migrations self-label `needs-migration`.** If your
+  work produces a new `news/seed/migrations/*.sql` file (i.e. the
+  assignment requires a DB migration), then **after** opening the
+  draft PR, add the label `needs-migration` to it
+  (`gh pr edit <n> --add-label needs-migration`; create the label
+  with `gh label create needs-migration ... || true` if it doesn't
+  exist). The migration-executor workflow watches for that label,
+  applies the migration to prod over the HMAC executor, restarts the
+  app, and moves your `manual-actions.md` Open entry to Completed —
+  so do still write the Open `manual-actions.md` entry with full
+  inline SQL (the executor reads it; the human still reviews it).
 - The wrap-up doc's "final summary to user" goes into the **PR
   description**, not into chat — there is no chat reader.
 

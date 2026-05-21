@@ -70,7 +70,7 @@ shipped.
 | 8 | 3 | infra, ops, skunkworks | Agent infra: Unattended dev-agent dispatcher | in-progress |
 | 9 | 2 | infra, security | Agent infra: Pre-merge QA + BUG-007 gate | in-progress |
 | 8 | 4 | infra, ops | Agent infra: Post-deploy verification | in-progress |
-| 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | backlog |
+| 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | in-progress |
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | backlog |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | backlog |
 
@@ -666,7 +666,7 @@ query; admin blueprint adds a `manual-actions.md` Open entry (new
 blueprint needs a Python App restart).
 
 ### Agent infra: Migration / restart executor
-**Priority:** 10 · **LOE:** 5 · **Category:** infra, ops, backend · **Status:** backlog
+**Priority:** 10 · **LOE:** 5 · **Category:** infra, ops, backend · **Status:** in-progress
 
 Phase 4. Highest-blast-radius phase. New
 `news/app/routes/agent_ops.py` blueprint at `/agent-ops/*` runs
