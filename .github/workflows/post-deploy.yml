@@ -103,6 +103,5 @@ jobs:
           prompt: ${{ steps.prompt.outputs.prompt }}
           claude_args: >-
             --model claude-sonnet-4-6
-            --max-turns 40
             --max-budget-usd 2
             --mcp-config /tmp/mcp.json
