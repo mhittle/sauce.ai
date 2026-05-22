@@ -1,5 +1,6 @@
 import datetime
 import json
+import os
 from flask import Blueprint, render_template, request, g, redirect, url_for, jsonify, current_app, abort
 
 from ..db import query, execute, get_conn
@@ -11,6 +12,7 @@ from ..feed_diversify import (
 )
 from ..term_prefs import build_term_clauses
 from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
+from .. import classify_topup
 
 bp = Blueprint("feed", __name__)
 
@@ -70,6 +72,26 @@ def _needs_onboarding():
     return (row["n"] if row else 0) == 0
 
 
+def _maybe_signal_topup(page, page_size):
+    """Demand-driven classify trigger. Two cheap COUNT(*)s + an mtime
+    check + (debounced) one filesystem touch. Wrapped so any failure
+    here can never break the feed response."""
+    try:
+        cfg = current_app.config
+        override = cfg.get("CLASSIFY_TOPUP_SIGNAL_PATH") or None
+        app_root = os.path.dirname(current_app.root_path)
+        signal_path = classify_topup.signal_path_for(app_root, override)
+        classify_topup.maybe_signal_topup(
+            query, page, page_size, signal_path,
+            threshold=int(cfg.get("CLASSIFY_TOPUP_THRESHOLD",
+                                  classify_topup.DEFAULT_THRESHOLD)),
+            cooldown_seconds=int(cfg.get("CLASSIFY_TOPUP_COOLDOWN_SECONDS",
+                                         classify_topup.DEFAULT_COOLDOWN_SECONDS)),
+        )
+    except Exception as e:
+        current_app.logger.warning("classify topup signal skipped: %s", e)
+
+
 def _switcher_profiles():
     """Profiles for the feed-header switcher. Empty for anon visitors."""
     u = getattr(g, "user", None)
@@ -90,7 +112,7 @@ def index():
         return redirect(url_for("algo.onboarding"))
     weights, active_algo_id = _active_weights()
     page = max(1, int(request.args.get("page", 1)))
-    page_size = 30
+    page_size = 40
     category = (request.args.get("category") or "").strip() or None
     sort = _normalize_sort(request.args.get("sort"))
     order_by_sql = _order_by_for_sort(sort)
@@ -218,6 +240,8 @@ def index():
         disc = discussions_for_articles([a["id"] for a in articles])
         for a in articles:
             a["discussions"] = disc.get(a["id"], [])
+
+    _maybe_signal_topup(page, page_size)
 
     if request.headers.get("HX-Request"):
         return render_template(

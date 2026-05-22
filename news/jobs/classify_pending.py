@@ -16,6 +16,7 @@ from requests.adapters import HTTPAdapter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
+from app import classify_topup
 from app.classifier import (
     compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline,
     source_obscurity_score, story_obscurity_score, detect_paywall, popularity_score,
@@ -226,9 +227,30 @@ def _reclassify_nollm(conn, cfg, deadline):
     return len(by_id), usage.get("est_cost_usd", 0.0)
 
 
+def _resolve_signal_path():
+    """Match the path the feed touches: ``<news>/logs/classify_topup.signal``
+    unless ``CLASSIFY_TOPUP_SIGNAL_PATH`` overrides it."""
+    override = getattr(Config, "CLASSIFY_TOPUP_SIGNAL_PATH", "") or None
+    app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return classify_topup.signal_path_for(app_root, override)
+
+
 def main():
+    triggered_only = "--triggered-only" in sys.argv[1:]
+    if triggered_only:
+        signal_path = _resolve_signal_path()
+        max_age = int(getattr(Config, "CLASSIFY_TOPUP_SIGNAL_MAX_AGE",
+                              classify_topup.DEFAULT_SIGNAL_MAX_AGE_SECONDS))
+        if not classify_topup.signal_is_fresh(signal_path, time.time(), max_age):
+            logger.info("%s --triggered-only: no fresh signal, exiting", JOB)
+            return
     try:
         with job_lock(JOB):
+            if triggered_only:
+                # Consume INSIDE the lock so a concurrent feed touch that
+                # races us just re-creates the signal for the next 1-min
+                # tick to act on.
+                classify_topup.consume_signal(_resolve_signal_path())
             _run()
     except AlreadyRunning:
         logger.info("%s lock held by another process; skipping this tick", JOB)
