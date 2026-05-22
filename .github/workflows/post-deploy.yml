@@ -1,10 +1,16 @@
 name: Post-deploy verification
 
+# claude-code-action@v1 does not run on push/schedule events. The smoke job
+# (plain curl) runs on push/schedule, then fires a `repository_dispatch`
+# (type: post-deploy-qa) carrying the smoke result via the PAT; the agent-qa
+# job runs the agent under that supported event.
 on:
   push:
     branches: [main]
   schedule:
     - cron: "*/30 * * * *"
+  repository_dispatch:
+    types: [post-deploy-qa]
 
 permissions:
   contents: write
@@ -20,13 +26,14 @@ env:
 
 jobs:
   smoke:
-    if: vars.AGENTS_ENABLED == 'true'
+    if: vars.AGENTS_ENABLED == 'true' && github.event_name != 'repository_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Wait for FTP deploy to settle
         if: github.event_name == 'push'
         run: sleep 120
-      - name: Curl smoke (fail on any 5xx)
+      - name: Curl smoke (record 5xx as failure)
+        id: curl
         run: |
           base="${SITE_URL%/}"
           paths=("/" "/firehose" "/algo" "/trending" "/search?q=test" "/gallery")
@@ -39,11 +46,31 @@ jobs:
               fail=1
             fi
           done
-          exit $fail
+          if [ "$fail" = "0" ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Dispatch agent QA
+        uses: actions/github-script@v7
+        env:
+          SMOKE_RESULT: ${{ steps.curl.outputs.result }}
+        with:
+          github-token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'post-deploy-qa',
+              client_payload: { smoke_result: process.env.SMOKE_RESULT },
+            });
+            core.info(`dispatched post-deploy-qa (smoke=${process.env.SMOKE_RESULT})`);
+      - name: Fail if smoke failed
+        if: steps.curl.outputs.result == 'failure'
+        run: exit 1
 
   agent-qa:
-    needs: smoke
-    if: always() && vars.AGENTS_ENABLED == 'true'
+    if: vars.AGENTS_ENABLED == 'true' && github.event_name == 'repository_dispatch' && github.event.action == 'post-deploy-qa'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -73,7 +100,7 @@ jobs:
         id: prompt
         env:
           REPO: ${{ github.repository }}
-          SMOKE_RESULT: ${{ needs.smoke.result }}
+          SMOKE_RESULT: ${{ github.event.client_payload.smoke_result }}
         run: |
           python - <<'PY'
           import os, pathlib
