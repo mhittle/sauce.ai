@@ -272,107 +272,17 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-21
 
-- **Agent infrastructure cluster — six phases, all merged this day.**
-  The unattended agent fleet that replaces "5 Claude Code terminals
-  per session." Every workflow is gated by repo variable
-  `AGENTS_ENABLED`; agents push/PR via fine-grained PAT
-  `AGENT_PUSH_TOKEN`; LLM calls use `ANTHROPIC_API_KEY`. Dev/PM = Opus
-  4.7, QA/review/triage = Sonnet 4.6, executor-finalize = Haiku 4.5.
-  Full detail per phase in the PRs; only load-bearing + setup state is
-  kept here.
-  - **P1 Dispatcher (PR #103).** `ready-for-agent` roadmap item →
-    unattended Opus dev session → draft PR. Files:
-    `.github/agents/dev-warmup.md` (unattended warmup; ASSIGNMENT block
-    with `{{ASSIGNMENT_TITLE}}`; never moves manual-actions Open→Completed;
-    draft-PR only; $8/45min budget; BLOCKED + PARTIAL protocols;
-    self-labels `needs-migration` when it produces a migration),
-    `.github/scripts/pick_ready_items.py` (stdlib picker: flips
-    `ready-for-agent`→`in-progress` in the at-a-glance row + detail
-    Status line, `[skip ci]` commit, emits `items=[...]`; idempotent),
-    `.github/workflows/dev-agent.yml` (push-to-`roadmap.md` /
-    workflow_dispatch; concurrency `dev-agent-picker`; implement matrix
-    max-parallel 3).
-  - **P2 Pre-merge QA + BUG-007 gate (PR #104).**
-    `.github/workflows/qa-code.yml` on pull_request: `tests` job
-    (always: pip install, `create_app()` boot, pytest) +
-    `bug007-gate` (Sonnet $1, gated by AGENTS_ENABLED). Gate flags
-    (a) new SQL refs in `news/app/**` or `jobs/*.py` absent from both
-    `seed/schema.sql` and an Open manual-actions entry, (b) changes to
-    passenger_wsgi/app `__init__`/config/jobs/requirements without a
-    same-PR INSTALL.txt update, (c) HARD FAIL on
-    `dangerous-clean-slate: true`. Verdict via `/tmp/bug007-verdict.txt`
-    → 0/1 exit; `blocked-pre-merge` label on block.
-    `.github/agents/qa-reviewer.md`. **Branch protection (manual):**
-    require `tests`; require `bug007-gate` once AGENTS_ENABLED=true.
-    Also fixed two pre-existing breakages the new `tests` job surfaced:
-    `sgmllib3k` PEP-517 build failure (workaround: upgrade
-    pip/setuptools/wheel + `--no-build-isolation feedparser`, per
-    INSTALL.txt §2c) and a stale `test_csrf.py` assertion (`b"CSRF"` →
-    `b"CSRF validation failed"`, since base.html now embeds
-    `X-CSRF-Token` in JS).
-  - **P3 Post-deploy verification (PR #105).** *App code (the one
-    pre-Phase-4 exception):* new read-only admin blueprint
-    `news/app/routes/admin_ops.py` — `GET /admin/cron-health` (last 200
-    lines of `logs/cron.log`, `deque` tail, `CRON_LOG_PATH` override)
-    and `GET /admin/usage-summary` (14-day signups/DAU/signals JSON,
-    read-only SELECTs on existing tables — **no migration**). 6 tests.
-    *Workflow:* `.github/workflows/post-deploy.yml` (push-to-main +120s
-    sleep + cron `*/30`): `smoke` curl of /, /firehose, /algo,
-    /trending, /search?q=test, /gallery (fail on 5xx) + `agent-qa`
-    (Sonnet $2 Playwright MCP: sign in, thumb-persist, Keywords tab,
-    firehose, cron-health scan; auto-files deduped `agent:qa-filed` bug
-    PRs). `.github/agents/post-deploy-qa.md`. *Server:* Open
-    manual-actions entry — Python App restart so `admin_ops` registers
-    (NOT BUG-007 class). Needs secrets `SMOKE_TEST_USER` /
-    `SMOKE_TEST_PASS` (admin account recommended for the cron-health
-    scan).
-  - **P4 Migration / restart executor (PR #106).** *App code:* new
-    blueprint `news/app/routes/agent_ops.py` at `/agent-ops/*`, all
-    HMAC-SHA256 authenticated over the request body keyed by
-    `AGENT_OPS_SECRET` (±300s freshness; unset → 503 fail-closed):
-    `run-migration` (filename whitelist basename-only `*.sql` resolved
-    under `news/seed/migrations/`; split on `;`; one transaction;
-    rollback on failure), `restart-app` (touch
-    `<app_root>/../tmp/restart.txt`, `AGENT_OPS_RESTART_FILE` override),
-    `verify-schema` (read-only parameterized information_schema SELECT,
-    identifier-validated). Endpoints added to
-    `security._EXEMPT_ENDPOINTS`; `AGENT_OPS_SECRET` /
-    `AGENT_OPS_RESTART_FILE` in `config.py`. 19 tests. **DDL is not
-    transactional in MySQL** — wrapper gives true rollback only for DML;
-    keep migrations idempotent. *Workflow:*
-    `.github/workflows/migration-executor.yml` on PR labeled
-    `needs-migration`: `apply` (sign + POST each diffed migration +
-    restart, fail loud) + `finalize` (Haiku $0.50: move manual-actions
-    entry Open→Completed, comment, swap label →`migration-applied`).
-    *Server:* Open manual-actions entry — set `AGENT_OPS_SECRET`
-    (`openssl rand -hex 32`) in BOTH cPanel Setup-Python-App env AND a
-    GitHub Actions repo secret, identical, quarterly rotation. No schema
-    change.
-  - **P5 Bug auto-triage (PR #107).**
-    `.github/workflows/bug-triage.yml` on PR labeled `agent:qa-filed`
-    (Sonnet $1): reads the new BUG-NNN, posts ONE verdict —
-    `AUTO_FIX_ELIGIBLE` (fix <3 files, clear repro, not a sharp-edge
-    area) or `NEEDS_HUMAN`; biased to NEEDS_HUMAN when unsure; read-only
-    + one comment, never promotes. `.github/agents/bug-triage.md`. No
-    server change.
-  - **P6 PM agent (PR #108).** `.github/workflows/pm-agent.yml` on cron
-    `0 14 * * 1` + workflow_dispatch (Opus $4): reads 14-day
-    history/bugs/roadmap + the P3 admin endpoints (curl login with
-    SMOKE_TEST_* , degrades gracefully), proposes ≤3 `status: proposed`
-    roadmap items (data-cited Rationale) in ONE draft PR
-    `PM proposals: <date>` touching detail sections only (never the
-    at-a-glance table); empty weeks open nothing.
-    `.github/agents/pm-agent.md`. Added `proposed` to roadmap status
-    conventions. No server change.
-  - **Setup the human must do before the loop is live:** create secrets
-    `AGENT_PUSH_TOKEN` (contents+PR write PAT), `ANTHROPIC_API_KEY`,
-    `AGENT_OPS_SECRET` (also in cPanel env), `SMOKE_TEST_USER` /
-    `SMOKE_TEST_PASS`; set variable `AGENTS_ENABLED=true`; add branch
-    protection (require `tests` + `bug007-gate`); restart the Python App
-    twice (admin_ops blueprint + the AGENT_OPS_SECRET env). Tracked in
-    `manual-actions.md` Open. Also moved two prior migrations
-    (lab-votes, keywords-on-algo) to Completed (user-confirmed applied
-    on prod 2026-05-21).
+- **Agent infrastructure cluster — six phases, all merged (PRs #103-#108).**
+  Shipped the unattended agent fleet: P1 dispatcher (ready-for-agent ->
+  Opus dev PR), P2 pre-merge BUG-007 QA gate, P3 post-deploy verification
+  (+ read-only `admin_ops` blueprint), P4 HMAC migration/restart executor
+  (`agent_ops` blueprint), P5 bug auto-triage, P6 weekly PM agent. Gated by
+  `AGENTS_ENABLED`; uses `AGENT_PUSH_TOKEN` / `ANTHROPIC_API_KEY` /
+  `AGENT_OPS_SECRET` / `SMOKE_TEST_*`. Full per-phase detail (files,
+  endpoints, budgets, the human setup checklist) is in the archive;
+  operational reference is `agent-fleet.md`; load-bearing config is in
+  "Load-bearing production state" above. Operationalized + hardened
+  2026-05-22 (see that entry).
 
 ### 2026-05-20
 
