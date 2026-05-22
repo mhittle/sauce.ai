@@ -83,11 +83,32 @@ ranking is a weighted SQL expression evaluated at query time — there is no
 per-article Python at request time. The three user views are `/` (feed),
 `/firehose` (live), and `/algo` (algorithm editor). Admin lives at `/admin/*`.
 
+## Step 5b — The autonomous agent fleet (read `agent-fleet.md`)
+
+This repo runs a **six-workflow fleet of unattended Claude agents** over
+the code and prod, gated by the repo variable `AGENTS_ENABLED`. Read
+`agent-fleet.md` for the full picture. The must-knows for a human session:
+
+- **Your PRs are auto-reviewed by a BUG-007 QA gate** (the `qa-code`
+  workflow). Expect a `BUG007_OK` / `BUG007_BLOCK` bot comment;
+  `BUG007_BLOCK` is a **required-check failure** that blocks merge.
+- ⚠️ **Pushing a `ready-for-agent` row in `roadmap.md` to `main` launches
+  a paid (~$8) unattended dev-agent run** that opens its own PR. Only do
+  that when you mean to. (This is also how you *intentionally* hand work
+  to the dev agent — see `agent-fleet.md`.)
+- A **weekly PM agent** opens proposal PRs; **post-deploy QA** runs on
+  every deploy and every 30 min; **DB migrations are applied
+  post-deploy** via the `needs-migration` label (never hand-apply or
+  pre-label — see the migrate-after-deploy section).
+- To **halt the fleet**, set the `AGENTS_ENABLED` variable to `false`.
+
 ## Step 6 — Session workflow
 
 1. Pick or confirm a feature branch. Never push to `main` directly. CI/CD
    deploys on push to `main`, so anything you push there is live within a
-   minute.
+   minute — **and** a push that touches `roadmap.md` with a
+   `ready-for-agent` row will dispatch a paid dev-agent run (see Step 5b /
+   `agent-fleet.md`).
 2. Use TodoWrite to track multi-step work. Mark items done as you go.
 3. Before pushing: run `python -m pytest news/tests/ -q`. All tests should
    pass.
@@ -95,7 +116,9 @@ per-article Python at request time. The three user views are `/` (feed),
    `news/app/__init__.py`, `news/app/config.py`, `news/jobs/*.py`, or
    `news/requirements.txt`): also update `news/INSTALL.txt` in the same
    commit if the install procedure changed.
-5. Open a draft PR. Don't self-merge; ask the user.
+5. Open a draft PR. Don't self-merge; ask the user. Expect the BUG-007
+   gate to post a verdict on the PR — a `BUG007_BLOCK` must be resolved
+   before merge.
 
 ## Step 7 — Parallel sessions and merge hygiene
 
@@ -299,7 +322,10 @@ Don't assume; let them decide.
 2. Ask the user: "Pick from the roadmap, or something else?" AND
    "Are the items in `manual-actions.md` Open section done yet?"
 3. Log any user-reported bugs into `bugs.md` immediately, before fixing.
-4. Do the work on a feature branch, open a draft PR.
+4. Do the work on a feature branch, open a draft PR. Expect the BUG-007
+   gate to auto-review it. **An autonomous agent fleet runs in CI
+   (`agent-fleet.md`) — gated by `AGENTS_ENABLED`; pushing a
+   `ready-for-agent` roadmap row to `main` launches a paid dev run.**
 5. If other Claude sessions are in flight (check `git branch -r`),
    confirm your file scope with the user before starting. Rebase your
    branch on `main` before opening or updating the PR
