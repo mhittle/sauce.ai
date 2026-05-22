@@ -62,7 +62,7 @@ shipped.
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
-| 6 | 2 | ui, algo, backend | Unique sources toggle — one article per source (Your Algorithm) | ready-for-agent |
+| 6 | 2 | ui, algo, backend | Unique sources toggle — one article per source (Your Algorithm) | in-progress |
 | 7 | 3 | ops, new-feature | Source catalog expansion (+1000 high-quality sources, incl. Substack / Medium) | done |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
@@ -607,7 +607,7 @@ DB migration). Scoped via `#feed-cards` so `/`, `/search`, `/saved`,
 search/saved would be cheap follow-ons by removing the scope.
 
 ### Unique sources toggle — one article per source (Your Algorithm)
-**Priority:** 6 · **LOE:** 2 · **Category:** ui, algo, backend · **Status:** ready-for-agent
+**Priority:** 6 · **LOE:** 2 · **Category:** ui, algo, backend · **Status:** in-progress
 
 A checkbox on the **Your Algorithm** editor (`/algo`, the UI tab) that,
 when on, guarantees the home feed shows **at most one article per
