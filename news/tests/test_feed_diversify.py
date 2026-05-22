@@ -1,6 +1,9 @@
 """Tests for app/feed_diversify.py (BUG-021)."""
 
-from app.feed_diversify import cap_per_source, fetch_budget, page_slice
+from app.feed_diversify import (
+    MAX_FETCH_ROWS, cap_per_source, effective_source_cap, fetch_budget,
+    page_slice,
+)
 
 
 def _row(article_id, source_id):
@@ -110,3 +113,52 @@ def test_burst_from_one_source_does_not_dominate():
     capped = cap_per_source(rows, cap=3)
     src_1_count = sum(1 for r in capped if r["source_id"] == 1)
     assert src_1_count == 3
+
+
+def test_effective_source_cap_unique_sources_on_returns_one():
+    assert effective_source_cap({"unique_sources": True}, default_cap=3) == 1
+    assert effective_source_cap({"unique_sources": 1}, default_cap=3) == 1
+
+
+def test_effective_source_cap_unique_sources_off_returns_default():
+    assert effective_source_cap({"unique_sources": False}, default_cap=3) == 3
+    assert effective_source_cap({"unique_sources": 0}, default_cap=3) == 3
+    assert effective_source_cap({}, default_cap=3) == 3
+
+
+def test_effective_source_cap_overrides_disabled_default():
+    # When the global cap is disabled (0) the toggle still tightens to 1.
+    assert effective_source_cap({"unique_sources": True}, default_cap=0) == 1
+
+
+def test_effective_source_cap_handles_none_weights():
+    assert effective_source_cap(None, default_cap=3) == 3
+    assert effective_source_cap(None, default_cap=0) == 0
+
+
+def test_effective_source_cap_does_not_weaken_tighter_default():
+    # If a future operator sets default_cap=1 globally, the toggle is a no-op.
+    assert effective_source_cap({"unique_sources": True}, default_cap=1) == 1
+    # And toggle-off doesn't weaken it either — default_cap is the floor.
+    assert effective_source_cap({}, default_cap=1) == 1
+
+
+def test_unique_sources_yields_no_duplicate_source_ids():
+    # Regression: cap_per_source with cap=1 leaves at most one row per source.
+    rows = [_row(i, i // 4) for i in range(20)]  # 4 rows per source × 5 sources
+    capped = cap_per_source(rows, cap=1)
+    src_ids = [r["source_id"] for r in capped]
+    assert len(src_ids) == len(set(src_ids))
+    assert sorted(src_ids) == [0, 1, 2, 3, 4]
+
+
+def test_fetch_budget_grows_for_cap_one():
+    # cap=1, page_size=30 → multiplier ≥ 31, so page 1 needs ≥ 930 rows.
+    assert fetch_budget(page=1, page_size=30, cap=1) >= 30 * 31
+
+
+def test_max_fetch_rows_is_a_sensible_ceiling():
+    # The ceiling exists to bound deep "Load more" paging under cap=1.
+    # At least enough for a few full pages, but not unbounded.
+    assert MAX_FETCH_ROWS >= 30 * 31
+    assert MAX_FETCH_ROWS <= 50_000

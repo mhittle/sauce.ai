@@ -79,6 +79,15 @@
         </div>
 
         <div class="feature-row">
+          <div class="feature-name">Unique sources</div>
+          <label>
+            <input type="checkbox" name="unique_sources" value="1"
+                   {% if weights.get('unique_sources') %}checked{% endif %} />
+            Show at most one article per source.
+          </label>
+        </div>
+
+        <div class="feature-row">
           <div class="feature-name">Category filter</div>
           <div class="checkboxes">
             {% for c in categories %}
