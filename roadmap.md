@@ -62,6 +62,7 @@ shipped.
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
+| 6 | 2 | ui, algo, backend | Unique sources toggle — one article per source (Your Algorithm) | ready-for-agent |
 | 7 | 3 | ops, new-feature | Source catalog expansion (+1000 high-quality sources, incl. Substack / Medium) | done |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
@@ -604,6 +605,89 @@ paragraph, single column, tight padding — title + source + lean dot +
 DB migration). Scoped via `#feed-cards` so `/`, `/search`, `/saved`,
 `/firehose` keep their current layouts; firehose is already dense and
 search/saved would be cheap follow-ons by removing the scope.
+
+### Unique sources toggle — one article per source (Your Algorithm)
+**Priority:** 6 · **LOE:** 2 · **Category:** ui, algo, backend · **Status:** ready-for-agent
+
+A checkbox on the **Your Algorithm** editor (`/algo`, the UI tab) that,
+when on, guarantees the home feed shows **at most one article per
+source** — no outlet appears twice. User framing: "let me see a wider
+spread of sources, not three Inquirer stories in a row." This is the
+user-controllable version of the BUG-021 fix: the feed already enforces
+a per-source cap (`FEED_MAX_PER_SOURCE`, default 3) globally via
+`app/feed_diversify.py`; this exposes a per-profile lever that tightens
+that cap to **1** for the user who wants maximum source diversity.
+
+**Why now / user value:** source diversity is a top-perceived expression
+of "my algorithm, my rules," and the plumbing is already shipped — this
+is a thin, high-clarity control over machinery that exists and is
+unit-tested. It pairs naturally with the existing diversification cap and
+the transparent-ranking thesis.
+
+**Where it lives & how it persists (no DB migration):**
+- The flag is a per-profile setting stored as a new key `unique_sources`
+  (boolean) inside the existing free-form `user_algorithms.weights_json`
+  dict. **No schema change, no migration, not BUG-007 class** — the
+  ranking layer (`ranking.build_score_sql` / `build_filters_sql`) only
+  reads known feature keys and ignores unknown keys, and
+  `parse_weights_json` / `resolved_weights_for_view` round-trip the dict
+  as-is. An older profile without the key simply reads as "off."
+
+**Sketch (files/surfaces to touch):**
+- `news/app/routes/algo.py` — in `_parse_form_weights(form)`, add
+  `weights["unique_sources"] = bool(form.get("unique_sources"))`.
+  (Unchecked HTML checkboxes don't submit, so set it explicitly every
+  save rather than relying on the key's presence.)
+- `news/app/templates/algo.html` — add the checkbox on the **UI** tab as
+  a feed-shaping control near the recency / category / country controls
+  (it is a feed-shaping toggle, not a per-feature slider, so it doesn't
+  belong inside the `.feature-row` weight grid). `name="unique_sources"`,
+  `value="1"`, `checked` when `weights.get('unique_sources')`. Include
+  the existing `csrf_field()` (the form already posts it). Short helper
+  caption: "Show at most one article per source."
+- `news/app/routes/feed.py` — in `index()`, resolve the **effective**
+  per-source cap: when the active profile's `weights.get("unique_sources")`
+  is truthy, use `cap = 1`; otherwise keep the existing
+  `FEED_MAX_PER_SOURCE` config value. Feed this cap into the existing
+  `fetch_budget(...)` / `cap_per_source(..., cap=...)` / `page_slice(...)`
+  calls — no new query, no new join. Keep the over-fetch + cap + slice
+  pagination contract intact (page N+1 must agree with page N).
+- Prefer a tiny pure helper (e.g. `effective_source_cap(weights,
+  default_cap)` in `app/feed_diversify.py`) so the decision is
+  unit-testable without Flask/DB and `feed.index()` stays thin.
+
+**Preserve:**
+- Anonymous visitors and signed-in users with no saved profile keep the
+  default behavior (balanced default weights → no `unique_sources` key →
+  existing `FEED_MAX_PER_SOURCE` cap). The toggle is per-profile, so it
+  only affects the active profile and travels with profile switching.
+- The toggle **overrides** the global cap toward 1; it must not weaken an
+  already-tighter setting and must work even if `FEED_MAX_PER_SOURCE` is
+  configured to 0 (disabled) — `unique_sources` still yields cap 1.
+- The cap is applied AFTER the SQL `ORDER BY` (as today), so the one
+  surviving article per source is the highest-ranked one for that
+  source under the user's algorithm. Story-cluster dedup, jitter,
+  source/keyword prefs, category/sort, and the 7-day window are all
+  unchanged. Scope to `/` only — `/firehose`, `/search`, `/saved`, and
+  the digest are untouched (same scoping decision as BUG-021).
+
+**Constraints / watch-outs:**
+- **No synchronous LLM, no new process** — pure SQL-fetch + Python cap.
+- **Over-fetch ceiling:** `fetch_budget` with `cap=1` and `page_size=30`
+  multiplies the row budget ~31x (≈930 rows for page 1, growing per
+  page). The active catalog has hundreds of sources so the page still
+  fills, but cap the fetch at a sane ceiling (e.g. a `max_fetch` constant)
+  so deep "Load more" paging can't issue an unbounded `LIMIT`. Justify
+  the ceiling in the PR; a short page near the end of the window is
+  acceptable, an unbounded fetch is not.
+- No migration, no cron, no env var, no new dependency, no symlink. A
+  template-only + thin-route change; Passenger restart on deploy as usual.
+
+**Test expectation:** `pytest news/tests/` stays green. Add pure unit
+tests for `effective_source_cap` (unique_sources on → 1; off/absent →
+default; default 0 + on → 1) and a `cap_per_source(..., cap=1)`
+regression asserting no duplicate `source_id` survives. No test should
+require Haiku, a live DB, or a browser.
 
 ### A/B split feed
 **Priority:** 6 · **LOE:** 5 · **Category:** ui, algo · **Status:** backlog
