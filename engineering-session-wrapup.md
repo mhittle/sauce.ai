@@ -106,6 +106,24 @@ For each item touched this session:
 Also update the at-a-glance table at the top to match the detail
 sections — they tend to drift.
 
+### 2b. Agent-fleet bookkeeping
+
+If the session touched the agent fleet (see `agent-fleet.md`), keep its
+state honest:
+
+- **`ready-for-agent` is a live trigger.** Don't mark a roadmap item
+  `ready-for-agent` at wrap-up unless you intend it to dispatch a paid
+  dev-agent run the moment it lands on `main`. Leave not-yet-approved
+  ideas as `proposed` or plain backlog entries.
+- **Migration PRs:** ensure a PR carrying a `news/seed/migrations/*.sql`
+  is labeled `has-migration` (informational), **not** `needs-migration`.
+  The migration is applied **post-deploy** by labeling `needs-migration`
+  once the merged file is live on prod — call that out in the final
+  summary (Step 7) as a manual step, like any other prod action.
+- If you changed any workflow (`.github/workflows/*.yml`), agent prompt
+  (`.github/agents/*.md`), or fleet secret/variable, update
+  `agent-fleet.md` to match in the same PR.
+
 ### 3. Update `bugs.md`
 
 For each bug touched this session:
