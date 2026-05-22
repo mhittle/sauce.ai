@@ -186,6 +186,13 @@ itself before invoking python.
 # every 5 min: classify pending articles
 */5  * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python classify_pending.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
 
+# every 1 min: demand-driven top-up. Fast no-op unless the feed has
+# touched logs/classify_topup.signal (buffer below CLASSIFY_TOPUP_THRESHOLD,
+# default 400). Bounded by the same job_lock and CLASSIFY_BUDGET_SECONDS
+# as the 5-min cron above, so a long run from either entry is mutually
+# exclusive with the other.
+*    * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python classify_pending.py --triggered-only >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
 # every 30 min: popularity poll
 */30 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python popularity_poll.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
 

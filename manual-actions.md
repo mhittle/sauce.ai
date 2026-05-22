@@ -71,6 +71,50 @@ no Keywords tab and the keyword controls render under the algo form.
 ---
 
 ## Completed
+### 2026-05-22 — Cron entry: classify_pending --triggered-only (every 1 min)
+**Status:** open · **PR:** TBD · **Opened:** 2026-05-22
+
+Demand-driven classification top-up. The feed (`/`) now touches
+`logs/classify_topup.signal` after each page load when the classified
+buffer ahead of the reader drops below 400 (debounced to once per
+60s). A new every-minute cron entry runs `classify_pending.py
+--triggered-only`, which is a fast no-op unless the signal file is
+present AND fresh (within `CLASSIFY_TOPUP_SIGNAL_MAX_AGE`, default
+600s). When the signal is fresh, it acquires the existing
+`job_lock(classify_pending)` and runs normally — the lock prevents
+overlap with the existing 5-min cron. This is **NOT** a per-request
+spawn (the feed only touches a file); the cron is the only process
+that ever launches a classifier.
+
+The existing `*/5 * * * * classify_pending.py` entry stays as the
+safety-net / cold-start tick.
+
+Add this line in cPanel → "Cron Jobs" (substitute the real
+`lt1ih6uyy2z6` for `YOURACCOUNT`):
+
+```
+*    * * * *  source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news/jobs && python classify_pending.py --triggered-only >> /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/cron.log 2>&1
+```
+
+**Verify** (after the next live feed load that should be over the
+threshold):
+
+```
+ls -la ~/public_html/sauce.ai/news/logs/classify_topup.signal
+tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
+```
+
+You should see one of:
+- `classify_pending --triggered-only: no fresh signal, exiting` (no demand)
+- `classified=N llm_articles=M ...` (signal was fresh; ran normally)
+- `classify_pending lock held by another process; skipping this tick`
+  (the 5-min cron is mid-run; safe — signal is left in place for the
+  next 1-min tick)
+
+No DB migration, no Python App restart, no new env var, no new pip dep.
+The signal file lives under `logs/` next to the existing job
+lockfiles; if the `logs/` dir doesn't exist it is created on first
+touch.
 
 ### 2026-05-22 — Migration: agent_runs (agent fleet observability)
 **Status:** completed · **PR:** #114 (merged 2026-05-22) · **Opened:** 2026-05-22 · **Completed:** 2026-05-22 ·
