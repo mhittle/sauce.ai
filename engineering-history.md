@@ -91,7 +91,10 @@ this section + `INSTALL.txt` win.
 
 **Cron (in the cPanel crontab, not in the repo)**
 
-`fetch_feeds` 15m · `classify_pending` 5m · `popularity_poll` 30m ·
+`fetch_feeds` 15m · `classify_pending` 5m ·
+`classify_pending --triggered-only` 1m (PR #121, demand-driven top-up;
+no-op unless the feed touched `logs/classify_topup.signal`) ·
+`popularity_poll` 30m ·
 `trending_poll` 30m · `maintenance` nightly 03:30 UTC ·
 `send_digest` 12:00 UTC · `discover_harvest` hourly :15 ·
 `discover_promote` 04:00 UTC · `discover_llm` Mon 05:00 UTC. Each line
@@ -140,6 +143,25 @@ server-side migration referenced below was applied on prod and is in
 `manual-actions.md` → Completed; bug root causes are in `bugs.md`.
 
 ### 2026-05-22
+
+- **Demand-driven feed classification (PR #121, unattended dev-agent).**
+  Closes the "feed runs dry until the next 5-min cron tick" gap when an
+  active reader outpaces `classify_pending`. **No synchronous LLM on the
+  request path, no per-request fork/spawn** (nproc ceiling untouched):
+  feed page size 30→40, and after each feed load the route does two cheap
+  `COUNT(*)`s and, if the classified buffer ahead of the reader is < 400,
+  **touches** `logs/classify_topup.signal` (mtime-debounced ~60s,
+  failure-swallowed). `classify_pending.py` gains `--triggered-only`
+  (new every-1-min cron) which no-ops unless the signal is present AND
+  fresh, then acquires the existing `job_lock` and consumes the signal
+  inside it — so the cron stays the only process that launches a
+  classifier and the `*/5` tick remains the safety net. No migration /
+  schema / pip / restart. New pure `app/classify_topup.py` + 23 tests
+  (543 pass). *Code:* `app/classify_topup.py` (new), `routes/feed.py`,
+  `app/config.py` (4 `CLASSIFY_TOPUP_*` knobs), `jobs/classify_pending.py`,
+  `INSTALL.txt`, `tests/test_classify_topup.py`. *Server state:* one new
+  1-min cron entry (`manual-actions.md` Open, full crontab line inline).
+  No migration file → no `has-migration` label.
 
 - **Fold per-algorithm Keywords into the Your Algorithm feature list (PR
   drafted, unattended dev-agent).** UI polish on top of the per-algo

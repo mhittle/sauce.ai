@@ -49,6 +49,16 @@ class Config:
     FEED_FETCH_BATCH = int(os.environ.get("FEED_FETCH_BATCH", "20"))
     CLASSIFY_BUDGET_SECONDS = int(os.environ.get("CLASSIFY_BUDGET_SECONDS", "240"))
     CLASSIFY_BATCH_LIMIT = int(os.environ.get("CLASSIFY_BATCH_LIMIT", "200"))
+    # Demand-driven top-up. The feed touches a signal file when the
+    # classified buffer drops below THRESHOLD; the every-minute
+    # `classify_pending --triggered-only` cron consumes it. COOLDOWN
+    # debounces the touch so a fast pager can't write the file 100x/sec.
+    # SIGNAL_MAX_AGE makes a stale signal ignorable (no stampede when a
+    # long-held job_lock finally releases).
+    CLASSIFY_TOPUP_THRESHOLD = int(os.environ.get("CLASSIFY_TOPUP_THRESHOLD", "400"))
+    CLASSIFY_TOPUP_COOLDOWN_SECONDS = int(os.environ.get("CLASSIFY_TOPUP_COOLDOWN_SECONDS", "60"))
+    CLASSIFY_TOPUP_SIGNAL_MAX_AGE = int(os.environ.get("CLASSIFY_TOPUP_SIGNAL_MAX_AGE", "600"))
+    CLASSIFY_TOPUP_SIGNAL_PATH = os.environ.get("CLASSIFY_TOPUP_SIGNAL_PATH", "")
 
     SITE_URL = os.environ.get("SITE_URL", "https://sauce.ai/news").rstrip("/")
     SMTP_HOST = os.environ.get("SMTP_HOST", "localhost")
