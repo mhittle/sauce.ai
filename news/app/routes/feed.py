@@ -6,7 +6,10 @@ from flask import Blueprint, render_template, request, g, redirect, url_for, jso
 from ..db import query, execute, get_conn
 from ..discussion import discussions_for_articles
 from ..explain import explain_article
-from ..feed_diversify import cap_per_source, fetch_budget, page_slice
+from ..feed_diversify import (
+    MAX_FETCH_ROWS, cap_per_source, effective_source_cap, fetch_budget,
+    page_slice,
+)
 from ..term_prefs import build_term_clauses
 from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
 from .. import classify_topup
@@ -195,9 +198,11 @@ def index():
     """
     # BUG-021: over-fetch from the top so the per-source cap (applied in
     # Python below) still yields a full page. Single-source-burst pages
-    # would otherwise be silently short.
-    src_cap = int(current_app.config.get("FEED_MAX_PER_SOURCE", 0) or 0)
-    fetch_limit = fetch_budget(page, page_size, src_cap)
+    # would otherwise be silently short. The active profile's unique-sources
+    # toggle (if set) tightens that cap to 1 for this viewer.
+    default_cap = int(current_app.config.get("FEED_MAX_PER_SOURCE", 0) or 0)
+    src_cap = effective_source_cap(weights, default_cap)
+    fetch_limit = min(fetch_budget(page, page_size, src_cap), MAX_FETCH_ROWS)
     params = {**score_params, **filter_params, **pref_params, **vis_params,
               **term_params,
               "limit": fetch_limit, "offset": 0}

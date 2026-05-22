@@ -16,7 +16,13 @@ agrees with page N.
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
+
+# Hard ceiling for the over-fetch budget. With `cap=1` and `page_size=30`
+# the multiplier is ~31x, so page N issues a `LIMIT` of ~930*N — unbounded
+# growth as "Load more" deepens. Clamp at MAX_FETCH_ROWS so the deepest
+# pages may come up short rather than scanning an unbounded slice.
+MAX_FETCH_ROWS = 5000
 
 
 def cap_per_source(
@@ -64,3 +70,16 @@ def page_slice(rows: Sequence[dict], page: int, page_size: int) -> list[dict]:
     start = (page - 1) * page_size
     end = page * page_size
     return list(rows[start:end])
+
+
+def effective_source_cap(weights: Mapping | None, default_cap: int) -> int:
+    """Per-profile `unique_sources` toggle tightens the global cap to 1.
+
+    When the active profile's weights carry `unique_sources` truthy the
+    feed shows at most one article per source regardless of the global
+    `FEED_MAX_PER_SOURCE` config (including when it is 0/disabled).
+    Otherwise return `default_cap` unchanged.
+    """
+    if weights and weights.get("unique_sources"):
+        return 1
+    return default_cap

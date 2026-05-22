@@ -144,6 +144,50 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-22
 
+- **Unique sources toggle — one article per source (PR drafted,
+  unattended dev-agent).** Per-profile boolean on `/algo`'s UI tab that
+  tightens the global per-source cap to 1 for the viewer. User framing:
+  "let me see a wider spread of sources, not three Inquirer stories in a
+  row." This is the user-controllable lever over the BUG-021 cap
+  (`FEED_MAX_PER_SOURCE`, default 3) already enforced by
+  `app/feed_diversify.py`. No DB migration, no new env var, no new cron,
+  no new dep — the flag is a new key `unique_sources` (boolean) inside
+  the existing free-form `user_algorithms.weights_json`; the ranking
+  layer already ignores unknown keys, so older profiles read the key as
+  "off" without backfill (NOT BUG-007 class). New pure helper
+  `feed_diversify.effective_source_cap(weights, default_cap)` — toggle on
+  → 1 regardless of the global cap (including when configured to 0 /
+  disabled); toggle off / absent → `default_cap`; never weakens an
+  already-tighter floor. `feed.index()` now resolves the effective cap
+  per request and clamps `fetch_budget(...)` to a new
+  `feed_diversify.MAX_FETCH_ROWS = 5000` ceiling so deep "Load more"
+  paging under cap=1 (multiplier ~31x) can't issue an unbounded `LIMIT`;
+  a short page near the end of the 7-day window is acceptable, an
+  unbounded fetch is not. Scope: `/` only — `/firehose`, `/search`,
+  `/saved`, and the digest are untouched (same scoping as BUG-021). The
+  cap is applied AFTER the SQL `ORDER BY`, so each source's surviving
+  article is the highest-ranked one for that source under the user's
+  algorithm; story-cluster dedup, jitter, source/keyword prefs,
+  category/sort, the 7-day window, and pagination stability (page N+1
+  agrees with page N) are unchanged. *Code touched:*
+  `news/app/feed_diversify.py` (+`MAX_FETCH_ROWS` constant,
+  +`effective_source_cap` helper), `news/app/routes/feed.py` (resolve
+  effective cap via `effective_source_cap(weights, default_cap)` and
+  clamp `fetch_budget(...)` at `MAX_FETCH_ROWS`),
+  `news/app/routes/algo.py` (`_parse_form_weights` writes
+  `weights["unique_sources"] = bool(form.get("unique_sources"))` on every
+  save so toggle-off clears a previously-saved truthy value — unchecked
+  HTML checkboxes don't submit),
+  `news/app/templates/algo.html` (+`Unique sources` feature-row with the
+  checkbox under Country filter, above Near a place — feed-shaping
+  control, not a per-feature slider, so it sits next to recency /
+  category / country rather than inside the weight grid). 10 new tests
+  in `test_feed_diversify.py` and `test_algo_unique_sources.py` pin
+  toggle-on/off/missing, override of a disabled global cap, "never
+  weakens a tighter floor," no-duplicate-source-ids regression, and
+  `MAX_FETCH_ROWS` ceiling sanity. Full suite: 530 passed. *Server
+  state touched:* none — template + thin-route + pure-helper change;
+  Passenger restart on deploy as usual.
 - **Demand-driven feed classification (PR #121, unattended dev-agent).**
   Closes the "feed runs dry until the next 5-min cron tick" gap when an
   active reader outpaces `classify_pending`. **No synchronous LLM on the

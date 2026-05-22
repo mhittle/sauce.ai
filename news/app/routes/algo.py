@@ -94,6 +94,10 @@ def _parse_form_weights(form):
         weights["recency"] = 0.0
     weights["category_filter"] = [c for c in form.getlist("category_filter") if c in CATEGORIES]
     weights["country_filter"] = [c for c in form.getlist("country_filter") if c in COUNTRIES]
+    # Unchecked HTML checkboxes don't submit, so set this every save rather
+    # than relying on key presence — otherwise toggling off would never
+    # clear the previously-saved truthy value.
+    weights["unique_sources"] = bool(form.get("unique_sources"))
 
     # Geo radius filter: free-text place + radius. Resolve the place once at
     # save time so the SQL layer can stay dumb. An unparseable place silently
