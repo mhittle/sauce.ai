@@ -57,6 +57,7 @@ shipped.
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
 | 7 | 3 | algo, ui | Per-algorithm keyword mute & boost (in the algo builder) | done |
 | 6 | 3 | algo, ui, new-feature | Keywords-on-algo only (drop /terms; travel with gallery publish/adopt) | done |
+| 6 | 2 | ui | Fold per-algorithm Keywords into the Your Algorithm feature list | ready-for-agent |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
@@ -485,6 +486,47 @@ unions `user_term_prefs` + the active algorithm's
 pure `app/term_prefs.build_term_clauses` builder — the builder's
 dedupe + mute-wins rules carry the merge semantics, so no new helper.
 `/terms` stays as the power-user account-wide surface.
+
+### Fold per-algorithm Keywords into the Your Algorithm feature list
+**Priority:** 6 · **LOE:** 2 · **Category:** ui · **Status:** ready-for-agent
+
+Follow-on UI polish to "Per-algorithm keyword mute & boost" (PR #82).
+Today `/algo` (the Your Algorithm editor) is an Alpine tabbed view with
+five top tabs — UI, Code, Presets, Profiles, **Keywords** — and the
+per-algorithm mute/boost terms live in their own **Keywords** tab,
+separate from the feature sliders. That siloes keywords from the rest of
+the algorithm definition and is easy to miss; keywords shape ranking just
+like the feature weights and belong in the same place.
+
+**Goal:** drop the standalone "Keywords" tab and fold its content into
+the regular feature list on the **UI** tab, so an algorithm's full
+definition (sliders + filters + keywords) is visible and editable in one
+view.
+
+**Sketch (template/UI reorg — no DB change, no route change):**
+- In `news/app/templates/algo.html`: move the keyword block currently
+  under `<section x-show="tab==='keywords'">` (the add-keyword form plus
+  the muted/boosted term lists) into the UI tab's `<div class="features">`
+  feature list — e.g. as a "Keywords" section/feature-row after the
+  existing rows (Category/Country filter, Near a place). Remove the
+  `Keywords` `<button>` from `<nav class="tabs">` and the now-empty
+  `tab==='keywords'` section. Keep the existing count inline.
+- The add/delete forms keep posting to the unchanged
+  `/algo/keywords/add` and `/algo/keywords/<id>/delete` routes; the
+  `_render_editor` context (`algo_muted`, `algo_boosted`,
+  `max_keywords`) is unchanged. CSRF fields stay on the forms.
+- Style the folded block to match `.features` / `.feature-row` in
+  `news/app/static/style.css`; keep it usable on mobile.
+
+**Preserve:** the 100-keyword cap (`MAX_KEYWORDS_PER_ALGO`), mute-wins +
+dedupe semantics, the "save an algorithm first" guard, keywords attaching
+to the **active** profile, and the Profiles-tab interplay (switch profile
+to edit a different one's keywords). `routes/feed.py`'s per-algorithm
+keyword union is unchanged.
+
+**Constraints:** no migration, no new endpoint, no ranking behavior
+change — purely where the controls render. Keep `pytest news/tests/`
+green; update any template-render test that asserts the Keywords tab.
 
 ### Multiple saved algorithms / profiles
 **Priority:** 7 · **LOE:** 4 · **Category:** backend, ui · **Status:** in-progress
