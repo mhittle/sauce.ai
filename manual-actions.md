@@ -40,8 +40,41 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-22 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** open · **PR:** (agent-fleet enablement, this session) ·
+**Opened:** 2026-05-22
+
+`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
+branches, open PRs, and fire `repository_dispatch` (the default
+`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
+Fine-grained PATs **expire**, and four workflows fail silently the day it
+lapses: `dev-agent`, `pm-agent`, `post-deploy`, `migration-executor`.
+
+**Action:** before the token's expiry, regenerate it (GitHub → Settings →
+Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
+with Contents / Pull requests / Workflows / Actions RW) and update the
+`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
+Actions → Secrets). No code change; the fleet resumes immediately. Record
+the new expiry date here when you rotate.
+
+---
+
+### 2026-05-22 — Python App restart (low-urgency): keywords-into-feature-list (PR #119)
+**Status:** open · **PR:** #119 (merged 2026-05-22) · **Opened:** 2026-05-22
+
+PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
+(`algo.html` + `style.css`). Template-only, so Passenger picks it up on
+its next worker cycle — **low-urgency** — but a cPanel "Restart" of the
+`sauce.ai/news` Python App makes it take immediately. Verify `/algo` shows
+no Keywords tab and the keyword controls render under the algo form.
+
+---
+
+## Completed
+
 ### 2026-05-22 — Migration: agent_runs (agent fleet observability)
-**Status:** open · **PR:** TBD · **Opened:** 2026-05-22 ·
+**Status:** completed · **PR:** #114 (merged 2026-05-22) · **Opened:** 2026-05-22 · **Completed:** 2026-05-22 ·
+**Applied:** by the migration-executor on the #114 `needs-migration` label (HMAC `/agent-ops/run-migration`), 2026-05-22.
 **File reference:** `news/seed/migrations/2026-05-22-agent-runs.sql`
 
 Adds a new append-only `agent_runs` table that each agent workflow
@@ -97,10 +130,6 @@ PR, and the `agent_ops` blueprint was already registered).
 above over HMAC and moves this entry to Completed automatically.
 
 ---
-
----
-
-## Completed
 
 ### 2026-05-21 — Secret: AGENT_OPS_SECRET for the HMAC migration executor
 **Status:** completed · **PR:** #106 (merged 2026-05-21) ·

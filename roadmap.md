@@ -58,7 +58,7 @@ shipped.
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
 | 7 | 3 | algo, ui | Per-algorithm keyword mute & boost (in the algo builder) | done |
 | 6 | 3 | algo, ui, new-feature | Keywords-on-algo only (drop /terms; travel with gallery publish/adopt) | done |
-| 6 | 2 | ui | Fold per-algorithm Keywords into the Your Algorithm feature list | in-progress |
+| 6 | 2 | ui | Fold per-algorithm Keywords into the Your Algorithm feature list | done |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
@@ -77,7 +77,7 @@ shipped.
 | 10 | 5 | infra, ops, backend | Agent infra: Migration / restart executor | done |
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
-| 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | in-progress |
+| 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
 
 ---
 
@@ -544,7 +544,7 @@ dedupe + mute-wins rules carry the merge semantics, so no new helper.
 `/terms` stays as the power-user account-wide surface.
 
 ### Fold per-algorithm Keywords into the Your Algorithm feature list
-**Priority:** 6 · **LOE:** 2 · **Category:** ui · **Status:** in-progress
+**Priority:** 6 · **LOE:** 2 · **Category:** ui · **Status:** done (PR #119)
 
 Follow-on UI polish to "Per-algorithm keyword mute & boost" (PR #82).
 Today `/algo` (the Your Algorithm editor) is an Alpine tabbed view with
@@ -941,7 +941,7 @@ read-only admin route + an init-time check; no sharp-edge infra, no new
 dependency.
 
 ### Agent fleet observability — weekly cost + activity rollup
-**Priority:** 6 · **LOE:** 3 · **Category:** infra, ops · **Status:** in-progress · **Dispatched:** 2026-05-21
+**Priority:** 6 · **LOE:** 3 · **Category:** infra, ops · **Status:** done (PR #114, migration applied to prod)
 
 **Rationale:** The six-phase agent fleet shipped 2026-05-21 (PRs
 #103–#108), each workflow carrying a per-run budget cap ($8 dev / $1 QA
@@ -966,6 +966,26 @@ app-behavior change.
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-22
+
+- **Agent fleet — operationalized + hardened.** Took the six-phase fleet
+  from merged-but-dormant to fully running, and shipped the first two
+  agent-built features. Fixes: headless tool permissions (PR #111),
+  `repository_dispatch` event wiring for dev-agent (PR #113) and
+  pm-agent/post-deploy + picker push hardening (PR #116),
+  migrate-after-deploy model (PR #115), fleet onboarding doc
+  `agent-fleet.md` (PR #117), PM-session doc (this PR).
+- **Agent fleet observability — weekly cost + activity rollup** (Pri 6,
+  LOE 3, PR #114). First fully autonomous dev-agent feature: `agent_runs`
+  table + `/agent-ops/report-run` + `/admin/agent-activity` rollup;
+  migration applied to prod via the executor.
+- **Fold per-algorithm Keywords into the Your Algorithm feature list**
+  (Pri 6, LOE 2, PR #119). Dropped the standalone Keywords tab; folded
+  the keyword controls into the UI-tab feature list.
+- **Demand-driven feed classification** (Pri 6, LOE 4, PR #120 — roadmap
+  item) — dispatched to the dev agent; implementation PR in flight, not
+  yet merged.
 
 ### 2026-05-21
 

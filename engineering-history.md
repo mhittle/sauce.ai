@@ -31,6 +31,14 @@ Also cross-referenced in `bugs.md` (BUG-001/002), `INSTALL.txt` §8/§9,
 and `new-engineering-session-instructions.md` Step 10. If these conflict,
 this section + `INSTALL.txt` win.
 
+**Agent-fleet config (GitHub side, not in repo)**
+
+- Repo **variable** `AGENTS_ENABLED=true` gates all six agent workflows
+  (set it to anything else to halt the fleet). Secrets: `ANTHROPIC_API_KEY`
+  (needs credits), `AGENT_PUSH_TOKEN` (fine-grained PAT — **expires**, see
+  `manual-actions.md`), `AGENT_OPS_SECRET`, `SMOKE_TEST_USER/PASS`, `FTPP`.
+  Full reference and the hard constraints: `agent-fleet.md`.
+
 **Host / paths**
 
 - GoDaddy cPanel/CloudLinux. Account `lt1ih6uyy2z6`. App root
@@ -214,6 +222,31 @@ server-side migration referenced below was applied on prod and is in
   self-labels `needs-migration` so the Phase 4 executor applies it.
   No new env var, no new cron, no new pip dep, no restart needed
   (both routes attach to already-registered blueprints).
+
+- **Agent fleet operationalized + hardened (interactive session).** Took
+  the six merged-but-dormant workflows (PRs #103–#108) live and fixed
+  every gap the first real runs surfaced. Enablement: set
+  `AGENTS_ENABLED=true` + the secrets (`ANTHROPIC_API_KEY`,
+  `AGENT_PUSH_TOKEN`, `AGENT_OPS_SECRET`, smoke creds) and topped up API
+  credits. Fixes: (1) **headless tool permissions** — `claude-code-action`
+  auto-denies tool calls without a permission mode, so workers use
+  `--permission-mode bypassPermissions` and the BUG-007 gate (untrusted
+  diffs) uses `dontAsk` + a tight `--allowedTools` allowlist (PR #111);
+  (2) **event constraint** — the action only runs on
+  `pull_request*`/`issues`/`issue_comment`/`repository_dispatch`, NOT
+  push/schedule/workflow_dispatch, so dev-agent (PR #113) and
+  pm-agent/post-deploy (PR #116) do their logic then fan out a
+  `repository_dispatch` via `AGENT_PUSH_TOKEN` (the default
+  `GITHUB_TOKEN` can't trigger downstream runs); picker push now
+  rebases+retries (PR #116); (3) **migrate-after-deploy** —
+  `/agent-ops/run-migration` reads the file from prod disk, so migrations
+  apply only post-deploy: the dev agent now labels migration PRs
+  `has-migration` and a human applies `needs-migration` after deploy
+  (PR #115). The #114 `agent_runs` migration was applied to prod this way.
+  Docs: `agent-fleet.md` (fleet reference, PR #117) and
+  `pm-session-instructions.md` (this PR). #120 (demand-driven feed
+  classification) dispatched; implementation PR in flight. *Load-bearing
+  fleet config lives in `agent-fleet.md`.*
 
 ### 2026-05-21
 
