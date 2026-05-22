@@ -3,6 +3,12 @@
 For any agent (LLM or human) starting fresh work on this codebase. Read this
 end-to-end before touching anything.
 
+> **Product-management session?** If you're here to do product work —
+> prioritize the backlog, spec features, decide *what* to build rather
+> than write code — use `pm-session-instructions.md` instead (same
+> codebase warmup, product-focused). The autonomous dev fleet
+> (`agent-fleet.md`) does the implementation.
+
 ---
 
 ## Step 1 — Read `engineering-history.md` end-to-end
