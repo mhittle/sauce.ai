@@ -162,6 +162,8 @@ jobs:
                   fh.write("\n")
               fh.write("__PROMPT_EOF__\n")
           PY
+      - name: Mark agent start
+        run: echo "STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
       - name: Run finalize agent
         uses: anthropics/claude-code-action@v1
         with:
@@ -169,3 +171,16 @@ jobs:
           github_token: ${{ secrets.AGENT_PUSH_TOKEN }}
           prompt: ${{ steps.prompt.outputs.prompt }}
           claude_args: "--model claude-haiku-4-5 --max-budget-usd 0.5 --permission-mode bypassPermissions"
+      - name: Report agent run
+        if: always()
+        env:
+          AGENT_OPS_SECRET: ${{ secrets.AGENT_OPS_SECRET }}
+          SITE_URL: https://sauce.ai/news
+          WORKFLOW: migration-executor
+          JOB: finalize
+          RUN_ID: ${{ github.run_id }}
+          CONCLUSION: ${{ job.status }}
+          EST_COST_USD: "0.5"
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          NOTES: "budget-cap"
+        run: python .github/scripts/report_agent_run.py

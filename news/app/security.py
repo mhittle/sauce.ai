@@ -50,6 +50,7 @@ _EXEMPT_ENDPOINTS = frozenset({
     "agent_ops.run_migration",
     "agent_ops.restart_app",
     "agent_ops.verify_schema",
+    "agent_ops.report_run",
 })
 
 

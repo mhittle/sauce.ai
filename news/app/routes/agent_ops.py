@@ -1,13 +1,16 @@
 """HMAC-authenticated executor for whitelisted prod operations.
 
 Runs INSIDE the news Flask app and is driven by the GitHub Actions
-migration-executor workflow. Three endpoints under `/agent-ops/*`, all
+migration-executor workflow. Four endpoints under `/agent-ops/*`, all
 authenticated by an HMAC-SHA256 signature over the request body keyed
 by `AGENT_OPS_SECRET` (set via .htaccess on prod):
 
   POST /agent-ops/run-migration  -> apply a whitelisted migration file
   POST /agent-ops/restart-app    -> touch the Passenger restart trigger
   POST /agent-ops/verify-schema  -> read-only column-existence check
+  POST /agent-ops/report-run     -> append a row to `agent_runs` from a
+                                    workflow's post-step (agent fleet
+                                    observability)
 
 This is the highest-blast-radius surface in the repo: it executes DDL
 on the production database. The guard rails are, in order:
@@ -236,6 +239,81 @@ def restart_app():
     except OSError as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
     return jsonify({"status": "ok", "restarted": True, "trigger": path})
+
+
+_WORKFLOW_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_CONCLUSION_RE = re.compile(r"^[A-Za-z0-9_-]{0,32}$")
+
+
+def _int_in_range(value, lo: int, hi: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return 0
+    if n < lo:
+        return lo
+    if n > hi:
+        return hi
+    return n
+
+
+def _decimal_in_range(value, hi: float) -> float:
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if f < 0:
+        return 0.0
+    if f > hi:
+        return hi
+    return f
+
+
+@bp.route("/report-run", methods=["POST"])
+def report_run():
+    ok, err = _authenticate()
+    if not ok:
+        return err
+
+    payload = _json_body()
+    if not isinstance(payload, dict):
+        return jsonify({"status": "error", "error": "invalid JSON body"}), 400
+
+    workflow = payload.get("workflow") or ""
+    if not isinstance(workflow, str) or not _WORKFLOW_RE.match(workflow):
+        return jsonify({"status": "error", "error": "invalid workflow"}), 400
+
+    job = payload.get("job") or ""
+    if not isinstance(job, str) or len(job) > 64:
+        return jsonify({"status": "error", "error": "invalid job"}), 400
+
+    conclusion = payload.get("conclusion") or ""
+    if not isinstance(conclusion, str) or not _CONCLUSION_RE.match(conclusion):
+        return jsonify({"status": "error", "error": "invalid conclusion"}), 400
+
+    run_id = _int_in_range(payload.get("run_id", 0), 0, 2**63 - 1)
+    duration_seconds = _int_in_range(payload.get("duration_seconds", 0), 0, 86_400)
+    pr_number = _int_in_range(payload.get("pr_number", 0), 0, 2**31 - 1)
+    est_cost_usd = _decimal_in_range(payload.get("est_cost_usd", 0), 9999.99999)
+
+    notes = payload.get("notes") or ""
+    if not isinstance(notes, str):
+        notes = ""
+    notes = notes[:255]
+
+    conn = get_conn()
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO agent_runs
+               (workflow, job, run_id, conclusion, duration_seconds,
+                est_cost_usd, pr_number, notes)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (workflow, job, run_id, conclusion, duration_seconds,
+             est_cost_usd, pr_number, notes),
+        )
+        new_id = cur.lastrowid
+    conn.commit()
+    return jsonify({"status": "ok", "id": new_id})
 
 
 @bp.route("/verify-schema", methods=["POST"])

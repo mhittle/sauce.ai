@@ -40,7 +40,63 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
+### 2026-05-22 — Migration: agent_runs (agent fleet observability)
+**Status:** open · **PR:** TBD · **Opened:** 2026-05-22 ·
+**File reference:** `news/seed/migrations/2026-05-22-agent-runs.sql`
+
+Adds a new append-only `agent_runs` table that each agent workflow
+appends one row to via the HMAC `/agent-ops/report-run` endpoint after
+its agent step finishes. Read by `GET /admin/agent-activity` for the
+14-day cost + activity rollup, and (going forward) by the Phase 6 PM
+agent so it can cite real fleet telemetry instead of inferring from PRs.
+
+**NOT BUG-007 class:** only the new `/admin/agent-activity` (read) and
+`/agent-ops/report-run` (write) endpoints touch this table; user traffic
+paths do not. The admin endpoint also degrades to an empty rollup if
+the table is missing (with a `table_missing: true` flag), so the page
+never 500s.
+
+Apply once on prod via phpMyAdmin → SQL tab (database `lt1ih6uyy2z6_news`):
+
+```sql
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ts               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  workflow         VARCHAR(64) NOT NULL,
+  job              VARCHAR(64) NOT NULL DEFAULT '',
+  run_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  conclusion       VARCHAR(32) NOT NULL DEFAULT '',
+  duration_seconds INT UNSIGNED NOT NULL DEFAULT 0,
+  est_cost_usd     DECIMAL(10,5) NOT NULL DEFAULT 0,
+  pr_number        INT UNSIGNED NOT NULL DEFAULT 0,
+  notes            VARCHAR(255) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY idx_agent_runs_ts (ts),
+  KEY idx_agent_runs_workflow_ts (workflow, ts)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Verify:**
+
+```sql
+SELECT COUNT(*) FROM agent_runs;       -- 0 immediately after apply
+SHOW INDEX FROM agent_runs;            -- expects PRIMARY + idx_agent_runs_ts + idx_agent_runs_workflow_ts
+```
+
+Then a quick browser check (signed-in admin):
+`https://sauce.ai/news/admin/agent-activity` → JSON, `table_missing: false`,
+empty `per_workflow` until the first agent workflow runs after the
+migration is applied.
+
+No Python App restart required (no new blueprint — the routes were
+added to the existing `admin_ops` / `agent_ops` blueprints in the same
+PR, and the `agent_ops` blueprint was already registered).
+
+**Auto-application:** the dev-agent should label this PR
+`needs-migration` so the migration-executor workflow applies the file
+above over HMAC and moves this entry to Completed automatically.
+
+---
 
 ---
 
