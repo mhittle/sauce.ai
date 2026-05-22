@@ -26,7 +26,30 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-023 — sauce.ai/news completely unreachable (connection timeout)
+**Status:** open · **Reporter:** agent (post-deploy QA) · **Opened:** 2026-05-22
+
+The post-deploy QA agent could not reach the site at all. Both a Playwright
+browser navigation and a direct `curl` request to `https://sauce.ai/news/`
+timed out with no response from the server.
+
+**Observed:**
+- Playwright `browser_navigate("https://sauce.ai/news/")` timed out after
+  60 s on two consecutive attempts (no HTTP response, not a 5xx — the
+  connection itself never completed).
+- `curl --max-time 30 https://sauce.ai/news/` exited with code 28
+  ("Connection timed out after 30002 ms"); HTTP status returned was 000
+  (no response).
+
+**Checks not reached due to site being down:** sign-in, thumb persistence,
+Algo Keywords tab, Firehose page, cron-health.
+
+**Deploy SHA at time of detection:** fff275fbfdaa73ff5c13cdafafe60b061fdcffcb
+
+**Prior smoke result (injected by workflow):** success — indicating the
+curl-based smoke check passed before this QA run, so the outage either
+started after the smoke job or the smoke job checked a different set of
+endpoints. The discrepancy is worth investigating.
 
 ---
 
