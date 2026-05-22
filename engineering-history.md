@@ -144,8 +144,9 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-22
 
-- **Unique sources toggle — one article per source (PR drafted,
-  unattended dev-agent).** Per-profile boolean on `/algo`'s UI tab that
+- **Unique sources toggle — one article per source (PR #124, unattended
+  dev-agent; PM-spec'd + dispatched via PR #123, ~$8 run).** Per-profile
+  boolean on `/algo`'s UI tab that
   tightens the global per-source cap to 1 for the viewer. User framing:
   "let me see a wider spread of sources, not three Inquirer stories in a
   row." This is the user-controllable lever over the BUG-021 cap
@@ -206,27 +207,6 @@ server-side migration referenced below was applied on prod and is in
   `INSTALL.txt`, `tests/test_classify_topup.py`. *Server state:* one new
   1-min cron entry (`manual-actions.md` Open, full crontab line inline).
   No migration file → no `has-migration` label.
-- **Unique sources toggle — one article per source (spec'd + dispatched,
-  PM session).** New `ready-for-agent` roadmap item authored and merged
-  to `main` (PR #123), which dispatched the unattended Opus dev-agent
-  (~$8 paid run) to implement it. Feature: a per-profile checkbox on
-  `/algo` (UI tab) that forces the home feed to **at most one article per
-  source**. Design chosen to be migration-free and not BUG-007 class —
-  the flag rides as a new `unique_sources` boolean key inside the
-  existing free-form `user_algorithms.weights_json` (the ranking layer
-  ignores unknown keys; `parse_weights_json` round-trips the dict), and
-  the read path reuses the BUG-021 `app/feed_diversify.py` cap machinery
-  with the *effective* per-source cap forced to 1 (overriding the global
-  `FEED_MAX_PER_SOURCE` default of 3). Spec'd surfaces: `routes/algo.py`
-  `_parse_form_weights`, `templates/algo.html` (feed-shaping checkbox, not
-  a feature-row), `routes/feed.py` `index()` effective-cap resolution, and
-  a pure `effective_source_cap` helper for unit tests; over-fetch ceiling
-  flagged so cap=1 deep-paging can't issue an unbounded `LIMIT`. Scoped to
-  `/` only (firehose/search/saved/digest unchanged). *Server state
-  touched:* none planned (no migration/cron/env/dep). *Open:* the
-  dev-agent's implementation PR is pending — review + merge it through the
-  BUG-007 gate; no `needs-migration` follow-up expected.
-
 - **Fold per-algorithm Keywords into the Your Algorithm feature list (PR
   drafted, unattended dev-agent).** UI polish on PR #82 + the
   keywords-on-algo migration: the standalone **Keywords** tab on `/algo`
