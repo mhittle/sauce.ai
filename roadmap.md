@@ -29,7 +29,7 @@ shipped.
 | 6 | 1 | ui, ops, docs | Root sauce.ai/ landing page (product lab positioning + coming-soon product cards) | done |
 | 6 | 3 | ui, new-feature, backend | Lab landing expansion: 10 more radical concepts + anon up/down voting | in-progress |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
-| 6 | 4 | backend, algo, ops | Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up | in-progress |
+| 6 | 4 | backend, algo, ops | Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up | done |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | done |
 | 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
 | 7 | 7 | ops, new-feature | Automated source discovery — social firehoses (Mastodon, Bluesky, X/Twitter) | backlog |
@@ -84,7 +84,7 @@ shipped.
 ## Items in detail
 
 ### Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up
-**Priority:** 6 · **LOE:** 4 · **Category:** backend, algo, ops · **Status:** in-progress
+**Priority:** 6 · **LOE:** 4 · **Category:** backend, algo, ops · **Status:** done (PR #121; new 1-min cron pending in manual-actions Open)
 
 Today classification is a 5-minute cron (`jobs/classify_pending.py`,
 rules + Haiku); the feed shows only `status='classified'` rows
@@ -983,9 +983,11 @@ narrative lives in `engineering-history.md` under the same date.
 - **Fold per-algorithm Keywords into the Your Algorithm feature list**
   (Pri 6, LOE 2, PR #119). Dropped the standalone Keywords tab; folded
   the keyword controls into the UI-tab feature list.
-- **Demand-driven feed classification** (Pri 6, LOE 4, PR #120 — roadmap
-  item) — dispatched to the dev agent; implementation PR in flight, not
-  yet merged.
+- **Demand-driven feed classification** (Pri 6, LOE 4, PR #121). Feed
+  activity touches a signal file; a new every-1-min `classify_pending
+  --triggered-only` cron tops up a ~400-article classified buffer (page
+  size 30→40). No synchronous LLM / no per-request spawn. New cron entry
+  is pending in `manual-actions.md` Open.
 
 ### 2026-05-21
 
