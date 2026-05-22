@@ -162,40 +162,38 @@ server-side migration referenced below was applied on prod and is in
   `INSTALL.txt`, `tests/test_classify_topup.py`. *Server state:* one new
   1-min cron entry (`manual-actions.md` Open, full crontab line inline).
   No migration file → no `has-migration` label.
+- **Unique sources toggle — one article per source (spec'd + dispatched,
+  PM session).** New `ready-for-agent` roadmap item authored and merged
+  to `main` (PR #123), which dispatched the unattended Opus dev-agent
+  (~$8 paid run) to implement it. Feature: a per-profile checkbox on
+  `/algo` (UI tab) that forces the home feed to **at most one article per
+  source**. Design chosen to be migration-free and not BUG-007 class —
+  the flag rides as a new `unique_sources` boolean key inside the
+  existing free-form `user_algorithms.weights_json` (the ranking layer
+  ignores unknown keys; `parse_weights_json` round-trips the dict), and
+  the read path reuses the BUG-021 `app/feed_diversify.py` cap machinery
+  with the *effective* per-source cap forced to 1 (overriding the global
+  `FEED_MAX_PER_SOURCE` default of 3). Spec'd surfaces: `routes/algo.py`
+  `_parse_form_weights`, `templates/algo.html` (feed-shaping checkbox, not
+  a feature-row), `routes/feed.py` `index()` effective-cap resolution, and
+  a pure `effective_source_cap` helper for unit tests; over-fetch ceiling
+  flagged so cap=1 deep-paging can't issue an unbounded `LIMIT`. Scoped to
+  `/` only (firehose/search/saved/digest unchanged). *Server state
+  touched:* none planned (no migration/cron/env/dep). *Open:* the
+  dev-agent's implementation PR is pending — review + merge it through the
+  BUG-007 gate; no `needs-migration` follow-up expected.
 
 - **Fold per-algorithm Keywords into the Your Algorithm feature list (PR
-  drafted, unattended dev-agent).** UI polish on top of the per-algo
-  keyword work (PR #82) and the keywords-on-algo migration (2026-05-21):
-  the standalone **Keywords** tab on `/algo` is gone; the add-keyword
-  form, count + cap, and the muted/boosted term lists now render as a
-  "Keywords" `feature-row` appended to the UI tab's existing feature
-  list (right after Near a place). The block is a sibling
-  `.features.features-keywords` panel directly below the algo-form
-  rather than inside it, because the per-keyword `<form>` elements
-  would otherwise nest inside `#algo-form` — invalid HTML. The CSS
-  collapses the row to a 2-column grid (label + body) and the existing
-  `.feature-row` mobile media query handles single-column stacking on
-  narrow viewports. No DB change, no route change, no ranking-behavior
-  change: `/algo/keywords/add` and `/algo/keywords/<id>/delete` still
-  carry the writes, `_render_editor` still hands `algo_muted`,
-  `algo_boosted`, `max_keywords`, `boost_default`, `kw_error`,
-  `active_algo_id` to the template, mute-wins/dedupe/100-cap semantics
-  are preserved, and the "Save an algorithm first" guard still renders
-  when there is no active profile. The Keywords tab count
-  (`Keywords (N)`) folds into a `.kw-inline-count` span next to the
-  new feature-name label. No test asserted on the Keywords tab markup
-  so no test changes were required; full pytest suite remains green
-  (520 passed). *Code touched:* `news/app/templates/algo.html` (drop
-  the `Keywords` tab `<button>` from `<nav class="tabs">`, drop the
-  `<section x-show="tab==='keywords'">` block at the end of the page,
-  add a `features-keywords` sibling block at the bottom of the UI
-  section), `news/app/static/style.css` (+6 lines: `.features-keywords`
-  margin, `.feature-keywords` 2-column grid override, `.kw-body`
-  min-width:0, `.kw-lede` muted lede, `.kw-inline-count` count
-  styling). *Server state touched:* none — no migration, no restart
-  needed (template-only change picked up by Passenger on next worker
-  cycle, but cPanel restart is still recommended for any deploy that
-  changes templates).
+  drafted, unattended dev-agent).** UI polish on PR #82 + the
+  keywords-on-algo migration: the standalone **Keywords** tab on `/algo`
+  is gone; the add form + muted/boosted lists now render as a sibling
+  `.features.features-keywords` panel below the algo-form (sibling, not
+  nested, so per-keyword `<form>`s don't nest inside `#algo-form`). No DB
+  / route / ranking change — `/algo/keywords/{add,<id>/delete}` writes,
+  `_render_editor` context, and mute-wins/dedupe/100-cap semantics all
+  preserved; pytest green (520). *Code touched:*
+  `templates/algo.html`, `static/style.css` (+6 lines). *Server state:*
+  none (template-only; cPanel restart recommended on deploy).
 
 - **Agent fleet observability — weekly cost + activity rollup (PR
   drafted, unattended dev-agent).** Closes the loop opened by the six
@@ -394,11 +392,9 @@ All entries condensed; full verbatim in `engineering-history-archive.md`
 ### 2026-05-14
 
 - **Feed sort selector — Relevance / Newest / Popularity (PR #48).**
-  `/?sort=` query param; `_normalize_sort` + `_order_by_for_sort`
-  pure helpers in `feed.py` swap the ORDER BY (newest →
-  `published_at`, popularity → `f.popularity`); threshold / source-
-  pref / visibility filters unchanged; category tabs + Load-more
-  preserve `sort=`. *Server:* none (restart on deploy).
+  `/?sort=` query param swaps the ORDER BY via `_normalize_sort` +
+  `_order_by_for_sort` in `feed.py`; filters unchanged; category tabs +
+  Load-more preserve `sort=`. *Server:* none.
 
 ### 2026-05-13
 
@@ -429,35 +425,27 @@ migrations" above where relevant.
 - **BUG-010 — feature bars (PR #35)** — template wrote
   `style="width:NN%"` but CSS reads `--w` custom property; switched to
   `style="--w:NN%"`.
-- **BUG-008/009 — classify_pending stall (PR #32)** — GoDaddy MySQL
-  drops idle sockets during LLM/HTTP gaps → `conn.ping(reconnect=True)`
-  at every idle point in classify/popularity/fetch; parallelized
-  paywall+body HTTP (10 workers); `CLASSIFY_BUDGET_SECONDS` 90→240;
-  throughput 10→180/tick. Lesson: ping-reconnect any cron HTTP-between-writes.
-- **BUG-007 recovery (PRs #30/#31)** — merged code referenced
-  `sources.owner_id` + `user_source_prefs` before migrations ran →
-  500s on every reader route. Lesson: treat Open `manual-actions.md`
-  as a merge blocker.
-- **Article deduplication (PR #24)** — `articles.simhash` +
-  `articles.story_id` + `(story_id,published_at)` index; SimHash
-  Hamming≤8 over 48h, canonical = highest reputation; feed dedupes by
-  cluster, firehose doesn't. v2 = embeddings. *Server:* dedup migration.
-- **Manual-actions tracker (PR #22)** — added `manual-actions.md`
-  lifecycle. Docs-only.
+- **BUG-008/009 — classify_pending stall (PR #32)** — idle MySQL sockets
+  dropped during LLM/HTTP gaps → `conn.ping(reconnect=True)` at every idle
+  point; parallelized paywall+body HTTP; throughput 10→180/tick. Lesson:
+  ping-reconnect any cron HTTP-between-writes.
+- **BUG-007 recovery (PRs #30/#31)** — code referenced `sources.owner_id`
+  + `user_source_prefs` before migrations ran → 500s on every reader
+  route. Lesson: treat Open `manual-actions.md` as a merge blocker.
+- **Article deduplication (PR #24)** — `articles.simhash`+`story_id`;
+  SimHash Hamming≤8 over 48h, canonical = highest reputation; feed dedupes
+  by cluster, firehose doesn't. *Server:* dedup migration.
+- **Manual-actions tracker (PR #22)** — docs-only.
 - **User-added RSS feeds (PR #29)** — `/sources`; `sources.owner_id`
-  scopes personal feeds; visibility filter in feed/firehose. *Server:*
-  `sources.owner_id` migration.
+  scopes personal feeds. *Server:* `sources.owner_id` migration.
 - **In-app reader view (PR #21)** — `article_bodies` + `app/extractor.py`
-  (lazy trafilatura, 1 MB cap, MIN_WORDS=60) in `classify_pending`;
-  `/read/<id>`; nightly `BODY_RETENTION_DAYS` prune. *Server:* migration
-  + `pip install trafilatura`.
-- **Thumbs up/down + signal foundation (PR #19)** — `user_signals`
-  (forward-compat for Signal Learning) + `user_source_prefs`;
-  `/signal` blueprint. *Server:* signals migration.
-- **Daily email digest (PR #23)** — opt-in `users.digest_enabled` +
-  unsub token; noon-UTC `send_digest` cron; stdlib `smtplib`
-  (localhost MTA default; `SMTP_*` env vars for a relay). *Server:*
-  digest migration + noon-UTC cron.
+  (lazy trafilatura) in `classify_pending`; `/read/<id>`. *Server:*
+  migration + `pip install trafilatura`.
+- **Thumbs up/down + signal foundation (PR #19)** — `user_signals` +
+  `user_source_prefs`; `/signal` blueprint. *Server:* signals migration.
+- **Daily email digest (PR #23)** — opt-in `users.digest_enabled` + unsub
+  token; noon-UTC `send_digest` cron; stdlib `smtplib`. *Server:* digest
+  migration + noon-UTC cron.
 - **Cron hardening + PyMySQL timeouts (PR #15)** — `job_lock(name)`
   fcntl mutex; `requests` timeouts; anthropic `timeout=30`; PyMySQL
   timeouts (web `(5,15,10)`, cron `(5,30,15)`); `FEED_FETCH_BATCH`
@@ -465,35 +453,27 @@ migrations" above where relevant.
 
 ### 2026-05-12
 
-- **Paywall feature (PR #14).** Active per-article HTTP probe in
-  `classify_pending` writes `article_features.paywall` 0..1 (JSON-LD /
-  `content_tier` / phrase heuristics; blocked → 0.5 "suspected");
-  opt-in catalog entry; `/admin/feeds` paywall column. *Server:*
+*(Full verbatim for all 2026-05-12 entries is in
+`engineering-history-archive.md`; load-bearing prod state is in the
+durable section above.)*
+
+- **Paywall feature (PR #14).** Per-article HTTP probe writes
+  `article_features.paywall` 0..1; opt-in catalog entry. *Server:*
   paywall migration.
-- **Editorial serif wordmark (PR #13).** `.brand` restyled in
-  `base.html` + `style.css` (system serif; italic "news"). *Server:*
-  none.
-- **Feature batch #7–#11.** #7 fix **BUG-006** (article links: HTMX
-  `hx-post` on the anchors → `onclick` fetch+keepalive so browser
-  navigation works); #8 category tabs on `/`; #9 3-axis feature config
-  (Direction + Weight + Threshold; uniform
-  `weight*(1-|v-dir|/scale)`); #10 obscurity features (story + source,
-  log-scaled) + migration; #11 source catalog 135→768 +
-  auto-deactivate at `error_count=10` + `/admin/feeds` Refresh button.
-  *Server:* obscurity migration; +633 seed-CSV import. Detail:
-  `bugs.md` BUG-006.
-- **Doc framework.** Added `roadmap.md`, `bugs.md` (BUG-001..005
-  pre-populated), `engineering-session-wrapup.md`, and wired all into
-  `new-engineering-session-instructions.md`. *Server:* none.
-- **v1 prototype deploy to GoDaddy (PRs #3, #4).** First working
-  deploy. Fixed 5 deploy bugs: `APPLICATION_ROOT` double-prefix 404
-  (BUG-004), INSTALL path mismatch (BUG-005), CloudLinux venv-shim
-  fork-bomb (BUG-001), cPanel self-recursive `passenger_wsgi.py`
-  (BUG-002), `anthropic 0.39` / `httpx 0.28` incompat → bumped to
-  `0.101.0` (BUG-003). All not-in-repo server state from this deploy is
-  consolidated in **Load-bearing production state** above; root causes
-  in `bugs.md` BUG-001..005 and `INSTALL.txt` §8. The Anthropic key +
-  DB password were exposed in chat and rotated before close.
+- **Editorial serif wordmark (PR #13).** `.brand` restyle. *Server:* none.
+- **Feature batch #7–#11.** BUG-006 fix (article-link click navigation),
+  category tabs, 3-axis feature config (Direction+Weight+Threshold),
+  obscurity features (+migration), source catalog 135→768
+  (auto-deactivate at `error_count=10`). *Server:* obscurity migration;
+  +633 seed-CSV import.
+- **Doc framework.** Added `roadmap.md`, `bugs.md`,
+  `engineering-session-wrapup.md`. *Server:* none.
+- **v1 prototype deploy to GoDaddy (PRs #3, #4).** First working deploy;
+  fixed 5 deploy bugs BUG-001..005 (`APPLICATION_ROOT` double-prefix,
+  INSTALL path mismatch, venv-shim fork-bomb, self-recursive
+  `passenger_wsgi.py`, anthropic/httpx incompat → `0.101.0`). All
+  not-in-repo state folded into **Load-bearing production state** above.
+  Anthropic key + DB password were exposed in chat and rotated before close.
 
 ---
 
