@@ -1,5 +1,12 @@
 name: Unattended dev-agent dispatcher
 
+# claude-code-action@v1 only runs on pull_request*/issues/issue_comment/
+# repository_dispatch events — NOT push/schedule/workflow_dispatch. So the
+# push picker and the manual trigger do their logic, then fan out one
+# `repository_dispatch` (type: dev-implement) per assignment, and the
+# implement job runs the agent under that supported event. The PAT is
+# required: a repository_dispatch sent with the default GITHUB_TOKEN would
+# not start a new workflow run.
 on:
   push:
     branches: [main]
@@ -11,9 +18,11 @@ on:
         description: "Roadmap item title to dispatch (exact match). Used verbatim as the agent's assignment; not flipped in roadmap.md."
         required: true
         type: string
+  repository_dispatch:
+    types: [dev-implement]
 
 concurrency:
-  group: dev-agent-picker
+  group: dev-agent-${{ github.event.client_payload.title || github.event.inputs.title || 'pick' }}
   cancel-in-progress: false
 
 permissions:
@@ -24,8 +33,6 @@ jobs:
   pick:
     if: vars.AGENTS_ENABLED == 'true' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    outputs:
-      items: ${{ steps.picker.outputs.items }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,38 +46,47 @@ jobs:
       - name: Pick ready-for-agent items
         id: picker
         run: python .github/scripts/pick_ready_items.py
+      - name: Dispatch one implement run per item
+        if: steps.picker.outputs.items != '[]'
+        uses: actions/github-script@v7
+        env:
+          ITEMS: ${{ steps.picker.outputs.items }}
+        with:
+          github-token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          script: |
+            const items = JSON.parse(process.env.ITEMS || '[]');
+            for (const title of items) {
+              await github.rest.repos.createDispatchEvent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                event_type: 'dev-implement',
+                client_payload: { title },
+              });
+              core.info(`dispatched dev-implement: ${title}`);
+            }
 
   manual:
     if: vars.AGENTS_ENABLED == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    outputs:
-      items: ${{ steps.title.outputs.items }}
     steps:
-      - name: Wrap title as JSON array
-        id: title
+      - name: Dispatch implement run for the given title
+        uses: actions/github-script@v7
         env:
           DISPATCH_TITLE: ${{ github.event.inputs.title }}
-        run: |
-          python - <<'PY'
-          import json, os
-          title = os.environ["DISPATCH_TITLE"]
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write("items=" + json.dumps([title]) + "\n")
-          PY
+        with:
+          github-token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'dev-implement',
+              client_payload: { title: process.env.DISPATCH_TITLE },
+            });
+            core.info(`dispatched dev-implement: ${process.env.DISPATCH_TITLE}`);
 
   implement:
-    needs: [pick, manual]
-    if: |
-      always() && vars.AGENTS_ENABLED == 'true' && (
-        (github.event_name == 'push' && needs.pick.result == 'success' && needs.pick.outputs.items != '[]') ||
-        (github.event_name == 'workflow_dispatch' && needs.manual.result == 'success')
-      )
+    if: vars.AGENTS_ENABLED == 'true' && github.event_name == 'repository_dispatch' && github.event.action == 'dev-implement'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        title: ${{ fromJSON(github.event_name == 'push' && needs.pick.outputs.items || needs.manual.outputs.items) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,7 +96,7 @@ jobs:
       - name: Compose prompt
         id: prompt
         env:
-          ASSIGNMENT_TITLE: ${{ matrix.title }}
+          ASSIGNMENT_TITLE: ${{ github.event.client_payload.title }}
         run: |
           python - <<'PY'
           import os, pathlib
