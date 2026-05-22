@@ -40,8 +40,14 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+---
+
+---
+
+## Completed
+
 ### 2026-05-22 — Migration: agent_runs (agent fleet observability)
-**Status:** open · **PR:** TBD · **Opened:** 2026-05-22 ·
+**Status:** completed · **PR:** #114 · **Opened:** 2026-05-22 · **Completed:** 2026-05-22 ·
 **File reference:** `news/seed/migrations/2026-05-22-agent-runs.sql`
 
 Adds a new append-only `agent_runs` table that each agent workflow
@@ -97,10 +103,6 @@ PR, and the `agent_ops` blueprint was already registered).
 above over HMAC and moves this entry to Completed automatically.
 
 ---
-
----
-
-## Completed
 
 ### 2026-05-21 — Secret: AGENT_OPS_SECRET for the HMAC migration executor
 **Status:** completed · **PR:** #106 (merged 2026-05-21) ·
