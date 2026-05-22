@@ -133,6 +133,40 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-22
 
+- **Fold per-algorithm Keywords into the Your Algorithm feature list (PR
+  drafted, unattended dev-agent).** UI polish on top of the per-algo
+  keyword work (PR #82) and the keywords-on-algo migration (2026-05-21):
+  the standalone **Keywords** tab on `/algo` is gone; the add-keyword
+  form, count + cap, and the muted/boosted term lists now render as a
+  "Keywords" `feature-row` appended to the UI tab's existing feature
+  list (right after Near a place). The block is a sibling
+  `.features.features-keywords` panel directly below the algo-form
+  rather than inside it, because the per-keyword `<form>` elements
+  would otherwise nest inside `#algo-form` — invalid HTML. The CSS
+  collapses the row to a 2-column grid (label + body) and the existing
+  `.feature-row` mobile media query handles single-column stacking on
+  narrow viewports. No DB change, no route change, no ranking-behavior
+  change: `/algo/keywords/add` and `/algo/keywords/<id>/delete` still
+  carry the writes, `_render_editor` still hands `algo_muted`,
+  `algo_boosted`, `max_keywords`, `boost_default`, `kw_error`,
+  `active_algo_id` to the template, mute-wins/dedupe/100-cap semantics
+  are preserved, and the "Save an algorithm first" guard still renders
+  when there is no active profile. The Keywords tab count
+  (`Keywords (N)`) folds into a `.kw-inline-count` span next to the
+  new feature-name label. No test asserted on the Keywords tab markup
+  so no test changes were required; full pytest suite remains green
+  (520 passed). *Code touched:* `news/app/templates/algo.html` (drop
+  the `Keywords` tab `<button>` from `<nav class="tabs">`, drop the
+  `<section x-show="tab==='keywords'">` block at the end of the page,
+  add a `features-keywords` sibling block at the bottom of the UI
+  section), `news/app/static/style.css` (+6 lines: `.features-keywords`
+  margin, `.feature-keywords` 2-column grid override, `.kw-body`
+  min-width:0, `.kw-lede` muted lede, `.kw-inline-count` count
+  styling). *Server state touched:* none — no migration, no restart
+  needed (template-only change picked up by Passenger on next worker
+  cycle, but cPanel restart is still recommended for any deploy that
+  changes templates).
+
 - **Agent fleet observability — weekly cost + activity rollup (PR
   drafted, unattended dev-agent).** Closes the loop opened by the six
   Phase-1..6 agent workflows shipped 2026-05-21 (PRs #103..#108): each
