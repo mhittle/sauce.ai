@@ -91,7 +91,10 @@ this section + `INSTALL.txt` win.
 
 **Cron (in the cPanel crontab, not in the repo)**
 
-`fetch_feeds` 15m · `classify_pending` 5m · `popularity_poll` 30m ·
+`fetch_feeds` 15m · `classify_pending` 5m ·
+`classify_pending --triggered-only` 1m (PR #121, demand-driven top-up;
+no-op unless the feed touched `logs/classify_topup.signal`) ·
+`popularity_poll` 30m ·
 `trending_poll` 30m · `maintenance` nightly 03:30 UTC ·
 `send_digest` 12:00 UTC · `discover_harvest` hourly :15 ·
 `discover_promote` 04:00 UTC · `discover_llm` Mon 05:00 UTC. Each line
@@ -141,52 +144,24 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-22
 
-- **Demand-driven feed classification (PR drafted, unattended dev-agent).**
-  Closes the "feed runs dry until the next 5-min cron tick" gap an
-  active reader hits when they outpace `classify_pending`. Two coupled
-  changes, **no synchronous LLM on the request path** and **no
-  per-request fork/spawn** (CloudLinux nproc ceiling stays untouched):
-  (1) feed page size 30 → 40 (`feed.py:90`); (2) after each feed load
-  (HTMX or full page) the route runs two cheap `COUNT(*)`s (pending,
-  classified-in-7d) and, if `classified - page*page_size < 400`,
-  **touches** `news/logs/classify_topup.signal`. The touch is debounced
-  by mtime cooldown (default 60s) so a fast pager can't write the file
-  100x/sec, and is wrapped so any failure logs and is swallowed (feed
-  response never fails on the trigger). The cron side: `classify_pending.py`
-  gains a `--triggered-only` mode that exits fast unless the signal is
-  present AND fresh (within `CLASSIFY_TOPUP_SIGNAL_MAX_AGE`, default
-  600s — stale signal is ignored so a long-held lock can't cause a
-  stampede when it releases). On fresh, the script acquires the
-  existing `job_lock(classify_pending)` (so an in-flight 5-min cron tick
-  makes it a no-op), consumes the signal INSIDE the lock (a concurrent
-  feed touch that races just re-creates the file for the next 1-min
-  tick), then runs the unchanged `_run()`. A new every-1-min cron entry
-  invokes it; the existing `*/5` cron stays as the cold-start /
-  safety-net tick. **No migration, no schema change, no new pip dep, no
-  Python App restart needed.** New pure module `app/classify_topup.py`
-  (~120 lines, all pure or single-stat-syscall) carries the helpers so
-  the trigger decision is unit-tested without a DB or Anthropic — 23
-  new tests (buffer-ahead math, should-trigger gating on pending+depth,
-  cooldown debounce, touch/fresh/consume semantics, and the cron
-  `--triggered-only` branch covering no-signal / stale / fresh / lock-
-  held cases). Full suite green (543 passed, was 520). *Code touched:*
-  `news/app/classify_topup.py` (new), `news/app/routes/feed.py`
-  (page_size 30→40; `import os`; `import classify_topup`; new
-  `_maybe_signal_topup(page, page_size)` helper called right before the
-  HTMX/full-page response branch — failure-tolerant try/except),
-  `news/app/config.py` (4 new env-driven knobs: `CLASSIFY_TOPUP_THRESHOLD`
-  default 400, `CLASSIFY_TOPUP_COOLDOWN_SECONDS` default 60,
-  `CLASSIFY_TOPUP_SIGNAL_MAX_AGE` default 600,
-  `CLASSIFY_TOPUP_SIGNAL_PATH` override), `news/jobs/classify_pending.py`
-  (`from app import classify_topup`; `_resolve_signal_path()`; `main()`
-  parses `--triggered-only`, gates on signal freshness, consumes inside
-  the lock), `news/INSTALL.txt` (new cron line documented next to the
-  existing `*/5 classify_pending` line), `news/tests/test_classify_topup.py`
-  (new). *Server state touched:* one new cron entry — `manual-actions.md`
-  Open entry with the full crontab line inline with the real
-  `lt1ih6uyy2z6` substituted. No `news/seed/migrations/*.sql` file
-  shipped; the PR therefore does **not** carry the `has-migration`
-  label.
+- **Demand-driven feed classification (PR #121, unattended dev-agent).**
+  Closes the "feed runs dry until the next 5-min cron tick" gap when an
+  active reader outpaces `classify_pending`. **No synchronous LLM on the
+  request path, no per-request fork/spawn** (nproc ceiling untouched):
+  feed page size 30→40, and after each feed load the route does two cheap
+  `COUNT(*)`s and, if the classified buffer ahead of the reader is < 400,
+  **touches** `logs/classify_topup.signal` (mtime-debounced ~60s,
+  failure-swallowed). `classify_pending.py` gains `--triggered-only`
+  (new every-1-min cron) which no-ops unless the signal is present AND
+  fresh, then acquires the existing `job_lock` and consumes the signal
+  inside it — so the cron stays the only process that launches a
+  classifier and the `*/5` tick remains the safety net. No migration /
+  schema / pip / restart. New pure `app/classify_topup.py` + 23 tests
+  (543 pass). *Code:* `app/classify_topup.py` (new), `routes/feed.py`,
+  `app/config.py` (4 `CLASSIFY_TOPUP_*` knobs), `jobs/classify_pending.py`,
+  `INSTALL.txt`, `tests/test_classify_topup.py`. *Server state:* one new
+  1-min cron entry (`manual-actions.md` Open, full crontab line inline).
+  No migration file → no `has-migration` label.
 
 - **Fold per-algorithm Keywords into the Your Algorithm feature list (PR
   drafted, unattended dev-agent).** UI polish on top of the per-algo

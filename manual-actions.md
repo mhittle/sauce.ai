@@ -70,9 +70,8 @@ no Keywords tab and the keyword controls render under the algo form.
 
 ---
 
-## Completed
 ### 2026-05-22 — Cron entry: classify_pending --triggered-only (every 1 min)
-**Status:** open · **PR:** TBD · **Opened:** 2026-05-22
+**Status:** open · **PR:** #121 · **Opened:** 2026-05-22
 
 Demand-driven classification top-up. The feed (`/`) now touches
 `logs/classify_topup.signal` after each page load when the classified
@@ -116,6 +115,9 @@ The signal file lives under `logs/` next to the existing job
 lockfiles; if the `logs/` dir doesn't exist it is created on first
 touch.
 
+---
+
+## Completed
 ### 2026-05-22 — Migration: agent_runs (agent fleet observability)
 **Status:** completed · **PR:** #114 (merged 2026-05-22) · **Opened:** 2026-05-22 · **Completed:** 2026-05-22 ·
 **Applied:** by the migration-executor on the #114 `needs-migration` label (HMAC `/agent-ops/run-migration`), 2026-05-22.
