@@ -1,5 +1,12 @@
 name: Migration executor
 
+# Migrate-AFTER-deploy model. The /agent-ops/run-migration endpoint reads
+# the SQL file from prod's own disk, so the migration must already be
+# deployed. The `needs-migration` label is therefore a POST-deploy signal:
+# apply it (human, or the post-deploy workflow) only once the merged PR's
+# migration file is live on prod. Applying it before deploy returns 404
+# "migration file not found". The dev agent labels new-migration PRs
+# `has-migration` (informational) and never `needs-migration`.
 on:
   pull_request:
     types: [labeled]
@@ -138,7 +145,7 @@ jobs:
           2. (covered by the commit in step 1).
           3. Post a comment on PR #{os.environ['PR_NUMBER']}:
              `gh pr comment {os.environ['PR_NUMBER']} --repo {os.environ['REPO']} --body "..."`
-             Body MUST be exactly: "✅ Migration applied, app restarted. Ready to merge."
+             Body MUST be exactly: "✅ Migration applied to prod, app restarted."
              (append any per-file note from step 1 on following lines).
           4. Swap labels:
              `gh pr edit {os.environ['PR_NUMBER']} --repo {os.environ['REPO']} --remove-label needs-migration --add-label migration-applied`
