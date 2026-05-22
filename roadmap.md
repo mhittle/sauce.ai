@@ -29,6 +29,7 @@ shipped.
 | 6 | 1 | ui, ops, docs | Root sauce.ai/ landing page (product lab positioning + coming-soon product cards) | done |
 | 6 | 3 | ui, new-feature, backend | Lab landing expansion: 10 more radical concepts + anon up/down voting | in-progress |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
+| 6 | 4 | backend, algo, ops | Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up | ready-for-agent |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | done |
 | 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
 | 7 | 7 | ops, new-feature | Automated source discovery — social firehoses (Mastodon, Bluesky, X/Twitter) | backlog |
@@ -80,6 +81,60 @@ shipped.
 ---
 
 ## Items in detail
+
+### Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up
+**Priority:** 6 · **LOE:** 4 · **Category:** backend, algo, ops · **Status:** ready-for-agent
+
+Today classification is a 5-minute cron (`jobs/classify_pending.py`,
+rules + Haiku); the feed shows only `status='classified'` rows
+(`feed.py`, 30/page). An active reader can outpace the cron and hit the
+end of the classified set — the feed runs dry until the next tick. Make
+**feed activity drive classification** so the feed stays effectively
+endless, **without ever blocking on Haiku at request time**.
+
+Decisions already made with the maintainer:
+- **Background top-up, never synchronous.** The HTTP response must never
+  wait on classification — serve already-classified rows immediately and
+  trigger classification out-of-band.
+- **~400 = classified buffer depth to maintain**, global/shared (an
+  article is classified once for everyone; only *ranking* is per-user).
+- **40 = "load more" page size** (currently 30).
+
+**Behavior:**
+- Feed page size 30 → 40 (`feed.py:90`).
+- On feed load and each "load more": if the classified depth available
+  ahead of the reader is below ~400, **fire a background classification
+  top-up** and return the page immediately.
+- Repeated top-ups keep extending the classified set as the reader pages,
+  until the pending pool is exhausted ("keeps going like that").
+
+**The crux is HOW to classify out-of-band on THIS host — it has a known
+foot-gun.** CloudLinux/Passenger here has a **tight nproc/EP limit
+(~115); a fork storm fork-bombs Passenger** (see
+`new-engineering-session-instructions.md` Step 10). Therefore:
+- **Never fork/spawn a classifier per request.** Debounce hard.
+- Reuse `classify_pending.py`'s existing **single-run `job_lock(JOB)`**
+  (raises `AlreadyRunning`) and **`CLASSIFY_BUDGET_SECONDS` walltime
+  budget** — a trigger must be a no-op while a run is in progress, and two
+  concurrent feed loads must never launch two runs.
+- Prefer the safest mechanism for this host. **Recommended:** a
+  lightweight "classify-now" flag the existing cron honors on its next
+  tick (bounded, no new process); or — only if justified and gated behind
+  the lock + a cooldown — a single detached, walltime-bounded
+  `classify_pending` run. Pick one and justify it in the PR.
+
+**Pointers:** `feed.py` (page size; post-page depth check + debounced
+trigger; never block) · `jobs/classify_pending.py` (a small "triggered /
+top-up" entrypoint or honor the classify-now flag; keep lock + budget
+intact) · `feed.html` ("load more" exists; adjust for 40 + keep-going).
+
+**Constraints:** no synchronous LLM on the request path; respect the
+single-run lock and walltime budget; **no per-request process spawning**
+(nproc safety); classification stays global; keep `pytest news/tests/`
+green and unit-test the trigger decision (buffer-low → trigger,
+run-in-progress → skip) without invoking Haiku. Likely no migration — but
+if you add a "classify-now" flag table, that's a migration: label the PR
+`has-migration` and let it apply post-deploy per `agent-fleet.md`.
 
 ### Lab landing expansion: 10 more radical concepts + anon up/down voting
 **Priority:** 6 · **LOE:** 3 · **Category:** ui, new-feature, backend · **Status:** in-progress
