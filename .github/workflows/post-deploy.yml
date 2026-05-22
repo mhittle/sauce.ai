@@ -92,6 +92,8 @@ jobs:
                   fh.write("\n")
               fh.write("__PROMPT_EOF__\n")
           PY
+      - name: Mark agent start
+        run: echo "STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
       - name: Run post-deploy QA
         uses: anthropics/claude-code-action@v1
         env:
@@ -106,3 +108,15 @@ jobs:
             --max-budget-usd 2
             --permission-mode bypassPermissions
             --mcp-config /tmp/mcp.json
+      - name: Report agent run
+        if: always()
+        env:
+          AGENT_OPS_SECRET: ${{ secrets.AGENT_OPS_SECRET }}
+          SITE_URL: https://sauce.ai/news
+          WORKFLOW: post-deploy
+          JOB: agent-qa
+          RUN_ID: ${{ github.run_id }}
+          CONCLUSION: ${{ job.status }}
+          EST_COST_USD: "2"
+          NOTES: "budget-cap"
+        run: python .github/scripts/report_agent_run.py

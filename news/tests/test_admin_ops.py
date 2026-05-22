@@ -124,3 +124,74 @@ def test_usage_summary_shape_and_merge(admin_client, usage_query):
     assert data["totals"]["signups"] == 4
     assert data["totals"]["signals"] == 12
     assert data["totals"]["dau_peak"] == 7
+
+
+# --- agent-activity -------------------------------------------------------
+
+def test_agent_activity_requires_admin(monkeypatch):
+    app = _app_with_user(monkeypatch, {"id": 9, "email": "u@x", "is_admin": 0})
+    r = app.test_client().get("/admin/agent-activity")
+    assert r.status_code == 403
+
+
+def test_agent_activity_aggregates_and_zero_fills(admin_client, monkeypatch):
+    today = date(2026, 5, 22)
+
+    per_workflow = [
+        {"workflow": "dev-agent", "runs": 2, "successes": 2, "failures": 0,
+         "cost_usd": 16.0, "duration_s": 1200},
+        {"workflow": "qa-code", "runs": 5, "successes": 4, "failures": 1,
+         "cost_usd": 5.0, "duration_s": 300},
+    ]
+    per_day = [
+        {"d": date(2026, 5, 21), "runs": 4, "cost_usd": 14.0},
+        {"d": today,             "runs": 3, "cost_usd": 7.0},
+    ]
+
+    def fake_query(sql, params=None, one=False):
+        s = " ".join(sql.split()).lower()
+        if "select utc_date() as d" in s:
+            return {"d": today}
+        if "group by workflow" in s:
+            return per_workflow
+        if "from agent_runs" in s and "group by d" in s:
+            return per_day
+        return [] if not one else None
+
+    monkeypatch.setattr("app.routes.admin_ops.query", fake_query)
+    r = admin_client.get("/admin/agent-activity")
+    assert r.status_code == 200
+    data = json.loads(r.data)
+    assert data["window_days"] == 14
+    assert data["table_missing"] is False
+    assert len(data["per_day"]) == 14
+    assert data["per_day"][-1] == {"date": "2026-05-22", "runs": 3, "cost_usd": 7.0}
+    assert data["per_day"][-2] == {"date": "2026-05-21", "runs": 4, "cost_usd": 14.0}
+    # A day with no rows is zero-filled.
+    assert data["per_day"][0] == {"date": "2026-05-09", "runs": 0, "cost_usd": 0.0}
+
+    by_wf = {w["workflow"]: w for w in data["per_workflow"]}
+    assert by_wf["dev-agent"]["runs"] == 2
+    assert by_wf["dev-agent"]["successes"] == 2
+    assert by_wf["dev-agent"]["cost_usd"] == 16.0
+    assert by_wf["qa-code"]["failures"] == 1
+
+    assert data["totals"]["runs"] == 7
+    assert data["totals"]["successes"] == 6
+    assert data["totals"]["failures"] == 1
+    assert data["totals"]["cost_usd"] == 21.0
+
+
+def test_agent_activity_degrades_when_table_missing(admin_client, monkeypatch):
+    def fake_query(sql, params=None, one=False):
+        # MySQL "Table 'x.agent_runs' doesn't exist" error class.
+        raise RuntimeError("(1146, \"Table 'lt1ih6uyy2z6_news.agent_runs' doesn't exist\")")
+
+    monkeypatch.setattr("app.routes.admin_ops.query", fake_query)
+    r = admin_client.get("/admin/agent-activity")
+    assert r.status_code == 200
+    data = json.loads(r.data)
+    assert data["table_missing"] is True
+    assert data["per_workflow"] == []
+    assert data["per_day"] == []
+    assert data["totals"] == {"runs": 0, "successes": 0, "failures": 0, "cost_usd": 0.0}

@@ -131,6 +131,56 @@ the deep context (root causes, calibration notes, file lists). Every
 server-side migration referenced below was applied on prod and is in
 `manual-actions.md` → Completed; bug root causes are in `bugs.md`.
 
+### 2026-05-22
+
+- **Agent fleet observability — weekly cost + activity rollup (PR
+  drafted, unattended dev-agent).** Closes the loop opened by the six
+  Phase-1..6 agent workflows shipped 2026-05-21 (PRs #103..#108): each
+  workflow carries a per-run budget cap but nothing aggregates what the
+  fleet actually *did*. Now: one append-only `agent_runs` row per agent
+  run (workflow, job, run_id, conclusion, duration_seconds,
+  est_cost_usd, pr_number, notes; mirrors the `llm_usage` table
+  pattern). A new HMAC-authenticated `POST /agent-ops/report-run`
+  endpoint (same `AGENT_OPS_SECRET` key as the Phase 4 executor —
+  no new secret) accepts the row from a final "Report agent run"
+  step appended to each of the six agent jobs (dev-agent.implement,
+  qa-code.bug007-gate, post-deploy.agent-qa, migration-executor.finalize,
+  bug-triage.triage, pm-agent.propose). The reporting step is gated
+  `if: always()` so a failed agent still records a row; a shared
+  `.github/scripts/report_agent_run.py` Python script signs and POSTs
+  via stdlib only (no new deps) and is failure-tolerant — any error
+  (missing secret, DNS, 5xx) logs and exits 0 so the reporting step
+  can never break the actual agent workflow. The per-job budget cap
+  is sent as `est_cost_usd` (with `notes:"budget-cap"` so future
+  iterations can swap in measured cost from action output without a
+  schema change). Read by new admin-only `GET /admin/agent-activity`
+  in the existing `admin_ops` blueprint: 14-day per-workflow rollup
+  (runs, successes, failures, total cost) + zero-filled per-day series
+  + totals; degrades to `table_missing: true` (still 200) if the
+  migration hasn't been applied yet, so the admin page never 500s.
+  PM agent (Phase 6) can now cite this endpoint instead of inferring
+  fleet activity from PRs. *Code touched:*
+  `news/seed/migrations/2026-05-22-agent-runs.sql` (new),
+  `news/seed/schema.sql` (+`agent_runs` CREATE TABLE after `llm_usage`),
+  `news/app/routes/agent_ops.py` (+`/report-run` route + pure helpers
+  `_int_in_range`, `_decimal_in_range`, regex validators),
+  `news/app/routes/admin_ops.py` (+`/agent-activity` route),
+  `news/app/security.py` (`agent_ops.report_run` added to
+  `_EXEMPT_ENDPOINTS` — HMAC over body is a stronger guard than CSRF
+  cookies a machine caller can't carry, same reasoning as the other
+  three `agent_ops.*` endpoints),
+  `.github/scripts/report_agent_run.py` (new), and a "Mark agent
+  start" + "Report agent run" step appended to dev-agent.yml,
+  qa-code.yml, post-deploy.yml, migration-executor.yml,
+  bug-triage.yml, pm-agent.yml. 10 new tests in `test_admin_ops.py`
+  and `test_agent_ops.py` (insert + clamping + invalid-workflow +
+  invalid-conclusion + HMAC enforcement + zero-fill + missing-table
+  degradation). *Server state touched:* one new migration —
+  `manual-actions.md` Open entry with full inline SQL; the PR
+  self-labels `needs-migration` so the Phase 4 executor applies it.
+  No new env var, no new cron, no new pip dep, no restart needed
+  (both routes attach to already-registered blueprints).
+
 ### 2026-05-21
 
 - **Agent infrastructure cluster — six phases, all merged this day.**

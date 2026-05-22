@@ -297,3 +297,117 @@ def test_verify_schema_runs_parameterized_select_only(app, monkeypatch):
     # parameterized — caller input never reaches the SQL string.
     assert "information_schema.columns" in captured["sql"].lower()
     assert captured["params"] == ("testdb", "article_features", "trending")
+
+
+# --- report-run -----------------------------------------------------------
+
+def _fake_conn_capture():
+    captured = {"rows": [], "events": []}
+
+    class FakeCursor:
+        lastrowid = 42
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def execute(self, sql, params=None):
+            captured["rows"].append((sql, params))
+
+    class FakeConn:
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            captured["events"].append("commit")
+
+    return FakeConn(), captured
+
+
+def test_report_run_requires_signature(app):
+    r = app.test_client().post("/agent-ops/report-run", data=b"{}")
+    assert r.status_code == 401
+
+
+def test_report_run_inserts_valid_payload(app, monkeypatch):
+    conn, captured = _fake_conn_capture()
+    monkeypatch.setattr("app.routes.agent_ops.get_conn", lambda: conn)
+
+    payload = {
+        "workflow": "dev-agent",
+        "job": "implement",
+        "run_id": 12345,
+        "conclusion": "success",
+        "duration_seconds": 1200,
+        "est_cost_usd": 7.5,
+        "pr_number": 113,
+        "notes": "budget-cap",
+    }
+    body = json.dumps(payload).encode()
+    r = app.test_client().post(
+        "/agent-ops/report-run", data=body, headers=_signed_headers(body)
+    )
+    assert r.status_code == 200
+    data = json.loads(r.data)
+    assert data["status"] == "ok"
+    assert data["id"] == 42
+    assert "commit" in captured["events"]
+    sql, params = captured["rows"][0]
+    assert "insert into agent_runs" in " ".join(sql.split()).lower()
+    assert params == (
+        "dev-agent", "implement", 12345, "success",
+        1200, 7.5, 113, "budget-cap",
+    )
+
+
+def test_report_run_rejects_invalid_workflow(app, monkeypatch):
+    conn, _captured = _fake_conn_capture()
+    monkeypatch.setattr("app.routes.agent_ops.get_conn", lambda: conn)
+    body = json.dumps({"workflow": "x; DROP TABLE x", "conclusion": "success"}).encode()
+    r = app.test_client().post(
+        "/agent-ops/report-run", data=body, headers=_signed_headers(body)
+    )
+    assert r.status_code == 400
+
+
+def test_report_run_rejects_invalid_conclusion(app, monkeypatch):
+    conn, _captured = _fake_conn_capture()
+    monkeypatch.setattr("app.routes.agent_ops.get_conn", lambda: conn)
+    body = json.dumps({"workflow": "dev-agent", "conclusion": "bad value!"}).encode()
+    r = app.test_client().post(
+        "/agent-ops/report-run", data=body, headers=_signed_headers(body)
+    )
+    assert r.status_code == 400
+
+
+def test_report_run_clamps_and_defaults(app, monkeypatch):
+    conn, captured = _fake_conn_capture()
+    monkeypatch.setattr("app.routes.agent_ops.get_conn", lambda: conn)
+
+    # est_cost_usd negative => 0; duration capped to 24h; junk pr_number => 0;
+    # long notes truncated to 255; missing job => empty string.
+    payload = {
+        "workflow": "qa-code",
+        "conclusion": "failure",
+        "est_cost_usd": -3.0,
+        "duration_seconds": 999_999,
+        "pr_number": "not-a-number",
+        "notes": "x" * 500,
+    }
+    body = json.dumps(payload).encode()
+    r = app.test_client().post(
+        "/agent-ops/report-run", data=body, headers=_signed_headers(body)
+    )
+    assert r.status_code == 200
+    _sql, params = captured["rows"][0]
+    workflow, job, run_id, conclusion, duration, cost, pr, notes = params
+    assert workflow == "qa-code"
+    assert job == ""
+    assert run_id == 0
+    assert conclusion == "failure"
+    assert duration == 86_400
+    assert cost == 0.0
+    assert pr == 0
+    assert len(notes) == 255

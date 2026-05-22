@@ -375,6 +375,26 @@ CREATE TABLE IF NOT EXISTS llm_usage (
   KEY idx_llm_ts (ts)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Agent fleet observability: one row per GitHub Actions agent workflow
+-- run, appended by the HMAC /agent-ops/report-run endpoint from a final
+-- reporting step in each agent workflow. Read by GET /admin/agent-activity.
+-- See migrations/2026-05-22-agent-runs.sql.
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ts               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  workflow         VARCHAR(64) NOT NULL,
+  job              VARCHAR(64) NOT NULL DEFAULT '',
+  run_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  conclusion       VARCHAR(32) NOT NULL DEFAULT '',
+  duration_seconds INT UNSIGNED NOT NULL DEFAULT 0,
+  est_cost_usd     DECIMAL(10,5) NOT NULL DEFAULT 0,
+  pr_number        INT UNSIGNED NOT NULL DEFAULT 0,
+  notes            VARCHAR(255) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY idx_agent_runs_ts (ts),
+  KEY idx_agent_runs_workflow_ts (workflow, ts)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Shareable algorithm gallery: published snapshots of `user_algorithms`
 -- + the per-adoption event log. See migrations/2026-05-20-shared-algorithms.sql.
 CREATE TABLE IF NOT EXISTS shared_algorithms (
