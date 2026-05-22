@@ -57,7 +57,7 @@ shipped.
 | 8 | 4 | algo, ui | Keyword / topic mute & boost | done |
 | 7 | 3 | algo, ui | Per-algorithm keyword mute & boost (in the algo builder) | done |
 | 6 | 3 | algo, ui, new-feature | Keywords-on-algo only (drop /terms; travel with gallery publish/adopt) | done |
-| 6 | 2 | ui | Fold per-algorithm Keywords into the Your Algorithm feature list | ready-for-agent |
+| 6 | 2 | ui | Fold per-algorithm Keywords into the Your Algorithm feature list | in-progress |
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
@@ -488,7 +488,7 @@ dedupe + mute-wins rules carry the merge semantics, so no new helper.
 `/terms` stays as the power-user account-wide surface.
 
 ### Fold per-algorithm Keywords into the Your Algorithm feature list
-**Priority:** 6 · **LOE:** 2 · **Category:** ui · **Status:** ready-for-agent
+**Priority:** 6 · **LOE:** 2 · **Category:** ui · **Status:** in-progress
 
 Follow-on UI polish to "Per-algorithm keyword mute & boost" (PR #82).
 Today `/algo` (the Your Algorithm editor) is an Alpine tabbed view with
