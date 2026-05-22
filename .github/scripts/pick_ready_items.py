@@ -109,6 +109,21 @@ def _run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def _push_with_retry(attempts: int = 3) -> None:
+    # main can advance between checkout and push (concurrent merges, or a
+    # re-run replaying an old SHA). Rebase the flip commit onto the latest
+    # main and retry rather than failing the dispatch.
+    for i in range(attempts):
+        try:
+            _run(["git", "push", "origin", "HEAD:main"])
+            return
+        except subprocess.CalledProcessError:
+            if i == attempts - 1:
+                raise
+            _run(["git", "fetch", "origin", "main"])
+            _run(["git", "rebase", "origin/main"])
+
+
 def main() -> int:
     original = ROADMAP.read_text(encoding="utf-8")
     text, picked = _flip_table(original)
@@ -142,7 +157,7 @@ def main() -> int:
             f"to in-progress [skip ci]"
         )
         _run(["git", "commit", "-m", msg])
-        _run(["git", "push", "origin", "HEAD:main"])
+        _push_with_retry()
 
     _emit_output(picked)
     print(f"picked={picked}")

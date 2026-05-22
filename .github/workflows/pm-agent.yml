@@ -1,9 +1,15 @@
 name: PM agent
 
+# claude-code-action@v1 does not run on schedule/workflow_dispatch events.
+# The scheduled/manual trigger fires a `repository_dispatch` (type:
+# pm-propose) via the PAT; the propose job runs the agent under that
+# supported event.
 on:
   schedule:
     - cron: "0 14 * * 1"
   workflow_dispatch:
+  repository_dispatch:
+    types: [pm-propose]
 
 permissions:
   contents: write
@@ -18,8 +24,25 @@ env:
   SITE_URL: https://sauce.ai/news
 
 jobs:
+  trigger:
+    if: vars.AGENTS_ENABLED == 'true' && github.event_name != 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire pm-propose repository_dispatch
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.AGENT_PUSH_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'pm-propose',
+              client_payload: {},
+            });
+            core.info('dispatched pm-propose');
+
   propose:
-    if: vars.AGENTS_ENABLED == 'true'
+    if: vars.AGENTS_ENABLED == 'true' && github.event_name == 'repository_dispatch' && github.event.action == 'pm-propose'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
