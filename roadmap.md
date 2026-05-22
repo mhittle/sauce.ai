@@ -62,7 +62,7 @@ shipped.
 | 7 | 4 | backend, ui | Multiple saved algorithms / profiles | in-progress |
 | 6 | 5 | ui, algo | A/B split feed | backlog |
 | 6 | 2 | ui | Compact / density toggle (Techmeme-style) | in-progress |
-| 6 | 2 | ui, algo, backend | Unique sources toggle — one article per source (Your Algorithm) | in-progress |
+| 6 | 2 | ui, algo, backend | Unique sources toggle — one article per source (Your Algorithm) | done |
 | 7 | 3 | ops, new-feature | Source catalog expansion (+1000 high-quality sources, incl. Substack / Medium) | done |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
 | 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
@@ -607,7 +607,7 @@ DB migration). Scoped via `#feed-cards` so `/`, `/search`, `/saved`,
 search/saved would be cheap follow-ons by removing the scope.
 
 ### Unique sources toggle — one article per source (Your Algorithm)
-**Priority:** 6 · **LOE:** 2 · **Category:** ui, algo, backend · **Status:** in-progress
+**Priority:** 6 · **LOE:** 2 · **Category:** ui, algo, backend · **Status:** done (PR #124, 2026-05-22)
 
 A checkbox on the **Your Algorithm** editor (`/algo`, the UI tab) that,
 when on, guarantees the home feed shows **at most one article per
@@ -986,6 +986,10 @@ narrative lives in `engineering-history.md` under the same date.
 - **Demand-driven feed classification** (Pri 6, LOE 4, PR #120 — roadmap
   item) — dispatched to the dev agent; implementation PR in flight, not
   yet merged.
+- **Unique sources toggle — one article per source** (Pri 6, LOE 2, PR
+  #124; PM-spec'd + dispatched via PR #123). Per-profile checkbox on
+  `/algo` forcing at most one article per source; migration-free (rides
+  in `weights_json`), reuses the BUG-021 `feed_diversify` cap forced to 1.
 
 ### 2026-05-21
 
