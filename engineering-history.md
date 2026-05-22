@@ -388,6 +388,153 @@ server-side migration referenced below was applied on prod and is in
   (PR #115). Docs: `agent-fleet.md` (PR #117), `pm-session-instructions.md`.
   *Load-bearing fleet config lives in `agent-fleet.md`.*
 Full verbatim in `engineering-history-archive.md` (grep by date / PR#).
+- **Breaking-news email alerts (PR drafted, unattended dev-agent).**
+  First push channel that reaches an opted-in reader between digests.
+  Detection rides distinct-outlet counting (the same signal that powers
+  `/trending`): the new `breaking_alerts` cron (every 15 min) selects
+  stories whose `story_id` is covered by >= `BREAKING_MIN_OUTLETS`
+  (default 12) distinct global outlets (`s.owner_id IS NULL`) in the
+  last `BREAKING_WINDOW_HOURS` (default 6), dedupes against
+  `breaking_news_alerts` (UNIQUE on `story_id`), and confirms each
+  survivor via one Haiku call with strict JSON
+  `{is_major, headline, blurb}`. Fail-closed on `LLMUnavailable` — no
+  row recorded so a later tick retries while still in window;
+  rejections ARE recorded so the cron does not re-judge them every 15
+  min. For each confirmed event, every opted-in user is sent an email
+  unless the event headline matches an active-profile mute term
+  (`algorithm_term_prefs`, same case-insensitive substring semantics
+  as `app.term_prefs._MATCH_EXPR` so the two matchers can't drift) or
+  the user is at their `BREAKING_MAX_PER_DAY` cap (default 3, tracked
+  via `alerts_day` / `alerts_today` with UTC rollover). The opt-in
+  toggle lives next to (but separate from) the daily-digest toggle on
+  `/account/settings`, with its own `unsub_token` so unsubscribing
+  from one channel doesn't touch the other. New
+  `/account/alerts/unsubscribe/<token>` route (CSRF-exempt, mirrors
+  the digest pattern). **NOT BUG-007 class** — both new tables are
+  separate from `users`, and `settings()` / the cron / the
+  unsubscribe route all tolerate them being missing (the cron is a
+  fast no-op, the settings page renders the toggle as off, and the
+  unsubscribe link surfaces "already unsubscribed"). Label the PR
+  `has-migration`, not `needs-migration` — the executor applies the
+  migration post-deploy per `agent-fleet.md`. The cron orchestrator
+  is in `jobs/breaking_alerts.py`; all decision logic
+  (`select_candidates`, `is_suppressed`, `daily_cap_ok`,
+  `parse_llm_verdict`) lives in pure `app/breaking.py` so the
+  21 new tests in `test_breaking.py` don't need Haiku/DB/SMTP. A
+  small `app/mailer.py` (build_message + smtp_send) was extracted
+  from `jobs/send_digest.py` so both senders share one
+  `MIMEMultipart('alternative')` + RFC 8058 `List-Unsubscribe` block
+  (`send_digest.py` is behavior-preserving after the refactor; the
+  one `test_digest.py` monkeypatch was moved from
+  `send_digest.smtplib.SMTP` to `app.mailer.smtplib.SMTP`). Full
+  suite: 574 passed (was 553). *Code touched:*
+  `news/seed/migrations/2026-05-22-breaking-alerts.sql` (new),
+  `news/seed/schema.sql` (+`user_alert_prefs`,
+  +`breaking_news_alerts`, both near `lab_concept_votes`),
+  `news/app/breaking.py` (new, pure helpers),
+  `news/app/mailer.py` (new, shared SMTP helper),
+  `news/jobs/breaking_alerts.py` (new cron),
+  `news/jobs/send_digest.py` (refactor to use mailer),
+  `news/app/templates/breaking_email.html` +
+  `news/app/templates/breaking_email.txt` (new),
+  `news/app/routes/account.py` (+breaking-news toggle in `settings()`,
+  +`alerts_unsubscribe` route),
+  `news/app/templates/account_settings.html` (+toggle section),
+  `news/app/config.py` (+4 `BREAKING_*` env knobs),
+  `news/app/security.py` (`account.alerts_unsubscribe` added to
+  `_EXEMPT_ENDPOINTS`),
+  `news/INSTALL.txt` (env knobs + new cron line),
+  `news/tests/test_breaking.py` (new, 21 tests),
+  `news/tests/test_digest.py` (monkeypatch target updated for the
+  mailer extraction). *Server state touched:* one new migration
+  (`manual-actions.md` Open entry with full inline SQL, two new
+  tables) + one new cron line (every 15 min). No new env var is
+  strictly required (defaults are sane); reuses the existing `SMTP_*`
+  config; no new pip dep; no new secret. Passenger restart on deploy
+  so the updated `account` blueprint registers
+  `/account/alerts/unsubscribe/<token>`.
+- **Unique sources toggle — one article per source (PR drafted,
+  unattended dev-agent).** Per-profile boolean on `/algo`'s UI tab that
+  tightens the global per-source cap to 1 for the viewer. User framing:
+  "let me see a wider spread of sources, not three Inquirer stories in a
+  row." This is the user-controllable lever over the BUG-021 cap
+  (`FEED_MAX_PER_SOURCE`, default 3) already enforced by
+  `app/feed_diversify.py`. No DB migration, no new env var, no new cron,
+  no new dep — the flag is a new key `unique_sources` (boolean) inside
+  the existing free-form `user_algorithms.weights_json`; the ranking
+  layer already ignores unknown keys, so older profiles read the key as
+  "off" without backfill (NOT BUG-007 class). New pure helper
+  `feed_diversify.effective_source_cap(weights, default_cap)` — toggle on
+  → 1 regardless of the global cap (including when configured to 0 /
+  disabled); toggle off / absent → `default_cap`; never weakens an
+  already-tighter floor. `feed.index()` now resolves the effective cap
+  per request and clamps `fetch_budget(...)` to a new
+  `feed_diversify.MAX_FETCH_ROWS = 5000` ceiling so deep "Load more"
+  paging under cap=1 (multiplier ~31x) can't issue an unbounded `LIMIT`;
+  a short page near the end of the 7-day window is acceptable, an
+  unbounded fetch is not. Scope: `/` only — `/firehose`, `/search`,
+  `/saved`, and the digest are untouched (same scoping as BUG-021). The
+  cap is applied AFTER the SQL `ORDER BY`, so each source's surviving
+  article is the highest-ranked one for that source under the user's
+  algorithm; story-cluster dedup, jitter, source/keyword prefs,
+  category/sort, the 7-day window, and pagination stability (page N+1
+  agrees with page N) are unchanged. *Code touched:*
+  `news/app/feed_diversify.py` (+`MAX_FETCH_ROWS` constant,
+  +`effective_source_cap` helper), `news/app/routes/feed.py` (resolve
+  effective cap via `effective_source_cap(weights, default_cap)` and
+  clamp `fetch_budget(...)` at `MAX_FETCH_ROWS`),
+  `news/app/routes/algo.py` (`_parse_form_weights` writes
+  `weights["unique_sources"] = bool(form.get("unique_sources"))` on every
+  save so toggle-off clears a previously-saved truthy value — unchecked
+  HTML checkboxes don't submit),
+  `news/app/templates/algo.html` (+`Unique sources` feature-row with the
+  checkbox under Country filter, above Near a place — feed-shaping
+  control, not a per-feature slider, so it sits next to recency /
+  category / country rather than inside the weight grid). 10 new tests
+  in `test_feed_diversify.py` and `test_algo_unique_sources.py` pin
+  toggle-on/off/missing, override of a disabled global cap, "never
+  weakens a tighter floor," no-duplicate-source-ids regression, and
+  `MAX_FETCH_ROWS` ceiling sanity. Full suite: 530 passed. *Server
+  state touched:* none — template + thin-route + pure-helper change;
+  Passenger restart on deploy as usual.
+- **Demand-driven feed classification (PR #121, unattended dev-agent).**
+  Closes the "feed runs dry until the next 5-min cron tick" gap when an
+  active reader outpaces `classify_pending`. **No synchronous LLM on the
+  request path, no per-request fork/spawn** (nproc ceiling untouched):
+  feed page size 30→40, and after each feed load the route does two cheap
+  `COUNT(*)`s and, if the classified buffer ahead of the reader is < 400,
+  **touches** `logs/classify_topup.signal` (mtime-debounced ~60s,
+  failure-swallowed). `classify_pending.py` gains `--triggered-only`
+  (new every-1-min cron) which no-ops unless the signal is present AND
+  fresh, then acquires the existing `job_lock` and consumes the signal
+  inside it — so the cron stays the only process that launches a
+  classifier and the `*/5` tick remains the safety net. No migration /
+  schema / pip / restart. New pure `app/classify_topup.py` + 23 tests
+  (543 pass). *Code:* `app/classify_topup.py` (new), `routes/feed.py`,
+  `app/config.py` (4 `CLASSIFY_TOPUP_*` knobs), `jobs/classify_pending.py`,
+  `INSTALL.txt`, `tests/test_classify_topup.py`. *Server state:* one new
+  1-min cron entry (`manual-actions.md` Open, full crontab line inline).
+  No migration file → no `has-migration` label.
+- **Unique sources toggle — one article per source (spec'd + dispatched,
+  PM session).** New `ready-for-agent` roadmap item authored and merged
+  to `main` (PR #123), which dispatched the unattended Opus dev-agent
+  (~$8 paid run) to implement it. Feature: a per-profile checkbox on
+  `/algo` (UI tab) that forces the home feed to **at most one article per
+  source**. Design chosen to be migration-free and not BUG-007 class —
+  the flag rides as a new `unique_sources` boolean key inside the
+  existing free-form `user_algorithms.weights_json` (the ranking layer
+  ignores unknown keys; `parse_weights_json` round-trips the dict), and
+  the read path reuses the BUG-021 `app/feed_diversify.py` cap machinery
+  with the *effective* per-source cap forced to 1 (overriding the global
+  `FEED_MAX_PER_SOURCE` default of 3). Spec'd surfaces: `routes/algo.py`
+  `_parse_form_weights`, `templates/algo.html` (feed-shaping checkbox, not
+  a feature-row), `routes/feed.py` `index()` effective-cap resolution, and
+  a pure `effective_source_cap` helper for unit tests; over-fetch ceiling
+  flagged so cap=1 deep-paging can't issue an unbounded `LIMIT`. Scoped to
+  `/` only (firehose/search/saved/digest unchanged). *Server state
+  touched:* none planned (no migration/cron/env/dep). *Open:* the
+  dev-agent's implementation PR is pending — review + merge it through the
+  BUG-007 gate; no `needs-migration` follow-up expected.
 
 - **Unique sources toggle — one article per source (PR drafted; PM-spec'd via
   PR #123, ~$8 dev-agent run).** Per-profile `/algo` checkbox forcing <=1

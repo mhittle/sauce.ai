@@ -163,7 +163,7 @@ def test_smtp_send_uses_starttls_when_configured(monkeypatch):
         def quit(self):
             sent["quit"] = True
 
-    monkeypatch.setattr("send_digest.smtplib.SMTP", FakeSMTP)
+    monkeypatch.setattr("app.mailer.smtplib.SMTP", FakeSMTP)
 
     cfg = types.SimpleNamespace(
         SMTP_HOST="smtp.example.com", SMTP_PORT=587,
@@ -210,7 +210,7 @@ def test_smtp_send_plain_local_mta(monkeypatch):
         def quit(self):
             pass
 
-    monkeypatch.setattr("send_digest.smtplib.SMTP", FakeSMTP)
+    monkeypatch.setattr("app.mailer.smtplib.SMTP", FakeSMTP)
 
     cfg = types.SimpleNamespace(
         SMTP_HOST="localhost", SMTP_PORT=25,

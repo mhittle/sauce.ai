@@ -42,6 +42,109 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ### 2026-05-31 — Python App restart + browser verify: feed selection/ranking split (PR #144, BUG-030)
 **Status:** open · **PR:** #144 (merged 2026-05-31) · **Opened:** 2026-05-31
+### 2026-05-22 — Migration + cron: breaking-news email alerts
+**Status:** open · **PR:** (breaking-news email alerts, this session) ·
+**Opened:** 2026-05-22 ·
+**File reference:** `news/seed/migrations/2026-05-22-breaking-alerts.sql`
+
+Adds two new tables and one new every-15-min cron line. **NOT BUG-007
+class** — both tables are separate from `users`, and the only callers
+(`/account/settings`, `/account/alerts/unsubscribe/<token>`, and the
+new `breaking_alerts` cron) tolerate the tables being missing (cron
+no-ops, settings page renders the toggle off, unsubscribe surfaces
+"already unsubscribed"). PR carries the informational
+`has-migration` label; do NOT add `needs-migration` until after this
+PR is merged and deployed (the executor reads the migration file from
+prod's own disk per `agent-fleet.md`).
+
+**1. Migration — apply once on prod via phpMyAdmin → SQL tab
+(database `lt1ih6uyy2z6_news`):**
+
+```sql
+CREATE TABLE IF NOT EXISTS user_alert_prefs (
+  user_id          INT UNSIGNED NOT NULL,
+  breaking_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  unsub_token      CHAR(40) NOT NULL DEFAULT '',
+  alerts_day       DATE DEFAULT NULL,
+  alerts_today     INT UNSIGNED NOT NULL DEFAULT 0,
+  last_alert_at    DATETIME DEFAULT NULL,
+  updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id),
+  KEY idx_uap_enabled (breaking_enabled),
+  CONSTRAINT fk_uap_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS breaking_news_alerts (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  story_id     BIGINT UNSIGNED NOT NULL,
+  outlet_count INT UNSIGNED NOT NULL DEFAULT 0,
+  status       ENUM('sent','rejected') NOT NULL,
+  headline     VARCHAR(200) NOT NULL DEFAULT '',
+  blurb        VARCHAR(500) NOT NULL DEFAULT '',
+  recipients   INT UNSIGNED NOT NULL DEFAULT 0,
+  detected_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_bna_story (story_id),
+  KEY idx_bna_status_detected (status, detected_at),
+  CONSTRAINT fk_bna_story FOREIGN KEY (story_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Verify:**
+
+```sql
+SELECT COUNT(*) FROM user_alert_prefs;        -- 0 immediately after apply
+SELECT COUNT(*) FROM breaking_news_alerts;    -- 0
+SHOW INDEX FROM breaking_news_alerts;         -- expects PRIMARY + uk_bna_story + idx_bna_status_detected
+```
+
+Then visit `/account/settings` (signed-in): you should see the new
+**"Breaking-news alerts"** section with its checkbox; enabling it
+inserts a `user_alert_prefs` row with a fresh `unsub_token`.
+
+**2. Cron entry — add in cPanel → "Cron Jobs":**
+
+```
+*/15 * * * *  source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news/jobs && python breaking_alerts.py >> /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/cron.log 2>&1
+```
+
+**Verify (after a tick fires):**
+
+```
+tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep breaking_alerts
+```
+
+You should see a line like:
+
+```
+candidates=N judged=M sent_events=K rejected=R skipped_llm=S emails_sent=E llm_cost_usd=0.0NNNN
+```
+
+Until the first major outlet-burst lands, `candidates=0` (or
+`new=0`) is the expected steady state. The job is a no-op when
+`BREAKING_ENABLED=0` in cPanel env vars (default on if unset).
+
+**3. Optional env tuning (set via cPanel "Setup Python App" if you
+want to deviate from defaults):**
+
+- `BREAKING_ENABLED` — `0` to kill-switch the cron without removing the line.
+- `BREAKING_WINDOW_HOURS` — default `6`.
+- `BREAKING_MIN_OUTLETS` — default `12`. Lower = more sends.
+- `BREAKING_MAX_PER_DAY` — default `3`. Per-user daily cap.
+
+No new pip dependency, no new secret. Reuses the existing `SMTP_*`
+config used by the daily digest.
+
+**4. Python App restart** (cPanel → Setup Python App → Restart) so
+the updated `account` blueprint registers
+`/account/alerts/unsubscribe/<token>` and `_EXEMPT_ENDPOINTS` picks
+up the new endpoint.
+
+---
+
+### 2026-05-22 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** open · **PR:** (agent-fleet enablement, this session) ·
+**Opened:** 2026-05-22
 
 BUG-030 split the home feed into a SELECTION stage (weights pick the
 candidate set via affinity) and a RANKING stage (the sort orders it).

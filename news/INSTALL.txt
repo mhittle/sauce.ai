@@ -105,6 +105,13 @@ If that prints the path, you're ready.
         DIGEST_MAX_ARTICLES     8
         DIGEST_LOOKBACK_HOURS   24
 
+    Optional (only required if you enabled the breaking-news alerts
+    cron in §4 — they share the same SMTP_* config as the digest):
+        BREAKING_ENABLED        1              (kill-switch; set 0 to disable the cron globally)
+        BREAKING_WINDOW_HOURS   6              (how recent an outlet burst must be to qualify)
+        BREAKING_MIN_OUTLETS    12             (distinct-outlet floor for a candidate)
+        BREAKING_MAX_PER_DAY    3              (per-user daily cap)
+
     Do NOT set APPLICATION_ROOT. LiteSpeed/Passenger already
     mounts the app at /news via the "Application URL" setting;
     setting APPLICATION_ROOT in env vars causes a double-prefix
@@ -220,6 +227,12 @@ itself before invoking python.
 
 # every 30 min: external trending poll (Google Trends + Google News RSS)
 */30 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python trending_poll.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
+
+# every 15 min: breaking-news outlet-burst detector + Haiku gate + push email
+# (opt-in per /account/settings; no-op until users enable; capped per
+# user via BREAKING_MAX_PER_DAY. Requires the 2026-05-22-breaking-alerts.sql
+# migration; cron no-ops cleanly if the new tables aren't present yet.)
+*/15 * * * *  source /home/YOURACCOUNT/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/YOURACCOUNT/public_html/sauce.ai/news/jobs && python breaking_alerts.py >> /home/YOURACCOUNT/public_html/sauce.ai/news/logs/cron.log 2>&1
 
     Note: output is redirected to logs/cron.log (NOT /dev/null).
     If a cron job goes wrong you must be able to see the error.
