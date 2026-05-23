@@ -19,7 +19,7 @@ deploy); the onboarding doc points here.
   gate reviews it → human merges → FTP deploy → migration (if any)
   applied post-deploy.**
 - ⚠️ **Pushing a `ready-for-agent` roadmap row to `main` launches a paid
-  (~$8) unattended dev run.** Know this before you push to `main`.
+  (~$10) unattended dev run.** Know this before you push to `main`.
 
 ---
 
@@ -27,7 +27,7 @@ deploy); the onboarding doc points here.
 
 | Workflow | File | Trigger | Model · cap | Does |
 |---|---|---|---|---|
-| **dev-agent** | `dev-agent.yml` | push→main (`roadmap.md`) · manual · `repository_dispatch(dev-implement)` | Opus · $8 | picks `ready-for-agent` items, implements one, opens a draft PR |
+| **dev-agent** | `dev-agent.yml` | push→main (`roadmap.md`) · manual · `repository_dispatch(dev-implement)` | Opus · $10 | picks `ready-for-agent` items, implements one, opens a draft PR |
 | **qa-code** (BUG-007 gate) | `qa-code.yml` | `pull_request` | Sonnet · $1 | reviews the diff for BUG-007-class issues; **required check** |
 | **pm-agent** | `pm-agent.yml` | weekly cron (Mon 14:00 UTC) · manual → `repository_dispatch(pm-propose)` | Opus · $4 | proposes roadmap items in a PR |
 | **post-deploy** | `post-deploy.yml` | push→main · 30-min cron → `repository_dispatch(post-deploy-qa)` | Sonnet · $2 | curl smoke-test + Playwright-MCP agent QA of prod |
