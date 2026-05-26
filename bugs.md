@@ -26,44 +26,17 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-### BUG-025 — classify_pending backlog: 56k articles pending, 0 classified by LLM today
-**Status:** open · **Reporter:** user · **Opened:** 2026-05-26
-
-User shared the `/admin` Overview and reported "the crons are not running
-or most articles are in a backlog." Dashboard snapshot:
-
-- `articles pending` = 56,604 (very large; BUG-008 backlog was ~7,700)
-- `articles classified` = 68,389
-- `articles classified by LLM today` = 0
-- `LLM spend today` = $0.00 (but `LLM spend 30d` = $18.88, so the LLM
-  path worked recently)
-- `fetched today` = 2,451 (so `fetch_feeds` **is** running)
-- `articles failed` = 0
-- `errored feeds` = 706 / 1,930 total
-
-Diagnosis (pending): `fetch_feeds` is healthy but `classify_pending` is
-making no LLM progress and the pending queue is growing. Candidate causes,
-in rough priority order:
-1. `classify_pending` cron not running / not sourcing the venv (INSTALL §8C).
-2. `classify_pending` crashing each tick — historically BUG-009
-   (`MySQL server has gone away` on idle socket) or a missing migration
-   (BUG-007 class) raising before the write block.
-3. `ANTHROPIC_API_KEY` missing in the cron env or out of credits →
-   `LLMUnavailable`; rows would fall back to `-nollm` (BUG-019) rather than
-   spend, but a hard key error could also stall the tick.
-4. nproc/EP exhaustion preventing the cron from forking (INSTALL §8D).
-
-**Repro / next step:** need prod `logs/cron.log` tail and crontab listing —
-not accessible from this container. Asked user to pull diagnostics.
-
-**Fix notes:** TBD.
+(none currently)
 
 ---
 
 ## In progress
 
-### BUG-026 — Article pinned to top of feed regardless of downvote; downvote doesn't remove it
+### BUG-027 — Article pinned to top of feed regardless of downvote; downvote doesn't remove it
 **Status:** in-progress (fix written, PR pending) · **Reporter:** user · **Opened:** 2026-05-26
+**Note:** renumbered from BUG-026 → BUG-027 on 2026-05-26 to resolve a
+parallel-session BUG-ID collision (a separate session used BUG-025 for the
+duplicate-profiles bug, now BUG-026). See `new-engineering-session-instructions.md` §7.4.
 
 User reports a specific article (Dark Reading — "[Virtual Event]
 Anatomy of a Data Breach: What to Do if it Happens to You", category
@@ -183,8 +156,11 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
-### BUG-025 — Algorithm switcher dropdown on `/` lists duplicate profiles
+### BUG-026 — Algorithm switcher dropdown on `/` lists duplicate profiles
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-26 · **Closed:** 2026-05-26 (PR pending)
+**Note:** renumbered from BUG-025 → BUG-026 on 2026-05-26 to resolve a
+parallel-session BUG-ID collision (BUG-025 is the feed-stale / geo-migration
+bug anchored by merged PR #135). Original PR/commit text may still say BUG-025.
 
 User reported the front-page "Algorithm:" selector showing the same
 algorithm names repeated many times (screenshot: "Lefty" x3,
@@ -229,6 +205,9 @@ non-destructive); they simply collapse in the UI and stop multiplying.
 create-reuse; `test_gallery_adopt.py` adopt-reuse + keyword refresh);
 full suite 563 passed. Browser verification on prod deferred (sandbox
 has no browser — same documented limitation as PR #53/#59/#72).
+
+---
+
 ### BUG-025 — Feed stale: no new articles since May 20; refresh and algo changes show the same articles
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-26 · **Closed:** 2026-05-26
 
@@ -252,7 +231,12 @@ was never applied on prod and was never tracked in `manual-actions.md`**
 (the gap that let it slip past the BUG-007 discipline). Because the
 feed only shows `status='classified'` rows, the classified corpus
 froze at the last good tick (~May 20) while `pending` silently piled
-up to ~57k rows. The "same articles on refresh / algo change"
+up to ~57k rows. *(A parallel session independently filed this same
+issue from the `/admin` Overview — 56,604 pending / 0 classified by
+LLM today / $0 spend today vs $18.88 over 30d / 2,451 fetched today /
+706 of 1,930 feeds errored — which corroborates: fetch healthy,
+classify making zero progress. That duplicate BUG-025 was folded into
+this entry.)* The "same articles on refresh / algo change"
 sub-symptom was the expected downstream effect of a frozen corpus
 (every algorithm drew from the same stale pool; multiplicative
 recency decay can't differentiate when everything is equally old) —
