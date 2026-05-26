@@ -44,6 +44,11 @@ def store(monkeypatch):
             aid, uid = params
             m = [r for r in rows if r["id"] == aid and r["user_id"] == uid]
             return ({"id": m[0]["id"]} if m else None) if one else m
+        if s.startswith("select id from user_algorithms where user_id = %s and name = %s"):
+            uid, name = params
+            m = [r for r in rows if r["user_id"] == uid and r["name"] == name]
+            m.sort(key=lambda r: r["updated_at"], reverse=True)
+            return ({"id": m[0]["id"]} if m else None) if one else m
         if "from user_algorithms" in s and "order by is_active desc" in s:
             (uid,) = params
             mine = [r for r in rows if r["user_id"] == uid]
@@ -61,6 +66,13 @@ def store(monkeypatch):
             _touch(r)
             rows.append(r)
             return r["id"]   # mirrors db.execute -> cur.lastrowid
+        elif s.startswith("update user_algorithms set weights_json=%s, expression_text=%s where id=%s and user_id=%s"):
+            wj, expr, aid, uid = params
+            for r in rows:
+                if r["id"] == aid and r["user_id"] == uid:
+                    r["weights_json"] = wj
+                    r["expression_text"] = expr
+                    _touch(r)
         elif s.startswith("update user_algorithms set is_active = 0 where user_id = %s"):
             (uid,) = params
             for r in rows:
@@ -119,6 +131,28 @@ def test_create_profile_inserts_and_activates(client, store):
 def test_create_profile_blank_name_defaults(client, store):
     client.post("/algo/profiles/create", data={"profile_name": "   "})
     assert store["rows"][-1]["name"] == "Custom"
+
+
+def test_create_profile_reuses_same_name_instead_of_duplicating(client, store):
+    """BUG-025: re-saving an existing profile name overwrites it and
+    activates it rather than stacking a duplicate row."""
+    other = store["seed"]("Other", active=1)
+    existing = store["seed"]("Lefty", active=0)
+    r = client.post("/algo/profiles/create",
+                    data={"profile_name": "Lefty", "w_objectivity": "1.5"})
+    assert r.status_code == 302
+    lefties = [x for x in store["rows"] if x["name"] == "Lefty"]
+    assert len(lefties) == 1                     # no duplicate created
+    assert lefties[0]["id"] == existing          # reused the existing row
+    assert json.loads(lefties[0]["weights_json"])["objectivity"] == 1.5
+    assert _active_ids(store["rows"]) == [existing]   # exactly one active
+
+
+def test_create_profile_distinct_name_inserts_new_row(client, store):
+    store["seed"]("Lefty", active=1)
+    client.post("/algo/profiles/create", data={"profile_name": "Righty"})
+    names = sorted(r["name"] for r in store["rows"])
+    assert names == ["Lefty", "Righty"]
 
 
 def test_activate_switches_single_active(client, store):

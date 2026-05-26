@@ -317,12 +317,27 @@ def create_profile():
     builder's proposed weights get persisted (the form carries them)."""
     weights = _parse_form_weights(request.form)
     name = _clean_name(request.form.get("profile_name"))
-    new_id = execute(
-        "INSERT INTO user_algorithms (user_id, name, weights_json, expression_text, is_active) "
-        "VALUES (%s, %s, %s, %s, 0)",
-        (g.user["id"], name, json.dumps(weights), weights_to_expression(weights)),
+    # Reuse a same-named profile instead of stacking a duplicate (BUG-025):
+    # saving "Morning brief" again overwrites the existing one and activates
+    # it, so the switcher never accumulates repeated names.
+    existing = query(
+        "SELECT id FROM user_algorithms WHERE user_id = %s AND name = %s "
+        "ORDER BY updated_at DESC LIMIT 1",
+        (g.user["id"], name), one=True,
     )
-    _set_active(g.user["id"], new_id)
+    if existing:
+        target_id = existing["id"]
+        execute(
+            "UPDATE user_algorithms SET weights_json=%s, expression_text=%s WHERE id=%s AND user_id=%s",
+            (json.dumps(weights), weights_to_expression(weights), target_id, g.user["id"]),
+        )
+    else:
+        target_id = execute(
+            "INSERT INTO user_algorithms (user_id, name, weights_json, expression_text, is_active) "
+            "VALUES (%s, %s, %s, %s, 0)",
+            (g.user["id"], name, json.dumps(weights), weights_to_expression(weights)),
+        )
+    _set_active(g.user["id"], target_id)
     return redirect(url_for("algo.index"))
 
 

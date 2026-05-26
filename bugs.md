@@ -86,6 +86,53 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-025 — Algorithm switcher dropdown on `/` lists duplicate profiles
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-26 · **Closed:** 2026-05-26 (PR pending)
+
+User reported the front-page "Algorithm:" selector showing the same
+algorithm names repeated many times (screenshot: "Lefty" x3,
+"Karenizer" x3, "Anti Yellow Media" x3, "Karen Maker" x3, "Fred's News"
+x3, "Palo"/"Non Yellow"/"general"/"Heady" x2 each), interleaved with the
+one-per-profile entries plus "Default"/"Custom".
+
+**Root cause:** not a query fan-out or a template bug — the switcher
+faithfully renders the rows in `user_algorithms`. `_switcher_profiles()`
+in `app/routes/feed.py` runs a plain `SELECT ... WHERE user_id = %s`
+(no JOIN) and `feed.html` renders one `<option>` per row, so every
+entry (including "Default"/"Custom", which are just profile *names*) is
+a real saved row. The duplicates are genuinely-duplicate rows that
+accumulate because two write paths `INSERT` a new profile with no
+guardrail: `gallery.adopt()` (`app/routes/gallery.py`) clones a fresh
+row on every "Adopt as my feed" click, and `algo.create_profile()`
+(`app/routes/algo.py`) saves a new row even when the name already
+exists. `save`, `use_preset`, and `onboarding` correctly
+update-in-place / are idempotent and were not implicated.
+
+**Fix (PR pending):** prevent + de-dupe display (per owner's choice).
+1. **Prevent** — `create_profile()` and `gallery.adopt()` now look up an
+   existing same-named profile for the user first; if found they
+   **update that row's weights** (adopt also refreshes its keywords:
+   wipe-then-reinsert `algorithm_term_prefs`) and re-activate it instead
+   of inserting a duplicate. New names still insert as before.
+2. **De-dupe display** — new pure helper
+   `feed._dedupe_switcher_rows(rows)` collapses duplicate-named rows so
+   each name appears once in the dropdown. Rows arrive ordered
+   `is_active DESC, updated_at DESC`, so the kept row for a name is the
+   active one (if active) else the most-recent; the active id is computed
+   from the full set so the `<option selected>` always resolves. This
+   also tidies the *pre-existing* duplicate rows already on prod (they
+   stay in the DB, non-destructive, but stop showing repeated).
+
+**Scope:** app-layer only — no DB migration, no schema/cron/env/dep
+change. Pre-existing duplicate rows are not deleted (the owner chose
+non-destructive); they simply collapse in the UI and stop multiplying.
+
+**Verification:** 20 new/updated unit tests
+(`test_feed_switcher.py` pure de-dupe; `test_algo_profiles.py`
+create-reuse; `test_gallery_adopt.py` adopt-reuse + keyword refresh);
+full suite 563 passed. Browser verification on prod deferred (sandbox
+has no browser — same documented limitation as PR #53/#59/#72).
+
 ### BUG-022 — Topnav text overflows page width
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-20 · **Closed:** 2026-05-20 (PR pending)
 
