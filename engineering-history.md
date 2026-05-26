@@ -134,6 +134,45 @@ these.
 
 ---
 
+## 2026-05-26
+
+- **BUG-025 — feed frozen at May 20; root cause was an unapplied geo
+  migration crashing `classify_pending` (interactive session, PR #135
+  merged).** *Context:* user reported the `/` feed stale since May 20 —
+  reloads and algo switches showed the same articles. *Diagnosis:*
+  `fetch_feeds` was healthy (new rows kept arriving as
+  `status='pending'`), but `classify_pending` crashed on **every** tick
+  at the `article_features` INSERT (classify_pending.py:428) with
+  `(1054, "Unknown column 'geo_lat' in 'INSERT INTO'")`. The geo /
+  "Near a place" feature (2026-05-20) shipped with
+  `seed/migrations/2026-05-20-geo.sql` (adds `geo_lat`/`geo_lng`/
+  `geo_place` + `idx_feat_geo`) wired into `schema.sql` and the INSERT,
+  but the migration **was never applied on prod and was never tracked in
+  `manual-actions.md`** — a **BUG-007-class** miss, except on the cron
+  *write* path, so it failed silently (no user-facing 500; the site
+  stayed up serving the frozen `classified` corpus) and went unnoticed
+  for 6 days while `pending` piled up to ~57k rows. The "same articles
+  on refresh / algo change" symptom was a downstream effect of the
+  frozen corpus, not a ranking bug. *Fix:* applied the missing migration
+  on prod (phpMyAdmin, `lt1ih6uyy2z6_news`); **no code change** — the
+  repo already matched. `classify_pending` recovered on the next cron
+  tick with no restart (verified: consecutive clean classify ticks, zero
+  tracebacks, user confirmed feed freshening). The ~57k backlog drains
+  oldest-first (`ORDER BY fetched_at ASC`) at ~180/tick (~50k/day), so
+  the newest feed date advances day-by-day over ~a day — self-healing.
+  *Code touched:* none (docs only — `bugs.md` BUG-025, `manual-actions.md`
+  geo entry now in Completed). *Server state touched:* geo columns added
+  to prod `article_features` (now in `manual-actions.md` Completed
+  2026-05-26). *Process learning:* every `seed/migrations/*.sql` that
+  adds a column a cron job writes must get an Open `manual-actions.md`
+  entry the moment it merges — a silent cron-path crash is harder to
+  catch than a user-route 500. *Open/unrelated:* the QA-filed BUG-023
+  (PR #130, site timeout) / BUG-024 (PR #134, Apache 415 + Cloudflare
+  challenge) are a separate web-tier/Cloudflare matter — the user's
+  browser loaded the site fine throughout; not yet investigated.
+
+---
+
 ## Condensed history
 
 Older entries, summarized. **Full verbatim text is in

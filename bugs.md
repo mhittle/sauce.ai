@@ -62,64 +62,7 @@ not accessible from this container. Asked user to pull diagnostics.
 
 ## In progress
 
-### BUG-025 — Feed stale: no new articles since May 20; refresh and algo changes show the same articles
-**Status:** in-progress · **Reporter:** user · **Opened:** 2026-05-26
-
-User reports the `/` feed is stale: the most recent article is dated
-May 20 (today is May 26, ~6 days), reloading `/` returns the same
-articles, and switching the active algorithm shows mostly the same
-articles.
-
-**Likely related:** the QA fleet auto-filed BUG-023 (PR #130, site
-connection timeout, 2026-05-22) and BUG-024 (PR #134, all GET
-endpoints returning Apache HTTP 415 + Cloudflare bot challenge,
-2026-05-26). If the Python App / cron has been down or the server
-mis-serving since ~May 20-22, `fetch_feeds` + `classify_pending`
-would have stopped ingesting, which fully explains a feed frozen at
-May 20. The "same articles on refresh / algo change" sub-symptom is
-most likely a downstream effect of a frozen corpus (all algorithms
-draw from the same stale ~6-day-old pool; multiplicative recency
-decay no longer differentiates when everything is old) rather than a
-fresh ranking regression — but confirm once ingestion is restored.
-
-**Repro (user):** load https://sauce.ai/news/, observe newest article
-is 2026-05-20; reload — identical; switch active profile — mostly
-identical.
-
-**Root cause (found 2026-05-26 via `logs/cron.log`):** classic
-**BUG-007 class**. `fetch_feeds` is healthy (new articles keep arriving
-as `status='pending'`), but `classify_pending` crashes on **every**
-tick at the `INSERT INTO article_features` (classify_pending.py:428)
-with:
-
-```
-pymysql.err.OperationalError: (1054, "Unknown column 'geo_lat' in 'INSERT INTO'")
-```
-
-The geo / "Near a place" feature merged with migration
-`news/seed/migrations/2026-05-20-geo.sql` (adds `geo_lat`, `geo_lng`,
-`geo_place` + `idx_feat_geo` to `article_features`) wired into
-`schema.sql` and the `classify_pending` INSERT — **but the migration
-was never applied on prod and was never tracked in `manual-actions.md`**
-(the gap that let it slip). Because the feed only shows
-`status='classified'` rows, the classified corpus froze at the last
-successful tick (~May 20) while `pending` silently piled up. The
-"same articles on refresh / algo change" sub-symptom is the expected
-downstream effect of a frozen corpus, not a separate ranking bug.
-
-Unrelated to the QA-filed BUG-023/024 (those are a web-tier/Cloudflare
-matter; the user's browser loads the site fine — this is purely the
-classify pipeline).
-
-**Fix:** apply the missing migration on prod (now tracked in
-`manual-actions.md` Open with full inline SQL). `classify_pending` is a
-fresh process per cron tick, so it recovers on the next tick with no
-restart; the ~6-day `pending` backlog drains at ~180/tick. No code
-change required — the repo already matches; the defect was the
-unapplied migration.
-
-**Status note:** `in-progress` until the user confirms the ALTER ran
-on prod and the feed shows post-May-20 articles, then `resolved`.
+(none currently)
 
 ---
 
@@ -219,6 +162,57 @@ non-destructive); they simply collapse in the UI and stop multiplying.
 create-reuse; `test_gallery_adopt.py` adopt-reuse + keyword refresh);
 full suite 563 passed. Browser verification on prod deferred (sandbox
 has no browser — same documented limitation as PR #53/#59/#72).
+### BUG-025 — Feed stale: no new articles since May 20; refresh and algo changes show the same articles
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-26 · **Closed:** 2026-05-26
+
+User reported the `/` feed frozen at May 20: reloading and switching
+the active algorithm both returned the same articles.
+
+**Root cause:** classic **BUG-007 class**, on the cron write path.
+`fetch_feeds` was healthy (new articles kept arriving as
+`status='pending'`), but `classify_pending` crashed on **every** tick
+at the `INSERT INTO article_features` (classify_pending.py:428):
+
+```
+pymysql.err.OperationalError: (1054, "Unknown column 'geo_lat' in 'INSERT INTO'")
+```
+
+The geo / "Near a place" feature merged with migration
+`news/seed/migrations/2026-05-20-geo.sql` (adds `geo_lat`, `geo_lng`,
+`geo_place` + `idx_feat_geo` to `article_features`), wired into
+`schema.sql` and the `classify_pending` INSERT — **but the migration
+was never applied on prod and was never tracked in `manual-actions.md`**
+(the gap that let it slip past the BUG-007 discipline). Because the
+feed only shows `status='classified'` rows, the classified corpus
+froze at the last good tick (~May 20) while `pending` silently piled
+up to ~57k rows. The "same articles on refresh / algo change"
+sub-symptom was the expected downstream effect of a frozen corpus
+(every algorithm drew from the same stale pool; multiplicative
+recency decay can't differentiate when everything is equally old) —
+not a separate ranking regression. Unrelated to the QA-filed
+BUG-023/024 (a web-tier/Cloudflare matter; the user's browser loaded
+the site fine throughout).
+
+**Fix:** applied the missing migration on prod via phpMyAdmin
+(`lt1ih6uyy2z6_news`) — see `manual-actions.md` Completed
+2026-05-26. No code change: the repo already matched; the defect was
+purely the unapplied migration. `classify_pending` is a fresh process
+each cron tick, so it recovered on the very next tick with no restart
+— verified live: ~13 consecutive successful Anthropic classify calls
+with zero tracebacks after the ALTER, and the user confirmed the feed
+freshening. The ~57k `pending` backlog drains **oldest-first**
+(`ORDER BY fetched_at ASC`, classify_pending.py:287) at ~180/tick
+(~50k/day), so the feed's newest date advances day-by-day over ~a day
+rather than jumping straight to today — self-healing, no action
+needed.
+
+**Process learning (same as BUG-007):** a load-bearing migration
+shipped without a `manual-actions.md` Open entry to gate it. The
+crash was on the cron write path rather than a user route, so it
+failed *silently* (no user-visible 500 — the site stayed up serving
+the stale corpus), which is why it went unnoticed for 6 days. Every
+`news/seed/migrations/*.sql` that adds a column written by a cron job
+must get an Open `manual-actions.md` entry the moment it merges.
 
 ### BUG-022 — Topnav text overflows page width
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-20 · **Closed:** 2026-05-20 (PR pending)
