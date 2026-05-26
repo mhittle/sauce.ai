@@ -40,6 +40,53 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-26 — Migration: article_features geo columns (geo_lat/geo_lng/geo_place) — UNBLOCKS classify_pending
+**Status:** open · **PR:** (geo / "Near a place" feature, 2026-05-20) ·
+**Opened:** 2026-05-26 (filed retroactively during BUG-025 investigation) ·
+**File reference:** `news/seed/migrations/2026-05-20-geo.sql`
+
+**URGENT — this is the BUG-025 fix.** The geo / "Near a place" feature
+shipped with `schema.sql` + `classify_pending.py` writing
+`geo_lat`/`geo_lng`/`geo_place`, but this migration was **never applied
+on prod and was never tracked here** — so `classify_pending` has been
+crashing on every tick since ~May 20 with
+`(1054, "Unknown column 'geo_lat' in 'INSERT INTO'")`. `fetch_feeds`
+keeps ingesting `pending` rows but none get classified, so the feed
+(which shows only `status='classified'`) froze at May 20. **BUG-007
+class**, but on the cron write path rather than a user route.
+
+Apply once on prod via phpMyAdmin → SQL tab (database `lt1ih6uyy2z6_news`):
+
+```sql
+ALTER TABLE article_features
+  ADD COLUMN geo_lat   FLOAT DEFAULT NULL AFTER region,
+  ADD COLUMN geo_lng   FLOAT DEFAULT NULL AFTER geo_lat,
+  ADD COLUMN geo_place VARCHAR(120) DEFAULT NULL AFTER geo_lng,
+  ADD KEY idx_feat_geo (geo_lat, geo_lng);
+```
+
+No Python App restart needed — `classify_pending` is a fresh process
+each cron tick and recovers on the next tick; the ~6-day `pending`
+backlog drains at ~180/tick. To force it, after the ALTER run:
+
+```
+source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate \
+  && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news/jobs && python classify_pending.py
+```
+
+**Verify:**
+
+```sql
+SHOW COLUMNS FROM article_features LIKE 'geo_%';   -- expects geo_lat, geo_lng, geo_place
+SELECT MAX(classified_at) FROM article_features;   -- should advance to ~now after a tick
+SELECT status, COUNT(*) FROM articles GROUP BY status;  -- pending count should fall over ticks
+```
+
+Then load https://sauce.ai/news/ — the newest article should be dated
+after 2026-05-20 within a few minutes.
+
+---
+
 ### 2026-05-22 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
 **Status:** open · **PR:** (agent-fleet enablement, this session) ·
 **Opened:** 2026-05-22

@@ -32,7 +32,64 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## In progress
 
-(none currently)
+### BUG-025 — Feed stale: no new articles since May 20; refresh and algo changes show the same articles
+**Status:** in-progress · **Reporter:** user · **Opened:** 2026-05-26
+
+User reports the `/` feed is stale: the most recent article is dated
+May 20 (today is May 26, ~6 days), reloading `/` returns the same
+articles, and switching the active algorithm shows mostly the same
+articles.
+
+**Likely related:** the QA fleet auto-filed BUG-023 (PR #130, site
+connection timeout, 2026-05-22) and BUG-024 (PR #134, all GET
+endpoints returning Apache HTTP 415 + Cloudflare bot challenge,
+2026-05-26). If the Python App / cron has been down or the server
+mis-serving since ~May 20-22, `fetch_feeds` + `classify_pending`
+would have stopped ingesting, which fully explains a feed frozen at
+May 20. The "same articles on refresh / algo change" sub-symptom is
+most likely a downstream effect of a frozen corpus (all algorithms
+draw from the same stale ~6-day-old pool; multiplicative recency
+decay no longer differentiates when everything is old) rather than a
+fresh ranking regression — but confirm once ingestion is restored.
+
+**Repro (user):** load https://sauce.ai/news/, observe newest article
+is 2026-05-20; reload — identical; switch active profile — mostly
+identical.
+
+**Root cause (found 2026-05-26 via `logs/cron.log`):** classic
+**BUG-007 class**. `fetch_feeds` is healthy (new articles keep arriving
+as `status='pending'`), but `classify_pending` crashes on **every**
+tick at the `INSERT INTO article_features` (classify_pending.py:428)
+with:
+
+```
+pymysql.err.OperationalError: (1054, "Unknown column 'geo_lat' in 'INSERT INTO'")
+```
+
+The geo / "Near a place" feature merged with migration
+`news/seed/migrations/2026-05-20-geo.sql` (adds `geo_lat`, `geo_lng`,
+`geo_place` + `idx_feat_geo` to `article_features`) wired into
+`schema.sql` and the `classify_pending` INSERT — **but the migration
+was never applied on prod and was never tracked in `manual-actions.md`**
+(the gap that let it slip). Because the feed only shows
+`status='classified'` rows, the classified corpus froze at the last
+successful tick (~May 20) while `pending` silently piled up. The
+"same articles on refresh / algo change" sub-symptom is the expected
+downstream effect of a frozen corpus, not a separate ranking bug.
+
+Unrelated to the QA-filed BUG-023/024 (those are a web-tier/Cloudflare
+matter; the user's browser loads the site fine — this is purely the
+classify pipeline).
+
+**Fix:** apply the missing migration on prod (now tracked in
+`manual-actions.md` Open with full inline SQL). `classify_pending` is a
+fresh process per cron tick, so it recovers on the next tick with no
+restart; the ~6-day `pending` backlog drains at ~180/tick. No code
+change required — the repo already matches; the defect was the
+unapplied migration.
+
+**Status note:** `in-progress` until the user confirms the ALTER ran
+on prod and the feed shows post-May-20 articles, then `resolved`.
 
 ---
 
