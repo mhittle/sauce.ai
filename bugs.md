@@ -26,7 +26,48 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-024 — Apache returns HTTP 415 for all GET requests; QA browser blocked by Cloudflare bot challenge
+**Status:** open · **Reporter:** agent (post-deploy QA) · **Opened:** 2026-05-26
+
+**Anonymous load check — FAILED**
+
+Two distinct symptoms observed on 2026-05-26:
+
+1. **HTTP 415 from Apache (all endpoints):** `curl` requests to `https://sauce.ai/news/`,
+   `https://sauce.ai/news/auth/login`, and `https://sauce.ai/news/firehose` all returned
+   `HTTP 415 Unsupported Media Type` from `server: Apache`. Response body:
+   > "The supplied request data is not in a format acceptable for processing by this resource."
+   HTTP 415 on GET requests is abnormal; it typically applies only to POST/PUT with a wrong
+   `Content-Type`. All three endpoints responded identically, suggesting a server-wide
+   Apache misconfiguration rather than a route-level error.
+
+2. **Cloudflare bot challenge blocking Playwright browser:** navigating to
+   `https://sauce.ai/news/` via the QA Playwright browser returned a Cloudflare
+   "One moment, please... / Please wait while your request is being verified..." challenge
+   page (HTTP 200 from Cloudflare). The challenge did not resolve within 60 s for the
+   headless browser; all six QA checks (anonymous load, sign-in, thumb persistence, Algo
+   Keywords, Firehose, cron-health) could not be completed as a result.
+
+**Relationship to BUG-023:** BUG-023 was a complete connection timeout (HTTP 000, no
+response). The current state is different — the server responds, but with 415. BUG-023
+appears partially resolved (no connection timeout), but a new server error condition is
+present.
+
+**Smoke job discrepancy:** the workflow-injected smoke result was `success`. The smoke
+job reports failure only on 5xx; 415 is 4xx and would not trigger a smoke failure even
+if the same endpoints were checked.
+
+**Deploy SHA:** fff275fbfdaa73ff5c13cdafafe60b061fdcffcb
+
+**Repro:**
+```
+curl -sS -o /dev/null -w "%{http_code}" https://sauce.ai/news/
+# Returns: 415
+curl -sS -o /dev/null -w "%{http_code}" https://sauce.ai/news/auth/login
+# Returns: 415
+curl -sS -o /dev/null -w "%{http_code}" https://sauce.ai/news/firehose
+# Returns: 415
+```
 
 ---
 
