@@ -26,7 +26,37 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-025 — classify_pending backlog: 56k articles pending, 0 classified by LLM today
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-26
+
+User shared the `/admin` Overview and reported "the crons are not running
+or most articles are in a backlog." Dashboard snapshot:
+
+- `articles pending` = 56,604 (very large; BUG-008 backlog was ~7,700)
+- `articles classified` = 68,389
+- `articles classified by LLM today` = 0
+- `LLM spend today` = $0.00 (but `LLM spend 30d` = $18.88, so the LLM
+  path worked recently)
+- `fetched today` = 2,451 (so `fetch_feeds` **is** running)
+- `articles failed` = 0
+- `errored feeds` = 706 / 1,930 total
+
+Diagnosis (pending): `fetch_feeds` is healthy but `classify_pending` is
+making no LLM progress and the pending queue is growing. Candidate causes,
+in rough priority order:
+1. `classify_pending` cron not running / not sourcing the venv (INSTALL §8C).
+2. `classify_pending` crashing each tick — historically BUG-009
+   (`MySQL server has gone away` on idle socket) or a missing migration
+   (BUG-007 class) raising before the write block.
+3. `ANTHROPIC_API_KEY` missing in the cron env or out of credits →
+   `LLMUnavailable`; rows would fall back to `-nollm` (BUG-019) rather than
+   spend, but a hard key error could also stall the tick.
+4. nproc/EP exhaustion preventing the cron from forking (INSTALL §8D).
+
+**Repro / next step:** need prod `logs/cron.log` tail and crontab listing —
+not accessible from this container. Asked user to pull diagnostics.
+
+**Fix notes:** TBD.
 
 ---
 
