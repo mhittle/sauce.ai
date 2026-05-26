@@ -151,7 +151,13 @@ def index():
     term_mute_sql = ""
     term_boost_mult = ""
     term_params = {}
+    down_filter_sql = ""
     if u:
+        down_filter_sql = (
+            " AND a.id NOT IN (SELECT article_id FROM user_signals "
+            "WHERE user_id = %(_dv_uid)s AND signal_type = 'thumb_down')"
+        )
+        pref_params["_dv_uid"] = u["id"]
         pref_join_sql = (
             " LEFT JOIN user_source_prefs usp "
             "ON usp.user_id = %(_pref_uid)s AND usp.source_id = s.id"
@@ -210,6 +216,7 @@ def index():
         {cat_filter_sql}
         {pref_filter_sql}
         {term_mute_sql}
+        {down_filter_sql}
       {order_by_sql}
       LIMIT %(limit)s OFFSET %(offset)s
     """

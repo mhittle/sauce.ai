@@ -62,7 +62,74 @@ not accessible from this container. Asked user to pull diagnostics.
 
 ## In progress
 
-(none currently)
+### BUG-026 — Article pinned to top of feed regardless of downvote; downvote doesn't remove it
+**Status:** in-progress (fix written, PR pending) · **Reporter:** user · **Opened:** 2026-05-26
+
+User reports a specific article (Dark Reading — "[Virtual Event]
+Anatomy of a Data Breach: What to Do if it Happens to You", category
+tech) is **always first** in the `/` feed even after downvoting it,
+and expects a downvoted article to **disappear** from the feed.
+
+**Two distinct issues, likely:**
+
+1. **"Always first" — probable future-date ranking bug.** The card is
+   dated **Jun 18, 15:00** — a *future* `published_at` relative to
+   today (2026-05-26). The ranking applies a multiplicative recency
+   gate `score = quality * EXP(-recency_w * hours / 24)` (BUG-011). A
+   future `published_at` makes `hours` negative, so the exponent is
+   positive and the multiplier is **> 1** — i.e. future-dated articles
+   get an unbounded recency *boost* instead of decay, pinning them to
+   the top. Root cause to confirm: where does the future date come from
+   (feed `<published>` parsed wrong / publisher lookahead / `updated`
+   vs `published`?) and the ranking should clamp future timestamps so
+   `hours >= 0` (recency multiplier capped at 1.0 at "now").
+
+2. **Downvote does not hide the article.** Current thumbs-down
+   (`user_signals` / `user_source_prefs`) semantics downweight a
+   *source*, not hard-filter an individual downvoted article. User
+   expectation here is: a downvoted article disappears. Need to
+   confirm current behavior in `routes/signal.py` + how `feed.py`
+   consumes signals, then decide: hard-filter downvoted article_ids
+   from the feed query (matches the stated expectation) vs. the
+   existing downweight model.
+
+**Repro (user):** load `/`, the Dark Reading data-breach article is
+first; click the downvote (▼); reload — still first.
+
+**Root cause confirmed:**
+1. **Always-first:** `ranking.py` recency gate is
+   `EXP(-recency_w * TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()) / 1440)`.
+   The Dark Reading card is a future-dated "Virtual Event" (Jun 18), so
+   `TIMESTAMPDIFF` is **negative** → exponent positive → multiplier
+   **> 1**, an unbounded recency *boost*. (The future date is legitimate
+   publisher data for an event listing — not a fetch bug — so the fix is
+   in ranking, not ingestion.)
+2. **Downvote doesn't remove it:** `routes/signals.py` records
+   `thumb_down` (and prompts to mute the *source* after 3 downvotes in
+   30 days), but `routes/feed.py` only reads `thumb_down` to highlight
+   the ▼ button — it never filters the downvoted article out of the
+   feed query.
+
+**Fix (PR pending):**
+1. `app/ranking.py` — clamp the age at 0:
+   `GREATEST(TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()), 0)`,
+   so a future date caps the recency multiplier at 1.0 ("now") instead
+   of boosting. Code-tab Python equivalent clamped to
+   `max(article.hours_old, 0)` for parity. New regression test
+   `test_recency_clamps_future_dates` (pure, passes in sandbox).
+2. `app/routes/feed.py` — for signed-in users, exclude downvoted
+   articles from the `/` feed:
+   `AND a.id NOT IN (SELECT article_id FROM user_signals
+   WHERE user_id = %(_dv_uid)s AND signal_type = 'thumb_down')`. A
+   downvoted article now disappears on the next load (matches the user's
+   stated expectation). Scope: `/` only; firehose/search/saved/digest
+   unchanged. The existing source-mute prompt after repeated downvotes
+   is preserved.
+
+**Verification:** ranking clamp unit-tested in sandbox. The feed
+downvote-filter is route+DB level — deferred to CI / a real env (same
+sandbox limitation as prior feed-route changes). No DB migration, no
+cron, no env var.
 
 ---
 
