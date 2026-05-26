@@ -212,6 +212,7 @@ def adopt(lid):
 
     weights = parse_weights_json(listing["weights_json"])
     keywords = parse_keywords(listing.get("keywords_json"))
+    name = (listing["name"] or "Adopted algorithm")[:120]
     # The single-active invariant every reader resolver depends on:
     # clear-all then set one. Mirrors `algo._set_active`, kept local so
     # we don't import a private helper across blueprints.
@@ -219,17 +220,32 @@ def adopt(lid):
         "UPDATE user_algorithms SET is_active = 0 WHERE user_id = %s",
         (uid,),
     )
-    new_id = execute(
-        "INSERT INTO user_algorithms "
-        "(user_id, name, weights_json, expression_text, is_active) "
-        "VALUES (%s, %s, %s, %s, 1)",
-        (
-            uid,
-            (listing["name"] or "Adopted algorithm")[:120],
-            json.dumps(weights),
-            weights_to_expression(weights),
-        ),
+    # Reuse a same-named profile instead of stacking a duplicate (BUG-025):
+    # re-adopting "Lefty" refreshes that profile's weights + keywords rather
+    # than adding another "Lefty" to the switcher.
+    existing = query(
+        "SELECT id FROM user_algorithms WHERE user_id = %s AND name = %s "
+        "ORDER BY updated_at DESC LIMIT 1",
+        (uid, name), one=True,
     )
+    if existing:
+        new_id = existing["id"]
+        execute(
+            "UPDATE user_algorithms SET weights_json=%s, expression_text=%s, is_active=1 "
+            "WHERE id=%s AND user_id=%s",
+            (json.dumps(weights), weights_to_expression(weights), new_id, uid),
+        )
+        execute(
+            "DELETE FROM algorithm_term_prefs WHERE algorithm_id = %s",
+            (new_id,),
+        )
+    else:
+        new_id = execute(
+            "INSERT INTO user_algorithms "
+            "(user_id, name, weights_json, expression_text, is_active) "
+            "VALUES (%s, %s, %s, %s, 1)",
+            (uid, name, json.dumps(weights), weights_to_expression(weights)),
+        )
     for kw in keywords:
         execute(
             "INSERT INTO algorithm_term_prefs "

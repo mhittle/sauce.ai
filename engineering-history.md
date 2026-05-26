@@ -142,6 +142,30 @@ the deep context (root causes, calibration notes, file lists). Every
 server-side migration referenced below was applied on prod and is in
 `manual-actions.md` → Completed; bug root causes are in `bugs.md`.
 
+### 2026-05-26
+
+- **BUG-025 — duplicate algorithm profiles in the feed switcher (PR
+  drafted).** User reported the front-page "Algorithm:" dropdown listing
+  the same names many times over. Root cause was not a query fan-out:
+  `feed._switcher_profiles()` SELECTs `user_algorithms` with no JOIN and
+  the template renders one `<option>` per row, so the dropdown faithfully
+  mirrors real rows. Duplicates accumulate because `gallery.adopt()` and
+  `algo.create_profile()` always `INSERT` a new row with no same-name
+  guardrail (re-adopting "Lefty" or re-saving a named profile stacks
+  another). Fix (owner chose "prevent + de-dupe display"): both write
+  paths now reuse an existing same-named profile — update its weights
+  (adopt also wipes+reinserts its `algorithm_term_prefs` keywords) and
+  re-activate, instead of inserting; and a new pure helper
+  `feed._dedupe_switcher_rows(rows)` collapses duplicate names in the
+  dropdown (keeps the active-or-most-recent row per name; active id
+  resolved from the full set). This also tidies the *existing* prod dupe
+  rows in the UI without deleting them (non-destructive by request).
+  *Code:* `app/routes/feed.py`, `app/routes/algo.py`,
+  `app/routes/gallery.py`; tests `test_feed_switcher.py` (new),
+  `test_gallery_adopt.py` (new), `test_algo_profiles.py` (extended).
+  Full suite 563 passed. *Server state:* none — app-layer only, no
+  migration/cron/env/dep, Passenger restart on deploy as usual.
+
 ### 2026-05-22
 
 - **Unique sources toggle — one article per source (PR drafted,
