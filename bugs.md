@@ -26,7 +26,43 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-025 — Feed stale: no new articles since May 20; refresh and algo changes show the same articles
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-26
+
+User reports the `/` feed is stale: the most recent article is dated
+May 20 (today is May 26, ~6 days), reloading `/` returns the same
+articles, and switching the active algorithm shows mostly the same
+articles.
+
+**Likely related:** the QA fleet auto-filed BUG-023 (PR #130, site
+connection timeout, 2026-05-22) and BUG-024 (PR #134, all GET
+endpoints returning Apache HTTP 415 + Cloudflare bot challenge,
+2026-05-26). If the Python App / cron has been down or the server
+mis-serving since ~May 20-22, `fetch_feeds` + `classify_pending`
+would have stopped ingesting, which fully explains a feed frozen at
+May 20. The "same articles on refresh / algo change" sub-symptom is
+most likely a downstream effect of a frozen corpus (all algorithms
+draw from the same stale ~6-day-old pool; multiplicative recency
+decay no longer differentiates when everything is old) rather than a
+fresh ranking regression — but confirm once ingestion is restored.
+
+**Repro (user):** load https://sauce.ai/news/, observe newest article
+is 2026-05-20; reload — identical; switch active profile — mostly
+identical.
+
+**Investigation needed (requires prod access the cloud agent lacks):**
+1. Is the Python App running in cPanel? (BUG-001 fork-bomb / BUG-023
+   timeout class.)
+2. `tail logs/cron.log` — are `fetch_feeds` / `classify_pending`
+   ticking, and when did they last succeed? (BUG-008/009 class:
+   `MySQL server has gone away` mid-batch.)
+3. Why is curl getting HTTP 415 from Apache on GET (BUG-024)? A
+   server-fronting/Cloudflare/Apache config change, not a Flask route.
+4. Count `articles` rows newer than 2026-05-20 in the DB — if rows
+   exist but aren't shown, it's a query/ranking bug; if none exist,
+   it's an ingestion stall.
+
+**Fix notes:** TBD pending investigation.
 
 ---
 
