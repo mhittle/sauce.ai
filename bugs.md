@@ -26,7 +26,109 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
-(none currently)
+### BUG-023 — Article classification rate stalls again after recent throughput fix
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-27
+
+User reports that a fix earlier appeared to improve the article
+classification rate, but it now seems stalled again. Symptom is observed
+on prod; not reproducible from the sandbox (no DB / cron / Anthropic /
+logs access).
+
+**Context (recent classification-path changes):** BUG-008/009 (PR #32)
+took throughput 10→180/tick via `conn.ping(reconnect=True)` at every idle
+point + parallelized paywall/body HTTP + `CLASSIFY_BUDGET_SECONDS` 90→240.
+Demand-driven top-up (PR #120/#121) added `classify_pending --triggered-only`
+(every-1-min cron, gated on a fresh `logs/classify_topup.signal`), page
+size 30→40, and the feed touching the signal when the classified buffer
+drops below 400.
+
+**Code review (this session) — defenses that are intact:**
+- `detect_paywall` / `extract_body` both use bounded connect+read
+  timeouts `(min(5,t), t)`, so a single hung host can't block a worker
+  indefinitely; the `ThreadPoolExecutor` fan-out therefore drains.
+- `job_lock` is `fcntl.flock(LOCK_EX|LOCK_NB)` — released by the OS when
+  the process exits (even on crash), so a *crashed* run cannot wedge the
+  lock. Only a *live-hung* process could.
+- `_run()` pings reconnect at the top of each batch loop and again before
+  the write block; `_reclassify_nollm` pings before its SELECT and write.
+- `signal_is_fresh` ignores a stale signal (mtime older than
+  `CLASSIFY_TOPUP_SIGNAL_MAX_AGE`, default 600s) so a lock held all night
+  can't cause a stampede when released.
+
+**Leading hypotheses (ranked), to confirm with prod telemetry:**
+1. **The every-1-min `--triggered-only` cron was never installed.** It is
+   still an *Open* item in `manual-actions.md` (2026-05-22). If absent,
+   demand-driven top-up never fires and only the `*/5` safety net drives
+   classification — which, under active reading, empties the buffer
+   between ticks and *looks* like a re-stall. **Cheapest to check first.**
+2. **Pending supply exhausted upstream.** If `fetch_feeds` is not
+   producing new `status='pending'` rows (dead feeds, a fetch crash, or
+   genuinely quiet feeds), classification has nothing to do — a supply
+   stall masquerading as a classify stall. `should_trigger` also returns
+   False when `pending<=0`, so the signal stops firing.
+3. **Anthropic credits / key.** Exhausted credits → `LLMUnavailable` →
+   rows still mark `classified` via the `-nollm` fallback (rate does NOT
+   stall, quality degrades) — but the *shared* balance also stalls the
+   agent fleet, a useful corroborating signal.
+4. **Live-hung run holding the lock** (e.g. a pathological trafilatura
+   parse — the CPU parse itself is not wallclock-bounded, only the HTTP
+   fetch is). Would show as a long-lived `classify_pending` process and an
+   old `logs/classify_pending.lock`; every tick logs "lock held … skipping."
+5. **MySQL-gone-away recurrence** — would show as PyMySQL `(2006)`
+   tracebacks in `logs/cron.log`.
+
+**Diagnostic commands (prod):**
+```sql
+-- supply vs. classified pool (hypothesis 1 & 2)
+SELECT status, COUNT(*) FROM articles GROUP BY status;
+SELECT MAX(classified_at) FROM article_features;   -- last successful write
+SELECT MAX(fetched_at) FROM articles;              -- last fetch
+```
+```bash
+tail -200 ~/public_html/sauce.ai/news/logs/cron.log | grep -E "classify_pending|fetch_feeds"
+crontab -l | grep classify_pending          # is the */1 --triggered-only line present?
+ls -la ~/public_html/sauce.ai/news/logs/classify_pending.lock
+ps aux | grep classify_pending | grep -v grep   # any long-lived run?
+```
+Admin: `/admin/cron-health` (cron.log tail) and `/admin/usage-summary`
+(signal counts) corroborate from the browser.
+
+**Confirmed root cause (2026-05-27, prod `cron.log` review):** hypothesis 1.
+The classifier is healthy — every `*/5` tick logs
+`classified=200 llm_articles=200 reclassified=0 cost_usd≈0.15`, all
+Anthropic calls 200 OK, no PyMySQL `(2006)`, no `lock held … skipping`,
+no `LLMUnavailable`. But the every-1-minute `--triggered-only` cron was
+**never installed on prod** (it was still an Open item in
+`manual-actions.md`): across 4+ hours of log there is not one
+`--triggered-only: no fresh signal, exiting` line nor any triggered run,
+which is impossible if the cron existed (it logs at INFO every minute).
+So PR #121's demand-driven top-up was inert and classification ran only
+on the `*/5` safety net, pinned at the `CLASSIFY_BATCH_LIMIT=200` default
+(it hits 200 and breaks every tick) → a hard ~2,400 articles/hour
+ceiling. With the catalog now at 1,919 feeds and bursty inflow
+(`fresh=276`, `fresh=153` ticks observed), the pending backlog wasn't
+draining — which presented as "stalled again."
+
+Neither `CLASSIFY_BATCH_LIMIT` nor `CLASSIFY_BUDGET_SECONDS` is set in the
+cPanel env, so prod runs the `config.py` defaults (200 / 240s) — confirmed
+by the steady `classified=200` cadence.
+
+**Fix:**
+- **(A, applied 2026-05-27)** User installed the every-1-minute
+  `classify_pending --triggered-only` cron line from `manual-actions.md`,
+  re-enabling demand-driven top-up. `job_lock` serializes all classify
+  runs, so this fills the idle gaps between `*/5` ticks (each tick runs
+  ~165–210s of the 300s interval) rather than running concurrently.
+- **(B, optional throughput lever — not yet applied)** Add
+  `CLASSIFY_BATCH_LIMIT` (e.g. 300) as a cPanel env var + restart so each
+  `*/5` tick uses its full 240s budget instead of stopping at 200. Going
+  much higher also needs `CLASSIFY_BUDGET_SECONDS` raised, which risks a
+  run bleeding past the 5-min cron interval (the lock then no-ops the next
+  `*/5` tick — acceptable). Hold pending observation of whether (A) drains
+  the backlog on its own.
+
+**Status note:** root cause identified and fix (A) applied; leaving `open`
+until prod telemetry confirms the backlog drains.
 
 ---
 
