@@ -150,8 +150,69 @@ def _load_algo_terms(algo_id):
     )
 
 
+def _parse_nl_keywords(form):
+    """Re-sanitize the NL-proposed keyword chips that ride through the algo
+    form as parallel hidden inputs. The client (Alpine) can drop chips before
+    saving, but everything submitted is re-validated here — the form is
+    untrusted. Returns an insertion-ordered list of {term, mode, weight},
+    deduped with mute winning over boost (same rule as build_term_clauses)."""
+    terms = form.getlist("nl_kw_term")
+    modes = form.getlist("nl_kw_mode")
+    weights = form.getlist("nl_kw_weight")
+    out = {}
+    for i, raw_term in enumerate(terms):
+        term = normalize_term(raw_term)
+        if term is None:
+            continue
+        mode = (modes[i] if i < len(modes) else "").strip().lower()
+        if mode not in VALID_MODES:
+            continue
+        if mode == "boost":
+            weight = clamp_boost(weights[i] if i < len(weights) else None)
+        else:
+            weight = BOOST_DEFAULT
+        if term in out:
+            if mode == "mute" and out[term]["mode"] != "mute":
+                out[term] = {"term": term, "mode": "mute", "weight": BOOST_DEFAULT}
+            continue
+        out[term] = {"term": term, "mode": mode, "weight": weight}
+    return list(out.values())
+
+
+def _apply_nl_keywords(algo_id, form):
+    """Persist the NL-proposed keywords into one profile's
+    `algorithm_term_prefs`, respecting the per-profile cap. Caller commits.
+    Idempotent: re-adding a term updates its mode/weight (same upsert as the
+    manual add path)."""
+    proposed = _parse_nl_keywords(form)
+    if not proposed:
+        return
+    count_row = query(
+        "SELECT COUNT(*) AS n FROM algorithm_term_prefs WHERE algorithm_id = %s",
+        (algo_id,), one=True,
+    )
+    existing = {
+        r["term"] for r in (query(
+            "SELECT term FROM algorithm_term_prefs WHERE algorithm_id = %s",
+            (algo_id,),
+        ) or [])
+    }
+    room = MAX_KEYWORDS_PER_ALGO - (count_row["n"] if count_row else 0)
+    for kw in proposed:
+        if kw["term"] not in existing:
+            if room <= 0:
+                break
+            room -= 1
+        execute(
+            "INSERT INTO algorithm_term_prefs (algorithm_id, term, mode, weight) "
+            "VALUES (%s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE mode = VALUES(mode), weight = VALUES(weight)",
+            (algo_id, kw["term"], kw["mode"], kw["weight"]),
+        )
+
+
 def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None,
-                   kw_error=None):
+                   kw_error=None, nl_keywords=None):
     profiles = _list_profiles(g.user["id"])
     active_id = next((p["id"] for p in profiles if p["is_active"]), None)
     algo_muted, algo_boosted = _load_algo_terms(active_id)
@@ -177,6 +238,7 @@ def _render_editor(weights, *, nl_description="", nl_notes=None, nl_error=None,
         max_keywords=MAX_KEYWORDS_PER_ALGO,
         boost_default=BOOST_DEFAULT,
         kw_error=kw_error,
+        nl_keywords=nl_keywords or [],
     )
 
 
@@ -216,7 +278,8 @@ def describe():
     notes = result["notes"] or (
         "Here's a starting point based on your description.")
     return _render_editor(
-        result["weights"], nl_description=description, nl_notes=notes)
+        result["weights"], nl_description=description, nl_notes=notes,
+        nl_keywords=result.get("keywords") or [])
 
 
 def _has_algorithm(user_id):
@@ -298,10 +361,11 @@ def save():
             (json.dumps(weights), weights_to_expression(weights), aid, g.user["id"]),
         )
     else:
-        execute(
+        aid = execute(
             "INSERT INTO user_algorithms (user_id, name, weights_json, expression_text, is_active) VALUES (%s, %s, %s, %s, 1)",
             (g.user["id"], "Custom", json.dumps(weights), weights_to_expression(weights)),
         )
+    _apply_nl_keywords(aid, request.form)
     get_conn().commit()
 
     if request.headers.get("HX-Request"):
@@ -337,6 +401,7 @@ def create_profile():
             "VALUES (%s, %s, %s, %s, 0)",
             (g.user["id"], name, json.dumps(weights), weights_to_expression(weights)),
         )
+    _apply_nl_keywords(target_id, request.form)
     _set_active(g.user["id"], target_id)
     return redirect(url_for("algo.index"))
 

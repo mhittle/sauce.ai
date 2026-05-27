@@ -134,6 +134,32 @@ these.
 
 ---
 
+## 2026-05-27
+
+- **NL algorithm builder now also proposes keywords (interactive session, PR
+  pending).** `/algo` → `/describe` mapped plain English onto feature
+  *sliders* only; explicitly-named terms ("more climate policy, hide crypto")
+  were dropped since keywords live in `algorithm_term_prefs`, not
+  `weights_json`. The single Haiku call now also returns a `keywords` list
+  (`{term, mode, weight}`), sanitized via the existing `term_prefs` helpers
+  (mute-wins dedupe, `clamp_boost`, cap `MAX_KEYWORDS=25`) and kept **out** of
+  the `weights` dict (preserves the `test_output_feeds_ranking_helpers` subset
+  invariant). Owner chose **review-then-Save**: proposed keywords render as
+  removable pending chips inside `#algo-form` (Alpine `x-for` + hidden
+  `nl_kw_*` inputs) and persist only on **Save algorithm** / **Save as new
+  profile**; new `_apply_nl_keywords()` re-sanitizes the untrusted chips
+  server-side and upserts to the target profile under
+  `MAX_KEYWORDS_PER_ALGO`. *Code:* `app/algo_nl.py`, `app/routes/algo.py`,
+  `app/templates/algo.html`, `app/static/style.css`, `tests/test_algo_nl.py`
+  (+7). **No migration** (`algorithm_term_prefs` already on prod, PR #82), no
+  cron/env/dep — standard Passenger restart on deploy. Minor gap: hx `Save
+  algorithm` persists keywords but the saved-keywords panel refreshes only on
+  full load (same as existing slider hx-save); "Save as new profile"
+  redirects and shows them immediately. *(History near its ~34 KB budget —
+  archive oldest entries at next wrap-up.)*
+
+---
+
 ## 2026-05-26
 
 - **BUG-025 — feed frozen at May 20; unapplied geo migration crashed

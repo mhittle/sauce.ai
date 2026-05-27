@@ -23,8 +23,14 @@ from .ranking import (
     CATEGORIES,
     _scale_width,
 )
+from .term_prefs import normalize_term, clamp_boost, BOOST_DEFAULT, VALID_MODES
 
 MAX_DESCRIPTION_CHARS = 1000
+
+# Cap how many keywords one description can propose. A normal request maps
+# to a handful; this bounds a pathological model response well under the
+# per-profile MAX_KEYWORDS_PER_ALGO the route enforces.
+MAX_KEYWORDS = 25
 
 
 def _clamp(value, lo, hi):
@@ -69,7 +75,17 @@ def _system_prompt():
         "Default around 0.7 unless the reader signals otherwise.\n"
         f"- category_filter: optional subset of {CATEGORIES}. Empty = all "
         "categories. Only restrict if the reader clearly wants just "
-        "certain topics.\n\n"
+        "certain topics.\n"
+        "- keywords: OPTIONAL list of specific topics, names, or phrases the "
+        "reader calls out by name (NOT the abstract features above). Use "
+        'mode "boost" for a subject they want more of and mode "mute" for one '
+        "they want hidden. Each is a short term/phrase (1-4 words). boost "
+        "weight is 1.0..5.0 (around 1.5 for a normal lean, higher for "
+        '"way more"); mute needs no weight. Only include terms the reader '
+        "names explicitly (e.g. 'more about climate policy, hide crypto and "
+        "the royal family' -> boost climate policy, mute crypto, mute royal "
+        "family). Leave the list empty if they only describe abstract "
+        "qualities. Matching is plain substring, so keep terms concrete.\n\n"
         "Guidance: 'less outrage / less opinion / just the facts' -> high "
         "objectivity weight + objectivity direction 1.0. 'hide paywalls' "
         "-> paywall direction 0.0 with a small threshold. 'long / deep / "
@@ -82,17 +98,52 @@ def _system_prompt():
         "Output STRICT JSON ONLY, no markdown, no code fences, exactly "
         'this schema: {"weights": {"<feature_key>": {"weight": <num>, '
         '"direction": <num>, "threshold": <num|null>}, ...}, "recency": '
-        '<num>, "category_filter": [<str>...], "notes": "<one or two '
-        'plain sentences telling the reader what you set and why>"}. '
+        '<num>, "category_filter": [<str>...], "keywords": [{"term": '
+        '"<str>", "mode": "boost"|"mute", "weight": <num>}, ...], "notes": '
+        '"<one or two plain sentences telling the reader what you set and '
+        'why>"}. '
         "Only use feature keys from the list above. Omit features you are "
-        "leaving at zero."
+        "leaving at zero. Use an empty keywords list if none apply."
     )
+
+
+def _normalize_keywords(parsed):
+    """Sanitize the model's proposed keyword list into the same shape the
+    `algorithm_term_prefs` rows use. Reuses the `term_prefs` helpers so the
+    rules can't drift from the manual add-keyword path: terms are
+    normalized/length-bounded, modes validated, boost weights clamped, the
+    list deduped (mute wins over boost, matching `build_term_clauses`), and
+    capped at `MAX_KEYWORDS`."""
+    raw = parsed.get("keywords")
+    if not isinstance(raw, list):
+        return []
+
+    seen = {}  # term -> {"term", "mode", "weight"}, insertion-ordered
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        term = normalize_term(item.get("term"))
+        if term is None:
+            continue
+        mode = str(item.get("mode", "")).strip().lower()
+        if mode not in VALID_MODES:
+            continue
+        weight = clamp_boost(item.get("weight")) if mode == "boost" else BOOST_DEFAULT
+        if term in seen:
+            # Mute wins over boost regardless of order; otherwise keep first.
+            if mode == "mute" and seen[term]["mode"] != "mute":
+                seen[term] = {"term": term, "mode": "mute", "weight": BOOST_DEFAULT}
+            continue
+        seen[term] = {"term": term, "mode": mode, "weight": weight}
+        if len(seen) >= MAX_KEYWORDS:
+            break
+    return list(seen.values())
 
 
 def _normalize(parsed):
     """Coerce the model's JSON into the canonical on-disk weights shape,
     clamping every value into its valid range and dropping anything
-    unknown. Returns (weights_dict, notes_str)."""
+    unknown. Returns (weights_dict, notes_str, keywords_list)."""
     weights = {}
     raw_w = parsed.get("weights")
     if not isinstance(raw_w, dict):
@@ -147,17 +198,22 @@ def _normalize(parsed):
     else:
         weights["category_filter"] = []
 
+    keywords = _normalize_keywords(parsed)
+    if keywords:
+        any_active = True
+
     if not any_active:
         raise LLMUnavailable("model produced no usable weights")
 
     notes = (parsed.get("notes") or "").strip()
-    return weights, notes[:500]
+    return weights, notes[:500], keywords
 
 
 def interpret_algorithm(description, *, api_key, model):
-    """Return {"weights": dict, "notes": str, "usage": {...}} or raise
-    LLMUnavailable. Makes exactly one Anthropic call per invocation; the
-    caller decides whether/when to persist the weights."""
+    """Return {"weights": dict, "notes": str, "keywords": [...], "usage":
+    {...}} or raise LLMUnavailable. Makes exactly one Anthropic call per
+    invocation; the caller decides whether/when to persist the weights and
+    keywords."""
     description = (description or "").strip()
     if not description:
         raise LLMUnavailable("empty description")
@@ -205,7 +261,7 @@ def interpret_algorithm(description, *, api_key, model):
     if not isinstance(parsed, dict):
         raise LLMUnavailable("model JSON was not an object")
 
-    weights, notes = _normalize(parsed)
+    weights, notes, keywords = _normalize(parsed)
 
     usage = {
         "input_tokens": getattr(resp.usage, "input_tokens", 0),
@@ -214,4 +270,4 @@ def interpret_algorithm(description, *, api_key, model):
         "model": model,
         "est_cost_usd": _estimate_cost(resp.usage),
     }
-    return {"weights": weights, "notes": notes, "usage": usage}
+    return {"weights": weights, "notes": notes, "keywords": keywords, "usage": usage}
