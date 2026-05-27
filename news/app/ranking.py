@@ -237,7 +237,7 @@ def build_score_sql(weights: dict, *, jitter: float = 0.0):
         expr = (
             f"({quality_expr}) "
             f"* EXP(-%(recency_w)s "
-            f"* TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()) / 1440)"
+            f"* GREATEST(TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()), 0) / 1440)"
         )
     else:
         expr = quality_expr
@@ -360,7 +360,7 @@ def weights_to_expression(weights: dict) -> str:
         lines.append("        return None  # filtered by threshold")
     if not parts:
         if rec > 0:
-            lines.append(f"    return 0 * exp(-{rec:.2f} * article.hours_old / 24)")
+            lines.append(f"    return 0 * exp(-{rec:.2f} * max(article.hours_old, 0) / 24)")
         else:
             lines.append("    return 0  # no weights set")
     else:
@@ -368,7 +368,7 @@ def weights_to_expression(weights: dict) -> str:
         lines.append("\n      + ".join(p.strip() for p in parts))
         lines.append("    )")
         if rec > 0:
-            lines.append(f"    return quality * exp(-{rec:.2f} * article.hours_old / 24)")
+            lines.append(f"    return quality * exp(-{rec:.2f} * max(article.hours_old, 0) / 24)")
         else:
             lines.append("    return quality")
     lines.append("")
