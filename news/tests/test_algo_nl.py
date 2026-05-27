@@ -52,13 +52,17 @@ def _install_fake_anthropic(monkeypatch, *, response_text=None, raise_on_create=
     return captured
 
 
-def _resp(weights=None, recency=0.7, category_filter=None, notes="did the thing"):
-    return json.dumps({
+def _resp(weights=None, recency=0.7, category_filter=None, notes="did the thing",
+          keywords=None):
+    payload = {
         "weights": weights or {},
         "recency": recency,
         "category_filter": category_filter or [],
         "notes": notes,
-    })
+    }
+    if keywords is not None:
+        payload["keywords"] = keywords
+    return json.dumps(payload)
 
 
 def test_happy_path_shape_and_usage(monkeypatch):
@@ -187,6 +191,91 @@ def test_recency_only_is_usable(monkeypatch):
     out = algo_nl.interpret_algorithm("just the freshest news",
                                       api_key="k", model="m")
     assert out["weights"]["recency"] == 1.0
+
+
+def test_keywords_extracted_and_sanitized(monkeypatch):
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}},
+        keywords=[
+            {"term": "Climate Policy", "mode": "boost", "weight": 2.0},
+            {"term": "crypto", "mode": "mute"},
+            {"term": "royal family", "mode": "boost", "weight": 99},  # clamped
+        ],
+    ))
+    out = algo_nl.interpret_algorithm("more climate, hide crypto",
+                                      api_key="k", model="m")
+    kws = out["keywords"]
+    assert {"term": "climate policy", "mode": "boost", "weight": 2.0} in kws
+    assert {"term": "crypto", "mode": "mute", "weight": algo_nl.BOOST_DEFAULT} in kws
+    # weight 99 clamped to BOOST_MAX (5.0)
+    rf = next(k for k in kws if k["term"] == "royal family")
+    assert rf["weight"] == 5.0
+    # Keywords never leak into the weights dict.
+    assert "keywords" not in out["weights"]
+
+
+def test_keywords_default_empty_when_absent(monkeypatch):
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}}))
+    out = algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    assert out["keywords"] == []
+
+
+def test_keyword_mute_wins_over_boost(monkeypatch):
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}},
+        keywords=[
+            {"term": "tesla", "mode": "boost", "weight": 2.0},
+            {"term": "Tesla", "mode": "mute"},
+        ],
+    ))
+    out = algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    tesla = [k for k in out["keywords"] if k["term"] == "tesla"]
+    assert len(tesla) == 1
+    assert tesla[0]["mode"] == "mute"
+
+
+def test_keyword_invalid_mode_and_short_term_dropped(monkeypatch):
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}},
+        keywords=[
+            {"term": "ok term", "mode": "sideways"},  # bad mode
+            {"term": "a", "mode": "boost"},            # too short
+            {"term": "  ", "mode": "mute"},            # empty
+            {"mode": "boost", "weight": 2},            # no term
+            "not a dict",
+        ],
+    ))
+    out = algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    assert out["keywords"] == []
+
+
+def test_keywords_only_is_usable(monkeypatch):
+    # No weights, no recency, but a keyword => still usable (not raised).
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={}, recency=0,
+        keywords=[{"term": "crypto", "mode": "mute"}]))
+    out = algo_nl.interpret_algorithm("just hide crypto", api_key="k", model="m")
+    assert out["keywords"] == [
+        {"term": "crypto", "mode": "mute", "weight": algo_nl.BOOST_DEFAULT}]
+
+
+def test_keywords_capped(monkeypatch):
+    many = [{"term": f"term number {i}", "mode": "boost", "weight": 1.5}
+            for i in range(algo_nl.MAX_KEYWORDS + 10)]
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}}, keywords=many))
+    out = algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    assert len(out["keywords"]) == algo_nl.MAX_KEYWORDS
+
+
+def test_keywords_in_system_prompt(monkeypatch):
+    captured = _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}}))
+    algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    sys_text = captured["system"][0]["text"]
+    assert "keywords" in sys_text
+    assert "boost" in sys_text and "mute" in sys_text
 
 
 def test_output_feeds_ranking_helpers(monkeypatch):

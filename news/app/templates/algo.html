@@ -132,6 +132,30 @@
         </div>
       </div>
 
+      <div class="nl-proposed-keywords" x-data="{ kws: {{ (nl_keywords or [])|tojson }} }"
+           x-show="kws.length" x-cloak>
+        <div class="feature-row feature-keywords">
+          <div class="feature-name">Keywords from your description</div>
+          <div class="kw-body">
+            <p class="kw-lede">Proposed from what you described &mdash; remove any you
+            don&rsquo;t want, then <strong>Save</strong>. They attach to the profile you
+            save to (mute wins over boost).</p>
+            <ul class="nl-kw-chips">
+              <template x-for="(kw, i) in kws" :key="kw.term">
+                <li :class="kw.mode === 'mute' ? 'mute' : 'boost'">
+                  <span class="term" x-text="kw.term"></span>
+                  <span class="wt" x-text="kw.mode === 'mute' ? 'mute' : ('boost ×' + Number(kw.weight).toFixed(1))"></span>
+                  <button type="button" class="linkbtn" @click="kws.splice(i, 1)">remove</button>
+                  <input type="hidden" name="nl_kw_term" :value="kw.term" />
+                  <input type="hidden" name="nl_kw_mode" :value="kw.mode" />
+                  <input type="hidden" name="nl_kw_weight" :value="kw.weight" />
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <div class="algo-actions">
         <button type="button"
                 hx-post="{{ url_for('algo.save') }}"

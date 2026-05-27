@@ -514,6 +514,13 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .algo .feature-keywords .kw-body { min-width: 0; }
 .algo .kw-lede { color: var(--muted); font-size: 0.88em; margin: 0 0 0.8em; line-height: 1.4; }
 .algo .kw-inline-count { color: var(--muted); font-weight: 400; font-size: 0.85em; }
+.algo .nl-proposed-keywords { margin: 0.4em 0 1em; }
+.algo .nl-kw-chips { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5em; }
+.algo .nl-kw-chips li { display: inline-flex; align-items: center; gap: 0.5em; padding: 0.3em 0.6em; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.9em; }
+.algo .nl-kw-chips li.mute { border-color: #d9a; }
+.algo .nl-kw-chips li.boost { border-color: #9c9; }
+.algo .nl-kw-chips .wt { color: var(--muted); font-size: 0.82em; }
+.algo .nl-kw-chips .linkbtn { color: var(--err); font-size: 0.82em; }
 
 /* shareable algorithm gallery (roadmap "Shareable algorithm gallery") */
 .gallery { max-width: 880px; margin: 0 auto; padding: 0 1em; }
