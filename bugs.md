@@ -93,9 +93,42 @@ ps aux | grep classify_pending | grep -v grep   # any long-lived run?
 Admin: `/admin/cron-health` (cron.log tail) and `/admin/usage-summary`
 (signal counts) corroborate from the browser.
 
-**Fix:** TBD once telemetry identifies the cause. If hypothesis 1, the fix
-is operational (install the cron line). If 2, investigate `fetch_feeds`.
-If 4, add a wallclock guard around the trafilatura parse.
+**Confirmed root cause (2026-05-27, prod `cron.log` review):** hypothesis 1.
+The classifier is healthy — every `*/5` tick logs
+`classified=200 llm_articles=200 reclassified=0 cost_usd≈0.15`, all
+Anthropic calls 200 OK, no PyMySQL `(2006)`, no `lock held … skipping`,
+no `LLMUnavailable`. But the every-1-minute `--triggered-only` cron was
+**never installed on prod** (it was still an Open item in
+`manual-actions.md`): across 4+ hours of log there is not one
+`--triggered-only: no fresh signal, exiting` line nor any triggered run,
+which is impossible if the cron existed (it logs at INFO every minute).
+So PR #121's demand-driven top-up was inert and classification ran only
+on the `*/5` safety net, pinned at the `CLASSIFY_BATCH_LIMIT=200` default
+(it hits 200 and breaks every tick) → a hard ~2,400 articles/hour
+ceiling. With the catalog now at 1,919 feeds and bursty inflow
+(`fresh=276`, `fresh=153` ticks observed), the pending backlog wasn't
+draining — which presented as "stalled again."
+
+Neither `CLASSIFY_BATCH_LIMIT` nor `CLASSIFY_BUDGET_SECONDS` is set in the
+cPanel env, so prod runs the `config.py` defaults (200 / 240s) — confirmed
+by the steady `classified=200` cadence.
+
+**Fix:**
+- **(A, applied 2026-05-27)** User installed the every-1-minute
+  `classify_pending --triggered-only` cron line from `manual-actions.md`,
+  re-enabling demand-driven top-up. `job_lock` serializes all classify
+  runs, so this fills the idle gaps between `*/5` ticks (each tick runs
+  ~165–210s of the 300s interval) rather than running concurrently.
+- **(B, optional throughput lever — not yet applied)** Add
+  `CLASSIFY_BATCH_LIMIT` (e.g. 300) as a cPanel env var + restart so each
+  `*/5` tick uses its full 240s budget instead of stopping at 200. Going
+  much higher also needs `CLASSIFY_BUDGET_SECONDS` raised, which risks a
+  run bleeding past the 5-min cron interval (the lock then no-ops the next
+  `*/5` tick — acceptable). Hold pending observation of whether (A) drains
+  the backlog on its own.
+
+**Status note:** root cause identified and fix (A) applied; leaving `open`
+until prod telemetry confirms the backlog drains.
 
 ---
 
