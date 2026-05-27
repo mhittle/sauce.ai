@@ -32,6 +32,22 @@ def test_recency_is_multiplicative_gate():
     assert "+ (%(recency_w)s" not in expr
 
 
+def test_recency_clamps_future_dates():
+    """BUG-026: a future published_at made TIMESTAMPDIFF negative, so the
+    recency gate became EXP(positive) > 1 — an unbounded *boost* that pinned
+    future-dated articles to the top of the feed. The age must be clamped at
+    0 so a future date caps the multiplier at 1.0 (treated as 'now'),
+    never a boost."""
+    w = {"objectivity": 1.0, "recency": 0.7}
+    expr, _ = build_score_sql(w)
+    one_line = expr.replace("\n", " ")
+    assert "GREATEST(TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()), 0)" in one_line
+    # the raw, un-clamped form must be gone
+    assert "* TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()) /" not in one_line
+    # parity: the Code-tab Python equivalent clamps too
+    assert "max(article.hours_old, 0)" in weights_to_expression(w)
+
+
 def test_recency_zero_disables_decay():
     w = {"objectivity": 1.0, "recency": 0}
     expr, params = build_score_sql(w)

@@ -29,7 +29,7 @@ shipped.
 | 6 | 1 | ui, ops, docs | Root sauce.ai/ landing page (product lab positioning + coming-soon product cards) | done |
 | 6 | 3 | ui, new-feature, backend | Lab landing expansion: 10 more radical concepts + anon up/down voting | in-progress |
 | 9 | 8 | backend, new-feature | Sandboxed Python algorithm execution | backlog |
-| 6 | 4 | backend, algo, ops | Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up | in-progress |
+| 6 | 4 | backend, algo, ops | Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up | done |
 | 9 | 6 | backend, ui, new-feature, algo | Story dossier (multi-source view of a single story) | done |
 | 8 | 7 | ops, backend, new-feature | Automated source discovery (Reddit/HN + LLM agent) | done |
 | 7 | 7 | ops, new-feature | Automated source discovery — social firehoses (Mastodon, Bluesky, X/Twitter) | backlog |
@@ -78,13 +78,180 @@ shipped.
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
+| 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | in-progress |
 
 ---
 
 ## Items in detail
 
+### Breaking-news email alerts (major-event detection → opt-in email)
+**Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** in-progress
+
+**User value / why now.** Today sauce.ai only reaches a reader when they
+come to us (the home feed) or once a day (the digest). When something
+genuinely major breaks, an engaged reader wants to *hear about it* — that
+is the single highest-value re-engagement moment a news product has, and
+we're currently silent in it. This is a retention/habit lever, and it
+leans on the one thing our multi-source backend uniquely owns:
+**distinct-outlet counting** (the same signal that powers `/trending`).
+"A story that suddenly hits many independent outlets at once" is the
+textbook breaking-news signature — no dependency on Google's noisy
+token-match. We also already own the entire email path (digest), so this
+is mostly assembly + one detection job, not new infrastructure.
+
+**Product decisions already made with the owner:**
+- **Detection = outlet-burst + a cheap LLM confirmation gate.** A bad
+  push email is worse than no email, so a deterministic threshold alone
+  isn't enough — one Haiku call confirms the event is genuinely major and
+  writes the push headline/blurb.
+- **Targeting = broad, minus mute keywords.** A major event is major for
+  everyone, so every opted-in user gets it — *except* we suppress an
+  alert whose topic matches that user's active-profile mute keywords.
+- **Opt-in = a new toggle, default off**, independent of the daily
+  digest (different intrusiveness level; the two must not be conflated).
+
+**How detection works (new cron `news/jobs/breaking_alerts.py`, every
+~15 min).** Mirrors the structure of `jobs/popularity_poll.py` /
+`jobs/trending_poll.py`: `from _bootstrap import Config, get_conn,
+setup_logging, db_log, job_lock, AlreadyRunning`; `JOB =
+"breaking_alerts"`; `with job_lock(JOB): _run()`; `conn.ping(reconnect=
+True)` before the send block (BUG-009 idle-socket lesson). Master
+kill-switch env `BREAKING_ENABLED` (default on); fast no-op when off.
+1. **Candidate query** — distinct global outlets per recent story
+   cluster:
+   ```sql
+   SELECT a.story_id,
+          COUNT(DISTINCT a.source_id) AS outlet_count,
+          MAX(a.published_at)         AS latest
+   FROM articles a
+   JOIN sources s ON s.id = a.source_id
+   WHERE a.story_id IS NOT NULL
+     AND a.published_at >= UTC_TIMESTAMP() - INTERVAL %s HOUR  -- BREAKING_WINDOW_HOURS, default 6
+     AND s.owner_id IS NULL                                    -- global pool only, not personal feeds
+   GROUP BY a.story_id
+   HAVING outlet_count >= %s                                   -- BREAKING_MIN_OUTLETS, default 12
+   ORDER BY outlet_count DESC;
+   ```
+2. **Dedup** — skip any `story_id` already in `breaking_news_alerts`
+   (UNIQUE on `story_id`), so each story alerts at most once.
+3. **LLM gate** — for each survivor, fetch the canonical article
+   (title + summary; optionally a few member headlines) and make one
+   call via the existing Haiku client (`app/classifier/llm.py` pattern;
+   reuse the configured model + `LLMUnavailable` + `llm_usage` cost
+   logging). Prompt returns strict JSON: `{is_major: bool, headline:
+   str, blurb: str}`. Record the verdict in `breaking_news_alerts`
+   (`status` = `sent` or `rejected`) so a rejected story is **not**
+   re-judged every 15-min tick. On `LLMUnavailable`, **record nothing
+   and skip** (fail-closed — a confirmation-less push is the risk we're
+   avoiding) so a later tick retries while the story is still in window.
+4. **Send** — for a `sent` event, email every opted-in, under-cap,
+   non-suppressed user (see below), then write the event row with
+   `recipients`.
+
+**Opt-in + per-user state (new table `user_alert_prefs`, deliberately
+SEPARATE from `users` so it is migrate-after-deploy safe / NOT BUG-007
+class):**
+```sql
+CREATE TABLE IF NOT EXISTS user_alert_prefs (
+  user_id          INT UNSIGNED NOT NULL,
+  breaking_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  unsub_token      CHAR(40) NOT NULL DEFAULT '',
+  alerts_day       DATE DEFAULT NULL,
+  alerts_today     INT UNSIGNED NOT NULL DEFAULT 0,
+  last_alert_at    DATETIME DEFAULT NULL,
+  updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id),
+  CONSTRAINT fk_uap_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+A per-user **daily cap** `BREAKING_MAX_PER_DAY` (default 3) uses
+`alerts_day`/`alerts_today` (reset when the UTC date rolls) so a busy
+news day can never spam one inbox. **Mute suppression:** for each
+recipient, load their active-profile mute terms (`SELECT term FROM
+algorithm_term_prefs WHERE algorithm_id = <active> AND mode = 'mute'`)
+and skip the send if the event headline/title matches, using the same
+case-insensitive substring semantics as `app/term_prefs.py`
+`build_term_clauses` (keep one matcher, don't reinvent).
+
+**Sketch (files/surfaces to touch):**
+- `news/seed/migrations/2026-05-22-breaking-alerts.sql` (new) +
+  `news/seed/schema.sql` (+`user_alert_prefs` and `breaking_news_alerts`
+  CREATE TABLEs, near the trending/`llm_usage` tables).
+  `breaking_news_alerts(id, story_id UNIQUE, outlet_count, status
+  ENUM('sent','rejected'), headline, blurb, recipients, detected_at)`.
+- `news/app/breaking.py` (new, pure / Flask-free, mirrors
+  `app/feed_diversify.py` / `app/trending.py`): `select_candidates(rows,
+  min_outlets)`, `is_suppressed(event_text, mute_terms)`,
+  `daily_cap_ok(prefs_row, max_per_day, today)`, and a `parse_llm_verdict`
+  clamp/validate helper. This is where the unit tests live — no
+  Flask/DB/SMTP/Haiku needed.
+- `news/jobs/breaking_alerts.py` (new cron) — orchestrates query → dedup
+  → LLM gate → send, using the pure helpers above.
+- `news/app/mailer.py` (new, small) — extract the inline smtplib +
+  `MIMEMultipart("alternative")` + `List-Unsubscribe` /
+  `List-Unsubscribe-Post` block currently duplicated in
+  `jobs/send_digest.py` into one `send_email(to, subject, html, text,
+  list_unsub_url)` helper, and **refactor `send_digest.py` to call it**
+  (behavior-preserving) so the two senders can't diverge. (If extraction
+  proves risky, duplicating the ~15 lines is an acceptable fallback —
+  justify in the PR.)
+- `news/app/templates/breaking_email.html` + `breaking_email.txt` (new) —
+  single-event push layout: headline, blurb, "N outlets covering this",
+  a link to the story dossier (`/story/<story_id>` — our killer demo, the
+  perfect landing surface), and the one-click unsubscribe footer.
+- `news/app/routes/account.py` — add a **"Breaking news alerts"** checkbox
+  to `settings()` + `account_settings.html` (next to the digest toggle,
+  clearly labeled as more intrusive/rarer), reading/writing
+  `user_alert_prefs.breaking_enabled` and minting `unsub_token` on enable
+  (mirror `_ensure_unsub_token`). Add a dedicated one-click route
+  `/account/alerts/unsubscribe/<token>` (GET+POST, RFC 8058, CSRF-exempt
+  like the digest unsubscribe) that flips `breaking_enabled = 0` and
+  rotates the token.
+- `news/app/config.py` — `BREAKING_ENABLED`, `BREAKING_WINDOW_HOURS`,
+  `BREAKING_MIN_OUTLETS`, `BREAKING_MAX_PER_DAY` (env-defaulted).
+- `news/INSTALL.txt` — document the new env knobs, the new every-15-min
+  cron line, and the migration (touches `jobs/*` + `config.py`, so the
+  BUG-007 gate expects an INSTALL.txt update in the same PR).
+
+**Preserve / must-not-break:**
+- The daily digest is untouched in behavior (only refactored to share
+  `mailer.py`). The two opt-ins are independent.
+- App code must **tolerate both new tables being absent** (migrate-after-
+  deploy): `settings()` wraps the `user_alert_prefs` read in try/except
+  and renders the toggle as "off" if the table is missing; the
+  unsubscribe route shows "already unsubscribed"; the cron no-ops on a
+  missing table. So this is **NOT BUG-007 class** — a missing migration
+  never 500s a user route. Label the PR `has-migration` (not
+  `needs-migration`); the executor applies it post-deploy per
+  `agent-fleet.md`.
+
+**Constraints / watch-outs:**
+- **No synchronous LLM and no process spawn on any request path** — the
+  Haiku gate runs only in the cron; the web app only reads/writes the
+  toggle. nproc ceiling untouched.
+- **Fail-closed on the LLM gate** (don't send if unconfirmed) and
+  **per-story dedup + per-user daily cap** are the three guards against a
+  spammy or embarrassing send. With `min_outlets >= 12` + dedup, expect
+  ~1–5 alerts/day; the Haiku gate is a handful of calls/tick at most
+  (sub-cent/day). Email volume = alerts/day × opted-in users.
+- Reuse the existing `SMTP_*` config and localhost-MTA default; no new
+  pip dependency, no new secret. One new cron entry (manual-actions Open).
+
+**Test expectation:** `pytest news/tests/` stays green. New
+`tests/test_breaking.py` covers the pure helpers without Haiku/DB/SMTP:
+candidate threshold (≥ min_outlets selected, below skipped), mute
+suppression (matching term → suppressed; non-match → sent), daily-cap
+rollover, and `parse_llm_verdict` clamping/`is_major=false`/malformed-JSON
+→ no send. The LLM call is stubbed; no test requires a live DB, MTA, or
+browser.
+
+**v2 (out of scope):** per-user relevance personalization of which events
+qualify; "follow this story/topic" granular alerts; SMS / Web Push
+channels; a frequency/quiet-hours control; an end-of-day "what you
+missed" recap for users who weren't around.
+
 ### Demand-driven feed classification — keep a ~400 buffer, page 40, background top-up
-**Priority:** 6 · **LOE:** 4 · **Category:** backend, algo, ops · **Status:** in-progress
+**Priority:** 6 · **LOE:** 4 · **Category:** backend, algo, ops · **Status:** done (PR #121; new 1-min cron pending in manual-actions Open)
 
 Today classification is a 5-minute cron (`jobs/classify_pending.py`,
 rules + Haiku); the feed shows only `status='classified'` rows
@@ -983,9 +1150,11 @@ narrative lives in `engineering-history.md` under the same date.
 - **Fold per-algorithm Keywords into the Your Algorithm feature list**
   (Pri 6, LOE 2, PR #119). Dropped the standalone Keywords tab; folded
   the keyword controls into the UI-tab feature list.
-- **Demand-driven feed classification** (Pri 6, LOE 4, PR #120 — roadmap
-  item) — dispatched to the dev agent; implementation PR in flight, not
-  yet merged.
+- **Demand-driven feed classification** (Pri 6, LOE 4, PR #121). Feed
+  activity touches a signal file; a new every-1-min `classify_pending
+  --triggered-only` cron tops up a ~400-article classified buffer (page
+  size 30→40). No synchronous LLM / no per-request spawn. New cron entry
+  is pending in `manual-actions.md` Open.
 
 ### 2026-05-21
 

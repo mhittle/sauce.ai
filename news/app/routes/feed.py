@@ -92,6 +92,24 @@ def _maybe_signal_topup(page, page_size):
         current_app.logger.warning("classify topup signal skipped: %s", e)
 
 
+def _dedupe_switcher_rows(rows):
+    """Collapse duplicate-named profiles for the header switcher so each name
+    shows once. Rows arrive ordered `is_active DESC, updated_at DESC`, so the
+    first row for a name is the active one (if that name is active) else the
+    most-recently-updated — keep that one and drop the rest. The active id is
+    computed from the full row set so it always resolves even if its name has
+    duplicates. Returns (deduped_rows, active_id)."""
+    active = next((r["id"] for r in rows if r["is_active"]), None)
+    seen = set()
+    deduped = []
+    for r in rows:
+        if r["name"] in seen:
+            continue
+        seen.add(r["name"])
+        deduped.append(r)
+    return deduped, active
+
+
 def _switcher_profiles():
     """Profiles for the feed-header switcher. Empty for anon visitors."""
     u = getattr(g, "user", None)
@@ -102,8 +120,7 @@ def _switcher_profiles():
         "ORDER BY is_active DESC, updated_at DESC",
         (u["id"],),
     ) or []
-    active = next((r["id"] for r in rows if r["is_active"]), None)
-    return rows, active
+    return _dedupe_switcher_rows(rows)
 
 
 @bp.route("/")
@@ -134,7 +151,13 @@ def index():
     term_mute_sql = ""
     term_boost_mult = ""
     term_params = {}
+    down_filter_sql = ""
     if u:
+        down_filter_sql = (
+            " AND a.id NOT IN (SELECT article_id FROM user_signals "
+            "WHERE user_id = %(_dv_uid)s AND signal_type = 'thumb_down')"
+        )
+        pref_params["_dv_uid"] = u["id"]
         pref_join_sql = (
             " LEFT JOIN user_source_prefs usp "
             "ON usp.user_id = %(_pref_uid)s AND usp.source_id = s.id"
@@ -193,6 +216,7 @@ def index():
         {cat_filter_sql}
         {pref_filter_sql}
         {term_mute_sql}
+        {down_filter_sql}
       {order_by_sql}
       LIMIT %(limit)s OFFSET %(offset)s
     """

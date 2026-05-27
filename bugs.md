@@ -134,7 +134,77 @@ until prod telemetry confirms the backlog drains.
 
 ## In progress
 
-(none currently)
+### BUG-027 — Article pinned to top of feed regardless of downvote; downvote doesn't remove it
+**Status:** in-progress (fix written, PR pending) · **Reporter:** user · **Opened:** 2026-05-26
+**Note:** renumbered from BUG-026 → BUG-027 on 2026-05-26 to resolve a
+parallel-session BUG-ID collision (a separate session used BUG-025 for the
+duplicate-profiles bug, now BUG-026). See `new-engineering-session-instructions.md` §7.4.
+
+User reports a specific article (Dark Reading — "[Virtual Event]
+Anatomy of a Data Breach: What to Do if it Happens to You", category
+tech) is **always first** in the `/` feed even after downvoting it,
+and expects a downvoted article to **disappear** from the feed.
+
+**Two distinct issues, likely:**
+
+1. **"Always first" — probable future-date ranking bug.** The card is
+   dated **Jun 18, 15:00** — a *future* `published_at` relative to
+   today (2026-05-26). The ranking applies a multiplicative recency
+   gate `score = quality * EXP(-recency_w * hours / 24)` (BUG-011). A
+   future `published_at` makes `hours` negative, so the exponent is
+   positive and the multiplier is **> 1** — i.e. future-dated articles
+   get an unbounded recency *boost* instead of decay, pinning them to
+   the top. Root cause to confirm: where does the future date come from
+   (feed `<published>` parsed wrong / publisher lookahead / `updated`
+   vs `published`?) and the ranking should clamp future timestamps so
+   `hours >= 0` (recency multiplier capped at 1.0 at "now").
+
+2. **Downvote does not hide the article.** Current thumbs-down
+   (`user_signals` / `user_source_prefs`) semantics downweight a
+   *source*, not hard-filter an individual downvoted article. User
+   expectation here is: a downvoted article disappears. Need to
+   confirm current behavior in `routes/signal.py` + how `feed.py`
+   consumes signals, then decide: hard-filter downvoted article_ids
+   from the feed query (matches the stated expectation) vs. the
+   existing downweight model.
+
+**Repro (user):** load `/`, the Dark Reading data-breach article is
+first; click the downvote (▼); reload — still first.
+
+**Root cause confirmed:**
+1. **Always-first:** `ranking.py` recency gate is
+   `EXP(-recency_w * TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()) / 1440)`.
+   The Dark Reading card is a future-dated "Virtual Event" (Jun 18), so
+   `TIMESTAMPDIFF` is **negative** → exponent positive → multiplier
+   **> 1**, an unbounded recency *boost*. (The future date is legitimate
+   publisher data for an event listing — not a fetch bug — so the fix is
+   in ranking, not ingestion.)
+2. **Downvote doesn't remove it:** `routes/signals.py` records
+   `thumb_down` (and prompts to mute the *source* after 3 downvotes in
+   30 days), but `routes/feed.py` only reads `thumb_down` to highlight
+   the ▼ button — it never filters the downvoted article out of the
+   feed query.
+
+**Fix (PR pending):**
+1. `app/ranking.py` — clamp the age at 0:
+   `GREATEST(TIMESTAMPDIFF(MINUTE, a.published_at, UTC_TIMESTAMP()), 0)`,
+   so a future date caps the recency multiplier at 1.0 ("now") instead
+   of boosting. Code-tab Python equivalent clamped to
+   `max(article.hours_old, 0)` for parity. New regression test
+   `test_recency_clamps_future_dates` (pure, passes in sandbox).
+2. `app/routes/feed.py` — for signed-in users, exclude downvoted
+   articles from the `/` feed:
+   `AND a.id NOT IN (SELECT article_id FROM user_signals
+   WHERE user_id = %(_dv_uid)s AND signal_type = 'thumb_down')`. A
+   downvoted article now disappears on the next load (matches the user's
+   stated expectation). Scope: `/` only; firehose/search/saved/digest
+   unchanged. The existing source-mute prompt after repeated downvotes
+   is preserved.
+
+**Verification:** ranking clamp unit-tested in sandbox. The feed
+downvote-filter is route+DB level — deferred to CI / a real env (same
+sandbox limitation as prior feed-route changes). No DB migration, no
+cron, no env var.
 
 ---
 
@@ -187,6 +257,115 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 ---
 
 ## Resolved
+
+### BUG-026 — Algorithm switcher dropdown on `/` lists duplicate profiles
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-26 · **Closed:** 2026-05-26 (PR pending)
+**Note:** renumbered from BUG-025 → BUG-026 on 2026-05-26 to resolve a
+parallel-session BUG-ID collision (BUG-025 is the feed-stale / geo-migration
+bug anchored by merged PR #135). Original PR/commit text may still say BUG-025.
+
+User reported the front-page "Algorithm:" selector showing the same
+algorithm names repeated many times (screenshot: "Lefty" x3,
+"Karenizer" x3, "Anti Yellow Media" x3, "Karen Maker" x3, "Fred's News"
+x3, "Palo"/"Non Yellow"/"general"/"Heady" x2 each), interleaved with the
+one-per-profile entries plus "Default"/"Custom".
+
+**Root cause:** not a query fan-out or a template bug — the switcher
+faithfully renders the rows in `user_algorithms`. `_switcher_profiles()`
+in `app/routes/feed.py` runs a plain `SELECT ... WHERE user_id = %s`
+(no JOIN) and `feed.html` renders one `<option>` per row, so every
+entry (including "Default"/"Custom", which are just profile *names*) is
+a real saved row. The duplicates are genuinely-duplicate rows that
+accumulate because two write paths `INSERT` a new profile with no
+guardrail: `gallery.adopt()` (`app/routes/gallery.py`) clones a fresh
+row on every "Adopt as my feed" click, and `algo.create_profile()`
+(`app/routes/algo.py`) saves a new row even when the name already
+exists. `save`, `use_preset`, and `onboarding` correctly
+update-in-place / are idempotent and were not implicated.
+
+**Fix (PR pending):** prevent + de-dupe display (per owner's choice).
+1. **Prevent** — `create_profile()` and `gallery.adopt()` now look up an
+   existing same-named profile for the user first; if found they
+   **update that row's weights** (adopt also refreshes its keywords:
+   wipe-then-reinsert `algorithm_term_prefs`) and re-activate it instead
+   of inserting a duplicate. New names still insert as before.
+2. **De-dupe display** — new pure helper
+   `feed._dedupe_switcher_rows(rows)` collapses duplicate-named rows so
+   each name appears once in the dropdown. Rows arrive ordered
+   `is_active DESC, updated_at DESC`, so the kept row for a name is the
+   active one (if active) else the most-recent; the active id is computed
+   from the full set so the `<option selected>` always resolves. This
+   also tidies the *pre-existing* duplicate rows already on prod (they
+   stay in the DB, non-destructive, but stop showing repeated).
+
+**Scope:** app-layer only — no DB migration, no schema/cron/env/dep
+change. Pre-existing duplicate rows are not deleted (the owner chose
+non-destructive); they simply collapse in the UI and stop multiplying.
+
+**Verification:** 20 new/updated unit tests
+(`test_feed_switcher.py` pure de-dupe; `test_algo_profiles.py`
+create-reuse; `test_gallery_adopt.py` adopt-reuse + keyword refresh);
+full suite 563 passed. Browser verification on prod deferred (sandbox
+has no browser — same documented limitation as PR #53/#59/#72).
+
+---
+
+### BUG-025 — Feed stale: no new articles since May 20; refresh and algo changes show the same articles
+**Status:** resolved · **Reporter:** user · **Opened:** 2026-05-26 · **Closed:** 2026-05-26
+
+User reported the `/` feed frozen at May 20: reloading and switching
+the active algorithm both returned the same articles.
+
+**Root cause:** classic **BUG-007 class**, on the cron write path.
+`fetch_feeds` was healthy (new articles kept arriving as
+`status='pending'`), but `classify_pending` crashed on **every** tick
+at the `INSERT INTO article_features` (classify_pending.py:428):
+
+```
+pymysql.err.OperationalError: (1054, "Unknown column 'geo_lat' in 'INSERT INTO'")
+```
+
+The geo / "Near a place" feature merged with migration
+`news/seed/migrations/2026-05-20-geo.sql` (adds `geo_lat`, `geo_lng`,
+`geo_place` + `idx_feat_geo` to `article_features`), wired into
+`schema.sql` and the `classify_pending` INSERT — **but the migration
+was never applied on prod and was never tracked in `manual-actions.md`**
+(the gap that let it slip past the BUG-007 discipline). Because the
+feed only shows `status='classified'` rows, the classified corpus
+froze at the last good tick (~May 20) while `pending` silently piled
+up to ~57k rows. *(A parallel session independently filed this same
+issue from the `/admin` Overview — 56,604 pending / 0 classified by
+LLM today / $0 spend today vs $18.88 over 30d / 2,451 fetched today /
+706 of 1,930 feeds errored — which corroborates: fetch healthy,
+classify making zero progress. That duplicate BUG-025 was folded into
+this entry.)* The "same articles on refresh / algo change"
+sub-symptom was the expected downstream effect of a frozen corpus
+(every algorithm drew from the same stale pool; multiplicative
+recency decay can't differentiate when everything is equally old) —
+not a separate ranking regression. Unrelated to the QA-filed
+BUG-023/024 (a web-tier/Cloudflare matter; the user's browser loaded
+the site fine throughout).
+
+**Fix:** applied the missing migration on prod via phpMyAdmin
+(`lt1ih6uyy2z6_news`) — see `manual-actions.md` Completed
+2026-05-26. No code change: the repo already matched; the defect was
+purely the unapplied migration. `classify_pending` is a fresh process
+each cron tick, so it recovered on the very next tick with no restart
+— verified live: ~13 consecutive successful Anthropic classify calls
+with zero tracebacks after the ALTER, and the user confirmed the feed
+freshening. The ~57k `pending` backlog drains **oldest-first**
+(`ORDER BY fetched_at ASC`, classify_pending.py:287) at ~180/tick
+(~50k/day), so the feed's newest date advances day-by-day over ~a day
+rather than jumping straight to today — self-healing, no action
+needed.
+
+**Process learning (same as BUG-007):** a load-bearing migration
+shipped without a `manual-actions.md` Open entry to gate it. The
+crash was on the cron write path rather than a user route, so it
+failed *silently* (no user-visible 500 — the site stayed up serving
+the stale corpus), which is why it went unnoticed for 6 days. Every
+`news/seed/migrations/*.sql` that adds a column written by a cron job
+must get an Open `manual-actions.md` entry the moment it merges.
 
 ### BUG-022 — Topnav text overflows page width
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-20 · **Closed:** 2026-05-20 (PR pending)
