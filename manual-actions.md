@@ -133,26 +133,24 @@ No DB migration, no cron, no env var, no new pip dep — restart only.
 
 ---
 
-### 2026-05-22 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
-**Status:** open · **PR:** (agent-fleet enablement, this session) ·
-**Opened:** 2026-05-22
+## Completed
+### 2026-05-31 — Rotated: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** completed · **PR:** (agent-fleet enablement) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31
 
 `AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
 branches, open PRs, and fire `repository_dispatch` (the default
 `GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
-Fine-grained PATs **expire**, and four workflows fail silently the day it
-lapses: `dev-agent`, `pm-agent`, `post-deploy`, `migration-executor`.
+Fine-grained PATs **expire** and four workflows (`dev-agent`, `pm-agent`,
+`post-deploy`, `migration-executor`) fail silently the day it lapses. User
+confirmed the token was regenerated (scope `mhittle/sauce.ai`: Contents /
+Pull requests / Workflows / Actions RW) and the `AGENT_PUSH_TOKEN` repo
+secret updated. No code change; the fleet resumes immediately.
 
-**Action:** before the token's expiry, regenerate it (GitHub → Settings →
-Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
-with Contents / Pull requests / Workflows / Actions RW) and update the
-`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
-Actions → Secrets). No code change; the fleet resumes immediately. Record
-the new expiry date here when you rotate.
+> **Standing reminder:** this is recurring — the new token will also expire.
+> Re-file an **Open** entry before its expiry so a future session rotates it
+> ahead of the lapse.
 
----
-
-## Completed
 ### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
 **Status:** completed · **PR:** #121 (merged 2026-05-22) ·
 **Opened:** 2026-05-22 · **Completed:** 2026-05-31 (first reported applied 2026-05-27 per `bugs.md` BUG-023)
