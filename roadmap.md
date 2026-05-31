@@ -78,7 +78,7 @@ shipped.
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
-| 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | in-progress |
+| 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | done |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
 | 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | in-progress |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
@@ -88,20 +88,22 @@ shipped.
 ## Items in detail
 
 ### Breaking-news email alerts (major-event detection → opt-in email)
-**Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** in-progress
+**Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** done (PR #132, merged 2026-05-31)
 
-> **Already built — awaiting merge (do NOT re-dispatch).** The full feature
-> is implemented in **PR #132** (`claude/agent/breaking-news-email-alerts`):
-> `breaking_alerts.py` + pure `breaking.py` + extracted `mailer.py`, the
-> opt-in toggle + CSRF-exempt unsubscribe, both migrations, 574 passing
-> tests; it passed the BUG-007 gate and test-merges cleanly into `main`. It's
-> still a **draft** only because the dev agent hit its budget cap. To finish:
-> flip #132 draft→ready, merge, label `needs-migration`, add the 15-min cron.
-> **Do not flip this item to `ready-for-agent`** — that would pay ~$8–10 to
-> rebuild #132 (the spec-finalize PR #155 was closed/superseded for the same
-> reason). `has-migration` (NOT BUG-007 class). Deliverability (the shared
-> localhost:25 SMTP path) should be verified before announcing it live;
-> default opt-in is off, so merging is safe regardless.
+> **Shipped 2026-05-31 (PR #132).** Outlet-burst detection + a fail-closed
+> Haiku confirmation gate; broad targeting minus the user's active-profile
+> mute keywords; a new opt-in toggle (default off, independent of the daily
+> digest); one-click RFC-8058 unsubscribe. New `news/jobs/breaking_alerts.py`
+> (every-15-min cron, `job_lock`, ping-reconnect, `BREAKING_ENABLED`
+> kill-switch), pure `news/app/breaking.py` (21 tests), extracted
+> `news/app/mailer.py` (digest refactored to share it, behavior-preserving),
+> `BREAKING_*` config knobs. `has-migration` — two new tables
+> (`user_alert_prefs`, `breaking_news_alerts`), both tolerated-absent (NOT
+> BUG-007 class). **Post-merge prod actions (manual-actions.md Open):** apply
+> the migration, add the 15-min cron, restart the Python App. Owner decision:
+> go live on deploy, no shadow/dry-run; default opt-in off so day-one blast
+> radius is only users who enabled the toggle. v2 follow-ons (per-user
+> relevance, follow-this-story, SMS/Web Push, quiet hours) remain backlog.
 
 **User value / why now.** Today sauce.ai only reaches a reader when they
 come to us (the home feed) or once a day (the digest). When something
