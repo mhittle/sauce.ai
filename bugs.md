@@ -26,6 +26,75 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
+### BUG-029 — NL algorithm builder (chat box) does not create keywords for the specific algorithm
+**Status:** open · **Reporter:** user · **Opened:** 2026-05-31
+**Note:** renumbered from BUG-028 → BUG-029 on 2026-05-31 to resolve a
+parallel-session BUG-ID collision (a session merged to `main` used BUG-028
+for the "Why?" ranking-explainer 500). See
+`new-engineering-session-instructions.md` §7.4. Original commit/PR #142
+text may still say BUG-028.
+
+User reports that entering algorithm preferences through the `/algo`
+natural-language chat box ("describe your algorithm") does **not** create
+keywords for that specific algorithm. Expected: a description like "more
+climate policy, hide crypto" should produce per-algorithm keyword
+mute/boost entries (in `algorithm_term_prefs`) attached to the active
+profile, in addition to moving the feature sliders.
+
+**Context (recent change, possibly unshipped):** the 2026-05-27
+engineering-history entry ("NL algorithm builder now also proposes
+keywords") describes exactly this capability — the single Haiku call in
+`app/algo_nl.py` was extended to also return a `keywords` list, rendered
+as removable pending chips in `#algo-form` and persisted only on **Save
+algorithm** / **Save as new profile** (owner chose review-then-Save). That
+work was logged as **PR pending** and may not be merged/deployed yet.
+
+**Hypotheses to confirm (ranked):**
+1. The keyword-proposal PR is still pending / not deployed to prod, so the
+   chat box maps onto sliders only (the pre-2026-05-27 behavior).
+2. The PR is deployed but keywords don't persist — e.g. the pending chips
+   render but `_apply_nl_keywords()` isn't invoked on Save, or the hidden
+   `nl_kw_*` inputs aren't submitted with the form.
+3. The Haiku call isn't returning a `keywords` list (prompt/parse issue),
+   so no chips ever appear to save.
+4. User expectation mismatch: keywords are proposed as review-then-Save
+   chips and only persist on an explicit Save — if the user described and
+   didn't Save, nothing is written. Need to confirm the user's exact flow.
+
+**Repro (to confirm with user):** go to `/algo`, type a description that
+names topics to favor/hide into the chat box, submit; check whether
+keyword chips appear and whether they persist to the profile after Save.
+
+**Investigation (2026-05-31):**
+- Code on `main` (PR #140, merged via d0b2457) is correct: `algo_nl.py`
+  returns a sanitized `keywords` list; `routes/algo.py` `describe()` passes
+  it as `nl_keywords`; `algo.html` renders the chips with hidden `nl_kw_*`
+  inputs **inside** `#algo-form`; both `save()` and `create_profile()` call
+  `_apply_nl_keywords()`. `test_algo_nl.py` 21/21 green in sandbox (route
+  layer not runnable here — no flask/pymysql, documented limitation).
+- **User confirmed: no keyword chips appear after "Build from
+  description", and the keywords are still absent after a full reload.**
+  This **rules out hypothesis 2/4** (the refresh gap would save-but-not-
+  show; a reload would then reveal them). The route is returning **no
+  keywords to render** in the first place.
+- **Leading cause → hypothesis 1 (stale Passenger worker).** PR #140 is on
+  `main` and auto-deploys, but the new `describe()` Python route needs a
+  **Passenger restart** to take effect (Jinja auto-reloads the template, so
+  the chip block is present, but the *old* route passes it no `nl_keywords`
+  → `kws=[]` → `x-show="kws.length"` false → no chips, even on reload —
+  exactly the reported symptom). No `manual-actions.md` Open entry was
+  created for the PR #140 restart (process gap, same class as BUG-007/025).
+  Secondary possibility (hypothesis 3): route is live but Haiku omits the
+  `keywords` array — distinguishable only after a restart confirms the new
+  route is serving.
+
+**Fix (pending user action):** restart the `sauce.ai/news` Python App in
+cPanel (added as an Open entry in `manual-actions.md` 2026-05-31, with
+verification), then re-test the describe flow. If chips still don't appear
+after a confirmed restart, escalate to hypothesis 3 (inspect the prompt/
+parse against live Haiku output). Status stays `open` until prod confirms
+chips render and keywords persist to the profile.
+
 ### BUG-023 — Article classification rate stalls again after recent throughput fix
 **Status:** open · **Reporter:** user · **Opened:** 2026-05-27
 
