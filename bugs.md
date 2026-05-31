@@ -128,7 +128,10 @@ by the steady `classified=200` cadence.
   the backlog on its own.
 
 **Status note:** root cause identified and fix (A) applied; leaving `open`
-until prod telemetry confirms the backlog drains.
+until prod telemetry confirms the backlog drains. (2026-05-31: owner
+re-confirmed the every-1-min `--triggered-only` cron is installed on prod;
+`manual-actions.md` entry moved to Completed. Still `open` pending the
+backlog-drain observation.)
 
 ---
 
