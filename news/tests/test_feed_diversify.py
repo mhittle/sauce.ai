@@ -1,8 +1,7 @@
 """Tests for app/feed_diversify.py (BUG-021)."""
 
 from app.feed_diversify import (
-    MAX_FETCH_ROWS, cap_per_source, effective_source_cap, fetch_budget,
-    page_slice,
+    MAX_FETCH_ROWS, cap_per_source, effective_source_cap, page_slice,
 )
 
 
@@ -56,24 +55,6 @@ def test_cap_custom_key():
     ]
     got = cap_per_source(rows, cap=1, key="category")
     assert [r["id"] for r in got] == [1, 3]
-
-
-def test_fetch_budget_zero_cap_is_exact():
-    assert fetch_budget(page=1, page_size=30, cap=0) == 30
-    assert fetch_budget(page=3, page_size=30, cap=0) == 90
-
-
-def test_fetch_budget_overfetches_enough_to_fill_page_at_cap():
-    # cap=3, page_size=30 → need at least 10 distinct sources to fill 30.
-    # multiplier should be ceil(30/3)+1 = 11, so fetch_budget(1,30,3) >= 30*11.
-    assert fetch_budget(page=1, page_size=30, cap=3) >= 30 * 11
-    assert fetch_budget(page=2, page_size=30, cap=3) >= 60 * 11
-
-
-def test_fetch_budget_multiplier_floored_at_two():
-    # large cap means little over-fetch is needed, but never less than 2x
-    # so a brief same-source run can't starve the page.
-    assert fetch_budget(page=1, page_size=10, cap=100) == 10 * 2
 
 
 def test_page_slice_returns_requested_window():
@@ -152,13 +133,8 @@ def test_unique_sources_yields_no_duplicate_source_ids():
     assert sorted(src_ids) == [0, 1, 2, 3, 4]
 
 
-def test_fetch_budget_grows_for_cap_one():
-    # cap=1, page_size=30 → multiplier ≥ 31, so page 1 needs ≥ 930 rows.
-    assert fetch_budget(page=1, page_size=30, cap=1) >= 30 * 31
-
-
 def test_max_fetch_rows_is_a_sensible_ceiling():
-    # The ceiling exists to bound deep "Load more" paging under cap=1.
-    # At least enough for a few full pages, but not unbounded.
+    # The ceiling bounds the FEED_SELECTION_POOL fetch (BUG-030): enough for
+    # many full pages, but not unbounded.
     assert MAX_FETCH_ROWS >= 30 * 31
     assert MAX_FETCH_ROWS <= 50_000

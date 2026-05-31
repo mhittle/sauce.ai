@@ -3,12 +3,14 @@
 `trending` replaced the old raw `popularity` sort in BUG-015; the
 legacy value is aliased so old links keep working.
 """
+import datetime
+
 from app.routes.feed import (
     SORT_OPTIONS,
     SORT_LABELS,
     _normalize_sort,
-    _order_by_for_sort,
 )
+from app.feed_diversify import rank_for_display
 
 
 def test_sort_options_are_the_three_documented():
@@ -39,29 +41,59 @@ def test_legacy_popularity_value_aliases_to_trending():
     assert _normalize_sort("  Popularity ") == "trending"
 
 
-def test_order_by_relevance_sorts_by_score_first():
-    sql = _order_by_for_sort("relevance")
-    assert sql.startswith("ORDER BY")
-    assert "score DESC" in sql
-    assert sql.index("score") < sql.index("published_at")
+# BUG-030: ordering for display is now a pure post-selection re-sort
+# (`rank_for_display`), distinct from affinity *selection* which the SQL
+# does. These pin the per-sort ordering semantics the SQL ORDER BY used to.
+
+def _rows():
+    """Three rows that disagree on score / freshness / trending so each sort
+    produces a distinct order."""
+    old = datetime.datetime(2026, 5, 1, 12, 0, 0)
+    new = datetime.datetime(2026, 5, 31, 12, 0, 0)
+    mid = datetime.datetime(2026, 5, 15, 12, 0, 0)
+    return [
+        {"id": 1, "score": 0.9, "trending": 0.1, "published_at": old},
+        {"id": 2, "score": 0.5, "trending": 0.9, "published_at": new},
+        {"id": 3, "score": 0.7, "trending": 0.5, "published_at": mid},
+    ]
 
 
-def test_order_by_newest_sorts_by_published_at_first():
-    sql = _order_by_for_sort("newest")
-    assert sql.startswith("ORDER BY")
-    assert "a.published_at DESC" in sql
-    assert sql.index("published_at") < sql.index("score")
+def test_rank_relevance_orders_by_score_desc():
+    out = rank_for_display(_rows(), "relevance")
+    assert [r["id"] for r in out] == [1, 3, 2]  # 0.9, 0.7, 0.5
 
 
-def test_order_by_trending_sorts_by_trending_then_algo_score():
-    sql = _order_by_for_sort("trending")
-    assert sql.startswith("ORDER BY")
-    assert "f.trending DESC" in sql
-    # Algo relevance is preserved as the within-trending tiebreak.
-    assert "score DESC" in sql
-    assert sql.index("trending") < sql.index("score")
+def test_rank_newest_orders_by_published_at_desc():
+    out = rank_for_display(_rows(), "newest")
+    assert [r["id"] for r in out] == [2, 3, 1]  # new, mid, old
 
 
-def test_order_by_unknown_falls_back_to_relevance():
-    """If a future bug ever feeds an unnormalized value here, fail safe."""
-    assert _order_by_for_sort("bogus") == _order_by_for_sort("relevance")
+def test_rank_trending_orders_by_trending_then_score():
+    out = rank_for_display(_rows(), "trending")
+    assert [r["id"] for r in out] == [2, 3, 1]  # 0.9, 0.5, 0.1
+
+
+def test_rank_unknown_sort_falls_back_to_relevance():
+    rows = _rows()
+    assert rank_for_display(rows, "bogus") == rank_for_display(rows, "relevance")
+
+
+def test_rank_is_stable_on_ties():
+    """Equal sort keys preserve incoming (affinity) order — Python stable sort."""
+    rows = [
+        {"id": 10, "score": 0.5, "published_at": datetime.datetime(2026, 5, 1)},
+        {"id": 11, "score": 0.5, "published_at": datetime.datetime(2026, 5, 1)},
+        {"id": 12, "score": 0.5, "published_at": datetime.datetime(2026, 5, 1)},
+    ]
+    assert [r["id"] for r in rank_for_display(rows, "relevance")] == [10, 11, 12]
+
+
+def test_rank_tolerates_missing_and_null_keys():
+    """A null published_at or absent trending/score must not raise."""
+    rows = [
+        {"id": 1, "score": None, "published_at": None},
+        {"id": 2, "score": 0.4, "published_at": datetime.datetime(2026, 5, 2)},
+    ]
+    for sort in ("relevance", "newest", "trending"):
+        out = rank_for_display(rows, sort)
+        assert {r["id"] for r in out} == {1, 2}

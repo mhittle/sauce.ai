@@ -153,6 +153,13 @@ secret updated. No code change; the fleet resumes immediately.
 > **Standing reminder:** this is recurring — the new token will also expire.
 > Re-file an **Open** entry before its expiry so a future session rotates it
 > ahead of the lapse.
+**Action:** before the token's expiry, regenerate it (GitHub → Settings →
+Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
+with Contents / Pull requests / Workflows / Actions RW) and update the
+`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
+Actions → Secrets). No code change; the fleet resumes immediately. Record
+the new expiry date here when you rotate.
+(none currently)
 
 ### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
 **Status:** completed · **PR:** #121 (merged 2026-05-22) ·
@@ -185,6 +192,10 @@ fully drains.)
 crontab -l | grep -- '--triggered-only'      # the */1 line is present
 tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
 ```
+**Verify:** `crontab -l | grep -- '--triggered-only'` lists the line;
+`tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending`
+shows `--triggered-only: no fresh signal, exiting` (idle) or a normal
+`classified=N ...` run.
 
 ---
 
@@ -200,6 +211,23 @@ the algo form.
 
 ---
 
+### 2026-05-31 — Rotated: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** completed · **PR:** (agent-fleet enablement) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
+branches, open PRs, and fire `repository_dispatch` (the default
+`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
+Fine-grained PATs **expire** and four workflows (`dev-agent`, `pm-agent`,
+`post-deploy`, `migration-executor`) fail silently the day it lapses. User
+confirmed the token was regenerated (scope `mhittle/sauce.ai`: Contents /
+Pull requests / Workflows / Actions RW) and the `AGENT_PUSH_TOKEN` repo
+secret updated. No code change; the fleet resumes immediately.
+
+> **Standing reminder:** this is a recurring action — the new token will
+> also expire. Re-file an **Open** entry before its expiry date so a future
+> session rotates it ahead of the lapse.
+
+---
 ### 2026-05-26 — Migration: article_features geo columns (geo_lat/geo_lng/geo_place) — BUG-025 fix
 **Status:** completed · **PR:** (geo / "Near a place" feature, 2026-05-20; entry filed retroactively in #135) ·
 **Opened:** 2026-05-26 · **Completed:** 2026-05-26 ·

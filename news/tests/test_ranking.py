@@ -1,5 +1,5 @@
 from app.ranking import (
-    build_score_sql, build_filters_sql, default_weights,
+    build_score_sql, build_affinity_sql, build_filters_sql, default_weights,
     weights_to_expression, parse_weights_json, PRESETS, FEATURE_KEYS,
     FEATURES, resolved_weights_for_view,
 )
@@ -129,6 +129,65 @@ def test_zero_weight_feature_is_excluded():
     expr, _ = build_score_sql(w)
     assert "f.info_density" in expr
     assert "f.objectivity" not in expr
+
+
+# --- build_affinity_sql: the selection signal (BUG-030) ---------------------
+
+def test_affinity_includes_weighted_features_with_a_keys():
+    """Affinity uses distinct `_aw`/`_ad` param names so it can coexist with
+    build_score_sql's `_w`/`_d` in the same query."""
+    w = {"objectivity": 1.5, "info_density": 0.5}
+    expr, params = build_affinity_sql(w)
+    assert "f.objectivity" in expr
+    assert "f.info_density" in expr
+    assert "objectivity_aw" in params and "objectivity_ad" in params
+    # no collision with build_score_sql's param namespace
+    assert "objectivity_w" not in params
+
+
+def test_affinity_weights_are_l1_normalized():
+    """Weights sum to 1 so affinity is in [0,1] and comparable across algos."""
+    w = {"objectivity": 1.5, "info_density": 0.5}  # total 2.0
+    _, params = build_affinity_sql(w)
+    assert params["objectivity_aw"] == 0.75
+    assert params["info_density_aw"] == 0.25
+    assert abs(sum(v for k, v in params.items() if k.endswith("_aw")) - 1.0) < 1e-9
+
+
+def test_affinity_carries_no_recency_gate_or_jitter():
+    """Selection must NOT be recency-gated (that's the ranking stage's job) —
+    otherwise fresh articles dominate every algo's set and orthogonal algos
+    converge (the BUG-030 symptom)."""
+    w = {"objectivity": 1.0, "recency": 0.7}
+    expr, params = build_affinity_sql(w)
+    assert "EXP(" not in expr
+    assert "RAND(" not in expr
+    assert "recency_w" not in params
+
+
+def test_affinity_empty_weights_returns_sentinel():
+    """No weighted feature -> ('1', {}) so the caller can fall back to its
+    default membership instead of selecting an arbitrary set."""
+    assert build_affinity_sql({}) == ("1", {})
+    assert build_affinity_sql({"recency": 0.7}) == ("1", {})
+    assert build_affinity_sql({"objectivity": 0}) == ("1", {})
+
+
+def test_affinity_uses_direction_and_scale():
+    w = {"political_lean": 1.0, "political_lean_direction": -0.3}
+    expr, params = build_affinity_sql(w)
+    assert params["political_lean_ad"] == -0.3
+    # signed feature has scale width 2
+    assert "/ 2" in expr
+
+
+def test_affinity_distinguishes_orthogonal_algos():
+    """Two algos weighting different features produce different expressions /
+    directions — the whole point of a selection stage."""
+    a, _ = build_affinity_sql({"objectivity": 1.0, "objectivity_direction": 1.0})
+    b, _ = build_affinity_sql({"sensationalism": 1.0, "sensationalism_direction": 1.0})
+    assert "f.objectivity" in a and "f.sensationalism" not in a
+    assert "f.sensationalism" in b and "f.objectivity" not in b
 
 
 def test_threshold_creates_hard_filter():
