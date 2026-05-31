@@ -67,9 +67,12 @@ done, move the entry to **Completed** with today's date in your first
 commit. Don't silently assume — explicit confirmation per item.
 
 If they pick from the roadmap, confirm the item and update its status to
-`in-progress` in `roadmap.md` as part of your first commit. If they have
-something else in mind, fine — but consider adding it to the roadmap with
-appropriate ratings so future sessions inherit the context.
+`in-progress` in `roadmap.md` as part of your first commit. Then, **in the
+same PR that ships the work**, flip it to `done` before requesting merge
+(see Step 12 / `engineering-session-wrapup.md` "Core principle") — the
+wrap-up bookkeeping rides in the feature PR, never a follow-up PR. If they
+have something else in mind, fine — but consider adding it to the roadmap
+with appropriate ratings so future sessions inherit the context.
 
 ## Step 4 — Read the deploy docs
 
@@ -125,6 +128,12 @@ the code and prod, gated by the repo variable `AGENTS_ENABLED`. Read
 5. Open a draft PR. Don't self-merge; ask the user. Expect the BUG-007
    gate to post a verdict on the PR — a `BUG007_BLOCK` must be resolved
    before merge.
+6. **Land all wrap-up bookkeeping in this same PR** — move the roadmap
+   item to `done` (status + at-a-glance row + Done-section entry with this
+   PR's number and date), append the `engineering-history.md` entry, and
+   update `bugs.md` / `manual-actions.md`. The merge is the single step;
+   never open a separate follow-up PR to mark things done (see Step 12 /
+   `engineering-session-wrapup.md` "Core principle").
 
 ## Step 7 — Parallel sessions and merge hygiene
 
@@ -337,7 +346,8 @@ Don't assume; let them decide.
    branch on `main` before opening or updating the PR
    (`git fetch && git rebase origin/main && git push --force-with-lease`).
 6. When something meaningful lands, append a new section to
-   `engineering-history.md` and (if applicable) move the roadmap item
-   to Done.
+   `engineering-history.md` and (if applicable) move the roadmap item to
+   Done — **in the same feature PR**, never a separate follow-up PR. The
+   merge is the single step.
 7. At wrap-up, follow `engineering-session-wrapup.md`. If the session
    feels stale, proactively suggest wrapping up.

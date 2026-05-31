@@ -65,7 +65,7 @@ shipped.
 | 6 | 2 | ui, algo, backend | Unique sources toggle — one article per source (Your Algorithm) | in-progress |
 | 7 | 3 | ops, new-feature | Source catalog expansion (+1000 high-quality sources, incl. Substack / Medium) | done |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
-| 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | in-progress |
+| 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | done |
 | 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
 | 8 | 6 | new-feature, ui | Shareable algorithm gallery | in-progress |
 | 7 | 5 | algo, backend | Community source-quality overlay | backlog |
@@ -978,7 +978,7 @@ instead of guesswork. Depends on Multiple saved algorithms for the
 "current vs. a scratch algo".
 
 ### Tune from this article
-**Priority:** 7 · **LOE:** 4 · **Category:** algo, ui · **Status:** in-progress
+**Priority:** 7 · **LOE:** 4 · **Category:** algo, ui · **Status:** done (PR #143, 2026-05-31)
 
 Inline "more like this / less like this" on any feed card that, instead
 of silently learning, *shows which feature weights it would nudge and by
@@ -997,7 +997,7 @@ three thin `feed.py` routes that mutate the active profile's existing
 `weights_json` (no new adjustment-vector table — stays absorbable into
 the Signal Learning regression). Only already-weighted features are
 nudged; directions/thresholds/filters untouched. **No migration / cron /
-env / dep.** Move to Done on merge.
+env / dep.** **Done — merged PR #143, 2026-05-31.**
 
 ### Periodic "is your feed working?" check-in
 **Priority:** 6 · **LOE:** 3 · **Category:** ui, ops · **Status:** backlog
@@ -1255,6 +1255,18 @@ app-behavior change.
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-05-31
+
+- **Tune from this article — article-anchored weight nudges** (Pri 7,
+  LOE 4). "More / less like this" on feed cards previews which feature
+  weights it would nudge, with Accept / Undo; mutates the active profile's
+  existing `weights_json` (no new adjustment store). Also fixed BUG-028
+  (the Why? explainer 500). PR #143.
+- **Article summary — 3-bullet TL;DR** (Pri 7, LOE 4). Cached Haiku summary
+  per gated article; lazy "TL;DR" toggle on cards + reader box. PR #145.
+  (Migration `2026-05-31-article-summaries.sql` still Open in
+  manual-actions — apply post-deploy.)
 
 ### 2026-05-22
 
