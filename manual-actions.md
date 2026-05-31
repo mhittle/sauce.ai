@@ -40,84 +40,76 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-22 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
-**Status:** open · **PR:** (agent-fleet enablement, this session) ·
-**Opened:** 2026-05-22
-
-`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
-branches, open PRs, and fire `repository_dispatch` (the default
-`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
-Fine-grained PATs **expire**, and four workflows fail silently the day it
-lapses: `dev-agent`, `pm-agent`, `post-deploy`, `migration-executor`.
-
-**Action:** before the token's expiry, regenerate it (GitHub → Settings →
-Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
-with Contents / Pull requests / Workflows / Actions RW) and update the
-`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
-Actions → Secrets). No code change; the fleet resumes immediately. Record
-the new expiry date here when you rotate.
+(none currently)
 
 ---
 
-### 2026-05-22 — Python App restart (low-urgency): keywords-into-feature-list (PR #119)
-**Status:** open · **PR:** #119 (merged 2026-05-22) · **Opened:** 2026-05-22
+## Completed
+### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min)
+**Status:** completed · **PR:** #121 · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
 
-PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
-(`algo.html` + `style.css`). Template-only, so Passenger picks it up on
-its next worker cycle — **low-urgency** — but a cPanel "Restart" of the
-`sauce.ai/news` Python App makes it take immediately. Verify `/algo` shows
-no Keywords tab and the keyword controls render under the algo form.
+Demand-driven classification top-up (the every-minute `classify_pending.py
+--triggered-only` cron, a fast no-op unless `logs/classify_topup.signal` is
+present AND fresh). This is also fix **(A)** for **BUG-023** (classification
+re-stall): the cron was inert because this line had never been installed, so
+PR #121's top-up never fired and classification ran only on the `*/5`
+safety-net (a ~2,400 articles/hour ceiling that couldn't drain the backlog
+under the 1,919-feed catalog). User confirmed the line is installed on prod
+(2026-05-31; first reported applied 2026-05-27 per `bugs.md` BUG-023). The
+existing `*/5 * * * * classify_pending.py` entry stays as the safety-net /
+cold-start tick; `job_lock(classify_pending)` serializes the two so they
+never run concurrently. No DB migration, no Python App restart, no new env
+var, no new pip dep.
 
----
-
-### 2026-05-22 — Cron entry: classify_pending --triggered-only (every 1 min)
-**Status:** open · **PR:** #121 · **Opened:** 2026-05-22
-
-Demand-driven classification top-up. The feed (`/`) now touches
-`logs/classify_topup.signal` after each page load when the classified
-buffer ahead of the reader drops below 400 (debounced to once per
-60s). A new every-minute cron entry runs `classify_pending.py
---triggered-only`, which is a fast no-op unless the signal file is
-present AND fresh (within `CLASSIFY_TOPUP_SIGNAL_MAX_AGE`, default
-600s). When the signal is fresh, it acquires the existing
-`job_lock(classify_pending)` and runs normally — the lock prevents
-overlap with the existing 5-min cron. This is **NOT** a per-request
-spawn (the feed only touches a file); the cron is the only process
-that ever launches a classifier.
-
-The existing `*/5 * * * * classify_pending.py` entry stays as the
-safety-net / cold-start tick.
-
-Add this line in cPanel → "Cron Jobs" (substitute the real
-`lt1ih6uyy2z6` for `YOURACCOUNT`):
+**Cron line installed (cPanel → "Cron Jobs"):**
 
 ```
 *    * * * *  source /home/lt1ih6uyy2z6/virtualenv/public_html/sauce.ai/news/3.11/bin/activate && cd /home/lt1ih6uyy2z6/public_html/sauce.ai/news/jobs && python classify_pending.py --triggered-only >> /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/cron.log 2>&1
 ```
 
-**Verify** (after the next live feed load that should be over the
-threshold):
+**Verify:**
 
 ```
-ls -la ~/public_html/sauce.ai/news/logs/classify_topup.signal
+crontab -l | grep -- '--triggered-only'      # the */1 line is present
 tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
 ```
 
-You should see one of:
-- `classify_pending --triggered-only: no fresh signal, exiting` (no demand)
-- `classified=N llm_articles=M ...` (signal was fresh; ran normally)
-- `classify_pending lock held by another process; skipping this tick`
-  (the 5-min cron is mid-run; safe — signal is left in place for the
-  next 1-min tick)
-
-No DB migration, no Python App restart, no new env var, no new pip dep.
-The signal file lives under `logs/` next to the existing job
-lockfiles; if the `logs/` dir doesn't exist it is created on first
-touch.
+Expect one of: `--triggered-only: no fresh signal, exiting` (no demand) ·
+`classified=N llm_articles=M ...` (ran) · `lock held … skipping` (5-min
+cron mid-run). (BUG-023 itself stays `open` in `bugs.md` until prod
+telemetry confirms the pending backlog fully drains.)
 
 ---
 
-## Completed
+### 2026-05-31 — Python App restart: keywords-into-feature-list (PR #119)
+**Status:** completed · **PR:** #119 (merged 2026-05-22) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
+(`algo.html` + `style.css`). Template-only (Passenger picks it up on its
+next worker cycle), so this was low-urgency, but the user confirmed a cPanel
+"Restart" of the `sauce.ai/news` Python App was performed so it takes
+immediately. `/algo` shows no Keywords tab; the keyword controls render
+under the algo form. No DB migration, no env var, no pip dep.
+
+---
+
+### 2026-05-31 — Rotated: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** completed · **PR:** (agent-fleet enablement) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
+branches, open PRs, and fire `repository_dispatch` (the default
+`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
+Fine-grained PATs **expire** and four workflows (`dev-agent`, `pm-agent`,
+`post-deploy`, `migration-executor`) fail silently the day it lapses. User
+confirmed the token was regenerated (scope `mhittle/sauce.ai`: Contents /
+Pull requests / Workflows / Actions RW) and the `AGENT_PUSH_TOKEN` repo
+secret updated. No code change; the fleet resumes immediately.
+
+> **Standing reminder:** this is a recurring action — the new token will
+> also expire. Re-file an **Open** entry before its expiry date so a future
+> session rotates it ahead of the lapse.
+
+---
 ### 2026-05-26 — Migration: article_features geo columns (geo_lat/geo_lng/geo_place) — BUG-025 fix
 **Status:** completed · **PR:** (geo / "Near a place" feature, 2026-05-20; entry filed retroactively in #135) ·
 **Opened:** 2026-05-26 · **Completed:** 2026-05-26 ·
