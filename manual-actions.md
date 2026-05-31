@@ -40,16 +40,18 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-31 — Python App restart + re-test: NL keyword prompt hardening (BUG-029)
-**Status:** open · **PR:** (BUG-029 prompt hardening, branch `claude/blissful-hamilton-Dh7SD`) · **Opened:** 2026-05-31
+### 2026-05-31 — Python App restart + re-test: NL keyword fix (BUG-029)
+**Status:** open · **PR:** PR #162 (prompt hardening, MERGED) + follow-up PR (parser tolerance), branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
 
-BUG-029 fix: the `/algo` natural-language builder set sliders but proposed no
-keywords because the Haiku prompt marked `keywords` OPTIONAL. This PR rewrites
-`app/algo_nl.py` `_system_prompt()` to make keyword extraction mandatory when
-the reader names a subject. The new prompt lives in the **worker-loaded**
-`algo_nl.py`, so Passenger caches it until restart — a restart is required
-**after this PR deploys** for the change to take effect (separate from any
-earlier restart). No DB migration, no cron, no env var, no new pip dep.
+BUG-029 fix, two parts: (1) PR #162 rewrote `app/algo_nl.py` `_system_prompt()`
+so keyword extraction is mandatory when the reader names a subject; (2) the
+follow-up PR makes `_normalize_keywords` tolerant of the shapes Haiku actually
+returns (mode-keyed buckets, alternate term/mode keys, mode synonyms) — the old
+parser silently dropped them, which is why a restart after #162 alone didn't
+fix it. Both changes live in the **worker-loaded** `app/algo_nl.py`, so a
+restart is required **after the follow-up PR deploys** for the parser fix to
+take effect (the #162-only restart is now superseded). No DB migration, no
+cron, no env var, no new pip dep.
 
 **Action (cPanel):** Setup Python App → the `sauce.ai/news` app → **Restart**.
 

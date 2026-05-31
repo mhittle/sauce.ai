@@ -190,6 +190,28 @@ prompt regresses to "OPTIONAL". **Prod actions:** deploy this PR, then
 re-test shows chips rendering; if still empty after the restart, the
 `nl_keywords=0` log line confirms it's a model-output problem to escalate
 against the prompt/parse rather than the deploy.
+
+**Still broken after PR #162 restart -> parser was too rigid (2026-05-31, PR
+pending).** User confirmed the app was restarted after PR #162 merged and chips
+*still* don't appear. That rules out the prompt being the sole cause and exposed
+the real failure mode: `algo_nl._normalize_keywords` only accepted a `list` of
+`dict`s with exactly `term` + `mode in {mute,boost}` and **silently dropped
+everything else**. Haiku frequently returns a tolerable-but-different shape —
+mode-keyed buckets `{"boost":[...],"mute":[...]}`, the term under
+`keyword`/`phrase`/`topic`, the mode under `action`/`type`, or synonyms like
+`hide`/`more`/`exclude` — all of which the old parser discarded, producing empty
+keywords no matter how forcefully the prompt asked (which is why two prompt
+iterations didn't help). **Fix:** rewrote `_normalize_keywords` to accept a
+list OR a mode-keyed dict OR a single keyword object; pull the term from any of
+several key names; map mode synonyms via `_MODE_SYNONYMS`; bare strings with no
+inferable mode are still dropped (never guessed). `interpret_algorithm` now also
+returns `keywords_raw` (the pre-normalization payload) and `describe()` logs it
+truncated when the normalized list is empty (`algo.describe nl_keywords=0 raw=…`)
+plus a distinct log on the `LLMUnavailable` branch — so if it STILL fails we can
+finally tell model-returned-nothing from shape-we-failed-to-parse from
+LLM-down. 4 new shape tests; all `_normalize_keywords` cases (incl. backward
+compat) pass in-sandbox. **Prod action unchanged:** restart after this
+follow-up PR deploys, then re-test.
 ### BUG-030 — Switching to an orthogonal algorithm surfaces largely the same articles
 **Status:** resolved (PR #144 merged 2026-05-31; prod restart + browser verify pending) · **Reporter:** user · **Opened:** 2026-05-31 · **Closed:** 2026-05-31
 **Note:** renumbered BUG-028 → BUG-029 → **BUG-030** on 2026-05-31 to clear

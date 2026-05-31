@@ -269,6 +269,8 @@ def describe():
             model=cfg.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
         )
     except LLMUnavailable:
+        current_app.logger.info(
+            "algo.describe LLMUnavailable desc_len=%d", len(description))
         return _render_editor(
             current,
             nl_description=description,
@@ -279,11 +281,18 @@ def describe():
         "Here's a starting point based on your description.")
     nl_keywords = result.get("keywords") or []
     # Surfaces whether Haiku actually proposed keywords for a given
-    # description — BUG-029 was invisible for weeks because we couldn't see
-    # the model's output on prod. Cheap INFO line, request path only.
-    current_app.logger.info(
-        "algo.describe nl_keywords=%d desc_len=%d", len(nl_keywords), len(description)
-    )
+    # description — BUG-029 stayed invisible across sessions because we
+    # couldn't see the model's output on prod. When the normalized list is
+    # empty, log the raw payload (truncated) so we can tell a model that
+    # returned nothing from one whose shape we failed to parse.
+    if nl_keywords:
+        current_app.logger.info(
+            "algo.describe nl_keywords=%d desc_len=%d",
+            len(nl_keywords), len(description))
+    else:
+        current_app.logger.info(
+            "algo.describe nl_keywords=0 desc_len=%d raw=%.300r",
+            len(description), result.get("keywords_raw"))
     return _render_editor(
         result["weights"], nl_description=description, nl_notes=notes,
         nl_keywords=nl_keywords)

@@ -260,6 +260,44 @@ def test_keywords_only_is_usable(monkeypatch):
         {"term": "crypto", "mode": "mute", "weight": algo_nl.BOOST_DEFAULT}]
 
 
+def test_keywords_tolerates_mode_keyed_dict(monkeypatch):
+    # Haiku sometimes returns keywords bucketed by mode instead of a list.
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}},
+        keywords={"boost": ["Climate Policy", {"term": "spacex", "weight": 2.0}],
+                  "mute": ["crypto"]}))
+    out = algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    kws = {k["term"]: k for k in out["keywords"]}
+    assert kws["climate policy"]["mode"] == "boost"
+    assert kws["spacex"]["mode"] == "boost" and kws["spacex"]["weight"] == 2.0
+    assert kws["crypto"]["mode"] == "mute"
+
+
+def test_keywords_tolerates_alternate_keys_and_mode_synonyms(monkeypatch):
+    # Alternate term/mode key names + mode synonyms ("hide"/"more") that the
+    # old rigid parser silently dropped (the real BUG-029 failure mode).
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}},
+        keywords=[
+            {"keyword": "climate policy", "action": "more"},
+            {"phrase": "crypto", "type": "hide"},
+            {"topic": "royal family", "mode": "exclude"},
+        ]))
+    out = algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    kws = {k["term"]: k["mode"] for k in out["keywords"]}
+    assert kws == {"climate policy": "boost", "crypto": "mute",
+                   "royal family": "mute"}
+
+
+def test_keywords_raw_exposed_for_logging(monkeypatch):
+    raw = [{"keyword": "x"}]  # unparseable (no mode) -> normalized empty
+    _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}}, keywords=raw))
+    out = algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    assert out["keywords"] == []
+    assert out["keywords_raw"] == raw
+
+
 def test_keywords_capped(monkeypatch):
     many = [{"term": f"term number {i}", "mode": "boost", "weight": 1.5}
             for i in range(algo_nl.MAX_KEYWORDS + 10)]
