@@ -31,6 +31,10 @@
                 hx-get="{{ url_for('feed.explain', article_id=a.id) }}"
                 hx-target="#why-{{ a.id }}" hx-swap="innerHTML"
                 title="Why did this article rank here?">Why?</button>
+        <button type="button" class="tldr-link"
+                hx-get="{{ url_for('feed.summary', article_id=a.id) }}"
+                hx-target="#tldr-{{ a.id }}" hx-swap="innerHTML"
+                title="3-bullet TL;DR">TL;DR</button>
         <a class="reader-link" href="{{ url_for('reader.read', article_id=a.id) }}" title="Open in reader">Read &rarr;</a>
         {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}
           <a class="dossier-link" href="{{ url_for('story.view', story_id=a.story_id) }}"
@@ -61,6 +65,7 @@
           {%- endfor %}
         </div>
       {% endif %}
+      <div class="tldr-panel" id="tldr-{{ a.id }}"></div>
       <div class="why-panel" id="why-{{ a.id }}"></div>
       {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}
         <div class="spectrum-peek" id="spectrum-{{ a.id }}"></div>

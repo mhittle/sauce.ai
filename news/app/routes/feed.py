@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, g, redirect, url_for, jso
 from ..db import query, execute, get_conn
 from ..discussion import discussions_for_articles
 from ..explain import explain_article
+from ..article_summary import load_bullets
 from ..feed_diversify import (
     MAX_FETCH_ROWS, cap_per_source, effective_source_cap, fetch_budget,
     page_slice,
@@ -344,3 +345,13 @@ def explain(article_id):
 
     ex = explain_article(row, weights, hours_old=hours_old, top_n=3)
     return render_template("partials/why_panel.html", a=row, ex=ex)
+
+
+@bp.route("/article/<int:article_id>/summary")
+def summary(article_id):
+    """3-bullet TL;DR panel, lazily fetched by HTMX when the "TL;DR" toggle on
+    a card is clicked, so the feed query stays cheap. Degrades to an empty
+    panel when no summary exists (ungated article, body not extracted, or the
+    article_summaries migration not yet applied)."""
+    bullets = load_bullets(article_id)
+    return render_template("partials/summary_panel.html", bullets=bullets)

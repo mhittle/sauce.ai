@@ -6,6 +6,7 @@ extraction failed/empty/blocked, falls back to a stub with a "Read at
 """
 from flask import Blueprint, abort, render_template
 
+from ..article_summary import load_bullets
 from ..db import query
 
 bp = Blueprint("reader", __name__)
@@ -39,4 +40,5 @@ def read(article_id):
         article=row,
         paragraphs=paragraphs,
         has_body=bool(paragraphs),
+        tldr=load_bullets(article_id),
     )

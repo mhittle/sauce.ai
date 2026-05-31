@@ -4,6 +4,7 @@
 Run every ~5 minutes from cron. Walltime-budgeted so a stuck LLM call can't
 exhaust shared-host CPU quota.
 """
+import json
 import os
 import sys
 import time
@@ -20,6 +21,7 @@ from app import classify_topup
 from app.classifier import (
     compute_rules_features, classify_batch_llm, LLMUnavailable, normalize_byline,
     source_obscurity_score, story_obscurity_score, detect_paywall, popularity_score,
+    summarize_batch_llm,
 )
 from app.classifier.llm import LLM_PERCEPTION_KEYS, LLM_PERCEPTION_DEFAULT
 from app.classifier.rules import split_bylines
@@ -227,6 +229,18 @@ def _reclassify_nollm(conn, cfg, deadline):
     return len(by_id), usage.get("est_cost_usd", 0.0)
 
 
+def _table_exists(conn, name):
+    """One-time capability probe. The TL;DR pass writes article_summaries
+    every tick once deployed; if the migration hasn't been applied yet we
+    skip the pass entirely rather than crash the classify write (the BUG-025
+    lesson — a cron-written column/table that's missing must degrade, not
+    freeze the feed)."""
+    conn.ping(reconnect=True)
+    with conn.cursor() as cur:
+        cur.execute("SHOW TABLES LIKE %s", (name,))
+        return cur.fetchone() is not None
+
+
 def _resolve_signal_path():
     """Match the path the feed touches: ``<news>/logs/classify_topup.signal``
     unless ``CLASSIFY_TOPUP_SIGNAL_PATH`` overrides it."""
@@ -260,8 +274,12 @@ def _run():
     cfg = Config
     start = time.time()
     conn = get_conn()
-    classified_total = llm_articles = 0
+    classified_total = llm_articles = summary_articles = 0
     cost_total = 0.0
+    summary_model = cfg.SUMMARY_MODEL or cfg.ANTHROPIC_MODEL
+    summaries_enabled = cfg.SUMMARY_ENABLED and _table_exists(conn, "article_summaries")
+    if cfg.SUMMARY_ENABLED and not summaries_enabled:
+        logger.info("TL;DR summaries: article_summaries table missing; skipping summary pass")
     http = requests.Session()
     # Default urllib3 pool is 10 hosts × 10 conns; we run HTTP_WORKERS=10
     # concurrently across up to that many distinct hosts per batch, so bump
@@ -399,6 +417,37 @@ def _run():
                         except Exception as e:
                             logger.warning("body extraction failed for %d: %s", aid, e)
 
+            # Step 2d: 3-bullet TL;DR — a separate, isolated LLM pass over the
+            # gated subset (reputation above floor, not paywalled, real body
+            # extracted). Decoupled from the judgments call: any failure is
+            # swallowed so a summary problem can never stall classification or
+            # degrade ranking. Summarizes the extracted body, not the RSS blurb.
+            summaries_by_id = {}
+            sum_usage = None
+            if summaries_enabled and time.time() - start < cfg.CLASSIFY_BUDGET_SECONDS:
+                sum_items = []
+                for art in batch:
+                    aid = art["id"]
+                    if float(art.get("source_reputation") or 0.0) <= cfg.SUMMARY_MIN_REPUTATION:
+                        continue
+                    if paywall_by_id.get(aid, 0.5) >= cfg.SUMMARY_MAX_PAYWALL:
+                        continue
+                    body = bodies_by_id.get(aid)
+                    if not body or body.get("status") != "ok" or not body.get("body_text"):
+                        continue
+                    sum_items.append((aid, art["title"], body["body_text"]))
+                if sum_items:
+                    try:
+                        sres = summarize_batch_llm(
+                            cfg.ANTHROPIC_API_KEY, summary_model, sum_items,
+                            max_body_chars=cfg.SUMMARY_MAX_BODY_CHARS)
+                        summaries_by_id = sres["by_id"]
+                        sum_usage = sres.get("usage") or None
+                    except LLMUnavailable as e:
+                        logger.info("TL;DR summary pass unavailable: %s", e)
+                    except Exception as e:
+                        logger.warning("TL;DR summary pass failed: %s", e)
+
             # Step 3: write features + bylines. Ping again — paywall + body
             # extraction above can spend another 30-100s idle on the socket.
             conn.ping(reconnect=True)
@@ -519,8 +568,34 @@ def _run():
                                 body.get("status", "error"),
                             ),
                         )
+                    # 3-bullet TL;DR (gated subset only; absent otherwise).
+                    bullets = summaries_by_id.get(aid)
+                    if bullets:
+                        cur.execute(
+                            """INSERT INTO article_summaries (article_id, bullets_json, model)
+                               VALUES (%s,%s,%s)
+                               ON DUPLICATE KEY UPDATE
+                                  bullets_json=VALUES(bullets_json),
+                                  model=VALUES(model),
+                                  generated_at=UTC_TIMESTAMP()""",
+                            (aid, json.dumps(bullets), summary_model),
+                        )
                     _assign_story_id(cur, art)
                     cur.execute("UPDATE articles SET status='classified' WHERE id=%s", (aid,))
+
+                if sum_usage:
+                    cur.execute(
+                        """INSERT INTO llm_usage (model, input_tokens, output_tokens,
+                           cache_read_tokens, articles, est_cost_usd)
+                           VALUES (%s,%s,%s,%s,%s,%s)""",
+                        (
+                            sum_usage.get("model"), sum_usage.get("input_tokens", 0),
+                            sum_usage.get("output_tokens", 0), sum_usage.get("cache_read_tokens", 0),
+                            len(summaries_by_id), sum_usage.get("est_cost_usd", 0.0),
+                        ),
+                    )
+                    summary_articles += len(summaries_by_id)
+                    cost_total += sum_usage.get("est_cost_usd", 0.0)
 
                 if usage:
                     cur.execute(
@@ -552,6 +627,7 @@ def _run():
             logger.warning("reclassify pass failed: %s", e)
 
         msg = (f"classified={classified_total} llm_articles={llm_articles} "
+               f"summaries={summary_articles} "
                f"reclassified={reclassified} cost_usd={cost_total:.4f}")
         logger.info(msg)
         db_log(conn, JOB, "info", msg)

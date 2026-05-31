@@ -40,26 +40,96 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
+### 2026-05-31 — Migration: article_summaries (3-bullet TL;DR)
+**Status:** open · **PR:** (Article summary — TL;DR, branch `claude/busy-hawking-dnvtZ`) ·
+**Opened:** 2026-05-31 · **File reference:** `news/seed/migrations/2026-05-31-article-summaries.sql`
+
+Backs the 3-bullet TL;DR feature. `jobs/classify_pending.py` runs a
+separate, isolated Haiku pass over gated articles (source_reputation >
+`SUMMARY_MIN_REPUTATION` AND paywall < `SUMMARY_MAX_PAYWALL` AND a body was
+extracted) and caches the bullets in this table; the feed "TL;DR" toggle and
+the reader view read it.
+
+**Cron WRITE path (BUG-007 / BUG-025 class), but defended:** the classifier
+probes for this table once per run and skips the summary pass entirely if it's
+absent — so a missing migration does **NOT** freeze classification the way the
+geo columns did (BUG-025). It just produces no summaries until applied, and
+the read path degrades to an empty panel. Apply promptly anyway so the feature
+actually works. CASCADE-pruned with the article; no new cron, no new env var
+required (knobs have defaults), no new pip dep. **Python App restart** after
+deploy so the new `feed.summary` route + reader change register.
+
+Apply once on prod via phpMyAdmin → SQL tab (database `lt1ih6uyy2z6_news`):
+
+```sql
+CREATE TABLE IF NOT EXISTS article_summaries (
+  article_id   BIGINT UNSIGNED NOT NULL,
+  bullets_json TEXT NOT NULL,
+  model        VARCHAR(64) NOT NULL DEFAULT '',
+  generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (article_id),
+  KEY idx_summaries_generated (generated_at),
+  CONSTRAINT fk_summaries_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Verify:**
+
+```sql
+SELECT COUNT(*) FROM article_summaries;   -- 0 immediately after apply, rises over classify ticks
+SHOW INDEX FROM article_summaries;        -- PRIMARY + idx_summaries_generated
+```
+
+```bash
+tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
+# look for the new `summaries=N` field, e.g.
+#   classified=200 llm_articles=200 summaries=37 reclassified=0 cost_usd=...
+```
+
+Then in a browser: a feed card's **TL;DR** toggle expands to up to 3 bullets
+(or a graceful "no summary yet" note); `/read/<id>` shows a TL;DR box above
+the body for summarized articles.
+
+---
+
+### 2026-05-22 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** open · **PR:** (agent-fleet enablement, this session) ·
+**Opened:** 2026-05-22
+
+`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
+branches, open PRs, and fire `repository_dispatch` (the default
+`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
+Fine-grained PATs **expire**, and four workflows fail silently the day it
+lapses: `dev-agent`, `pm-agent`, `post-deploy`, `migration-executor`.
+
+**Action:** before the token's expiry, regenerate it (GitHub → Settings →
+Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
+with Contents / Pull requests / Workflows / Actions RW) and update the
+`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
+Actions → Secrets). No code change; the fleet resumes immediately. Record
+the new expiry date here when you rotate.
 
 ---
 
 ## Completed
-### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min)
-**Status:** completed · **PR:** #121 · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
+### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
+**Status:** completed · **PR:** #121 (merged 2026-05-22) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31 (first reported applied 2026-05-27 per `bugs.md` BUG-023)
 
-Demand-driven classification top-up (the every-minute `classify_pending.py
---triggered-only` cron, a fast no-op unless `logs/classify_topup.signal` is
-present AND fresh). This is also fix **(A)** for **BUG-023** (classification
-re-stall): the cron was inert because this line had never been installed, so
-PR #121's top-up never fired and classification ran only on the `*/5`
-safety-net (a ~2,400 articles/hour ceiling that couldn't drain the backlog
-under the 1,919-feed catalog). User confirmed the line is installed on prod
-(2026-05-31; first reported applied 2026-05-27 per `bugs.md` BUG-023). The
+Demand-driven classification top-up: the feed touches
+`logs/classify_topup.signal` when the classified buffer drops below 400
+(debounced ~60s); the every-minute `classify_pending.py --triggered-only`
+cron consumes it — a fast no-op unless the signal is present AND fresh,
+otherwise it takes `job_lock(classify_pending)` and runs normally. This was
+also fix **(A)** for **BUG-023** (classification re-stall): the cron had never
+been installed, so PR #121's top-up was inert and classification ran only on
+the `*/5` safety-net (~2,400 articles/hour — couldn't drain the backlog under
+the 1,919-feed catalog). User confirmed the line is installed on prod. The
 existing `*/5 * * * * classify_pending.py` entry stays as the safety-net /
-cold-start tick; `job_lock(classify_pending)` serializes the two so they
-never run concurrently. No DB migration, no Python App restart, no new env
-var, no new pip dep.
+cold-start tick; `job_lock` serializes the two so they never run concurrently.
+No DB migration, no Python App restart, no new env var, no new pip dep.
+(BUG-023 stays `open` in `bugs.md` until prod telemetry confirms the backlog
+fully drains.)
 
 **Cron line installed (cPanel → "Cron Jobs"):**
 
@@ -74,42 +144,20 @@ crontab -l | grep -- '--triggered-only'      # the */1 line is present
 tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
 ```
 
-Expect one of: `--triggered-only: no fresh signal, exiting` (no demand) ·
-`classified=N llm_articles=M ...` (ran) · `lock held … skipping` (5-min
-cron mid-run). (BUG-023 itself stays `open` in `bugs.md` until prod
-telemetry confirms the pending backlog fully drains.)
-
 ---
 
 ### 2026-05-31 — Python App restart: keywords-into-feature-list (PR #119)
-**Status:** completed · **PR:** #119 (merged 2026-05-22) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
+**Status:** completed · **PR:** #119 (merged 2026-05-22) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31
 
 PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
-(`algo.html` + `style.css`). Template-only (Passenger picks it up on its
-next worker cycle), so this was low-urgency, but the user confirmed a cPanel
-"Restart" of the `sauce.ai/news` Python App was performed so it takes
-immediately. `/algo` shows no Keywords tab; the keyword controls render
-under the algo form. No DB migration, no env var, no pip dep.
+(`algo.html` + `style.css`). Template-only (no migration / cron / env / dep).
+User confirmed the `sauce.ai/news` Python App was restarted in cPanel and
+`/algo` now shows no Keywords tab, with the keyword controls rendering under
+the algo form.
 
 ---
 
-### 2026-05-31 — Rotated: AGENT_PUSH_TOKEN (fine-grained PAT)
-**Status:** completed · **PR:** (agent-fleet enablement) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
-
-`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
-branches, open PRs, and fire `repository_dispatch` (the default
-`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
-Fine-grained PATs **expire** and four workflows (`dev-agent`, `pm-agent`,
-`post-deploy`, `migration-executor`) fail silently the day it lapses. User
-confirmed the token was regenerated (scope `mhittle/sauce.ai`: Contents /
-Pull requests / Workflows / Actions RW) and the `AGENT_PUSH_TOKEN` repo
-secret updated. No code change; the fleet resumes immediately.
-
-> **Standing reminder:** this is a recurring action — the new token will
-> also expire. Re-file an **Open** entry before its expiry date so a future
-> session rotates it ahead of the lapse.
-
----
 ### 2026-05-26 — Migration: article_features geo columns (geo_lat/geo_lng/geo_place) — BUG-025 fix
 **Status:** completed · **PR:** (geo / "Near a place" feature, 2026-05-20; entry filed retroactively in #135) ·
 **Opened:** 2026-05-26 · **Completed:** 2026-05-26 ·

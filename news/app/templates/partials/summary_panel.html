@@ -1,0 +1,15 @@
+{# 3-bullet TL;DR, loaded by the "TL;DR" toggle (feed.summary). #}
+<div class="tldr-box">
+  <div class="tldr-head">
+    <span class="tldr-label">TL;DR</span>
+    <button type="button" class="linkbtn muted tldr-hide"
+            onclick="this.closest('.tldr-panel').innerHTML=''">Hide</button>
+  </div>
+  {% if bullets %}
+    <ul class="tldr-list">
+      {% for b in bullets %}<li>{{ b }}</li>{% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted tldr-empty">No summary for this article yet &mdash; the summarizer only covers reputable, non-paywalled articles once their text has been pulled in.</p>
+  {% endif %}
+</div>
