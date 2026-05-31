@@ -278,6 +278,22 @@ def test_keywords_in_system_prompt(monkeypatch):
     assert "boost" in sys_text and "mute" in sys_text
 
 
+def test_system_prompt_treats_keywords_as_mandatory(monkeypatch):
+    # BUG-029: the prompt previously marked keywords "OPTIONAL" and twice told
+    # the model it could leave them empty, so Haiku returned weights only and
+    # no chips ever rendered. Guard against that wording regressing: keyword
+    # extraction must read as first-class, and the prompt must carry a worked
+    # example showing populated keywords.
+    captured = _install_fake_anthropic(monkeypatch, response_text=_resp(
+        weights={"objectivity": {"weight": 1.0, "direction": 1.0}}))
+    algo_nl.interpret_algorithm("x", api_key="k", model="m")
+    sys_text = captured["system"][0]["text"]
+    assert "OPTIONAL list of specific topics" not in sys_text
+    assert "FIRST-CLASS" in sys_text
+    # A worked example that actually populates the keywords array.
+    assert '"keywords": [{"term": "ai policy"' in sys_text
+
+
 def test_output_feeds_ranking_helpers(monkeypatch):
     _install_fake_anthropic(monkeypatch, response_text=_resp(weights={
         "objectivity": {"weight": 1.2, "direction": 1.0, "threshold": 0.3},

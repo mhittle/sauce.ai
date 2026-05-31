@@ -136,6 +136,38 @@ these.
 
 ## 2026-05-31
 
+- **BUG-029 — NL `/algo` chat box still produced no keywords; hardened the
+  Haiku prompt (interactive session, PR pending).** User re-reported that
+  describing a feed in the `/algo` chat box sets sliders but creates **no
+  per-algorithm keywords**, and confirmed two facts that retired the prior
+  theory: the Python App **has** been restarted since PR #140 (2026-05-27),
+  and **no keyword chips appear at all** after "Build from description." That
+  eliminated hypotheses 1 (stale worker) and 2 (persistence) — the live route
+  is serving but `interpret_algorithm()` is returning an empty `keywords`
+  list, i.e. Haiku omits the array while still returning weights. Re-audited
+  the whole merged chain (`algo_nl.py` parse, `routes/algo.py`
+  describe/save/`_apply_nl_keywords`, `algo.html` chips inside `#algo-form`) —
+  all correct, so the defect is **prompt-side, not code**. Root cause in
+  `app/algo_nl.py` `_system_prompt()`: keywords were labeled `OPTIONAL`,
+  buried among "Also:" bullets, and the prompt twice told the model it could
+  leave the list empty, so Haiku took the out. **Fix:** promoted keyword
+  extraction to a FIRST-CLASS, mandatory-when-a-subject-is-named instruction
+  (emit a keyword *in addition* to moving sliders), tightened the empty-list
+  caveat to abstract-only descriptions, added a second worked example, and
+  added a fully-populated worked-example JSON at the schema tail. Added a
+  cheap `current_app.logger.info("algo.describe nl_keywords=%d …")` line in
+  `describe()` so prod logs reveal whether Haiku now returns keywords (this
+  bug was invisible across sessions precisely because we couldn't see the
+  model's output). *Code:* `app/algo_nl.py`, `app/routes/algo.py`,
+  `tests/test_algo_nl.py` (+1 guard test that the prompt can't regress to
+  "OPTIONAL"). Pure paths verified in-sandbox (no pytest/flask/anthropic here
+  — documented limitation). **Server state:** none new — but the new prompt
+  needs a **Passenger restart after this PR deploys** to take effect
+  (`manual-actions.md` Open). BUG-029 stays `in-progress` until prod re-test
+  confirms chips render; fallback if still empty is to inspect the
+  `algo.describe nl_keywords=` log line. *Note:* `engineering-history.md` is
+  ~49.5 KB, well over the ~34 KB single-Read budget — needs a dedicated
+  archive pass at the next wrap-up.
 - **News Near You — `/local` page over the existing geo features (dev-agent
   session, PR #160).** Shipped roadmap Pri 7 / LOE 4 from `ready-for-agent`.
   The classifier already wrote `article_features.geo_lat/lng/place` on every

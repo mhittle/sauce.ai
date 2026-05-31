@@ -277,9 +277,16 @@ def describe():
         )
     notes = result["notes"] or (
         "Here's a starting point based on your description.")
+    nl_keywords = result.get("keywords") or []
+    # Surfaces whether Haiku actually proposed keywords for a given
+    # description — BUG-029 was invisible for weeks because we couldn't see
+    # the model's output on prod. Cheap INFO line, request path only.
+    current_app.logger.info(
+        "algo.describe nl_keywords=%d desc_len=%d", len(nl_keywords), len(description)
+    )
     return _render_editor(
         result["weights"], nl_description=description, nl_notes=notes,
-        nl_keywords=result.get("keywords") or [])
+        nl_keywords=nl_keywords)
 
 
 def _has_algorithm(user_id):

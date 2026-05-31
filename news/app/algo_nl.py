@@ -76,16 +76,24 @@ def _system_prompt():
         f"- category_filter: optional subset of {CATEGORIES}. Empty = all "
         "categories. Only restrict if the reader clearly wants just "
         "certain topics.\n"
-        "- keywords: OPTIONAL list of specific topics, names, or phrases the "
-        "reader calls out by name (NOT the abstract features above). Use "
+        "- keywords: the concrete subjects the reader names — specific "
+        "topics, people, places, organizations, companies, products, or "
+        "events (NOT the abstract features above). This is a FIRST-CLASS part "
+        "of your job, not an afterthought: whenever the description mentions a "
+        "nameable thing the reader wants more or less of, you MUST add it here "
+        "in ADDITION to setting feature weights. Do not fold a named subject "
+        "into the abstract sliders and skip the keyword — emit both. Use "
         'mode "boost" for a subject they want more of and mode "mute" for one '
-        "they want hidden. Each is a short term/phrase (1-4 words). boost "
-        "weight is 1.0..5.0 (around 1.5 for a normal lean, higher for "
-        '"way more"); mute needs no weight. Only include terms the reader '
-        "names explicitly (e.g. 'more about climate policy, hide crypto and "
-        "the royal family' -> boost climate policy, mute crypto, mute royal "
-        "family). Leave the list empty if they only describe abstract "
-        "qualities. Matching is plain substring, so keep terms concrete.\n\n"
+        "they want hidden. Each term is a short concrete phrase (1-4 words; "
+        "lowercase is fine). boost weight is 1.0..5.0 (about 1.5 for a normal "
+        'lean, higher for "way more"); mute needs no weight. Examples: "more '
+        'about climate policy, hide crypto and the royal family" -> boost '
+        'climate policy, mute crypto, mute royal family; "I love Formula 1 '
+        'and SpaceX but I am sick of Elon Musk takes" -> boost formula 1, '
+        "boost spacex, mute elon musk. Matching is plain case-insensitive "
+        "substring, so keep terms concrete and literal. Return an empty list "
+        "ONLY when the reader describes purely abstract qualities (tone, lean, "
+        "length, objectivity) and names no specific subject at all.\n\n"
         "Guidance: 'less outrage / less opinion / just the facts' -> high "
         "objectivity weight + objectivity direction 1.0. 'hide paywalls' "
         "-> paywall direction 0.0 with a small threshold. 'long / deep / "
@@ -94,7 +102,9 @@ def _system_prompt():
         "source_obscurity. 'balanced / centrist / both sides' -> "
         "political_lean & source_lean direction 0.0 with non-trivial "
         "weight. Map ideological lean requests to political_lean/"
-        "source_lean direction, never refuse.\n\n"
+        "source_lean direction, never refuse. And any proper noun or named "
+        "subject the reader wants more or less of becomes a keyword "
+        "(boost/mute) even when you also move the sliders.\n\n"
         "Output STRICT JSON ONLY, no markdown, no code fences, exactly "
         'this schema: {"weights": {"<feature_key>": {"weight": <num>, '
         '"direction": <num>, "threshold": <num|null>}, ...}, "recency": '
@@ -103,7 +113,18 @@ def _system_prompt():
         '"<one or two plain sentences telling the reader what you set and '
         'why>"}. '
         "Only use feature keys from the list above. Omit features you are "
-        "leaving at zero. Use an empty keywords list if none apply."
+        "leaving at zero.\n\n"
+        "Worked example — the description \"deep, objective tech coverage, "
+        "lots about AI policy, but hide anything on crypto\" maps to "
+        "(illustrative): "
+        '{"weights": {"objectivity": {"weight": 1.5, "direction": 1.0, '
+        '"threshold": null}, "info_density": {"weight": 1.0, "direction": '
+        '1.0, "threshold": null}}, "recency": 0.7, "category_filter": '
+        '["tech"], "keywords": [{"term": "ai policy", "mode": "boost", '
+        '"weight": 1.5}, {"term": "crypto", "mode": "mute", "weight": 1.5}], '
+        '"notes": "Objective, in-depth tech, boosting AI policy and hiding '
+        'crypto."}. Note how the named subjects (AI policy, crypto) appear as '
+        "keywords even though the abstract qualities also set sliders."
     )
 
 
