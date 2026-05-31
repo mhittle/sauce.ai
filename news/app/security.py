@@ -46,6 +46,7 @@ _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 #   caller can't carry anyway.
 _EXEMPT_ENDPOINTS = frozenset({
     "account.unsubscribe",
+    "account.alerts_unsubscribe",
     "lab.vote",
     "agent_ops.run_migration",
     "agent_ops.restart_app",

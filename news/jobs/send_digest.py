@@ -13,17 +13,14 @@ SMTP defaults to localhost:25 (cPanel's local MTA). Set SMTP_HOST/_USER/_PASSWOR
 + SMTP_USE_TLS=1 to relay through a real SMTP provider for deliverability.
 """
 import os
-import smtplib
 import sys
 from datetime import datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import formataddr
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _bootstrap import Config, get_conn, setup_logging, db_log, job_lock, AlreadyRunning
 
+from app.mailer import build_message, smtp_send  # noqa: F401  (smtp_send re-exported for test_digest)
 from app.ranking import build_score_sql, build_filters_sql, default_weights, parse_weights_json
 
 JOB = "send_digest"
@@ -111,33 +108,15 @@ def render_digest(env, user_email, articles, unsub_token, cfg):
     html = env.get_template("digest_email.html").render(**ctx)
     text = env.get_template("digest_email.txt").render(**ctx)
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = formataddr(("sauce.ai/news", cfg.SMTP_FROM))
-    msg["To"] = user_email
-    msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
-    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-    msg.attach(MIMEText(text, "plain", "utf-8"))
-    msg.attach(MIMEText(html, "html", "utf-8"))
-    return msg
-
-
-def smtp_send(cfg, from_addr, to_addr, msg):
-    """Open an SMTP connection per send. Plain on port 25, STARTTLS optional."""
-    smtp = smtplib.SMTP(cfg.SMTP_HOST, cfg.SMTP_PORT, timeout=30)
-    try:
-        smtp.ehlo()
-        if cfg.SMTP_USE_TLS:
-            smtp.starttls()
-            smtp.ehlo()
-        if cfg.SMTP_USER:
-            smtp.login(cfg.SMTP_USER, cfg.SMTP_PASSWORD)
-        smtp.sendmail(from_addr, [to_addr], msg.as_string())
-    finally:
-        try:
-            smtp.quit()
-        except Exception:
-            pass
+    return build_message(
+        subject=subject,
+        from_addr=cfg.SMTP_FROM,
+        from_name="sauce.ai/news",
+        to_addr=user_email,
+        html=html,
+        text=text,
+        list_unsubscribe_url=unsubscribe_url,
+    )
 
 
 def main():

@@ -1,0 +1,13 @@
+BREAKING — sauce.ai / news
+
+{{ headline }}
+
+{% if blurb %}{{ blurb }}
+
+{% endif %}{{ outlet_count }} outlets are covering this story.
+Read across the spectrum: {{ story_url }}
+
+--
+More at {{ site_url }}/
+Unsubscribe from breaking alerts: {{ unsubscribe_url }}
+Manage settings (digest is separate): {{ site_url }}/account/settings

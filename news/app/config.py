@@ -89,6 +89,16 @@ class Config:
     DIGEST_LOOKBACK_HOURS = int(os.environ.get("DIGEST_LOOKBACK_HOURS", "24"))
     DIGEST_RESEND_GUARD_HOURS = int(os.environ.get("DIGEST_RESEND_GUARD_HOURS", "20"))
 
+    # Breaking-news email alerts (jobs/breaking_alerts.py). BREAKING_ENABLED
+    # is the master kill-switch (default on); MIN_OUTLETS is the
+    # distinct-outlet floor that makes a story a candidate; WINDOW_HOURS
+    # is the recency window; MAX_PER_DAY is the per-user daily cap so a
+    # busy news day can never spam one inbox.
+    BREAKING_ENABLED = os.environ.get("BREAKING_ENABLED", "1") not in ("0", "false", "False")
+    BREAKING_WINDOW_HOURS = int(os.environ.get("BREAKING_WINDOW_HOURS", "6"))
+    BREAKING_MIN_OUTLETS = int(os.environ.get("BREAKING_MIN_OUTLETS", "12"))
+    BREAKING_MAX_PER_DAY = int(os.environ.get("BREAKING_MAX_PER_DAY", "3"))
+
     DISCOVER_PROMOTION_SCORE_MIN = int(os.environ.get("DISCOVER_PROMOTION_SCORE_MIN", "3"))
     DISCOVER_PROMOTE_BUDGET_SECONDS = int(os.environ.get("DISCOVER_PROMOTE_BUDGET_SECONDS", "1500"))
     DISCOVER_PROMOTE_WORKERS = int(os.environ.get("DISCOVER_PROMOTE_WORKERS", "8"))

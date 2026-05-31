@@ -17,6 +17,17 @@
     {% if digest_last_sent_at %}
       <p class="muted">Last sent: {{ digest_last_sent_at.strftime('%Y-%m-%d %H:%M UTC') }}</p>
     {% endif %}
+
+    <h2>Breaking-news alerts</h2>
+    <p class="muted">A push email when a story suddenly hits many independent outlets at once and is confirmed by a model as major (think wars, disasters, election results, court rulings of national significance). Rare and intrusive — capped at 3 per day and independent of the daily digest. Off by default.</p>
+    <label class="inline">
+      <input type="checkbox" name="breaking_enabled" {% if breaking_enabled %}checked{% endif %} />
+      Email me breaking-news alerts
+    </label>
+    {% if breaking_last_alert_at %}
+      <p class="muted">Last alert: {{ breaking_last_alert_at.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+    {% endif %}
+
     <p><button type="submit" class="primary">Save settings</button></p>
   </form>
 </div>
