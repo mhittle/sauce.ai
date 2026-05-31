@@ -40,6 +40,32 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-31 — Python App restart + browser verify: feed selection/ranking split (PR #144, BUG-030)
+**Status:** open · **PR:** #144 (merged 2026-05-31) · **Opened:** 2026-05-31
+
+BUG-030 split the home feed into a SELECTION stage (weights pick the
+candidate set via affinity) and a RANKING stage (the sort orders it).
+Changed `routes/feed.py` `index()` + added `FEED_SELECTION_POOL` in
+`config.py`. **Not BUG-007 class** — no migration; a stale worker just
+serves the *old* single-score behavior until restarted (no 500).
+
+**Action (cPanel):** Setup Python App → the `sauce.ai/news` app →
+**Restart**. This same restart also picks up the still-pending PR #140
+(NL keyword chips) and PR #145 (TL;DR `feed.summary`) route changes — one
+restart covers all three.
+
+**Verify (browser, signed in):** on `/`, switch between two *orthogonal*
+saved algorithm profiles (e.g. one weighting objectivity/analysis-depth,
+another weighting sensationalism/popularity) and confirm the visible
+article **set** differs — not just the order. Optional tuning:
+`FEED_SELECTION_POOL` env var (default 600) — lower = more distinct feeds
+per algorithm, higher = deeper "Load more" paging. After confirming, flip
+the prod-verify caveat off `bugs.md` BUG-030.
+
+No DB migration, no cron, no new env var required, no new pip dep.
+
+---
+
 ### 2026-05-31 — Migration: article_summaries (3-bullet TL;DR)
 **Status:** open · **PR:** (Article summary — TL;DR, branch `claude/busy-hawking-dnvtZ`) ·
 **Opened:** 2026-05-31 · **File reference:** `news/seed/migrations/2026-05-31-article-summaries.sql`
@@ -137,30 +163,6 @@ No DB migration, no cron, no env var, no new pip dep — restart only.
 ---
 
 ## Completed
-### 2026-05-31 — Rotated: AGENT_PUSH_TOKEN (fine-grained PAT)
-**Status:** completed · **PR:** (agent-fleet enablement) ·
-**Opened:** 2026-05-22 · **Completed:** 2026-05-31
-
-`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
-branches, open PRs, and fire `repository_dispatch` (the default
-`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
-Fine-grained PATs **expire** and four workflows (`dev-agent`, `pm-agent`,
-`post-deploy`, `migration-executor`) fail silently the day it lapses. User
-confirmed the token was regenerated (scope `mhittle/sauce.ai`: Contents /
-Pull requests / Workflows / Actions RW) and the `AGENT_PUSH_TOKEN` repo
-secret updated. No code change; the fleet resumes immediately.
-
-> **Standing reminder:** this is recurring — the new token will also expire.
-> Re-file an **Open** entry before its expiry so a future session rotates it
-> ahead of the lapse.
-**Action:** before the token's expiry, regenerate it (GitHub → Settings →
-Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
-with Contents / Pull requests / Workflows / Actions RW) and update the
-`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
-Actions → Secrets). No code change; the fleet resumes immediately. Record
-the new expiry date here when you rotate.
-(none currently)
-
 ### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
 **Status:** completed · **PR:** #121 (merged 2026-05-22) ·
 **Opened:** 2026-05-22 · **Completed:** 2026-05-31 (first reported applied 2026-05-27 per `bugs.md` BUG-023)

@@ -95,7 +95,7 @@ after a confirmed restart, escalate to hypothesis 3 (inspect the prompt/
 parse against live Haiku output). Status stays `open` until prod confirms
 chips render and keywords persist to the profile.
 ### BUG-030 — Switching to an orthogonal algorithm surfaces largely the same articles
-**Status:** in-progress (fix written, PR #144) · **Reporter:** user · **Opened:** 2026-05-31
+**Status:** resolved (PR #144 merged 2026-05-31; prod restart + browser verify pending) · **Reporter:** user · **Opened:** 2026-05-31 · **Closed:** 2026-05-31
 **Note:** renumbered BUG-028 → BUG-029 → **BUG-030** on 2026-05-31 to clear
 a cascade of parallel-session BUG-ID collisions: BUG-028 was taken by a
 merged session's "Why?" ranking-explainer 500 (see Resolved), and BUG-029
@@ -132,7 +132,7 @@ design conflation):**
    info_density "high," so a fresh reputable story scores well under
    nearly *any* algo. Orthogonal intents don't repel each other's picks.
 
-**Fix (PR pending) — separate SELECTION from RANKING (owner chose this):**
+**Fix (PR #144, merged 2026-05-31) — separate SELECTION from RANKING (owner chose this):**
 - New `ranking.build_affinity_sql(weights)`: the **selection** signal — an
   L1-normalized, recency-free weighted feature match in `[0,1]`. Returns
   `("1", {})` when no feature is weighted.
@@ -156,7 +156,13 @@ design conflation):**
 empty-weights sentinel) and `rank_for_display` (per-sort order) run in the
 sandbox. Route+DB behavior (set actually differs between two saved algos)
 deferred to a real env / browser — same sandbox limitation noted on prior
-feed-route PRs.
+feed-route PRs. Merged through 4 rebases all green on the BUG-007 gate.
+**Remaining (prod):** Passenger restart so the new `feed.index()` route
+serves (shared with the PR #140/#145 restarts already pending in
+`manual-actions.md`), then switch between two orthogonal saved profiles on
+`/` and confirm the article *set* differs — tracked as a `manual-actions.md`
+Open entry (2026-05-31). Flip the prod-verify caveat off this entry once
+confirmed.
 
 ---
 
