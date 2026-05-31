@@ -136,8 +136,30 @@ these.
 
 ## 2026-05-31
 
+- **BUG-029 (cont.) — still broken after the prompt fix; the parser was too
+  rigid (interactive session, follow-up PR pending).** After PR #162 (prompt
+  hardening) merged and the app was restarted, the user reported chips *still*
+  don't appear — ruling out the prompt as the sole cause. Real root cause:
+  `algo_nl._normalize_keywords` accepted only a `list` of `dict`s with exactly
+  `term` + `mode in {mute,boost}` and silently dropped any other shape. Haiku
+  commonly returns a tolerable variant (mode-keyed buckets
+  `{"boost":[...],"mute":[...]}`, term under `keyword`/`phrase`/`topic`, mode
+  under `action`/`type`, or synonyms `hide`/`more`/`exclude`) — all discarded,
+  so keywords came back empty regardless of prompt wording (why two prompt
+  iterations didn't move the needle). **Fix:** `_normalize_keywords` now accepts
+  a list / mode-keyed dict / single object, pulls the term from any of several
+  key names, and maps mode synonyms (`_MODE_SYNONYMS`); bare strings with no
+  inferable mode are dropped, never guessed. `interpret_algorithm` returns
+  `keywords_raw`; `describe()` logs the raw payload truncated when the
+  normalized list is empty (`algo.describe nl_keywords=0 raw=…`) and logs the
+  `LLMUnavailable` branch distinctly — so a further failure is diagnosable
+  (model-empty vs shape-unparsed vs LLM-down) without another blind round.
+  *Code:* `app/algo_nl.py`, `app/routes/algo.py`, `tests/test_algo_nl.py` (+4
+  shape tests). No migration/cron/env/dep; **needs a Passenger restart after
+  this PR deploys** (same `manual-actions.md` Open entry). BUG-029 stays
+  `in-progress` until prod re-test confirms chips render.
 - **BUG-029 — NL `/algo` chat box still produced no keywords; hardened the
-  Haiku prompt (interactive session, PR pending).** User re-reported that
+  Haiku prompt (interactive session, PR #162 merged).** User re-reported that
   describing a feed in the `/algo` chat box sets sliders but creates **no
   per-algorithm keywords**, and confirmed two facts that retired the prior
   theory: the Python App **has** been restarted since PR #140 (2026-05-27),

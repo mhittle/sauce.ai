@@ -33,6 +33,47 @@ MAX_DESCRIPTION_CHARS = 1000
 MAX_KEYWORDS = 25
 
 
+# Haiku does not always return the exact {term, mode} schema we ask for. To
+# keep BUG-029 from recurring on a shape we didn't anticipate, the keyword
+# parser is deliberately tolerant: it accepts a list OR a mode-keyed dict, the
+# term under any of several key names, and the mode under several key names
+# with a synonym map. A shape it genuinely can't interpret is dropped, never
+# guessed.
+_TERM_KEYS = ("term", "keyword", "phrase", "topic", "subject", "name", "text", "value")
+_MODE_KEYS = ("mode", "action", "type", "preference", "sentiment", "polarity", "direction")
+_MODE_SYNONYMS = {
+    "mute": "mute", "hide": "mute", "exclude": "mute", "block": "mute",
+    "less": "mute", "down": "mute", "downrank": "mute", "demote": "mute",
+    "remove": "mute", "avoid": "mute", "suppress": "mute", "negative": "mute",
+    "boost": "boost", "more": "boost", "favor": "boost", "favour": "boost",
+    "prefer": "boost", "up": "boost", "promote": "boost", "include": "boost",
+    "like": "boost", "positive": "boost",
+}
+
+
+def _normalize_mode(raw):
+    return _MODE_SYNONYMS.get(str(raw or "").strip().lower())
+
+
+def _coerce_keyword_item(item, default_mode):
+    """Best-effort (term, mode, weight) from one model keyword entry,
+    tolerating the shape variants Haiku emits. Returns None if it isn't a
+    usable shape; the caller still validates term/mode before keeping it."""
+    if isinstance(item, str):
+        return item, default_mode, None
+    if isinstance(item, dict):
+        term = next((item[k] for k in _TERM_KEYS if item.get(k)), None)
+        mode = default_mode
+        for k in _MODE_KEYS:
+            v = item.get(k)
+            if isinstance(v, str) and v.strip():
+                mode = v
+                break
+        weight = item.get("weight", item.get("boost"))
+        return term, mode, weight
+    return None
+
+
 def _clamp(value, lo, hi):
     return max(lo, min(hi, value))
 
@@ -136,20 +177,34 @@ def _normalize_keywords(parsed):
     list deduped (mute wins over boost, matching `build_term_clauses`), and
     capped at `MAX_KEYWORDS`."""
     raw = parsed.get("keywords")
-    if not isinstance(raw, list):
+    # Accept a list of items, OR a mode-keyed bucket dict
+    # ({"boost": [...], "mute": [...]}), OR a single keyword object.
+    items = []  # (item, default_mode)
+    if isinstance(raw, list):
+        items = [(it, None) for it in raw]
+    elif isinstance(raw, dict):
+        for key, val in raw.items():
+            bucket_mode = _normalize_mode(key)
+            if bucket_mode and isinstance(val, list):
+                items.extend((it, bucket_mode) for it in val)
+        if not items:  # not mode-keyed -> treat as one keyword object
+            items = [(raw, None)]
+    else:
         return []
 
     seen = {}  # term -> {"term", "mode", "weight"}, insertion-ordered
-    for item in raw:
-        if not isinstance(item, dict):
+    for item, default_mode in items:
+        coerced = _coerce_keyword_item(item, default_mode)
+        if coerced is None:
             continue
-        term = normalize_term(item.get("term"))
+        raw_term, raw_mode, raw_weight = coerced
+        term = normalize_term(raw_term)
         if term is None:
             continue
-        mode = str(item.get("mode", "")).strip().lower()
+        mode = _normalize_mode(raw_mode)
         if mode not in VALID_MODES:
             continue
-        weight = clamp_boost(item.get("weight")) if mode == "boost" else BOOST_DEFAULT
+        weight = clamp_boost(raw_weight) if mode == "boost" else BOOST_DEFAULT
         if term in seen:
             # Mute wins over boost regardless of order; otherwise keep first.
             if mode == "mute" and seen[term]["mode"] != "mute":
@@ -291,4 +346,12 @@ def interpret_algorithm(description, *, api_key, model):
         "model": model,
         "est_cost_usd": _estimate_cost(resp.usage),
     }
-    return {"weights": weights, "notes": notes, "keywords": keywords, "usage": usage}
+    return {
+        "weights": weights,
+        "notes": notes,
+        "keywords": keywords,
+        # Pre-normalization payload, kept only so the route can log what Haiku
+        # actually sent when the normalized list comes back empty (BUG-029).
+        "keywords_raw": parsed.get("keywords"),
+        "usage": usage,
+    }
