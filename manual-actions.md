@@ -61,6 +61,35 @@ cold-start tick; `job_lock(classify_pending)` serializes the two so they
 never run concurrently. No DB migration, no Python App restart, no new env
 var, no new pip dep.
 
+### 2026-05-31 — Python App restart: keywords-into-feature-list (PR #119)
+**Status:** completed · **PR:** #119 (merged 2026-05-22) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
+(`algo.html` + `style.css`). Template-only (no migration / cron / env /
+dep). User confirmed (2026-05-31) the `sauce.ai/news` Python App was
+restarted in cPanel and `/algo` now shows no Keywords tab, with the
+keyword controls rendering under the algo form.
+
+---
+
+### 2026-05-27 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
+**Status:** completed · **PR:** #121 (merged 2026-05-22) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-27
+
+Demand-driven classification top-up. The feed (`/`) touches
+`logs/classify_topup.signal` after each page load when the classified
+buffer ahead of the reader drops below 400 (debounced ~60s); the new
+every-minute cron runs `classify_pending.py --triggered-only`, a fast
+no-op unless the signal is present AND fresh, otherwise it acquires the
+existing `job_lock(classify_pending)` and runs normally (the lock
+serializes it against the `*/5` safety-net tick). This entry was the
+root cause of **BUG-023** (classification re-stall): PR #121's top-up
+was inert because this line was never installed. User confirmed
+(2026-05-27, per BUG-023 fix A) the line is now in the prod crontab;
+demand-driven top-up is live. No DB migration, no Python App restart,
+no new env var, no new pip dep.
+
 **Cron line installed (cPanel → "Cron Jobs"):**
 
 ```
@@ -110,6 +139,16 @@ secret updated. No code change; the fleet resumes immediately.
 > session rotates it ahead of the lapse.
 
 ---
+crontab -l | grep -- '--triggered-only'   # the */1 line is present
+tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
+```
+
+`classify_pending --triggered-only: no fresh signal, exiting` once a
+minute confirms the cron is live (no demand); `classified=N ...` lines
+appear when the signal is fresh.
+
+---
+
 ### 2026-05-26 — Migration: article_features geo columns (geo_lat/geo_lng/geo_place) — BUG-025 fix
 **Status:** completed · **PR:** (geo / "Near a place" feature, 2026-05-20; entry filed retroactively in #135) ·
 **Opened:** 2026-05-26 · **Completed:** 2026-05-26 ·
