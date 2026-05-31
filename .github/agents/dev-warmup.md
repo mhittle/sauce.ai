@@ -68,10 +68,11 @@ otherwise ship.
 
 The dispatcher already flipped the matching roadmap entry to
 `in-progress` (both the at-a-glance row and the detail section's
-`**Status:**` line) before invoking you, so **do not re-flip it**. Do
-not edit the row to `done` yourself either — the human flips
-draft→ready and merges, and the wrap-up entry you append to
-`engineering-history.md` is what carries the "what shipped" detail.
+`**Status:**` line) before invoking you, so **do not re-flip it to
+`in-progress`**. When you ship (open the draft PR), you **do** move it to
+`done` in that same PR — see Step 12 and `engineering-session-wrapup.md`
+"Core principle: wrap-up lands in the feature PR". The only time it stays
+`in-progress` is a BLOCKED / PARTIAL stop (the PR is parked, not shipped).
 
 ## Step 6 — Session workflow
 
@@ -236,13 +237,20 @@ see it's parked).
 ## Step 12 — Wrap-up
 
 When the work is shipped (PR opened) or you are stopping under the
-BLOCKED / PARTIAL protocol, follow `engineering-session-wrapup.md`:
+BLOCKED / PARTIAL protocol, follow `engineering-session-wrapup.md`. **All
+wrap-up bookkeeping ships inside this same PR** — there is no separate
+follow-up PR (`engineering-session-wrapup.md` "Core principle"):
 
 - Append a new dated section to `engineering-history.md` (Context /
   What shipped / Code touched / Server state touched / PRs / Open
   items). Terse.
-- Update `roadmap.md` if the assignment changed status (do not flip
-  to `done` yourself — that's the human's call on merge).
+- Update `roadmap.md`: **if you shipped, move the assignment to `done`**
+  in this PR — flip the at-a-glance row and the detail `**Status:**` line
+  to `done` and add a Done-section entry citing this PR's number and
+  today's date. (The PR number is known once the draft PR is open; amend
+  or add a commit on the same branch to fill it in.) **Only** leave it
+  `in-progress` if you are stopping under the BLOCKED / PARTIAL protocol —
+  a parked PR is not `done`.
 - Update `bugs.md` for any bugs touched.
 - If your work produced a new prod action the human must run, append
   it to `manual-actions.md` Open with the **full command/SQL inline**
