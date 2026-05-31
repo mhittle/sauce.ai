@@ -94,6 +94,65 @@ verification), then re-test the describe flow. If chips still don't appear
 after a confirmed restart, escalate to hypothesis 3 (inspect the prompt/
 parse against live Haiku output). Status stays `open` until prod confirms
 chips render and keywords persist to the profile.
+### BUG-028 — Switching to an orthogonal algorithm surfaces largely the same articles
+**Status:** in-progress (fix written, PR pending) · **Reporter:** user · **Opened:** 2026-05-31
+
+User reports that loading one algorithm and then switching to a
+*different, supposedly orthogonal* algorithm shows "a lot of the same
+articles." Expectation, in the user's framing: **weights decide what's
+in the list (membership/selection); ranking decides the order**. Two
+orthogonal algorithms should therefore produce visibly different
+*sets*, not just a reordering of one set.
+
+**Root cause (confirmed by code review — no crash/arithmetic bug, a
+design conflation):**
+1. **Weights only reorder; they never select.** The `/` candidate set
+   (`routes/feed.py:index()`) is the *entire* `classified`, canonical,
+   7-day, visible pool minus the *hard filters* in
+   `ranking.build_filters_sql` (per-feature thresholds, category/country/
+   geo, source-deny). A normal saved algo sets none of those, so two
+   algos draw from an **identical** pool and the weight vector only feeds
+   a single `score` used for `ORDER BY`. There was no selection stage
+   distinct from the score — exactly the opposite of the user's model.
+2. **The multiplicative recency gate dominates and homogenizes the top.**
+   `score = quality * EXP(-recency_w * hours / 24)` (`ranking.py`). At the
+   default `recency=0.7` the multiplier is ~1.0@0h, 0.5@24h, 0.25@48h,
+   ~0.05@4d, so the freshest articles float up almost regardless of
+   weights — weights only break ties among similar-age rows. Biggest
+   single driver of the overlap (side effect of the BUG-011 fix).
+3. **No penalty axis; presets all point the same way.** Each feature
+   contributes `w * (1 - |value-dir|/scale) ∈ [0, w]` (always ≥ 0) and
+   the presets/defaults all push objectivity / source_reputation /
+   info_density "high," so a fresh reputable story scores well under
+   nearly *any* algo. Orthogonal intents don't repel each other's picks.
+
+**Fix (PR pending) — separate SELECTION from RANKING (owner chose this):**
+- New `ranking.build_affinity_sql(weights)`: the **selection** signal — an
+  L1-normalized, recency-free weighted feature match in `[0,1]`. Returns
+  `("1", {})` when no feature is weighted.
+- `routes/feed.py:index()` now: SELECT both `affinity` and the existing
+  recency-gated `score`, `ORDER BY affinity DESC ... LIMIT FEED_SELECTION_POOL`
+  to pick the **candidate SET** (membership = what's *in* the list), apply
+  the per-source cap to that set, then **re-order** it by the user's sort
+  via a new pure `feed_diversify.rank_for_display(rows, sort)`
+  (relevance→recency-gated score, newest→published_at, trending→trending).
+  Two orthogonal algos now select genuinely different sets.
+- Recency moves to the *ranking* stage only: it no longer shapes
+  membership, so an algo can surface older content it is most affine to,
+  freshest-first. Does **not** regress BUG-011 (ordering is still
+  recency-gated). New `FEED_SELECTION_POOL` config (default 600, clamped
+  at `MAX_FETCH_ROWS`).
+- Scope: `/` only — firehose, `/search`, `/saved`, `/algo` preview, and
+  the digest keep the single-score `build_score_sql` model (same scoping
+  as BUG-021/BUG-027). No DB migration, no cron, no new dep.
+
+**Verification:** pure unit tests for `build_affinity_sql` (normalization,
+empty-weights sentinel) and `rank_for_display` (per-sort order) run in the
+sandbox. Route+DB behavior (set actually differs between two saved algos)
+deferred to a real env / browser — same sandbox limitation noted on prior
+feed-route PRs.
+
+---
 
 ### BUG-023 — Article classification rate stalls again after recent throughput fix
 **Status:** open · **Reporter:** user · **Opened:** 2026-05-27

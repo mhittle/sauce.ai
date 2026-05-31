@@ -16,7 +16,12 @@ agrees with page N.
 
 from __future__ import annotations
 
+import datetime
 from typing import Iterable, Mapping, Sequence
+
+# Sort key fallback for rows with a null publication time, so a mixed
+# datetime/None column still orders deterministically.
+_MIN_DT = datetime.datetime.min
 
 # Hard ceiling for the over-fetch budget. With `cap=1` and `page_size=30`
 # the multiplier is ~31x, so page N issues a `LIMIT` of ~930*N — unbounded
@@ -70,6 +75,36 @@ def page_slice(rows: Sequence[dict], page: int, page_size: int) -> list[dict]:
     start = (page - 1) * page_size
     end = page * page_size
     return list(rows[start:end])
+
+
+def _num(row: Mapping, key: str) -> float:
+    v = row.get(key)
+    return float(v) if isinstance(v, (int, float)) else 0.0
+
+
+def rank_for_display(rows: Iterable[dict], sort: str) -> list[dict]:
+    """Order an already-SELECTED candidate set for display (BUG-028).
+
+    Selection (membership — *which* articles are in the list) is done
+    upstream by affinity: what the algorithm cares about. This is the
+    separate *ranking* stage — the order the chosen articles are shown in —
+    keyed on the user's sort:
+
+      relevance -> recency-gated algo `score`, freshest-and-best first
+      newest    -> `published_at`
+      trending  -> external `trending` heat
+
+    All three are descending with the algo `score` as a stable tiebreak;
+    Python's sort is stable so equal keys preserve the incoming
+    (affinity) order. Pure: no Flask, no DB.
+    """
+    if sort == "newest":
+        key = lambda r: (r.get("published_at") or _MIN_DT, _num(r, "score"))
+    elif sort == "trending":
+        key = lambda r: (_num(r, "trending"), _num(r, "score"))
+    else:  # relevance (default / unknown)
+        key = lambda r: (_num(r, "score"), r.get("published_at") or _MIN_DT)
+    return sorted(rows, key=key, reverse=True)
 
 
 def effective_source_cap(weights: Mapping | None, default_cap: int) -> int:

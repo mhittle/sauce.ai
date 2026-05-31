@@ -8,13 +8,13 @@ from ..discussion import discussions_for_articles
 from ..explain import explain_article
 from ..article_summary import load_bullets
 from ..feed_diversify import (
-    MAX_FETCH_ROWS, cap_per_source, effective_source_cap, fetch_budget,
-    page_slice,
+    MAX_FETCH_ROWS, cap_per_source, effective_source_cap, page_slice,
+    rank_for_display,
 )
 from ..term_prefs import build_term_clauses
 from ..ranking import (
-    build_score_sql, build_filters_sql, default_weights, PRESETS,
-    parse_weights_json, weights_to_expression, FEATURE_KEYS,
+    build_affinity_sql, build_score_sql, build_filters_sql, default_weights,
+    PRESETS, parse_weights_json, weights_to_expression, FEATURE_KEYS,
 )
 from ..tune import propose_nudges, apply_nudges, sanitize_revert, DIRECTIONS
 from .. import classify_topup
@@ -38,18 +38,6 @@ def _normalize_sort(value):
     v = (value or "").strip().lower()
     v = _SORT_ALIASES.get(v, v)
     return v if v in SORT_OPTIONS else "relevance"
-
-
-def _order_by_for_sort(sort):
-    if sort == "newest":
-        return "ORDER BY a.published_at DESC, score DESC"
-    if sort == "trending":
-        # Trending heat first; the user's algo score breaks ties so within
-        # the hot topics they still get their best-by-algorithm articles
-        # (BUG-015). Non-trending rows tie at trending=0 and fall through
-        # to the normal algo order.
-        return "ORDER BY f.trending DESC, score DESC"
-    return "ORDER BY score DESC, a.published_at DESC"
 
 
 def _active_weights():
@@ -137,9 +125,13 @@ def index():
     page_size = 40
     category = (request.args.get("category") or "").strip() or None
     sort = _normalize_sort(request.args.get("sort"))
-    order_by_sql = _order_by_for_sort(sort)
 
+    # BUG-028: weights drive *selection* (which articles are in the list),
+    # the sort drives *ranking* (the order they're shown). `affinity` is the
+    # recency-free, weight-normalized feature match used to pick the candidate
+    # SET; `score` is the recency-gated relevance signal used to order it.
     jitter = float(current_app.config.get("FEED_JITTER", 0.0) or 0.0)
+    affinity_expr, affinity_params = build_affinity_sql(weights)
     score_expr, score_params = build_score_sql(weights, jitter=jitter)
     filter_sql, filter_params = build_filters_sql(weights)
 
@@ -201,6 +193,7 @@ def index():
              f.info_density, f.journalist_reputation, f.source_reputation,
              f.popularity, f.trending, f.category, f.country,
              COALESCE(cs.cluster_size, 1) AS cluster_size,
+             ({affinity_expr}){pref_score_mult}{term_boost_mult} AS affinity,
              ({score_expr}){pref_score_mult}{term_boost_mult} AS score
       FROM articles a
       JOIN sources s ON s.id = a.source_id
@@ -222,22 +215,28 @@ def index():
         {pref_filter_sql}
         {term_mute_sql}
         {down_filter_sql}
-      {order_by_sql}
-      LIMIT %(limit)s OFFSET %(offset)s
+      ORDER BY affinity DESC, a.published_at DESC
+      LIMIT %(selpool)s
     """
-    # BUG-021: over-fetch from the top so the per-source cap (applied in
-    # Python below) still yields a full page. Single-source-burst pages
-    # would otherwise be silently short. The active profile's unique-sources
-    # toggle (if set) tightens that cap to 1 for this viewer.
+    # BUG-028: select the top-N most-affine articles as the membership SET
+    # (what's *in* the list). Fixed per request (not page-scaled) so paging
+    # walks a stable set; clamped at MAX_FETCH_ROWS. The per-source cap then
+    # trims the set for diversity (keeping each source's most-affine rows,
+    # since the SQL returns them affinity-ordered); the active profile's
+    # unique-sources toggle tightens that cap to 1. Finally rank_for_display
+    # re-orders the capped set by the user's sort (ranking != selection).
+    sel_pool = min(
+        int(current_app.config.get("FEED_SELECTION_POOL", 600) or 600),
+        MAX_FETCH_ROWS,
+    )
     default_cap = int(current_app.config.get("FEED_MAX_PER_SOURCE", 0) or 0)
     src_cap = effective_source_cap(weights, default_cap)
-    fetch_limit = min(fetch_budget(page, page_size, src_cap), MAX_FETCH_ROWS)
-    params = {**score_params, **filter_params, **pref_params, **vis_params,
-              **term_params,
-              "limit": fetch_limit, "offset": 0}
-    raw = query(sql, params)
-    capped = cap_per_source(raw, cap=src_cap)
-    articles = page_slice(capped, page, page_size)
+    params = {**affinity_params, **score_params, **filter_params,
+              **pref_params, **vis_params, **term_params,
+              "selpool": sel_pool}
+    selected = query(sql, params)
+    capped = cap_per_source(selected, cap=src_cap)
+    articles = page_slice(rank_for_display(capped, sort), page, page_size)
 
     if u and articles:
         ids = [a["id"] for a in articles]

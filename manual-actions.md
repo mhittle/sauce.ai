@@ -153,6 +153,14 @@ secret updated. No code change; the fleet resumes immediately.
 > **Standing reminder:** this is recurring — the new token will also expire.
 > Re-file an **Open** entry before its expiry so a future session rotates it
 > ahead of the lapse.
+**Action:** before the token's expiry, regenerate it (GitHub → Settings →
+Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
+with Contents / Pull requests / Workflows / Actions RW) and update the
+`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
+Actions → Secrets). No code change; the fleet resumes immediately. Record
+the new expiry date here when you rotate.
+(none currently)
+_None outstanding._
 
 ### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
 **Status:** completed · **PR:** #121 (merged 2026-05-22) ·
@@ -172,6 +180,20 @@ cold-start tick; `job_lock` serializes the two so they never run concurrently.
 No DB migration, no Python App restart, no new env var, no new pip dep.
 (BUG-023 stays `open` in `bugs.md` until prod telemetry confirms the backlog
 fully drains.)
+
+
+### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min) — also BUG-023 fix (A)
+**Status:** completed · **PR:** #121 (merged 2026-05-22) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+Demand-driven classification top-up cron. User confirmed (2026-05-31)
+the every-minute `classify_pending --triggered-only` line is installed
+in the cPanel crontab. This is also **BUG-023 fix (A)** — the missing
+cron was the confirmed root cause of the classification re-stall (see
+`bugs.md` BUG-023). `job_lock(classify_pending)` serializes it against
+the existing `*/5` tick, so it fills the idle gaps rather than running
+concurrently; the feed only *touches* `logs/classify_topup.signal`, so
+this is not a per-request spawn.
 
 **Cron line installed (cPanel → "Cron Jobs"):**
 
@@ -197,6 +219,58 @@ PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
 User confirmed the `sauce.ai/news` Python App was restarted in cPanel and
 `/algo` now shows no Keywords tab, with the keyword controls rendering under
 the algo form.
+
+---
+
+### 2026-05-31 — Rotated: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** completed · **PR:** (agent-fleet enablement) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
+branches, open PRs, and fire `repository_dispatch` (the default
+`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
+Fine-grained PATs **expire** and four workflows (`dev-agent`, `pm-agent`,
+`post-deploy`, `migration-executor`) fail silently the day it lapses. User
+confirmed the token was regenerated (scope `mhittle/sauce.ai`: Contents /
+Pull requests / Workflows / Actions RW) and the `AGENT_PUSH_TOKEN` repo
+secret updated. No code change; the fleet resumes immediately.
+
+> **Standing reminder:** this is a recurring action — the new token will
+> also expire. Re-file an **Open** entry before its expiry date so a future
+> session rotates it ahead of the lapse.
+
+---
+**Verify (confirmed):** `crontab -l | grep -- --triggered-only` lists
+the line; `tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep
+classify_pending` shows `--triggered-only: no fresh signal, exiting`
+(idle) or a normal `classified=N ...` run when the signal was fresh.
+The existing `*/5` safety-net tick stays. No DB migration, no restart,
+no new env var, no new pip dep.
+
+---
+
+### 2026-05-31 — Python App restart: keywords-into-feature-list (PR #119)
+**Status:** completed · **PR:** #119 (merged 2026-05-22) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
+(template-only). User confirmed (2026-05-31) the `sauce.ai/news` Python
+App has been restarted/cycled, so the change is live: `/algo` shows no
+separate Keywords tab and the keyword controls render under the algo
+form. No DB / cron / env / pip change.
+
+---
+
+### 2026-05-31 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** completed · **PR:** (agent-fleet enablement) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31
+
+User confirmed (2026-05-31) the `AGENT_PUSH_TOKEN` fine-grained PAT has
+been rotated and the `AGENT_PUSH_TOKEN` repo secret updated, so the four
+dependent workflows (`dev-agent`, `pm-agent`, `post-deploy`,
+`migration-executor`) keep pushing branches / opening PRs / firing
+`repository_dispatch`. **Standing reminder:** fine-grained PATs expire —
+re-open a fresh Open entry (recording the new expiry) when this token's
+expiry next approaches.
 
 ---
 

@@ -584,6 +584,24 @@ K. /trending page is empty or 500s:
   the window — not reachable at the real catalog size (~768 active
   sources). No DB/cron/env change required to deploy; flip
   FEED_MAX_PER_SOURCE=0 in cPanel env vars to disable in a hurry.
+- Selection vs ranking on `/` (BUG-028): the home feed separates *what*
+  is in the list from *how* it is ordered. Each algorithm's feature
+  weights drive SELECTION — the feed picks the top FEED_SELECTION_POOL
+  (default 600, env-tunable, clamped at 5000) most-affine articles as the
+  candidate SET, where affinity is the recency-free, L1-normalized
+  weighted feature match (ranking.build_affinity_sql). The chosen SET is
+  then capped per source and ordered by the user's sort (relevance =
+  recency-gated score, newest = published_at, trending = trending heat)
+  via the pure feed_diversify.rank_for_display. So two different
+  ("orthogonal") algorithms surface genuinely different article sets, not
+  just a reordering of one set. Recency now affects only the ranking
+  stage, not membership, so an algorithm can surface older content it is
+  most affine to (freshest-first within the set); this does NOT regress
+  BUG-011 (ordering is still recency-gated). Larger FEED_SELECTION_POOL =
+  more paging depth but more overlap between algorithms; smaller = more
+  distinct feeds but a shallower `/`. Only `/` uses this two-stage model;
+  `/firehose`, `/search`, `/saved`, `/algo` preview, and the digest keep
+  the single-score model. No DB/cron change required to deploy.
 - "Why?" ranking explainer: the "Why?" toggle on each feed card
   lazily loads a per-feature score breakdown (feed.explain ->
   /article/<id>/explain). It is a progressive enhancement -- HTMX

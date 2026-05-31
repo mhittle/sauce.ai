@@ -253,6 +253,50 @@ def build_score_sql(weights: dict, *, jitter: float = 0.0):
     return expr, params
 
 
+def build_affinity_sql(weights: dict):
+    """Return (sql_expression, params) for an article's *affinity* to the
+    algorithm — the SELECTION signal (BUG-028).
+
+    Distinct from build_score_sql (the *ranking* signal): affinity carries
+    NO recency gate and NO jitter. It is the L1-normalized weighted feature
+    match — `sum(w_i * match_i) / sum(w_i)`, with `match_i = 1 - |value -
+    direction| / scale` in [0, 1] — so the result is in [0, 1] and directly
+    comparable across algorithms. The feed selects the top-N most-affine
+    articles as the candidate SET (what's *in* the list), then orders that
+    set separately by the user's sort. Two algorithms with different weight
+    vectors therefore pick genuinely different sets, not just a reordering
+    of one set.
+
+    Returns ("1", {}) when no feature carries positive weight, so the caller
+    can detect "no preference" and fall back to its default membership.
+    """
+    weighted = []
+    total = 0.0
+    for feat in FEATURES:
+        fk = feat["key"]
+        try:
+            w = float(weights.get(fk, 0) or 0)
+        except (TypeError, ValueError):
+            w = 0.0
+        if w <= 0:
+            continue
+        weighted.append((feat, w))
+        total += w
+    if not weighted or total <= 0:
+        return "1", {}
+
+    parts = []
+    params = {}
+    for feat, w in weighted:
+        fk = feat["key"]
+        d = _direction_from_weights(weights, feat)
+        scale = _scale_width(feat)
+        params[f"{fk}_aw"] = w / total
+        params[f"{fk}_ad"] = d
+        parts.append(f"(%({fk}_aw)s * (1 - ABS(f.{fk} - %({fk}_ad)s) / {scale}))")
+    return " + ".join(parts), params
+
+
 def build_filters_sql(weights: dict):
     """Hard filters: category list, source deny, per-feature thresholds.
 
