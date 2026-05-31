@@ -167,75 +167,38 @@ these.
   dep. *(History is over its ~34 KB budget — archive oldest entries at
   wrap-up before it breaks single-Read onboarding.)*
 
-## 2026-05-27
-
-- **NL algorithm builder now also proposes keywords (interactive session, PR
-  pending).** `/algo` → `/describe` mapped plain English onto feature
-  *sliders* only; explicitly-named terms ("more climate policy, hide crypto")
-  were dropped since keywords live in `algorithm_term_prefs`, not
-  `weights_json`. The single Haiku call now also returns a `keywords` list
-  (`{term, mode, weight}`), sanitized via the existing `term_prefs` helpers
-  (mute-wins dedupe, `clamp_boost`, cap `MAX_KEYWORDS=25`) and kept **out** of
-  the `weights` dict (preserves the `test_output_feeds_ranking_helpers` subset
-  invariant). Owner chose **review-then-Save**: proposed keywords render as
-  removable pending chips inside `#algo-form` (Alpine `x-for` + hidden
-  `nl_kw_*` inputs) and persist only on **Save algorithm** / **Save as new
-  profile**; new `_apply_nl_keywords()` re-sanitizes the untrusted chips
-  server-side and upserts to the target profile under
-  `MAX_KEYWORDS_PER_ALGO`. *Code:* `app/algo_nl.py`, `app/routes/algo.py`,
-  `app/templates/algo.html`, `app/static/style.css`, `tests/test_algo_nl.py`
-  (+7). **No migration** (`algorithm_term_prefs` already on prod, PR #82), no
-  cron/env/dep — standard Passenger restart on deploy. Minor gap: hx `Save
-  algorithm` persists keywords but the saved-keywords panel refreshes only on
-  full load (same as existing slider hx-save); "Save as new profile"
-  redirects and shows them immediately. *(History near its ~34 KB budget —
-  archive oldest entries at next wrap-up.)*
-
----
-
-## 2026-05-26
-
-- **BUG-025 — feed frozen at May 20; unapplied geo migration crashed
-  `classify_pending` (interactive session, PR #135 merged).** Feed stale
-  since May 20. `fetch_feeds` was healthy but `classify_pending` crashed
-  every tick at the `article_features` INSERT with
-  `(1054, "Unknown column 'geo_lat'")`: the geo / "Near a place" feature
-  (`seed/migrations/2026-05-20-geo.sql`, adds `geo_lat`/`geo_lng`/
-  `geo_place`) was wired into `schema.sql` + the INSERT but **never
-  applied on prod and never tracked in `manual-actions.md`** — a
-  **BUG-007-class** miss on the cron *write* path, so it failed silently
-  (no user 500; site served the frozen `classified` corpus) for 6 days
-  while `pending` grew to ~57k. *Fix:* applied the migration on prod;
-  **no code change** (repo already matched). `classify_pending` recovered
-  on the next tick (verified clean ticks, user confirmed freshening); the
-  ~57k backlog drains oldest-first (~50k/day), self-healing. Full detail
-  + process learning ("any migration adding a cron-written column needs a
-  `manual-actions.md` Open entry at merge time") in `bugs.md` BUG-025;
-  migration in `manual-actions.md` Completed 2026-05-26. *Unrelated/open:*
-  QA-filed BUG-023 (PR #130 timeout) / BUG-024 (PR #134 Apache 415 +
-  Cloudflare) are a separate web-tier matter, not yet investigated.
-
-- **BUG-027 — future-dated article pinned to top; downvote didn't
-  remove it (interactive session, PR #137 draft).** A Dark Reading
-  "Virtual Event" dated **Jun 18** (future) was always first. (1) The
-  recency gate made a *future* (negative) age a multiplier **> 1** — an
-  unbounded boost; fixed by clamping the age with `GREATEST(..., 0)` in
-  `ranking.py` (Code-tab Python equiv `max(hours_old, 0)` for parity).
-  (2) `thumb_down` was recorded but never filtered; the signed-in `/`
-  feed now excludes downvoted ids, so a downvote removes the article on
-  next load. *Code:* `app/ranking.py`, `app/routes/feed.py`,
-  `tests/test_ranking.py`. No migration. Detail in `bugs.md` BUG-027.
-
-- **BUG-026 — duplicate algorithm profiles in the feed switcher (PR
-  drafted, parallel session; renumbered from BUG-025 to resolve a
-  same-day BUG-ID collision).** `/` "Algorithm:" dropdown listed names
-  many times: `gallery.adopt()` + `algo.create_profile()` `INSERT`ed
-  same-named rows with no guardrail. Fix: both reuse the existing
-  same-named profile instead of inserting, and a new pure
-  `feed._dedupe_switcher_rows()` collapses duplicate names in the
-  dropdown (non-destructive to existing rows). *Code:* `feed.py`,
-  `algo.py`, `gallery.py` + tests. App-layer only, no migration. Detail
-  in `bugs.md` BUG-026.
+- **"Tune from this article" — article-anchored weight nudges (interactive
+  session, PR pending).** Shipped the Signal-Learning *wedge* (roadmap Pri 7,
+  LOE 4): each feed card carries signed-in **More / Less like this** buttons
+  that lazily load a preview of which feature *weights* would change and by
+  how much, with **Accept** / **Undo** — nothing persists until Accept. New
+  pure `app/tune.py`: nudge = `±LEARNING_RATE·(2·alignment − 1)` per
+  *already-weighted* feature, where `alignment = 1 − |value − direction|/scale`
+  is the scorer's own per-feature factor (imported from `ranking`, same parity
+  discipline as `explain.py`, so it can't desync from `build_score_sql`).
+  "More" boosts aligned features / trims misaligned; "Less" flips sign;
+  clamped to `[0, 2]`; sub-`MIN_DELTA` and zero-weight features dropped. Apply
+  **recomputes server-side** (never trusts client deltas) and mutates the
+  active profile's existing `weights_json` — **no new adjustment-vector
+  table**, so the full Signal Learning regression can later absorb it (roadmap
+  note); Undo merges the pre-nudge weights back (re-sanitized, known keys
+  only). Three thin feed-bp routes (`GET/POST /article/<id>/tune`,
+  `POST …/tune/undo`); directions/thresholds/filters/keywords untouched.
+  *Code:* `app/tune.py`, `routes/feed.py`,
+  `templates/partials/{tune_panel,tune_applied,tune_reverted}.html` +
+  `feed_cards.html`, `static/style.css`, `tests/test_tune.py` (12 pure).
+  **No migration/cron/env/dep — Passenger restart on deploy.**
+- **BUG-028 — "Why?" explainer 500'd on every click (fixed, same PR).** Found
+  while reusing `_active_weights()` for Tune: it was changed to return a
+  `(weights, active_algo_id)` tuple and `feed.index()` updated to unpack it,
+  but the older `explain()` route still passed the tuple to
+  `explain_article()` (`.get()` on a tuple → `AttributeError`) — broken since
+  ~2026-05-20, uncaught because `explain.py`'s tests call it with a dict.
+  One-line fix `weights, _ = _active_weights()`. See `bugs.md` BUG-028.
+- **Manual-actions queue drained.** User confirmed all three Open prod actions
+  done → moved to Completed: `AGENT_PUSH_TOKEN` rotated, PR #119 restart, and
+  the 1-min `classify_pending --triggered-only` cron (installed 2026-05-27 as
+  BUG-023 fix A). `manual-actions.md` Open is now empty.
 
 ---
 
@@ -246,6 +209,36 @@ Older entries, summarized. **Full verbatim text is in
 the deep context (root causes, calibration notes, file lists). Every
 server-side migration referenced below was applied on prod and is in
 `manual-actions.md` → Completed; bug root causes are in `bugs.md`.
+
+### 2026-05-27
+
+- **NL algorithm builder now also proposes keywords (interactive session, PR
+  pending).** `/algo`→`/describe`'s single Haiku call now also returns a
+  `{term, mode, weight}` keyword list, sanitized via the `term_prefs` helpers
+  and kept **out** of `weights_json`. Review-then-Save UX: proposed keywords
+  render as removable pending chips and persist only on Save (new
+  `_apply_nl_keywords()` re-sanitizes server-side). *Code:* `algo_nl.py`,
+  `routes/algo.py`, `algo.html`, `style.css`, `test_algo_nl.py`. No
+  migration/cron/env/dep.
+
+### 2026-05-26
+
+- **BUG-025 — feed frozen at May 20 (PR #135 merged).** `classify_pending`
+  crashed every tick on `Unknown column 'geo_lat'`: the 2026-05-20 geo
+  migration was wired into `schema.sql`/the INSERT but never applied on prod
+  and never tracked — a BUG-007-class miss on the cron *write* path, silent
+  (no user 500) for 6 days while `pending` grew to ~57k. Fix: applied the
+  migration on prod (no code change); backlog self-drains. **Lesson: any
+  migration adding a cron-written column needs a `manual-actions.md` Open
+  entry at merge time.**
+- **BUG-027 — future-dated article pinned to top; downvote didn't remove it
+  (PR #137 draft, in-progress).** Future `published_at` made the recency
+  multiplier > 1 (unbounded boost); clamped age with `GREATEST(..., 0)` in
+  `ranking.py`. Also the signed-in `/` feed now excludes `thumb_down` ids.
+- **BUG-026 — duplicate algorithm profiles in the feed switcher (PR
+  drafted).** `gallery.adopt()`/`algo.create_profile()` inserted same-named
+  rows; both now reuse the existing same-named profile, and a pure
+  `feed._dedupe_switcher_rows()` collapses duplicate names in the dropdown.
 
 ### 2026-05-22
 

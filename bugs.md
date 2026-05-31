@@ -258,6 +258,30 @@ the platform. Mitigation is "know it can happen and have the backup ready".
 
 ## Resolved
 
+### BUG-028 — "Why?" ranking explainer 500s on every click
+**Status:** resolved · **Reporter:** internal (found while building "Tune
+from this article") · **Opened:** 2026-05-31 · **Closed:** 2026-05-31 (PR pending)
+
+The "Why this ranked" popover (feed card → `GET /article/<id>/explain`,
+PR #79) raised `AttributeError` and 500'd on every open. Root cause: a
+silent signature drift. `feed._active_weights()` was later changed to
+return a `(weights, active_algo_id)` **tuple** (when the per-algorithm
+keyword feature, ~PR #82 / 2026-05-20, needed the active id), and
+`feed.index()` was updated to unpack it (`weights, active_algo_id = ...`)
+— but the older `explain()` route still did `weights = _active_weights()`
+and passed the **tuple** to `explain_article(row, weights, ...)`, which
+calls `weights.get(fk)`. A tuple has no `.get`, so every Why click threw.
+The pure `app/explain.py` tests never caught it because they call
+`explain_article` directly with a dict; the route itself had no test.
+
+**Fix:** unpack the tuple in the route — `weights, _ = _active_weights()`
+(`app/routes/feed.py`). One line. Caught while reusing the same
+active-weights resolution for the new Tune endpoints. **Lesson:** a helper
+that changes its return shape needs every caller updated in the same
+change; a route with no test can drift silently for ~11 days.
+
+---
+
 ### BUG-026 — Algorithm switcher dropdown on `/` lists duplicate profiles
 **Status:** resolved · **Reporter:** user · **Opened:** 2026-05-26 · **Closed:** 2026-05-26 (PR pending)
 **Note:** renumbered from BUG-025 → BUG-026 on 2026-05-26 to resolve a
