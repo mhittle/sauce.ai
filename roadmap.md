@@ -1252,6 +1252,84 @@ are fine; if nothing meaningful surfaces, no PR is opened. New
 
 ---
 
+## PM proposals (2026-05-25)
+
+PM-agent suggestions from the 2026-05-25 cycle. Each is `status:
+proposed` — not yet authorized for dev. The human promotes a proposal
+to `ready-for-agent` (and folds its row into the at-a-glance table) to
+dispatch it. Telemetry (`/admin/cron-health`, `/admin/usage-summary`)
+was unavailable this run — `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` were
+not exported to the workflow environment, so the login POST returned
+"Invalid email or password." Rationales below cite
+engineering-history / bugs / roadmap signals only.
+
+### Cron run telemetry — structured per-tick rollup
+**Priority:** 6 · **LOE:** 3 · **Category:** infra, ops · **Status:** proposed
+
+**Rationale:** The cron fleet has quietly grown to ~12 jobs:
+`fetch_feeds` 15m, `classify_pending` 5m, `classify_pending
+--triggered-only` 1m (new from PR #121, 2026-05-22), `popularity_poll`
+30m, `trending_poll` 30m, `maintenance` nightly, `send_digest` daily,
+`discover_harvest` hourly, `discover_promote` daily, `discover_llm`
+weekly, plus the `breaking_alerts` 15m cron in flight for the in-
+progress breaking-news alerts spec. The only operational visibility
+today is `GET /admin/cron-health`, which scrapes the last 200 lines of
+`logs/cron.log` — at the current write rate that is well under one
+hour of history, so a job that fails six hours ago is invisible. This
+is the same gap PR #114 closed for the agent fleet ("a per-run cap
+bounds a single run but does not catch a workflow that fails or loops
+repeatedly"); the rationale applies identically to crons, which carry
+exactly the same failure modes (BUG-009 idle-socket regression, LLM
+rate-limit storms, nproc pressure).
+
+Propose a `cron_runs` append-only table mirroring `agent_runs` /
+`llm_usage` — `(id, job, started_at, duration_ms, status
+ENUM('ok','locked','error'), summary_json, error_excerpt)` — written
+once per tick by a tiny `_bootstrap` wrapper so existing jobs don't
+each grow their own logging. New read-only `GET /admin/cron-health-
+rollup` returns a 14-day per-job summary (runs / ok / locked / error /
+mean duration / last error excerpt) and a zero-filled daily series,
+exactly matching the shape of `/admin/agent-activity`. Degrade to
+`table_missing: true` (still 200) if the migration trails the deploy
+so the admin page never 500s (NOT BUG-007 class). Scope: one
+migration, one wrapper, one admin route — no app-behavior change, no
+new dependency, no sharp-edge infra. Strong precedent in PR #114.
+
+### Algorithm-knob usage analytics — which features do users actually use?
+**Priority:** 5 · **LOE:** 3 · **Category:** algo, ops · **Status:** proposed
+
+**Rationale:** Over the last 14 days the `/algo` editor has grown
+dramatically — `FEATURES`/`feature_catalog` gained 12 perceptual
+features via PR #84 (2026-05-20), per-algorithm keywords landed via
+PR #82 (2026-05-20) and were folded into the UI tab via PR #119
+(2026-05-22), the multi-profile switcher shipped via PR #65, the
+gallery now travels `keywords_json` (2026-05-21), and the
+`unique_sources` feed-shaping toggle was just spec'd + drafted on
+2026-05-22. The editor now exposes 22+ ranking knobs plus several
+feed-shaping toggles plus keywords plus profiles — and we have **no
+data on which of these users actually configure away from default**.
+Without that, the next investment decision (more perceptual features?
+A/B split feed? Tune-from-this-article? Reading-diet meter?) is a
+guess. Every feature already lands a `weights_json` row that records
+the user's intent — the data is on disk, just not aggregated.
+
+Propose a nightly aggregator in `maintenance.py` that scans
+`user_algorithms.weights_json` + `algorithm_term_prefs` and writes a
+single small `algorithm_feature_usage(date, feature_key,
+profiles_total, profiles_non_default, profiles_muted, profiles_boosted)`
+row per known key, plus a read-only `GET /admin/algo-usage` page
+listing each feature with its 14-day usage curve and a recency
+sparkline. Pure aggregation of existing rows — no impression
+tracking, no new write path, no per-request cost, no PII (counts
+only). Pairs naturally with **Signal Learning** (Pri 8, backlog) and
+**Reading diet meter** (Pri 7, backlog) by surfacing the *supply*
+side (what users explicitly chose) alongside their eventual *demand*-
+side (what they actually read). Scope: one tiny table, one nightly
+SQL pass, one admin route — no new cron, no env var, no LLM, no new
+dependency.
+
+---
+
 ## PM proposals (2026-05-21)
 
 PM-agent suggestions from the 2026-05-21 cycle (run manually). Each is
