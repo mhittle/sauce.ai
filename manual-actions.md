@@ -89,6 +89,9 @@ tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
 Then in a browser: a feed card's **TL;DR** toggle expands to up to 3 bullets
 (or a graceful "no summary yet" note); `/read/<id>` shows a TL;DR box above
 the body for summarized articles.
+
+---
+
 ### 2026-05-31 — Python App restart: NL keyword proposals (PR #140) — BUG-029
 **Status:** open · **PR:** #140 (merged 2026-05-27) · **Opened:** 2026-05-31
 
