@@ -82,6 +82,8 @@ shipped.
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
 | 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | in-progress |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
+| 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
+| 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | proposed |
 
 ---
 
@@ -1039,6 +1041,167 @@ rail toward the reader's topics ("big in your world"); a dedicated
 auto-refresh; surfacing the rail on mobile as a horizontally-scrollable
 carousel; folding the breaking-alerts detection signal in so "Brief" and
 "Breaking email" share one outlet-burst definition.
+### Ask your feed (grounded conversational news over your personalized corpus)
+**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui, algo, backend · **Status:** proposed
+
+**User value / why now.** Every feature this arc has handed the reader more
+*control* over their feed (sliders, NL builder, keyword mutes, profiles,
+unique-sources, Tune). "Ask your feed" is the next altitude: it lets the
+reader *interrogate* the feed in plain language — *"what happened with the
+budget bill this week, in my sources?"*, *"summarize what the outlets I trust
+said about the Fed decision"*, *"what am I missing on the election?"* — and get
+a synthesized answer **grounded only in their own personalized corpus, with
+inline citations to the exact stories**. This is the single most "wow" demo in
+the backlog and it is *on-thesis*, not a generic chatbot bolt-on: the answer is
+constrained to the articles **your** algorithm surfaced (your visible sources,
+your mutes respected), so it is your news, queryable — something a single-source
+reader or Google News structurally cannot offer. It also reuses our two biggest
+existing assets (the FULLTEXT search index and the multi-source dedup'd corpus)
+and re-engages readers who want an answer, not a scroll.
+
+**Product decisions already made with the owner:**
+- **Multi-turn chat**, not single-shot Q&A — the reader can ask follow-ups
+  ("…and what did the senate version change?") within a conversation, so
+  conversation history is carried into each turn.
+- **Corpus = personalized, wider window.** Retrieval runs over the user's
+  *visible + un-muted* corpus (owner visibility + `user_source_prefs` mutes +
+  the active profile's `algorithm_term_prefs` mutes), over a wider window than
+  the 7-day home feed (default ~21 days, `ASK_WINDOW_DAYS`) so "this/last week"
+  questions actually work. Muted topics/sources stay muted — it is genuinely
+  *your* feed.
+- **Persist queries in a new `ask_queries` table** — durable across Passenger
+  workers, enforces the per-user daily cap reliably (the in-process limiter is
+  per-worker and leaky), and doubles as query history (a v2 surface) + an abuse
+  audit. Deliberately SEPARATE from `users`, so it is migrate-after-deploy
+  safe / **NOT BUG-007 class**.
+
+**How it works (v1 — deterministic retrieval + ONE grounded LLM call per
+turn).** This is the **same request-path class as the NL builder**
+(`/algo/describe`), which already makes a synchronous, user-initiated Haiku
+call: a deliberate button-press, signed-in, rate-limited — NOT the automatic
+feed path, **no process spawn**, no embeddings, no vector DB, no new pip dep.
+1. **Retrieve** — reuse the `/search` FULLTEXT path
+   (`MATCH(a.title, a.summary) AGAINST (%(q)s)`) but with the **feed's
+   personalization scoping** applied: the `vis_sql` owner-visibility clause,
+   the `user_source_prefs` mute join (`COALESCE(usp.weight,1.0) > 0`), and the
+   active profile's `algorithm_term_prefs` mutes via
+   `term_prefs.build_term_clauses` (mute clauses only — boosts irrelevant to
+   retrieval). Window = `ASK_WINDOW_DAYS`. Dedup to canonical cluster members
+   (`a.story_id IS NULL OR a.id = a.story_id`). Take the top
+   `ASK_MAX_CONTEXT_ARTICLES` (default ~18) by relevance, then recency.
+2. **Ground** — one synchronous Haiku call via the **exact
+   `algo_nl.interpret_algorithm` precedent**: lazy `anthropic` import, 30s
+   timeout, `LLMUnavailable` → graceful inline error (never a 500), usage
+   logged to `llm_usage` (reuse `classifier.llm._estimate_cost`). The system
+   prompt passes the numbered retrieved articles (title + summary + source +
+   date + id) plus the prior conversation turns, and instructs: **"Answer ONLY
+   from these numbered articles. Cite claims as [1], [2]. If they do not
+   answer the question, say you don't have coverage of that in the user's
+   feed — do not use outside knowledge."** Refuse-when-no-coverage is the
+   anti-hallucination guard and is a hard requirement.
+3. **Render** — the answer renders with footnote citations resolved to real
+   links (article URL or `/story/<id>` dossier when the cited article is a
+   multi-source canonical). HTMX-async (`hx-post` + a spinner target) so the
+   blocking call is never visibly janky; single-flight per user.
+
+**New table (`ask_queries`, migrate-after-deploy safe / NOT BUG-007 class):**
+```sql
+CREATE TABLE IF NOT EXISTS ask_queries (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id       INT UNSIGNED NOT NULL,
+  conversation  CHAR(40) NOT NULL DEFAULT '',   -- groups multi-turn turns
+  question      VARCHAR(2000) NOT NULL,
+  answered      TINYINT(1) NOT NULL DEFAULT 0,   -- 0 = no-coverage/refused/failed
+  article_ids   VARCHAR(500) NOT NULL DEFAULT '', -- cited ids, comma-joined (audit)
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_ask_user_day (user_id, created_at),
+  KEY idx_ask_convo (conversation),
+  CONSTRAINT fk_ask_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+The per-user **daily cap** `ASK_MAX_PER_DAY` (default 25) is a
+`SELECT COUNT(*) FROM ask_queries WHERE user_id=%s AND created_at >= <UTC
+midnight>`; over cap → friendly "you've reached today's limit" panel, no LLM
+call. Multi-turn history for a turn is the last `ASK_MAX_TURNS` (default 6) rows
+for the same `conversation` token (a hidden field minted on first ask).
+
+**Sketch (files/surfaces to touch):**
+- `news/app/ask.py` (new, pure / Flask-free, mirrors `app/algo_nl.py` /
+  `app/feed_diversify.py`): the testable core — `build_context_block(articles)`
+  (number + format retrieved rows for the prompt), `build_messages(history,
+  question, context)` (assemble multi-turn message list), `parse_answer(text,
+  allowed_ids)` (extract/validate citations, drop any cite not in the retrieved
+  set — the model can't cite a story it wasn't given), `daily_cap_ok(count,
+  max_per_day)`, and `system_prompt()`. **No Flask/DB/Haiku here** — this is
+  where the unit tests live.
+- `news/app/routes/ask.py` (new blueprint, `url_prefix="/ask"`, all
+  `@login_required`): `GET /ask` renders the chat page; `POST /ask` runs
+  retrieve → ground → render for one turn (HTMX partial). Retrieval reuses the
+  `/search` SQL pattern + the feed visibility/mute fragments; the LLM call
+  reuses the `interpret_algorithm` invocation pattern (lazy import, timeout,
+  `LLMUnavailable` fallback, `llm_usage` write). Register in
+  `news/app/__init__.py` next to the other blueprints.
+- `news/app/templates/ask.html` + `news/app/templates/partials/ask_answer.html`
+  (new) — chat transcript, question box, spinner, answer-with-citations
+  partial; reuse existing card/lean-badge CSS where possible.
+- `news/app/static/style.css` — a small `.ask-*` block.
+- `news/app/templates/base.html` — add an **"Ask"** nav link (signed-in only,
+  near "Gallery"/"Your Algo"). Optional: a small "Ask your feed" affordance on
+  `/` later (v2).
+- `news/app/config.py` — `ASK_ENABLED` (default on), `ASK_MODEL` (falls back to
+  `ANTHROPIC_MODEL` if empty), `ASK_WINDOW_DAYS` (21), `ASK_MAX_CONTEXT_ARTICLES`
+  (18), `ASK_MAX_PER_DAY` (25), `ASK_MAX_TURNS` (6), following the
+  `os.environ.get(..., default)` pattern of the `SUMMARY_*` / `FEED_*` knobs.
+- `news/seed/schema.sql` (+`ask_queries` CREATE TABLE, near `llm_usage`) +
+  `news/seed/migrations/2026-06-01-ask-queries.sql` (new).
+- `news/INSTALL.txt` — document the new env knobs and the migration (touches
+  `config.py`, so the BUG-007 gate expects an INSTALL.txt update in the PR).
+
+**Preserve / must-not-break:**
+- App code must **tolerate `ask_queries` being absent** (migrate-after-deploy):
+  the route wraps the cap-count read in try/except and, if the table is
+  missing, falls back to the in-process `SlidingWindowLimiter` so the page
+  still works pre-migration and never 500s. So this is **NOT BUG-007 class**.
+  Label the PR `has-migration` (not `needs-migration`); the executor applies it
+  post-deploy per `agent-fleet.md`.
+- `/search`, `/`, `/firehose` retrieval behavior is unchanged — Ask *reuses*
+  the SQL patterns, it does not modify the existing routes.
+- CSRF stays **on** for `POST /ask` (it is a signed-in form, unlike the anon
+  `lab.vote` exemption) — the chat form carries the CSRF field.
+
+**Constraints / watch-outs:**
+- **No synchronous LLM on the *automatic* path and no process spawn** — the
+  Haiku call fires only on an explicit user submit (same class as
+  `/algo/describe`), signed-in, single-flight, daily-capped. nproc ceiling
+  untouched: one blocking HTTP call inside the existing worker, not a fork.
+  Because the call is multi-second, the page is HTMX-async with a spinner and
+  the feature is **signed-in only** (bounds concurrency at current DAU).
+- **Anti-hallucination is a hard requirement**, not polish: `parse_answer`
+  drops any citation id not in the retrieved set, and the prompt + a
+  zero-retrieval short-circuit (if FULLTEXT returns nothing, skip the LLM and
+  show "I don't have coverage of that in your feed") guarantee the model can't
+  answer from training data.
+- **Cost**: one Haiku call per turn over ~18 short article rows + ≤6 turns of
+  history ≈ a few cents/day per active user at the cap; logged to `llm_usage`
+  and visible in `/admin/usage-summary`. `ASK_MAX_PER_DAY` is the cost ceiling.
+- Reuse the existing `ANTHROPIC_API_KEY`; no new secret, no new pip dependency,
+  no new cron.
+
+**Test expectation:** `pytest news/tests/` stays green. New
+`tests/test_ask.py` covers the pure `app/ask.py` helpers with the
+**`sys.modules` anthropic stub** pattern from `test_algo_nl.py` (no Flask, DB,
+or live Haiku): context block numbering/formatting; multi-turn message assembly
+(history truncated to `ASK_MAX_TURNS`); `parse_answer` keeps valid citations and
+**drops out-of-set citation ids**; `daily_cap_ok` boundary (at cap → blocked,
+under → allowed); empty-retrieval → no-coverage path; `LLMUnavailable` →
+graceful sentinel, never raises. No test requires a live DB, MTA, or browser.
+
+**v2 (out of scope):** semantic/embeddings retrieval (beyond FULLTEXT) for
+fuzzy matches; a "Ask about this story" entry point on `/story/<id>` and feed
+cards; streaming token output; persistent named conversations / shareable
+answers; an "Ask" box inline on the home feed; voice input; prompt-caching the
+system prompt across turns to cut cost.
 
 ---
 
