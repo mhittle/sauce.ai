@@ -255,7 +255,7 @@ def build_score_sql(weights: dict, *, jitter: float = 0.0):
 
 def build_affinity_sql(weights: dict):
     """Return (sql_expression, params) for an article's *affinity* to the
-    algorithm — the SELECTION signal (BUG-028).
+    algorithm — the SELECTION signal (BUG-029).
 
     Distinct from build_score_sql (the *ranking* signal): affinity carries
     NO recency gate and NO jitter. It is the L1-normalized weighted feature

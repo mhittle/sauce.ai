@@ -41,7 +41,7 @@ def test_legacy_popularity_value_aliases_to_trending():
     assert _normalize_sort("  Popularity ") == "trending"
 
 
-# BUG-028: ordering for display is now a pure post-selection re-sort
+# BUG-029: ordering for display is now a pure post-selection re-sort
 # (`rank_for_display`), distinct from affinity *selection* which the SQL
 # does. These pin the per-sort ordering semantics the SQL ORDER BY used to.
 

@@ -24,7 +24,7 @@ from typing import Iterable, Mapping, Sequence
 _MIN_DT = datetime.datetime.min
 
 # Hard ceiling for the per-request fetch. The feed selects a fixed
-# FEED_SELECTION_POOL of affinity-ranked rows (BUG-028); clamp it here so a
+# FEED_SELECTION_POOL of affinity-ranked rows (BUG-029); clamp it here so a
 # misconfigured pool can't issue an unbounded `LIMIT`. Deep "Load more"
 # paging past the pool comes up short rather than scanning the whole window.
 MAX_FETCH_ROWS = 5000
@@ -67,7 +67,7 @@ def _num(row: Mapping, key: str) -> float:
 
 
 def rank_for_display(rows: Iterable[dict], sort: str) -> list[dict]:
-    """Order an already-SELECTED candidate set for display (BUG-028).
+    """Order an already-SELECTED candidate set for display (BUG-029).
 
     Selection (membership — *which* articles are in the list) is done
     upstream by affinity: what the algorithm cares about. This is the

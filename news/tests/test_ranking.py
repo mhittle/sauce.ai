@@ -131,7 +131,7 @@ def test_zero_weight_feature_is_excluded():
     assert "f.objectivity" not in expr
 
 
-# --- build_affinity_sql: the selection signal (BUG-028) ---------------------
+# --- build_affinity_sql: the selection signal (BUG-029) ---------------------
 
 def test_affinity_includes_weighted_features_with_a_keys():
     """Affinity uses distinct `_aw`/`_ad` param names so it can coexist with
@@ -157,7 +157,7 @@ def test_affinity_weights_are_l1_normalized():
 def test_affinity_carries_no_recency_gate_or_jitter():
     """Selection must NOT be recency-gated (that's the ranking stage's job) —
     otherwise fresh articles dominate every algo's set and orthogonal algos
-    converge (the BUG-028 symptom)."""
+    converge (the BUG-029 symptom)."""
     w = {"objectivity": 1.0, "recency": 0.7}
     expr, params = build_affinity_sql(w)
     assert "EXP(" not in expr

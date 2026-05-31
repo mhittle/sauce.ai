@@ -584,7 +584,7 @@ K. /trending page is empty or 500s:
   the window — not reachable at the real catalog size (~768 active
   sources). No DB/cron/env change required to deploy; flip
   FEED_MAX_PER_SOURCE=0 in cPanel env vars to disable in a hurry.
-- Selection vs ranking on `/` (BUG-028): the home feed separates *what*
+- Selection vs ranking on `/` (BUG-029): the home feed separates *what*
   is in the list from *how* it is ordered. Each algorithm's feature
   weights drive SELECTION — the feed picks the top FEED_SELECTION_POOL
   (default 600, env-tunable, clamped at 5000) most-affine articles as the

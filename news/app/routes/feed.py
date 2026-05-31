@@ -126,7 +126,7 @@ def index():
     category = (request.args.get("category") or "").strip() or None
     sort = _normalize_sort(request.args.get("sort"))
 
-    # BUG-028: weights drive *selection* (which articles are in the list),
+    # BUG-029: weights drive *selection* (which articles are in the list),
     # the sort drives *ranking* (the order they're shown). `affinity` is the
     # recency-free, weight-normalized feature match used to pick the candidate
     # SET; `score` is the recency-gated relevance signal used to order it.
@@ -218,7 +218,7 @@ def index():
       ORDER BY affinity DESC, a.published_at DESC
       LIMIT %(selpool)s
     """
-    # BUG-028: select the top-N most-affine articles as the membership SET
+    # BUG-029: select the top-N most-affine articles as the membership SET
     # (what's *in* the list). Fixed per request (not page-scaled) so paging
     # walks a stable set; clamped at MAX_FETCH_ROWS. The per-source cap then
     # trims the set for diversity (keeping each source's most-affine rows,

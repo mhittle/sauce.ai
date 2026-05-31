@@ -139,6 +139,8 @@ these.
 - **BUG-029 — NL `/algo` chat box doesn't create per-algorithm keywords (interactive session, PR #142 merged, docs-only).** User: describing a feed in the `/algo` chat box doesn't create keywords for that algorithm. Code on `main` (PR #140) is correct end-to-end (`algo_nl.py` returns a sanitized `keywords` list; `describe()` passes `nl_keywords`; `algo.html` renders chips with hidden `nl_kw_*` inputs inside `#algo-form`; `save()`/`create_profile()` call `_apply_nl_keywords()` -> `algorithm_term_prefs`; `test_algo_nl.py` 21/21). User confirmed **no chips appear and none after reload**, which rules out the Save-refresh gap and points to a **stale Passenger worker**: PR #140's new route needs a restart to take effect (the template auto-reloads, so the old route serves no keywords -> `kws=[]` -> no chips). Filed the missing **PR #140 restart** as a `manual-actions.md` Open entry (BUG-029) with browser/DB verification; fallback if chips still missing post-restart = Haiku omitting the `keywords` array (`app/algo_nl.py` prompt/parse), not the deploy. **No code change** this session; BUG-029 stays `open` pending the prod restart + re-test. Renumbered BUG-028->029 after rebase (parallel session merged BUG-028 = the "Why?" explainer 500). *Process gap:* PR #140 shipped 2026-05-27 without a restart manual-action, same class as BUG-007/025.
 - **BUG-028 — orthogonal algorithms surfaced the same articles; split
   SELECTION from RANKING on `/` (interactive session, PR pending).** User:
+- **BUG-029 — orthogonal algorithms surfaced the same articles; split
+  SELECTION from RANKING on `/` (interactive session, PR #144).** User:
   switching to a different, supposedly orthogonal algorithm showed "a lot
   of the same articles." Review (no crash/arithmetic bug) found a design
   conflation: feature weights only fed a single `score` used for
@@ -162,7 +164,8 @@ these.
   `tests/test_ranking.py` (+6 affinity), `tests/test_feed_sort.py`
   (rank_for_display replaces the removed `_order_by_for_sort`). No
   migration/cron/dep; Passenger restart on deploy. Detail: `bugs.md`
-  BUG-028.
+  BUG-029 (renumbered from BUG-028 — a parallel session merged a different
+  BUG-028, the "Why?" explainer 500, first).
 - **Manual-actions reconciliation.** User confirmed all three Open items
   done; moved to Completed (2026-05-31): every-1-min
   `classify_pending --triggered-only` cron (PR #121, also **BUG-023 fix
