@@ -88,6 +88,19 @@ shipped.
 ### Breaking-news email alerts (major-event detection → opt-in email)
 **Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** in-progress
 
+> **Already built — awaiting merge (do NOT re-dispatch).** The full feature
+> is implemented in **PR #132** (`claude/agent/breaking-news-email-alerts`):
+> `breaking_alerts.py` + pure `breaking.py` + extracted `mailer.py`, the
+> opt-in toggle + CSRF-exempt unsubscribe, both migrations, 574 passing
+> tests; it passed the BUG-007 gate and test-merges cleanly into `main`. It's
+> still a **draft** only because the dev agent hit its budget cap. To finish:
+> flip #132 draft→ready, merge, label `needs-migration`, add the 15-min cron.
+> **Do not flip this item to `ready-for-agent`** — that would pay ~$8–10 to
+> rebuild #132 (the spec-finalize PR #155 was closed/superseded for the same
+> reason). `has-migration` (NOT BUG-007 class). Deliverability (the shared
+> localhost:25 SMTP path) should be verified before announcing it live;
+> default opt-in is off, so merging is safe regardless.
+
 **User value / why now.** Today sauce.ai only reaches a reader when they
 come to us (the home feed) or once a day (the digest). When something
 genuinely major breaks, an engaged reader wants to *hear about it* — that
