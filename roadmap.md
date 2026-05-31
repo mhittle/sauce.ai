@@ -78,7 +78,7 @@ shipped.
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
-| 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | ready-for-agent |
+| 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | in-progress |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
 
 ---
@@ -86,7 +86,7 @@ shipped.
 ## Items in detail
 
 ### Breaking-news email alerts (major-event detection → opt-in email)
-**Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** ready-for-agent
+**Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** in-progress
 
 **User value / why now.** Today sauce.ai only reaches a reader when they
 come to us (the home feed) or once a day (the digest). When something
