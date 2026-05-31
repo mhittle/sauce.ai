@@ -136,6 +136,30 @@ these.
 
 ## 2026-05-31
 
+- **Breaking-news email alerts — spec finalized + dispatched (PM session, roadmap-only).**
+  Pressure-tested the existing `in-progress` spec against the live code (Explore
+  pass): `send_digest.py` already splits `smtp_send()` from message-building
+  with the exact `MIMEMultipart("alternative")` + `List-Unsubscribe` block and
+  `_ensure_unsub_token()` (mailer extraction = low risk); `account.py`
+  `settings()` + digest toggle + CSRF-exempt `/account/unsubscribe/<token>`
+  exist to mirror 1:1; cron bootstrap, Haiku client (`classify_batch_llm` →
+  `LLMUnavailable`, `llm_usage` logging), schema columns, and the `BREAKING_*`
+  config pattern all confirmed present. **One spec correction:**
+  `term_prefs.build_term_clauses` is SQL-clause-only — there is **no** pure
+  matcher to reuse, so the spec now says *extract* a pure `term_matches(text,
+  term)` into `term_prefs.py` and have both the SQL builder and
+  `breaking.is_suppressed` call it (one matcher, two callers). **Owner product
+  decision:** ship **live on deploy — NO shadow/dry-run mode** (PM recommended
+  a default-on `BREAKING_DRY_RUN` to calibrate the firing rate on the now-1,919-feed
+  catalog before any real send; owner declined). Compensating asks folded into
+  the spec: `BREAKING_MIN_OUTLETS`/`WINDOW_HOURS`/`MAX_PER_DAY` must stay
+  env-tunable, the cron must log a structured per-tick audit line
+  (candidates/verdicts/recipients), and the three guards (fail-closed LLM gate,
+  per-story dedup, per-user daily cap) plus `BREAKING_ENABLED` kill-switch carry
+  the safety. Status flipped `in-progress → ready-for-agent` (row + detail);
+  merging the dispatch PR to `main` fires the paid (~$8) dev run. No code this
+  session.
+
 - **BUG-029 — NL `/algo` chat box doesn't create per-algorithm keywords (interactive session, PR #142 merged, docs-only).** User: describing a feed in the `/algo` chat box doesn't create keywords for that algorithm. Code on `main` (PR #140) is correct end-to-end (`algo_nl.py` returns a sanitized `keywords` list; `describe()` passes `nl_keywords`; `algo.html` renders chips with hidden `nl_kw_*` inputs inside `#algo-form`; `save()`/`create_profile()` call `_apply_nl_keywords()` -> `algorithm_term_prefs`; `test_algo_nl.py` 21/21). User confirmed **no chips appear and none after reload**, which rules out the Save-refresh gap and points to a **stale Passenger worker**: PR #140's new route needs a restart to take effect (the template auto-reloads, so the old route serves no keywords -> `kws=[]` -> no chips). Filed the missing **PR #140 restart** as a `manual-actions.md` Open entry (BUG-029) with browser/DB verification; fallback if chips still missing post-restart = Haiku omitting the `keywords` array (`app/algo_nl.py` prompt/parse), not the deploy. **No code change** this session; BUG-029 stays `open` pending the prod restart + re-test. Renumbered BUG-028->029 after rebase (parallel session merged BUG-028 = the "Why?" explainer 500). *Process gap:* PR #140 shipped 2026-05-27 without a restart manual-action, same class as BUG-007/025.
 - **BUG-030 — orthogonal algorithms surfaced the same articles; split
   SELECTION from RANKING on `/` (interactive session, PR #144).** User:

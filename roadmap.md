@@ -78,7 +78,7 @@ shipped.
 | 6 | 2 | infra, ops | Agent infra: Bug auto-triage | done |
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
-| 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | in-progress |
+| 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | ready-for-agent |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
 
 ---
@@ -86,7 +86,7 @@ shipped.
 ## Items in detail
 
 ### Breaking-news email alerts (major-event detection → opt-in email)
-**Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** in-progress
+**Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** ready-for-agent
 
 **User value / why now.** Today sauce.ai only reaches a reader when they
 come to us (the home feed) or once a day (the digest). When something
@@ -170,12 +170,21 @@ A per-user **daily cap** `BREAKING_MAX_PER_DAY` (default 3) uses
 news day can never spam one inbox. **Mute suppression:** for each
 recipient, load their active-profile mute terms (`SELECT term FROM
 algorithm_term_prefs WHERE algorithm_id = <active> AND mode = 'mute'`)
-and skip the send if the event headline/title matches, using the same
-case-insensitive substring semantics as `app/term_prefs.py`
-`build_term_clauses` (keep one matcher, don't reinvent).
+and skip the send if the event headline/title matches, using the **same
+case-insensitive substring semantics** as the feed's keyword mute.
+⚠️ **Correction (verified against code 2026-05-31):** `app/term_prefs.py`
+`build_term_clauses` is **SQL-clause-building only — there is no pure
+Python matcher to reuse today.** So *extract* one: add a pure
+`term_matches(text, term) -> bool` to `app/term_prefs.py` that lower-cases
+`text` and does the escaped-`LIKE`-equivalent substring test (mirror the
+existing `_MATCH_EXPR` `LOWER(CONCAT(title,' ',summary))` + `escape_like`
+semantics), refactor `build_term_clauses` to be expressed in terms of the
+same matching rule, and call `term_matches` from `breaking.is_suppressed`.
+One matcher, two callers — so the alert-suppression rule can never drift
+from the feed's mute rule.
 
 **Sketch (files/surfaces to touch):**
-- `news/seed/migrations/2026-05-22-breaking-alerts.sql` (new) +
+- `news/seed/migrations/2026-05-31-breaking-alerts.sql` (new) +
   `news/seed/schema.sql` (+`user_alert_prefs` and `breaking_news_alerts`
   CREATE TABLEs, near the trending/`llm_usage` tables).
   `breaking_news_alerts(id, story_id UNIQUE, outlet_count, status
@@ -186,6 +195,11 @@ case-insensitive substring semantics as `app/term_prefs.py`
   `daily_cap_ok(prefs_row, max_per_day, today)`, and a `parse_llm_verdict`
   clamp/validate helper. This is where the unit tests live — no
   Flask/DB/SMTP/Haiku needed.
+- `news/app/term_prefs.py` (edit) — add the pure
+  `term_matches(text, term) -> bool` helper described above and refactor
+  `build_term_clauses` to share its matching rule; `breaking.is_suppressed`
+  delegates to it. Pure, already unit-tested module — extend
+  `tests/test_term_prefs.py` with `term_matches` cases.
 - `news/jobs/breaking_alerts.py` (new cron) — orchestrates query → dedup
   → LLM gate → send, using the pure helpers above.
 - `news/app/mailer.py` (new, small) — extract the inline smtplib +
@@ -238,13 +252,41 @@ case-insensitive substring semantics as `app/term_prefs.py`
 - Reuse the existing `SMTP_*` config and localhost-MTA default; no new
   pip dependency, no new secret. One new cron entry (manual-actions Open).
 
+**Rollout (owner decision 2026-05-31 — go live on deploy, NO shadow/dry-run
+mode):** the first qualifying event will email real opted-in users as soon
+as the cron + migration are live, so the three guards must be airtight and
+`BREAKING_MIN_OUTLETS`/`BREAKING_WINDOW_HOURS`/`BREAKING_MAX_PER_DAY` MUST be
+env-tunable (read from `config.py`, never hard-coded) — the catalog is now
+**1,919 feeds** (up from 768 when first spec'd), so "12 outlets in 6h" is a
+looser bar than it was and the owner will tune `BREAKING_MIN_OUTLETS` after
+watching the real firing rate. `BREAKING_ENABLED` (master kill-switch,
+default on) is the instant-stop if a send misbehaves: a single env flip +
+no restart needed (it's a cron, fresh process each tick). The cron MUST log
+one structured line per tick — candidates considered, LLM verdicts
+(sent/rejected), recipients emailed — so the owner can audit firing rate and
+quality from `logs/cron.log` / `/admin/cron-health` without a DB query.
+Default opt-in is **off**, so day-one blast radius = only users who actively
+enabled the toggle.
+
+**Manual-actions the dev agent must file (Open, full inline SQL/commands per
+`manual-actions.md` conventions, account `lt1ih6uyy2z6` substituted):** (1)
+the two-table migration (`has-migration` label — applied post-deploy by the
+executor, NOT BUG-007 class since both tables are tolerated-absent); (2) the
+new every-~15-min `breaking_alerts.py` cron line; (3) a note that the new
+`BREAKING_*` knobs are env-defaulted (no action required to ship, but listed
+so the owner knows where to tune them). Restart the Python App on deploy
+(new `/account/alerts/unsubscribe/<token>` route).
+
 **Test expectation:** `pytest news/tests/` stays green. New
 `tests/test_breaking.py` covers the pure helpers without Haiku/DB/SMTP:
 candidate threshold (≥ min_outlets selected, below skipped), mute
 suppression (matching term → suppressed; non-match → sent), daily-cap
 rollover, and `parse_llm_verdict` clamping/`is_major=false`/malformed-JSON
 → no send. The LLM call is stubbed; no test requires a live DB, MTA, or
-browser.
+browser. Add `term_matches` cases to `tests/test_term_prefs.py` (case-fold,
+substring hit/miss, LIKE-metacharacter escaping) and a parity assertion that
+`is_suppressed` agrees with `term_matches` so the alert-suppression rule
+can't drift from the feed mute rule.
 
 **v2 (out of scope):** per-user relevance personalization of which events
 qualify; "follow this story/topic" granular alerts; SMS / Web Push
