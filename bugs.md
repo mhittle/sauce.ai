@@ -26,6 +26,54 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
+### BUG-031 — Anonymous `/` (home feed) returns HTTP 500 after the PR #145 deploy
+**Status:** open · **Reporter:** post-deploy QA agent (was PR #147, closed) · **Opened:** 2026-05-31
+**Note:** originally auto-filed by the QA agent as a draft PR (#147) that
+labeled this "BUG-028"; that number was already taken on `main` by the "Why?"
+explainer 500 (now Resolved). Re-filed here as **BUG-031** to avoid the
+collision; PR #147 was closed and folded into this entry.
+
+The post-deploy QA agent reports anonymous `GET https://sauce.ai/news/`
+returning **HTTP 500** consistently (generic LiteSpeed/Apache 500 page, no app
+output), while `/auth/login` and `/firehose` return **200**. Deploy HEAD was
+`70e0516` (merge of PR #145, the 3-bullet TL;DR feature). The "only `/` 500s
+while other routes are healthy" signature is the classic **BUG-007 class**
+pattern — the feed route references prod state that the other routes don't.
+
+**Leading hypotheses (ranked), to confirm with prod telemetry:**
+1. **`article_summaries` migration still unapplied + a code-path gap.** PR #145
+   added the TL;DR read path (`feed.summary` route + a feed-card toggle). The
+   migration (`2026-05-31-article-summaries.sql`) is still **Open** in
+   `manual-actions.md`. The read path is *supposed* to degrade gracefully on a
+   missing table (`load_bullets` catches it), but a 500 on the full `/` render
+   suggests a gap in that guard on the feed-index path specifically. **Cheapest
+   to check first** — apply the migration (Open manual-action) and re-test.
+2. **Stale Passenger worker after the #144/#145 deploy.** PR #144 (feed
+   SELECTION/RANKING split, `feed.index()` rewrite + new `FEED_SELECTION_POOL`
+   config) and PR #145 both need a **Python App restart** (Open in
+   `manual-actions.md`). A half-loaded worker serving a new template against an
+   old route — or a config key read before restart — can 500 `/` while the
+   unchanged `/auth/login` and `/firehose` stay up.
+3. **A genuine exception in the new `feed.index()` affinity/diversify path**
+   (PR #144) on the anonymous/default-weights branch — would show as a Python
+   traceback in `~/public_html/sauce.ai/news/logs/`.
+
+**Diagnostic (prod):**
+```bash
+curl -sS -o /dev/null -w "%{http_code}\n" https://sauce.ai/news/            # expect 200, currently 500
+tail -100 ~/public_html/sauce.ai/news/logs/*.log                            # look for the feed-route traceback
+```
+```sql
+SHOW TABLES LIKE 'article_summaries';   -- hypothesis 1: missing => apply the Open migration
+```
+
+**Fix (pending prod action):** work the two Open `manual-actions.md` items in
+order — (a) apply the `article_summaries` migration, (b) restart the Python App
+(the restart also covers PR #140/#144) — then re-test `/`. If `/` still 500s
+after both, pull the traceback from `logs/` and escalate to hypothesis 3
+(the `feed.index()` affinity path). Status stays `open` until prod confirms `/`
+returns 200.
+
 ### BUG-029 — NL algorithm builder (chat box) does not create keywords for the specific algorithm
 **Status:** open · **Reporter:** user · **Opened:** 2026-05-31
 **Note:** renumbered from BUG-028 → BUG-029 on 2026-05-31 to resolve a
