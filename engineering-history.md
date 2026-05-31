@@ -159,6 +159,36 @@ these.
   the safety. Status flipped `in-progress → ready-for-agent` (row + detail);
   merging the dispatch PR to `main` fires the paid (~$8) dev run. No code this
   session.
+- **PM session — backlog prioritization + two Google-News-inspired specs (this
+  session; roadmap-only).** Owner asked to prioritize the backlog, then pivoted
+  to "new features that take advantage of the best parts of Google News."
+  Framed Google's real strengths (habit-forming *surfaces*, not personalization
+  — which is our turf) against sauce.ai's under-used assets, and shaped three:
+  **News Near You** (local section over the `geo_*` columns we already compute
+  but only expose as a buried `/algo` slider), **The Brief** (Top Stories rail
+  with inline spectrum spread — the missing front-page hook), and a dossier
+  **story timeline**. Wrote two **build-ready** roadmap items (detail + matching
+  at-a-glance rows, byte-identical titles):
+  - **News Near You — `ready-for-agent` (DISPATCHED, ~$8 dev run on merge to
+    `main`).** Pri 7 / LOE 4. A `/local` page that injects a page-chosen place
+    into a *copy* of the active weights and reuses the existing feed query path
+    verbatim (so it's "my algorithm, filtered to my place"), reusing
+    `app/geo.py` (`geocode_query` / `haversine_sql`) + the geo filter already
+    in `ranking.build_filters_sql`. Place via `?place=` + a `local_place`
+    cookie (no table). **NOT BUG-007 class — no migration/cron/env/dep**;
+    US-only in v1 (US Census gazetteer). The one open engineering call left to
+    the dev agent: extract `feed.index()`'s query into a shared builder vs.
+    reuse the smaller building blocks (fallback documented).
+  - **The Brief — `backlog` (tracked, NOT dispatched).** Pri 7 / LOE 4. A Top
+    Stories rail above `/`'s feed cards: top N multi-outlet clusters by
+    distinct-outlet count (internal, not the Google-gated trending snapshot),
+    each with an `L·C·R` spectrum chip (`spectrum.lean_bucket`) linking to the
+    dossier. Page-1/non-HTMX/no-category only, degrades to empty on any failure.
+    NOT BUG-007 class — additive read path, no migration.
+  - No code change this session. Dispatch note: the row is `ready-for-agent` on
+    branch `claude/wizardly-wozniak-TOR5s` — the picker fires on **push to
+    `main`**, so the paid dev run launches when this roadmap PR is **merged**,
+    not on the branch push.
 
 - **BUG-029 — NL `/algo` chat box doesn't create per-algorithm keywords (interactive session, PR #142 merged, docs-only).** User: describing a feed in the `/algo` chat box doesn't create keywords for that algorithm. Code on `main` (PR #140) is correct end-to-end (`algo_nl.py` returns a sanitized `keywords` list; `describe()` passes `nl_keywords`; `algo.html` renders chips with hidden `nl_kw_*` inputs inside `#algo-form`; `save()`/`create_profile()` call `_apply_nl_keywords()` -> `algorithm_term_prefs`; `test_algo_nl.py` 21/21). User confirmed **no chips appear and none after reload**, which rules out the Save-refresh gap and points to a **stale Passenger worker**: PR #140's new route needs a restart to take effect (the template auto-reloads, so the old route serves no keywords -> `kws=[]` -> no chips). Filed the missing **PR #140 restart** as a `manual-actions.md` Open entry (BUG-029) with browser/DB verification; fallback if chips still missing post-restart = Haiku omitting the `keywords` array (`app/algo_nl.py` prompt/parse), not the deploy. **No code change** this session; BUG-029 stays `open` pending the prod restart + re-test. Renumbered BUG-028->029 after rebase (parallel session merged BUG-028 = the "Why?" explainer 500). *Process gap:* PR #140 shipped 2026-05-27 without a restart manual-action, same class as BUG-007/025.
 - **BUG-030 — orthogonal algorithms surfaced the same articles; split

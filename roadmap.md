@@ -80,6 +80,8 @@ shipped.
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
 | 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | in-progress |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
+| 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | ready-for-agent |
+| 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
 
 ---
 
@@ -809,6 +811,234 @@ opposing argument; anchoring "the other side" to the *user's* reading-lean
 diet instead of the article's bucket (Signal-Learning territory — needs the
 per-user lean profile); a "strongest agreeing coverage" inverse for finding
 corroboration.
+
+### News Near You — local news section over the geo features we already compute
+**Priority:** 7 · **LOE:** 4 · **Category:** new-feature, ui, algo, backend · **Status:** ready-for-agent
+
+**User value / why now.** Google News's Local section is one of its
+stickiest, hardest-to-replicate surfaces — "what's happening where I am" is a
+durable daily habit. We already own the expensive half: the classifier
+resolves an article's location and writes `article_features.geo_lat /
+geo_lng / geo_place` on every row (the geo / "Near a place" feature, migration
+applied 2026-05-26), and `app/geo.py` already does US geocoding + a MySQL-5.7
+haversine radius clause. **But today that asset is buried** — geo only exists
+as one free-text "Near a place" control inside the `/algo` editor, stored in
+`weights_json`. Most readers never find it. This turns a latent,
+already-paid-for backend capability into a first-class destination, and does
+it *on-thesis*: local news is shown **ranked by the reader's own algorithm**
+and the radius is a transparent control the reader owns, not a Google-style
+black box.
+
+**What it is.** A new `/local` ("Near You") page: the reader sets a place
+(ZIP, "City, ST", state, or city name) and a radius; the page renders the same
+feed cards as `/`, filtered to articles whose resolved location is within the
+radius, ordered by the reader's active-profile score. A nav link surfaces it.
+
+**The core design — reuse the feed query verbatim (the whole point).** The geo
+filter is *already* applied by `ranking.build_filters_sql(weights)` via
+`_geo_filter_from_weights` (reads `geo_lat` / `geo_lng` / `geo_radius_mi` off
+the weights dict) → `geo.haversine_sql`. So `/local` does **not** write a new
+query: it takes the viewer's active weights (`_active_weights()`, balanced
+default for anon), **copies** the dict, overrides the four geo keys with the
+page-chosen place, and runs the identical scoring + visibility + story-dedup +
+source-diversify + cards path as `feed.index()`. Local news therefore inherits
+ranking, keyword/source prefs, downvote-hide, jitter, and pagination for free,
+and can never desync from the home feed's behavior.
+
+**Where the place comes from (no DB, no migration).** Precedence, resolved by
+a new pure helper:
+1. `?place=` query param → `geo.geocode_query(place)`; on success persist the
+   resolved `(lat, lng, label, radius)` in a `local_place` cookie (JSON,
+   `path=/`, `SameSite=Lax`, ~1yr, `secure=request.is_secure` — mirror the
+   `lab_voter_token` cookie in `routes/lab.py`); no server-side row.
+2. else the `local_place` cookie, if present and parseable.
+3. else, for a signed-in user whose active profile already has a stored geo
+   filter (`weights.get("geo_lat")` etc.), prefill from that — so someone who
+   already set "Near a place" in `/algo` lands on a working page immediately.
+4. else render an **empty state**: a short "Set your location to see local
+   news" form, no error.
+Radius comes from `?radius=` clamped to `GEO_RADIUS_MAX_MI` (500), default
+`GEO_RADIUS_DEFAULT_MI` (50) — both already in `ranking.py`.
+
+**Sketch (files/surfaces to touch):**
+- `news/app/geo_local.py` (new, pure / Flask-free, mirrors `app/spectrum.py`
+  / `app/feed_diversify.py`): `resolve_local_place(place_param, radius_param,
+  cookie_value, weights, *, default_radius, max_radius)` → returns a small
+  dict `{lat, lng, label, radius}` or `None`, plus `serialize_cookie` /
+  `parse_cookie` helpers. **This is where the unit tests live** — precedence,
+  radius clamp, unresolvable place → `None`, malformed cookie → `None`. No
+  Flask/DB/geocoding-data needed if `geocode_query` is injected or the helper
+  takes already-resolved coords; keep the geocode call in the route and have
+  the pure helper handle precedence/validation only.
+- `news/app/routes/local.py` (new thin blueprint, registered at root like
+  `trending_bp` / `saves_bp` — route `GET /local`): resolve the place, build
+  the geo-injected weights copy, and **call a shared feed-query function**.
+  To avoid duplicating the ~40-line query in `feed.index()`, extract that
+  SELECT-build-and-fetch into a reusable `feed._run_feed_query(weights, *,
+  page, page_size, category, sort, ...)` (behavior-preserving refactor of
+  `index()`), and have both `/` and `/local` call it. If extraction proves
+  risky for one PR, the fallback is for `/local` to import and reuse the
+  smaller building blocks (`build_score_sql`, `build_filters_sql`,
+  `cap_per_source`, etc.) directly — justify the choice in the PR.
+- `news/app/templates/local.html` (new) — extends the base layout; a header
+  with the resolved place label + a radius `<select>` + a "change location"
+  form (GET to `/local`, includes `csrf` is unnecessary since it's a GET), and
+  the shared `partials/feed_cards.html` for the list. HTMX "Load more"
+  preserves `place`/`radius` (the cookie carries place; the param carries
+  page) exactly like the home feed.
+- `news/app/templates/base.html` — add a **"Near You"** nav link in `.topnav`
+  (the BUG-022 `flex-wrap` already absorbs another item; keep label short).
+- `news/app/__init__.py` — `register_blueprint(local_bp)`.
+
+**Preserve / must-not-break:**
+- `/`, `/firehose`, `/search`, `/saved`, and the digest are **untouched**
+  (same scoping discipline as BUG-021 / the spectrum peek). If `index()` is
+  refactored to share the query builder, its output must be byte-for-byte
+  unchanged — assert via the existing feed tests.
+- The geo filter semantics are unchanged: `haversine_sql` already excludes
+  rows with `geo_lat IS NULL`, so `/local` shows only articles the classifier
+  resolved to a place. The reader's algorithm still orders within the radius.
+
+**Constraints / watch-outs:**
+- **US-only (v1).** `app/geo.py` is backed by a US Census gazetteer subset, so
+  the place picker resolves US ZIP/city/state only. A non-US query simply
+  fails to resolve → the empty/"couldn't find that place" state, never a 500.
+  Call this out in the UI copy and as the documented v1 limitation; an
+  international gazetteer is the explicit v2.
+- **Coverage depends on geo-classification fill.** Only articles with a
+  resolved `geo_*` are eligible; a sparse local area may yield a short page.
+  Acceptable for v1 (and improves as the classify backlog drains / coverage
+  grows) — surface a gentle "not much nearby right now — try a wider radius"
+  note when the result set is small rather than an empty void.
+- **NOT BUG-007 class.** Reads only columns/tables already on prod
+  (`article_features.geo_*`); **no DB migration, no cron, no env var, no new
+  dependency, no symlink.** Anonymous-safe (balanced default weights + cookie).
+  No synchronous LLM, no process spawn — one in-memory geocode + one SQL query,
+  same cost profile as `/`. Passenger restart on deploy so the new blueprint
+  registers (standard).
+
+**Test expectation:** `pytest news/tests/` stays green. New
+`tests/test_geo_local.py` covers `resolve_local_place` purely: param beats
+cookie beats stored-weights beats none; radius clamp (>max → max, ≤0 →
+default); unresolvable place → `None`; malformed/garbage cookie → `None`
+(never raises). If `feed.index()` is refactored, the existing feed-route tests
+must still pass unchanged. No test requires Haiku, a live DB, a browser, or
+network.
+
+**v2 (out of scope):** international geocoding; "use my location" via the
+browser Geolocation API; a "Local" rail embedded at the top of the home feed;
+remembering multiple saved places; a per-source `is_local`/coverage-area
+notion distinct from per-article geo.
+
+### The Brief — Top Stories rail on the home feed with inline spectrum spread
+**Priority:** 7 · **LOE:** 4 · **Category:** ui, new-feature, algo · **Status:** backlog
+
+**User value / why now.** Google News's single most habit-forming surface is
+the Top Stories cluster at the top of the page — "here's what matters right
+now," multi-source, above the fold. sauce.ai has **no front-page "what matters
+now" hook**: `/` is a personalized river, `/trending` is a separate
+destination most readers never click, and breaking-news detection (in-progress)
+is email-only. A reader arriving at `/` should immediately see the few biggest
+stories in the world right now — then drop into their personalized feed below.
+The twist Google structurally cannot do: each brief shows its **coverage
+spectrum inline** — "18 outlets · L 5 · C 9 · R 4" — so the front page itself
+makes coverage bias visible and links straight to our killer-demo dossier.
+This is the daily-habit surface we're missing, it's cheap, and it visibly
+expresses the transparent-ranking thesis on the highest-traffic page.
+
+**What it is.** A compact "The Brief" rail rendered above the feed cards on the
+`/` home page (page 1 only): the 3–5 biggest **multi-outlet story clusters**
+in a recent window, each a one-line entry — headline (canonical member), an
+"N outlets" count, a tiny `L·C·R` spectrum chip, and a link to
+`/story/<story_id>`. Collapses/hides cleanly when there's nothing big enough.
+
+**How "biggest" is defined (deterministic, LLM-free, no Google dependency).**
+Rank recent story clusters by **distinct global outlet count** — the same
+signal `/trending` uses and the breaking-alerts spec relies on — sourced
+directly from `articles`, not the Google-gated `trending_topics` snapshot
+(so a purely-internal big story still surfaces):
+```sql
+SELECT a.story_id,
+       COUNT(DISTINCT a.source_id) AS outlet_count,
+       MAX(a.published_at)         AS latest
+FROM articles a
+JOIN sources s ON s.id = a.source_id
+WHERE a.status = 'classified'
+  AND a.story_id IS NOT NULL
+  AND a.published_at >= UTC_TIMESTAMP() - INTERVAL %s HOUR   -- BRIEF_WINDOW_HOURS, default ~12
+  AND s.owner_id IS NULL                                     -- global pool only, not personal feeds
+GROUP BY a.story_id
+HAVING outlet_count >= %s                                    -- BRIEF_MIN_OUTLETS, default ~4
+ORDER BY outlet_count DESC, latest DESC
+LIMIT %s;                                                    -- BRIEF_MAX_ITEMS, default 5
+```
+For each surviving `story_id`, fetch the canonical member (`a.id = a.story_id`)
+for the headline/link and the per-bucket counts. The **spectrum chip** is built
+with the existing shared `app/spectrum.py` `lean_bucket` over the cluster
+members' `political_lean` (keep the ±0.2 thresholds shared — `spectrum.py`
+already carries the sync note). Compute the L/C/R tallies in a small **pure
+helper** so it's unit-testable.
+
+**Sketch (files/surfaces to touch):**
+- `news/app/brief.py` (new, pure / Flask-free, mirrors `app/spectrum.py`):
+  `summarize_spread(members)` → `{"left": n, "center": n, "right": n,
+  "outlets": n}` using `lean_bucket`; and a `select_brief(rows, min_outlets,
+  max_items)` shaping helper if useful. **Unit tests live here** — no
+  Flask/DB needed.
+- `news/app/routes/feed.py` — in `index()`, after building the page, run one
+  extra cheap query (the candidate query above + a canonical-member/bucket
+  fetch) **only on page 1, non-HTMX, no category filter**, behind a
+  try/except that yields `brief=[]` on any failure (the rail must never break
+  the feed). Pass `brief` to the template. Consider a thin
+  `_load_brief(limit, window_hours, min_outlets)` function kept next to
+  `index()`.
+- `news/app/templates/index.html` (the home feed template) — render the rail
+  above `#feed-cards`, hidden entirely when `brief` is empty. Each row links
+  to `url_for("story.view", story_id=...)`.
+- `news/app/static/style.css` — a small `.brief` block; reuse the existing
+  lean-badge / `.spectrum-peek` classes for the L·C·R chip; dark-mode-aware.
+- `news/app/config.py` — `BRIEF_ENABLED` (default on), `BRIEF_WINDOW_HOURS`,
+  `BRIEF_MIN_OUTLETS`, `BRIEF_MAX_ITEMS` (all env-defaulted).
+
+**Preserve / must-not-break:**
+- The personalized feed below is **unchanged** — the rail is additive markup +
+  one extra query. The Brief is **not** personalized (it's "what's big for
+  everyone"); it does not read the user's weights, so it can't interfere with
+  ranking, dedup, diversify, or pagination.
+- Show on the `/` page-1 full render only — **not** on the HTMX "Load more"
+  partial, not on category-filtered views, not on `/firehose` / `/search` /
+  `/saved`. Gate on `not request.headers.get("HX-Request")` and `page == 1`
+  and no `category`.
+- Reuse the shared `lean_bucket` thresholds; do not fork them.
+
+**Constraints / watch-outs:**
+- **NOT BUG-007 class** — reads only columns/tables already on prod
+  (`articles`, `sources`, `article_features.political_lean`). **No DB
+  migration, no cron, no env var required (knobs default), no new dependency,
+  no symlink.** Passenger restart on deploy (template/route/CSS).
+- **No synchronous LLM, no process spawn.** v1 is pure SQL + a Python tally —
+  one extra indexed `GROUP BY` on the page-1 render only. (A cached Haiku
+  one-line "why this matters" per brief, keyed like `story_dossiers`, is the
+  explicit **v2** — keep v1 LLM-free and request-path-safe.)
+- **Cost of the extra query:** it's a grouped scan over the 7-day-ish window;
+  the `(story_id, published_at)` index (`idx_articles_story`) supports it.
+  Keep the window tight (`BRIEF_WINDOW_HOURS`) and `LIMIT` small. If it ever
+  shows up in latency, the fallback is to read the `trending_topics` snapshot
+  the cron already maintains instead of a live group-by — note this in the PR
+  but prefer the live query for v1 correctness.
+
+**Test expectation:** `pytest news/tests/` stays green. New
+`tests/test_brief.py` covers `summarize_spread` / `select_brief` purely:
+correct L/C/R bucketing at the ±0.2 boundaries; outlet tally; `min_outlets`
+threshold (below → excluded); `max_items` cap; empty input → empty result.
+The existing feed-route tests must still pass (the rail is additive and
+degrades to empty). No test requires Haiku, a live DB, or a browser.
+
+**v2 (out of scope):** a cached Haiku one-liner per brief; personalizing the
+rail toward the reader's topics ("big in your world"); a dedicated
+auto-refresh; surfacing the rail on mobile as a horizontally-scrollable
+carousel; folding the breaking-alerts detection signal in so "Brief" and
+"Breaking email" share one outlet-burst definition.
 
 ---
 
