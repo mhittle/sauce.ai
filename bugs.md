@@ -26,6 +26,40 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
+### BUG-028 — Homepage returns HTTP 500 for all anonymous requests
+**Status:** open · **Reporter:** agent (post-deploy QA) · **Opened:** 2026-05-31
+
+**Anonymous load check — FAILED**
+
+Navigating to `https://sauce.ai/news/` via Playwright returned a page titled
+"500 Internal Server Error" with body text:
+
+> "The server encountered an internal error and was unable to complete your
+> request. Either the server is overloaded or there is an error in the
+> application."
+
+This is the standard Apache/LiteSpeed 500 error page, not a Flask/application
+traceback. All anonymous feed content is inaccessible.
+
+**Observed:** 2026-05-31 UTC via post-deploy QA agent. Smoke check for the
+same run also reported `failure`, independently corroborating the 500.
+
+**Deploy SHA at time of observation:** 70e0516f0de0f3a36ea20b59e123aa681d7eba4e
+(HEAD of main, merged PR #145).
+
+**Checks not completed due to site-down state:** sign-in, thumb persistence,
+Algo Keywords tab, Firehose, cron-health (cron-health redirected to login).
+
+**Distinct from BUG-024** (which observed HTTP 415 "Unsupported Media Type" on
+all GET endpoints on 2026-05-26 — a different HTTP status code and error class).
+
+**Recommended first steps:**
+- Check the Python App status in cPanel (is the app crashed / needs restart?).
+- Review `~/public_html/sauce.ai/news/logs/` for a Python traceback.
+- Check whether a recent migration was applied or a cPanel env var changed.
+
+---
+
 ### BUG-023 — Article classification rate stalls again after recent throughput fix
 **Status:** open · **Reporter:** user · **Opened:** 2026-05-27
 
