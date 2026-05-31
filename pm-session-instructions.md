@@ -73,7 +73,7 @@ can implement. When the owner approves a feature:
   constraints, and a test expectation. The dev agent's PR quality tracks
   your spec quality.
 - `proposed` = tracked idea; **`ready-for-agent` = dispatch.**
-  ⚠️ Pushing a `ready-for-agent` row to `main` launches a **paid (~$8)
+  ⚠️ Pushing a `ready-for-agent` row to `main` launches a **paid (~$10)
   autonomous dev run** that opens a PR. Only set that flag when the owner
   says go.
 - For DB changes: design app code to tolerate the table not existing yet,

@@ -9,7 +9,7 @@ context — the differences from the human version are flagged with
 
 ## Hard budget
 
-- **$8 USD max** in Anthropic spend (enforced by `--max-budget-usd 8`
+- **$10 USD max** in Anthropic spend (enforced by `--max-budget-usd 10`
   on the runner; treat as immovable).
 - **45 minutes wallclock max** for this whole run.
 - If you are approaching either cap, commit a draft PR titled

@@ -102,7 +102,7 @@ the code and prod, gated by the repo variable `AGENTS_ENABLED`. Read
   workflow). Expect a `BUG007_OK` / `BUG007_BLOCK` bot comment;
   `BUG007_BLOCK` is a **required-check failure** that blocks merge.
 - ⚠️ **Pushing a `ready-for-agent` row in `roadmap.md` to `main` launches
-  a paid (~$8) unattended dev-agent run** that opens its own PR. Only do
+  a paid (~$10) unattended dev-agent run** that opens its own PR. Only do
   that when you mean to. (This is also how you *intentionally* hand work
   to the dev agent — see `agent-fleet.md`.)
 - A **weekly PM agent** opens proposal PRs; **post-deploy QA** runs on
