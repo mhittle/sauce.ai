@@ -89,6 +89,47 @@ tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
 Then in a browser: a feed card's **TL;DR** toggle expands to up to 3 bullets
 (or a graceful "no summary yet" note); `/read/<id>` shows a TL;DR box above
 the body for summarized articles.
+### 2026-05-31 — Python App restart: NL keyword proposals (PR #140) — BUG-029
+**Status:** open · **PR:** #140 (merged 2026-05-27) · **Opened:** 2026-05-31
+
+PR #140 extended the `/algo` natural-language builder so the single Haiku
+call also proposes per-algorithm **keywords** (rendered as review-then-Save
+chips). The Python route change (`routes/algo.py` `describe()` now computes
+and returns `nl_keywords`; `save()`/`create_profile()` call
+`_apply_nl_keywords()`) needs a **Passenger restart** to take effect —
+Passenger caches imports until restart even after CI/CD writes the new
+files (INSTALL §8G). The template auto-reloads via Jinja, so the chip block
+is already present, but until the worker restarts the **old** `describe()`
+serves and passes no keywords → no chips appear and nothing persists. This
+is the cause of **BUG-029** (user: "entering algo prefs through the chat
+box does not create keywords for the specific algo" — no chips, none after
+reload). No restart entry was filed when PR #140 merged; filing it now.
+
+**Action (cPanel):** Setup Python App → the `sauce.ai/news` app →
+**Restart**.
+
+**Verify (signed-in browser):** go to `https://sauce.ai/news/algo`, type a
+description that names topics, e.g. *"more about climate policy, hide
+crypto and the royal family"*, click **Build from description**. A
+"Keywords from your description" box with removable chips
+(boost climate policy / mute crypto / mute royal family) should appear
+above the Save buttons. Click **Save as new profile** (redirects, so the
+saved list refreshes immediately) and confirm the terms show in the
+lower **Keywords** panel for that profile. Optional DB check:
+
+```sql
+SELECT atp.term, atp.mode, atp.weight
+FROM algorithm_term_prefs atp
+JOIN user_algorithms ua ON ua.id = atp.algorithm_id
+WHERE ua.user_id = <your_user_id>
+ORDER BY atp.id DESC LIMIT 10;
+```
+
+If chips still do **not** appear after a confirmed restart, the new route
+is live but Haiku is omitting the `keywords` array — reopen BUG-029 against
+the prompt/parse path (`app/algo_nl.py`) rather than the deploy.
+
+No DB migration, no cron, no env var, no new pip dep — restart only.
 
 ---
 
