@@ -6,6 +6,7 @@ from .rules import (
 from .llm import classify_batch_llm, LLMUnavailable
 from .paywall import detect_paywall
 from .framing import generate_framing
+from .summary import summarize_batch_llm
 
 __all__ = [
     "compute_rules_features", "normalize_byline",
@@ -14,4 +15,5 @@ __all__ = [
     "classify_batch_llm", "LLMUnavailable",
     "detect_paywall",
     "generate_framing",
+    "summarize_batch_llm",
 ]

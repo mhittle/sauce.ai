@@ -41,6 +41,74 @@ Sort **Open** newest-first. **Completed** newest-first.
 ## Open
 
 (none currently)
+### 2026-05-31 — Migration: article_summaries (3-bullet TL;DR)
+**Status:** open · **PR:** (Article summary — TL;DR, branch `claude/busy-hawking-dnvtZ`) ·
+**Opened:** 2026-05-31 · **File reference:** `news/seed/migrations/2026-05-31-article-summaries.sql`
+
+Backs the 3-bullet TL;DR feature. `jobs/classify_pending.py` runs a
+separate, isolated Haiku pass over gated articles (source_reputation >
+`SUMMARY_MIN_REPUTATION` AND paywall < `SUMMARY_MAX_PAYWALL` AND a body was
+extracted) and caches the bullets in this table; the feed "TL;DR" toggle and
+the reader view read it.
+
+**Cron WRITE path (BUG-007 / BUG-025 class), but defended:** the classifier
+probes for this table once per run and skips the summary pass entirely if it's
+absent — so a missing migration does **NOT** freeze classification the way the
+geo columns did (BUG-025). It just produces no summaries until applied, and
+the read path degrades to an empty panel. Apply promptly anyway so the feature
+actually works. CASCADE-pruned with the article; no new cron, no new env var
+required (knobs have defaults), no new pip dep. **Python App restart** after
+deploy so the new `feed.summary` route + reader change register.
+
+Apply once on prod via phpMyAdmin → SQL tab (database `lt1ih6uyy2z6_news`):
+
+```sql
+CREATE TABLE IF NOT EXISTS article_summaries (
+  article_id   BIGINT UNSIGNED NOT NULL,
+  bullets_json TEXT NOT NULL,
+  model        VARCHAR(64) NOT NULL DEFAULT '',
+  generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (article_id),
+  KEY idx_summaries_generated (generated_at),
+  CONSTRAINT fk_summaries_article FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Verify:**
+
+```sql
+SELECT COUNT(*) FROM article_summaries;   -- 0 immediately after apply, rises over classify ticks
+SHOW INDEX FROM article_summaries;        -- PRIMARY + idx_summaries_generated
+```
+
+```bash
+tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
+# look for the new `summaries=N` field, e.g.
+#   classified=200 llm_articles=200 summaries=37 reclassified=0 cost_usd=...
+```
+
+Then in a browser: a feed card's **TL;DR** toggle expands to up to 3 bullets
+(or a graceful "no summary yet" note); `/read/<id>` shows a TL;DR box above
+the body for summarized articles.
+
+---
+
+### 2026-05-22 — Rotate before expiry: AGENT_PUSH_TOKEN (fine-grained PAT)
+**Status:** open · **PR:** (agent-fleet enablement, this session) ·
+**Opened:** 2026-05-22
+
+`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
+branches, open PRs, and fire `repository_dispatch` (the default
+`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
+Fine-grained PATs **expire**, and four workflows fail silently the day it
+lapses: `dev-agent`, `pm-agent`, `post-deploy`, `migration-executor`.
+
+**Action:** before the token's expiry, regenerate it (GitHub → Settings →
+Developer settings → Fine-grained tokens; scope to `mhittle/sauce.ai`
+with Contents / Pull requests / Workflows / Actions RW) and update the
+`AGENT_PUSH_TOKEN` repo secret (Settings → Secrets and variables →
+Actions → Secrets). No code change; the fleet resumes immediately. Record
+the new expiry date here when you rotate.
 
 ---
 

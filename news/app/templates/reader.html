@@ -21,6 +21,15 @@
     </figure>
   {% endif %}
 
+  {% if tldr %}
+    <aside class="tldr-box reader-tldr" aria-label="Summary">
+      <div class="tldr-head"><span class="tldr-label">TL;DR</span></div>
+      <ul class="tldr-list">
+        {% for b in tldr %}<li>{{ b }}</li>{% endfor %}
+      </ul>
+    </aside>
+  {% endif %}
+
   {% if has_body %}
     <div class="reader-body">
       {% for p in paragraphs %}<p>{{ p }}</p>{% endfor %}
