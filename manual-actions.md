@@ -40,6 +40,37 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-31 — Python App restart + re-test: NL keyword prompt hardening (BUG-029)
+**Status:** open · **PR:** (BUG-029 prompt hardening, branch `claude/blissful-hamilton-Dh7SD`) · **Opened:** 2026-05-31
+
+BUG-029 fix: the `/algo` natural-language builder set sliders but proposed no
+keywords because the Haiku prompt marked `keywords` OPTIONAL. This PR rewrites
+`app/algo_nl.py` `_system_prompt()` to make keyword extraction mandatory when
+the reader names a subject. The new prompt lives in the **worker-loaded**
+`algo_nl.py`, so Passenger caches it until restart — a restart is required
+**after this PR deploys** for the change to take effect (separate from any
+earlier restart). No DB migration, no cron, no env var, no new pip dep.
+
+**Action (cPanel):** Setup Python App → the `sauce.ai/news` app → **Restart**.
+
+**Verify (signed-in browser):** go to `https://sauce.ai/news/algo`, type a
+description that names topics, e.g. *"more about climate policy and the LA
+Lakers, hide crypto and the royal family"*, click **Build from description**.
+A "Keywords from your description" box with removable chips (boost climate
+policy / boost la lakers / mute crypto / mute royal family) should now appear
+above the Save buttons. Click **Save as new profile** and confirm the terms
+land in that profile's lower **Keywords** panel. Server-side confirmation that
+Haiku is now returning keywords:
+
+```
+tail -100 /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/*.log | grep "algo.describe nl_keywords="
+# expect a line like: algo.describe nl_keywords=4 desc_len=72
+```
+
+If chips still don't appear and the log shows `nl_keywords=0`, the model is
+still omitting the array — reopen BUG-029 against the prompt/parse path
+(`app/algo_nl.py`) rather than the deploy.
+
 ### 2026-05-31 — Browser verify: News Near You /local (PR #160)
 **Status:** open · **PR:** #160 (News Near You) · **Opened:** 2026-05-31
 

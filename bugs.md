@@ -75,7 +75,7 @@ after both, pull the traceback from `logs/` and escalate to hypothesis 3
 returns 200.
 
 ### BUG-029 — NL algorithm builder (chat box) does not create keywords for the specific algorithm
-**Status:** open · **Reporter:** user · **Opened:** 2026-05-31
+**Status:** in-progress (prompt-hardening fix written, PR pending; prod re-test pending) · **Reporter:** user · **Opened:** 2026-05-31
 **Note:** renumbered from BUG-028 → BUG-029 on 2026-05-31 to resolve a
 parallel-session BUG-ID collision (a session merged to `main` used BUG-028
 for the "Why?" ranking-explainer 500). See
@@ -142,6 +142,54 @@ verification), then re-test the describe flow. If chips still don't appear
 after a confirmed restart, escalate to hypothesis 3 (inspect the prompt/
 parse against live Haiku output). Status stays `open` until prod confirms
 chips render and keywords persist to the profile.
+
+**Re-report + code re-verification (2026-05-31, continued):** user reports
+the keywords are **still not set by the prompt** on `/algo`. Re-audited the
+entire merged chain on `main`/this branch (PR #140 = commit `d2e4da5`, present
+in history) end-to-end — it is correct:
+- `app/algo_nl.py` `_system_prompt()` instructs a `keywords` array;
+  `_normalize_keywords()` sanitizes via `term_prefs` helpers; `_normalize()`
+  returns the list and `interpret_algorithm()` surfaces it.
+- `routes/algo.py` `describe()` passes `nl_keywords=result.get("keywords")`;
+  `_render_editor` forwards it; `save()` + `create_profile()` both call
+  `_apply_nl_keywords()` (which re-sanitizes the submitted `nl_kw_*` inputs).
+- `templates/algo.html` renders the chip block (`x-for` over `kws`) with the
+  hidden `nl_kw_term/mode/weight` inputs **inside** `#algo-form` (opens L27,
+  closes L173); "Save algorithm" uses `hx-include="#algo-form"`, "Save as new
+  profile" is a plain submit inside it — so the chips ride along on either save.
+This **re-confirms the bug is not in the repo code**; the two live hypotheses
+remain (1) the PR #140 Passenger restart was never done (the `describe()`
+route is still the pre-#140 build serving no keywords), or (3) the worker is
+fresh but Haiku is omitting the `keywords` array. These are distinguished only
+by prod facts I can't observe from the sandbox (no Flask/DB/LLM/browser).
+Awaiting user confirmation of (a) whether the Python App has been restarted
+since PR #140 deployed and (b) whether chips appear at all vs. appear-but-
+don't-persist, before either pointing at the restart or hardening the
+`algo_nl.py` prompt for (3).
+
+**Disambiguated + fix (2026-05-31, PR pending):** user confirmed (a) the
+Python App **has** been restarted since PR #140 and (b) **no chips appear at
+all** (none after reload). That eliminates hypotheses 1 (stale worker) and 2
+(persistence) and confirms **hypothesis 3** — the live `describe()` route runs
+but `interpret_algorithm()` returns an empty `keywords` list (Haiku sets the
+sliders but omits the array). Root cause is the prompt, not the code: in
+`app/algo_nl.py` `_system_prompt()` the `keywords` field was labeled
+`OPTIONAL`, buried among the "Also:" bullets, and the prompt told the model
+**twice** it could leave the list empty, so Haiku reliably did. **Fix
+(`app/algo_nl.py`):** keywords reframed as a FIRST-CLASS, mandatory-when-a-
+subject-is-named output (emit a keyword *in addition* to moving the sliders),
+the empty-list caveat narrowed to purely-abstract descriptions, a second
+worked example added, and a fully-populated worked-example JSON appended at
+the schema tail. Also added an `algo.describe nl_keywords=%d` INFO log in
+`routes/algo.py` `describe()` so prod logs show whether Haiku now returns
+keywords (this bug stayed invisible across sessions because the model's output
+was never observable). New guard test in `tests/test_algo_nl.py` fails if the
+prompt regresses to "OPTIONAL". **Prod actions:** deploy this PR, then
+**restart the Python App** (the new prompt is in the worker-loaded
+`algo_nl.py`) — `manual-actions.md` Open. Stays `in-progress` until a prod
+re-test shows chips rendering; if still empty after the restart, the
+`nl_keywords=0` log line confirms it's a model-output problem to escalate
+against the prompt/parse rather than the deploy.
 ### BUG-030 — Switching to an orthogonal algorithm surfaces largely the same articles
 **Status:** resolved (PR #144 merged 2026-05-31; prod restart + browser verify pending) · **Reporter:** user · **Opened:** 2026-05-31 · **Closed:** 2026-05-31
 **Note:** renumbered BUG-028 → BUG-029 → **BUG-030** on 2026-05-31 to clear
