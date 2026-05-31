@@ -40,7 +40,6 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-(none currently)
 ### 2026-05-31 — Migration: article_summaries (3-bullet TL;DR)
 **Status:** open · **PR:** (Article summary — TL;DR, branch `claude/busy-hawking-dnvtZ`) ·
 **Opened:** 2026-05-31 · **File reference:** `news/seed/migrations/2026-05-31-article-summaries.sql`
@@ -113,50 +112,24 @@ the new expiry date here when you rotate.
 ---
 
 ## Completed
-### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min)
-**Status:** completed · **PR:** #121 · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
-
-Demand-driven classification top-up (the every-minute `classify_pending.py
---triggered-only` cron, a fast no-op unless `logs/classify_topup.signal` is
-present AND fresh). This is also fix **(A)** for **BUG-023** (classification
-re-stall): the cron was inert because this line had never been installed, so
-PR #121's top-up never fired and classification ran only on the `*/5`
-safety-net (a ~2,400 articles/hour ceiling that couldn't drain the backlog
-under the 1,919-feed catalog). User confirmed the line is installed on prod
-(2026-05-31; first reported applied 2026-05-27 per `bugs.md` BUG-023). The
-existing `*/5 * * * * classify_pending.py` entry stays as the safety-net /
-cold-start tick; `job_lock(classify_pending)` serializes the two so they
-never run concurrently. No DB migration, no Python App restart, no new env
-var, no new pip dep.
-
-### 2026-05-31 — Python App restart: keywords-into-feature-list (PR #119)
-**Status:** completed · **PR:** #119 (merged 2026-05-22) ·
-**Opened:** 2026-05-22 · **Completed:** 2026-05-31
-
-PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
-(`algo.html` + `style.css`). Template-only (no migration / cron / env /
-dep). User confirmed (2026-05-31) the `sauce.ai/news` Python App was
-restarted in cPanel and `/algo` now shows no Keywords tab, with the
-keyword controls rendering under the algo form.
-
----
-
-### 2026-05-27 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
+### 2026-05-31 — Cron entry: classify_pending --triggered-only (every 1 min) — BUG-023 fix (A)
 **Status:** completed · **PR:** #121 (merged 2026-05-22) ·
-**Opened:** 2026-05-22 · **Completed:** 2026-05-27
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31 (first reported applied 2026-05-27 per `bugs.md` BUG-023)
 
-Demand-driven classification top-up. The feed (`/`) touches
-`logs/classify_topup.signal` after each page load when the classified
-buffer ahead of the reader drops below 400 (debounced ~60s); the new
-every-minute cron runs `classify_pending.py --triggered-only`, a fast
-no-op unless the signal is present AND fresh, otherwise it acquires the
-existing `job_lock(classify_pending)` and runs normally (the lock
-serializes it against the `*/5` safety-net tick). This entry was the
-root cause of **BUG-023** (classification re-stall): PR #121's top-up
-was inert because this line was never installed. User confirmed
-(2026-05-27, per BUG-023 fix A) the line is now in the prod crontab;
-demand-driven top-up is live. No DB migration, no Python App restart,
-no new env var, no new pip dep.
+Demand-driven classification top-up: the feed touches
+`logs/classify_topup.signal` when the classified buffer drops below 400
+(debounced ~60s); the every-minute `classify_pending.py --triggered-only`
+cron consumes it — a fast no-op unless the signal is present AND fresh,
+otherwise it takes `job_lock(classify_pending)` and runs normally. This was
+also fix **(A)** for **BUG-023** (classification re-stall): the cron had never
+been installed, so PR #121's top-up was inert and classification ran only on
+the `*/5` safety-net (~2,400 articles/hour — couldn't drain the backlog under
+the 1,919-feed catalog). User confirmed the line is installed on prod. The
+existing `*/5 * * * * classify_pending.py` entry stays as the safety-net /
+cold-start tick; `job_lock` serializes the two so they never run concurrently.
+No DB migration, no Python App restart, no new env var, no new pip dep.
+(BUG-023 stays `open` in `bugs.md` until prod telemetry confirms the backlog
+fully drains.)
 
 **Cron line installed (cPanel → "Cron Jobs"):**
 
@@ -171,49 +144,17 @@ crontab -l | grep -- '--triggered-only'      # the */1 line is present
 tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
 ```
 
-Expect one of: `--triggered-only: no fresh signal, exiting` (no demand) ·
-`classified=N llm_articles=M ...` (ran) · `lock held … skipping` (5-min
-cron mid-run). (BUG-023 itself stays `open` in `bugs.md` until prod
-telemetry confirms the pending backlog fully drains.)
-
 ---
 
 ### 2026-05-31 — Python App restart: keywords-into-feature-list (PR #119)
-**Status:** completed · **PR:** #119 (merged 2026-05-22) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
+**Status:** completed · **PR:** #119 (merged 2026-05-22) ·
+**Opened:** 2026-05-22 · **Completed:** 2026-05-31
 
 PR #119 folded the `/algo` Keywords tab into the UI-tab feature list
-(`algo.html` + `style.css`). Template-only (Passenger picks it up on its
-next worker cycle), so this was low-urgency, but the user confirmed a cPanel
-"Restart" of the `sauce.ai/news` Python App was performed so it takes
-immediately. `/algo` shows no Keywords tab; the keyword controls render
-under the algo form. No DB migration, no env var, no pip dep.
-
----
-
-### 2026-05-31 — Rotated: AGENT_PUSH_TOKEN (fine-grained PAT)
-**Status:** completed · **PR:** (agent-fleet enablement) · **Opened:** 2026-05-22 · **Completed:** 2026-05-31
-
-`AGENT_PUSH_TOKEN` is the fine-grained PAT that lets the agent fleet push
-branches, open PRs, and fire `repository_dispatch` (the default
-`GITHUB_TOKEN` can't trigger downstream workflows — see `agent-fleet.md`).
-Fine-grained PATs **expire** and four workflows (`dev-agent`, `pm-agent`,
-`post-deploy`, `migration-executor`) fail silently the day it lapses. User
-confirmed the token was regenerated (scope `mhittle/sauce.ai`: Contents /
-Pull requests / Workflows / Actions RW) and the `AGENT_PUSH_TOKEN` repo
-secret updated. No code change; the fleet resumes immediately.
-
-> **Standing reminder:** this is a recurring action — the new token will
-> also expire. Re-file an **Open** entry before its expiry date so a future
-> session rotates it ahead of the lapse.
-
----
-crontab -l | grep -- '--triggered-only'   # the */1 line is present
-tail -50 ~/public_html/sauce.ai/news/logs/cron.log | grep classify_pending
-```
-
-`classify_pending --triggered-only: no fresh signal, exiting` once a
-minute confirms the cron is live (no demand); `classified=N ...` lines
-appear when the signal is fresh.
+(`algo.html` + `style.css`). Template-only (no migration / cron / env / dep).
+User confirmed the `sauce.ai/news` Python App was restarted in cPanel and
+`/algo` now shows no Keywords tab, with the keyword controls rendering under
+the algo form.
 
 ---
 
