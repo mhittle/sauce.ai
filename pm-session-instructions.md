@@ -95,5 +95,7 @@ can implement. When the owner approves a feature:
 
 Follow `engineering-session-wrapup.md`: update `roadmap.md` (keep the
 at-a-glance table in sync) and append to `engineering-history.md` if
-something meaningful was decided. Remember `ready-for-agent` is a **live
+something meaningful was decided — **all in the same PR** (the wrap-up
+bookkeeping rides in the feature/spec PR, never a separate follow-up; see
+that doc's "Core principle"). Remember `ready-for-agent` is a **live
 trigger** — don't set it at wrap-up unless you intend to dispatch.

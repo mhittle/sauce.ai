@@ -56,7 +56,12 @@ on or the fleet stalls mid-run.
    `repository_dispatch(dev-implement)` per item.
 3. The `implement` job runs the Opus agent with `.github/agents/dev-warmup.md`
    + the title; the agent reads the matching roadmap section for context
-   and opens a **draft** PR.
+   and opens a **draft** PR. That PR carries the **full wrap-up in one
+   PR** — it moves the roadmap row from `in-progress` to `done` (status +
+   at-a-glance + a Done-section entry citing the PR) and appends the
+   `engineering-history.md` entry, so no separate follow-up PR is ever
+   needed (see `engineering-session-wrapup.md` "Core principle: wrap-up
+   lands in the feature PR").
 4. The PR triggers the BUG-007 gate. A human reviews, flips draft→ready,
    and merges.
 

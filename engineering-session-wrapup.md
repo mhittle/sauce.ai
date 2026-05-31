@@ -16,6 +16,32 @@ consistently.
 
 ---
 
+## Core principle: wrap-up lands in the feature PR, not a follow-up PR
+
+**All per-feature wrap-up bookkeeping ships inside the same PR as the
+feature** — never as a separate PR opened after merge. By the time you
+request review/merge, the feature branch must already carry the *finished*
+state:
+
+- `roadmap.md`: the item moved to **`done`** (status + at-a-glance row +
+  a Done-section entry) with the **PR number** of *this* PR and today's
+  date. (You marked it `in-progress` at your first commit; flip it to
+  `done` in this same PR before requesting merge — fill in the PR number
+  once the PR is open, amending or adding a commit on the same branch.)
+- `engineering-history.md`: the dated entry for the work.
+- `bugs.md`, `manual-actions.md`: any status changes / new prod actions.
+
+Marking an item `done` while the PR is still open is intentional and
+correct: the PR *is* the unit of completion, it only lands on `main` when
+merged, and a rejected PR's branch edits never reach `main`. This means a
+reviewer sees the complete record in one diff and **no second "mark it
+done" PR is ever required**. The merge is the single step.
+
+(The checklist below is therefore mostly about *making sure* every doc is
+in sync on the feature branch — it is not a list of post-merge chores.)
+
+---
+
 ## Self-trigger: when to proactively suggest a wrap-up
 
 Suggest a wrap-up when any of these are true:
@@ -96,8 +122,12 @@ ingestible in a single `Read` — onboarding reads it end-to-end.
 
 For each item touched this session:
 
-- If completed → move it from "Items in detail" to the "Done" section
-  with PR# and date.
+- If completed → move it to the "Done" section **in this same PR** (not a
+  follow-up): set its status to `done`, move/add its Done-section entry
+  with **this PR's number** and date, and update the at-a-glance row. The
+  feature merges already-`done`; never leave a "flip to done after merge"
+  chore. (Status was `in-progress` from your first commit; this is where
+  it becomes `done`.)
 - If started but not finished → status `in-progress`. Add a note about
   where it stands and what's left.
 - If discovered as a new feature/sprint candidate → add a new entry with
@@ -155,6 +185,10 @@ still accurate.
   duplicates). See `new-engineering-session-instructions.md` Step 7
   for the full parallel-session protocol.
 - All commits pushed to the feature branch.
+- The feature branch already carries the finished bookkeeping (roadmap
+  item `done` with this PR's number, history entry, bugs/manual-actions in
+  sync) — see "Core principle" above. Do **not** plan a separate
+  post-merge PR for any of it.
 - Any draft PRs are either:
   - merged,
   - marked ready-for-review with a note to the user,
@@ -214,6 +248,9 @@ The next session will read `engineering-history.md` and pick up cleanly.
 
 Don't:
 
+- Open a separate follow-up PR for wrap-up bookkeeping (roadmap → done,
+  history entry, etc.). It all ships in the feature PR; the merge is the
+  single step. See "Core principle" at the top.
 - Skip the history entry because "nothing important happened" — the
   decision *that* nothing important happened is itself worth logging.
 - Update one tracking doc and forget the others (history, roadmap,
