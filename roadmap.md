@@ -79,7 +79,7 @@ shipped.
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
 | 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | in-progress |
-| 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
+| 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | ready-for-agent |
 
 ---
 
@@ -655,7 +655,7 @@ cleanly: Flask + gunicorn behind nginx, MySQL local, system cron.
 Defer until shared hosting actively breaks something the customer notices.
 
 ### Steel-man — strongest opposing-view coverage of a story
-**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo, new-feature · **Status:** backlog
+**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo, new-feature · **Status:** ready-for-agent
 
 **User value / why now.** sauce.ai already owns the one thing that makes a
 credible "see the other side" feature possible: a deduplicated story cluster
