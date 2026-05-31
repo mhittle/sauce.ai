@@ -79,6 +79,7 @@ shipped.
 | 5 | 3 | infra, skunkworks | Agent infra: PM agent (weekly proposals) | done |
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
 | 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | in-progress |
+| 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
 
 ---
 
@@ -644,6 +645,107 @@ scaffolds, immutable venv shims, fork-bombs on respawn. A $6–10/month VPS
 cleanly: Flask + gunicorn behind nginx, MySQL local, system cron.
 
 Defer until shared hosting actively breaks something the customer notices.
+
+### Steel-man — strongest opposing-view coverage of a story
+**Priority:** 7 · **LOE:** 3 · **Category:** ui, algo, new-feature · **Status:** backlog
+
+**User value / why now.** sauce.ai already owns the one thing that makes a
+credible "see the other side" feature possible: a deduplicated story cluster
+with every covering outlet's political lean (`articles.story_id` +
+`article_features.political_lean` — the same data behind the `/story/<id>`
+dossier and the in-feed "+N angles" peek). This turns that latent asset into
+a single deliberate action: on any multi-source card, one click surfaces the
+**strongest** coverage of the same story from the **opposite** side of the
+spectrum. The emphasis on *strongest* (highest-quality, not a cherry-picked
+strawman) is the whole point and the differentiator — it's a steel-man, not a
+dunk. Most on-thesis ("transparent, my-rules news") and the most shareable of
+the bubble-breaking cluster.
+
+**What it is.** A new "⚖ Steel-man" pill on multi-source `/` feed cards (next
+to the existing "+N angles" pill) and a highlighted callout on the
+`/story/<id>` dossier. Clicking expands inline (HTMX, exactly like the
+spectrum peek) to show the 1–2 best opposing-side articles for that story:
+source, headline, lean badge, lead paragraph, and a link into the full
+dossier.
+
+**How "the other side" is defined (v1 — deterministic, no per-user state):**
+relative to the **anchor article's own lean bucket** (the card you're looking
+at), not the user's politics:
+- anchor in `left` bucket → opposing = `right` members;
+- anchor in `right` → opposing = `left`;
+- anchor in `center` → best of *both* flanks (left + right).
+
+Buckets use the existing ±0.2 thresholds already shared by `app/spectrum.py`
+and `app/routes/story.py` (keep all three in sync — `spectrum.py` already
+carries a sync note).
+
+**How "strongest" is defined.** Within the opposing bucket, rank candidates by
+a **quality key** built from columns we already compute —
+`source_reputation` and `objectivity` (e.g. their product), tie-broken by
+recency — and take the top 1–2, **at most one per source**. This deliberately
+surfaces the most reputable, most objective version of the other side, which
+is what makes it a steel-man rather than an outrage-bait counterexample.
+
+**Sketch (files/surfaces to touch):**
+- `news/app/spectrum.py` — new pure, Flask/DB-free helper
+  `pick_steelman(members, anchor_lean, limit=2)` reusing `lean_bucket`:
+  resolve the opposing bucket(s) from `anchor_lean`, drop the anchor and
+  same-source dupes, rank by the quality key, return the top `limit`. This is
+  where the unit tests live (no Flask/DB/LLM needed).
+- `news/app/routes/story.py` — new thin `GET /story/<id>/steelman` route that
+  reuses `_fetch_cluster(story_id)` (so visibility / personal-source
+  filtering is identical to peek/dossier), computes the anchor lean from the
+  canonical member, calls `pick_steelman`, and renders a small partial. Also
+  add a "Strongest opposing coverage" callout to the `view()` dossier render
+  when the cluster spans both flanks.
+- `news/app/templates/partials/feed_cards.html` — add the "⚖ Steel-man" pill
+  (mirrors the "+N angles" `hx-get` / `hx-target="#spectrum-<id>"` pattern;
+  reuse the existing `.spectrum-peek` slot or add a sibling slot), shown only
+  when `a.cluster_size > 1` AND the cluster has an opposing-side member.
+- `news/app/templates/partials/steelman.html` (new) + the dossier callout
+  markup; `news/app/static/style.css` — a small block reusing the
+  spectrum-peek / lean-badge classes.
+
+**Gating (when the pill shows).** Only when the cluster genuinely spans ≥2
+lean buckets *and* has at least one opposing-side member relative to the
+anchor — otherwise there's nothing to steel-man and the pill is hidden
+(single-source / single-bucket clusters never show it). Mirrors the dossier's
+`FRAMING_MIN_BUCKETS` spirit.
+
+**Preserve / must-not-break:**
+- The in-feed "+N angles" spectrum peek (`story.peek` /
+  `pick_spectrum_sample`) is unchanged — steel-man is a *sibling* selection,
+  not a replacement.
+- Lean-bucket thresholds stay shared across `spectrum.py` / `story.py` / the
+  new helper (the existing sync note governs).
+- Scope to `/` feed cards + `/story/<id>` only — `/firehose`, `/search`,
+  `/saved`, and the digest are untouched (same scoping as the spectrum peek).
+
+**Constraints / watch-outs:**
+- **No synchronous LLM, no process spawn** — v1 selection is pure SQL-fetched
+  rows + a Python ranking, the same cost profile as the existing peek. (A
+  one-line Haiku "here's the strongest argument the other side is making"
+  framing, cached like `story_dossiers`, is the explicit v2 — keep v1
+  LLM-free so it's cheap and request-path-safe.)
+- **NOT BUG-007 class** — purely additive read path over columns/tables
+  already on prod; if there's no opposing member the partial renders empty.
+  Anonymous-safe. **No DB migration, no cron, no env var, no new dep, no
+  symlink** — new pure helper + thin route + template/CSS; Passenger restart
+  on deploy so the new `story` route registers.
+
+**Test expectation:** `pytest news/tests/` stays green. New pure tests for
+`pick_steelman` (in `tests/test_spectrum.py` or a new `test_steelman.py`):
+anchor-left → returns right-bucket members; anchor-right → left; anchor-center
+→ best of both flanks; ranks by the quality key (a high-reputation/objective
+opposing article beats a low one); one-per-source dedupe; empty result when
+the cluster has no opposing-side member. No test requires Haiku, a live DB, or
+a browser.
+
+**v2 (out of scope):** an optional cached Haiku one-liner steel-manning the
+opposing argument; anchoring "the other side" to the *user's* reading-lean
+diet instead of the article's bucket (Signal-Learning territory — needs the
+per-user lean profile); a "strongest agreeing coverage" inverse for finding
+corroboration.
 
 ---
 
