@@ -65,7 +65,7 @@ shipped.
 | 6 | 2 | ui, algo, backend | Unique sources toggle — one article per source (Your Algorithm) | in-progress |
 | 7 | 3 | ops, new-feature | Source catalog expansion (+1000 high-quality sources, incl. Substack / Medium) | done |
 | 7 | 4 | ui, new-feature | Onboarding interview / cold-start | done |
-| 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | backlog |
+| 7 | 4 | algo, ui | Tune from this article (Signal-Learning wedge) | in-progress |
 | 6 | 3 | ui, ops | Periodic "is your feed working?" check-in | backlog |
 | 8 | 6 | new-feature, ui | Shareable algorithm gallery | in-progress |
 | 7 | 5 | algo, backend | Community source-quality overlay | backlog |
@@ -868,7 +868,7 @@ instead of guesswork. Depends on Multiple saved algorithms for the
 "current vs. a scratch algo".
 
 ### Tune from this article
-**Priority:** 7 · **LOE:** 4 · **Category:** algo, ui · **Status:** backlog
+**Priority:** 7 · **LOE:** 4 · **Category:** algo, ui · **Status:** in-progress
 
 Inline "more like this / less like this" on any feed card that, instead
 of silently learning, *shows which feature weights it would nudge and by
@@ -877,6 +877,17 @@ larger **Signal Learning** item (Pri 8) but article-anchored and
 immediate — can ship as the cheap standalone wedge for that theme and
 later be absorbed into the full Signal Learning regression. Keep the two
 in sync; don't double-implement the adjustment-vector storage.
+
+**In progress (2026-05-31, PR pending).** Implemented as a pure
+`app/tune.py` (nudge = `±LEARNING_RATE·(2·alignment − 1)` per weighted
+feature, where `alignment = 1 − |value − direction| / scale` is the
+scorer's own per-feature factor — reused from `ranking`/`explain` for
+parity, so no second adjustment representation). Preview→Accept→Undo via
+three thin `feed.py` routes that mutate the active profile's existing
+`weights_json` (no new adjustment-vector table — stays absorbable into
+the Signal Learning regression). Only already-weighted features are
+nudged; directions/thresholds/filters untouched. **No migration / cron /
+env / dep.** Move to Done on merge.
 
 ### Periodic "is your feed working?" check-in
 **Priority:** 6 · **LOE:** 3 · **Category:** ui, ops · **Status:** backlog

@@ -12,7 +12,11 @@ from ..feed_diversify import (
     page_slice,
 )
 from ..term_prefs import build_term_clauses
-from ..ranking import build_score_sql, build_filters_sql, default_weights, PRESETS, parse_weights_json
+from ..ranking import (
+    build_score_sql, build_filters_sql, default_weights, PRESETS,
+    parse_weights_json, weights_to_expression, FEATURE_KEYS,
+)
+from ..tune import propose_nudges, apply_nudges, sanitize_revert, DIRECTIONS
 from .. import classify_topup
 
 bp = Blueprint("feed", __name__)
@@ -314,7 +318,7 @@ def explain(article_id):
     source-visibility scoping as the feed itself (anon → balanced default),
     so the explanation reflects what actually ranked the row for the viewer.
     """
-    weights = _active_weights()
+    weights, _ = _active_weights()
     u = getattr(g, "user", None)
     uid = u["id"] if u else None
     vis_sql = "(s.owner_id IS NULL OR s.owner_id = %(_vis_owner)s)" if uid else "s.owner_id IS NULL"
@@ -355,3 +359,120 @@ def summary(article_id):
     article_summaries migration not yet applied)."""
     bullets = load_bullets(article_id)
     return render_template("partials/summary_panel.html", bullets=bullets)
+
+
+def _tune_target(uid):
+    """Active profile (id, name, weights) for a signed-in user. A reader who
+    reached the feed always has an active row (feed._needs_onboarding sends
+    those with none to onboarding), but fall back to defaults defensively."""
+    row = query(
+        "SELECT id, name, weights_json FROM user_algorithms "
+        "WHERE user_id = %s AND is_active = 1 ORDER BY updated_at DESC LIMIT 1",
+        (uid,), one=True,
+    )
+    if not row:
+        return None, None, default_weights()
+    return row["id"], row["name"], parse_weights_json(row["weights_json"])
+
+
+def _article_feature_row(article_id, uid):
+    """All feature columns for one classified article, scoped to sources the
+    user may see (global + their own). Returns None if not found / not
+    visible. Selects every FEATURE_KEYS column so a nudge can touch any
+    weighted feature, not just the subset the Why panel explains."""
+    cols = ", ".join(f"f.{k}" for k in FEATURE_KEYS)
+    row = query(
+        f"""
+        SELECT a.id, a.title, {cols}
+        FROM articles a
+        JOIN sources s ON s.id = a.source_id
+        JOIN article_features f ON f.article_id = a.id
+        WHERE a.id = %(aid)s AND a.status = 'classified'
+          AND (s.owner_id IS NULL OR s.owner_id = %(_vo)s)
+        """,
+        {"aid": article_id, "_vo": uid}, one=True,
+    )
+    return row
+
+
+def _persist_weights(algo_id, uid, weights):
+    execute(
+        "UPDATE user_algorithms SET weights_json=%s, expression_text=%s "
+        "WHERE id=%s AND user_id=%s",
+        (json.dumps(weights), weights_to_expression(weights), algo_id, uid),
+    )
+    get_conn().commit()
+
+
+@bp.route("/article/<int:article_id>/tune")
+def tune(article_id):
+    """Preview the weight nudges a "more / less like this" click would make,
+    without persisting anything. Signed-in only — the control is hidden for
+    anon visitors, who have no algorithm to tune."""
+    u = getattr(g, "user", None)
+    if not u:
+        abort(401)
+    direction = (request.args.get("dir") or "").strip().lower()
+    if direction not in DIRECTIONS:
+        abort(400)
+    _, name, weights = _tune_target(u["id"])
+    row = _article_feature_row(article_id, u["id"])
+    if not row:
+        abort(404)
+    nudges = propose_nudges(row, weights, direction)
+    return render_template(
+        "partials/tune_panel.html",
+        a=row, direction=direction, nudges=nudges, profile_name=name,
+    )
+
+
+@bp.route("/article/<int:article_id>/tune", methods=["POST"])
+def tune_apply(article_id):
+    """Recompute the nudges server-side (never trust the previewed deltas)
+    and persist them onto the viewer's active profile's weights_json."""
+    u = getattr(g, "user", None)
+    if not u:
+        abort(401)
+    direction = (request.form.get("dir") or "").strip().lower()
+    if direction not in DIRECTIONS:
+        abort(400)
+    algo_id, name, weights = _tune_target(u["id"])
+    row = _article_feature_row(article_id, u["id"])
+    if not row:
+        abort(404)
+    if not algo_id:
+        return render_template(
+            "partials/tune_applied.html",
+            a=row, applied=[], prev={}, profile_name=None, no_profile=True,
+        )
+    nudges = propose_nudges(row, weights, direction)
+    prev = {}
+    if nudges:
+        prev = {n["key"]: round(float(weights.get(n["key"], 0) or 0), 3) for n in nudges}
+        _persist_weights(algo_id, u["id"], apply_nudges(weights, nudges))
+    return render_template(
+        "partials/tune_applied.html",
+        a=row, applied=nudges, prev=prev, profile_name=name, no_profile=False,
+    )
+
+
+@bp.route("/article/<int:article_id>/tune/undo", methods=["POST"])
+def tune_undo(article_id):
+    """Revert a just-applied nudge: merge the pre-nudge feature weights (sent
+    back as `prev_<feature>` fields, re-validated server-side) onto whatever
+    the active profile currently holds."""
+    u = getattr(g, "user", None)
+    if not u:
+        abort(401)
+    algo_id, _, weights = _tune_target(u["id"])
+    items = [
+        (field[len("prev_"):], value)
+        for field, value in request.form.items()
+        if field.startswith("prev_")
+    ]
+    override = sanitize_revert(items, weights)
+    if algo_id and override:
+        merged = dict(weights)
+        merged.update(override)
+        _persist_weights(algo_id, u["id"], merged)
+    return render_template("partials/tune_reverted.html", a={"id": article_id})

@@ -1,0 +1,34 @@
+{# Tune-from-this-article preview, loaded by the "More/Less like this" buttons
+   (feed.tune). Non-destructive: nothing changes until Apply (feed.tune_apply). #}
+<div class="tune-box">
+  <div class="tune-head">
+    <span class="tune-label">
+      {{ 'More' if direction == 'more' else 'Less' }} like this &mdash; proposed tuning
+    </span>
+    <button type="button" class="linkbtn muted tune-hide"
+            onclick="this.closest('.tune-panel').innerHTML=''">Cancel</button>
+  </div>
+  {% if nudges %}
+    <ul class="tune-list">
+      {% for n in nudges %}
+        <li class="tune-item">
+          <span class="tune-name">{{ n.label }}</span>
+          <span class="tune-delta {{ 'up' if n.delta > 0 else 'down' }}"
+                title="weight {{ '%.2f' % n.current_weight }} &rarr; {{ '%.2f' % n.new_weight }}">{{ '%+.2f' % n.delta }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+    <form hx-post="{{ url_for('feed.tune_apply', article_id=a.id) }}"
+          hx-target="#tune-{{ a.id }}" hx-swap="innerHTML">
+      <input type="hidden" name="dir" value="{{ direction }}">
+      <button type="submit" class="tune-accept">
+        Apply{% if profile_name %} to &ldquo;{{ profile_name }}&rdquo;{% endif %}
+      </button>
+    </form>
+    <p class="tune-note muted">Adjusts feature weights only &mdash; you can fine-tune on
+      <a href="{{ url_for('algo.index') }}">Your Algo</a>.</p>
+  {% else %}
+    <p class="muted tune-empty">Nothing to nudge here &mdash; this article doesn't move any
+      feature your algorithm currently weights. <a href="{{ url_for('algo.index') }}">Tune manually &rarr;</a></p>
+  {% endif %}
+</div>

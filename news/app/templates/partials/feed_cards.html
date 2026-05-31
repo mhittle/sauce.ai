@@ -35,6 +35,18 @@
                 hx-get="{{ url_for('feed.summary', article_id=a.id) }}"
                 hx-target="#tldr-{{ a.id }}" hx-swap="innerHTML"
                 title="3-bullet TL;DR">TL;DR</button>
+        {% if current_user %}
+          <span class="tune-links" role="group" aria-label="Tune your algorithm from this article">
+            <button type="button" class="tune-link more"
+                    hx-get="{{ url_for('feed.tune', article_id=a.id, dir='more') }}"
+                    hx-target="#tune-{{ a.id }}" hx-swap="innerHTML"
+                    title="Nudge your algorithm toward articles like this">More like this</button>
+            <button type="button" class="tune-link less"
+                    hx-get="{{ url_for('feed.tune', article_id=a.id, dir='less') }}"
+                    hx-target="#tune-{{ a.id }}" hx-swap="innerHTML"
+                    title="Nudge your algorithm away from articles like this">Less like this</button>
+          </span>
+        {% endif %}
         <a class="reader-link" href="{{ url_for('reader.read', article_id=a.id) }}" title="Open in reader">Read &rarr;</a>
         {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}
           <a class="dossier-link" href="{{ url_for('story.view', story_id=a.story_id) }}"
@@ -67,6 +79,7 @@
       {% endif %}
       <div class="tldr-panel" id="tldr-{{ a.id }}"></div>
       <div class="why-panel" id="why-{{ a.id }}"></div>
+      {% if current_user %}<div class="tune-panel" id="tune-{{ a.id }}"></div>{% endif %}
       {% if a.cluster_size and a.cluster_size > 1 and a.story_id %}
         <div class="spectrum-peek" id="spectrum-{{ a.id }}"></div>
       {% endif %}

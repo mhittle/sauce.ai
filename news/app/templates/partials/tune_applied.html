@@ -1,0 +1,34 @@
+{# Result of applying a tune (feed.tune_apply): confirms the change and offers
+   an Undo that restores the pre-nudge weights (feed.tune_undo). #}
+<div class="tune-box">
+  <div class="tune-head">
+    <span class="tune-label">
+      {% if no_profile %}No algorithm to tune{% elif applied %}Algorithm updated{% else %}No change{% endif %}
+    </span>
+    <button type="button" class="linkbtn muted tune-hide"
+            onclick="this.closest('.tune-panel').innerHTML=''">Close</button>
+  </div>
+  {% if no_profile %}
+    <p class="muted">Save an algorithm first, then tune from articles.
+      <a href="{{ url_for('algo.index') }}">Your Algo &rarr;</a></p>
+  {% elif applied %}
+    <ul class="tune-list">
+      {% for n in applied %}
+        <li class="tune-item">
+          <span class="tune-name">{{ n.label }}</span>
+          <span class="tune-delta {{ 'up' if n.delta > 0 else 'down' }}">{{ '%+.2f' % n.delta }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+    <p class="tune-note muted">Your feed reflects this on the next load.</p>
+    <form hx-post="{{ url_for('feed.tune_undo', article_id=a.id) }}"
+          hx-target="#tune-{{ a.id }}" hx-swap="innerHTML">
+      {% for key, w in prev.items() %}
+        <input type="hidden" name="prev_{{ key }}" value="{{ w }}">
+      {% endfor %}
+      <button type="submit" class="linkbtn tune-undo">Undo</button>
+    </form>
+  {% else %}
+    <p class="muted tune-empty">Nothing to nudge for this article.</p>
+  {% endif %}
+</div>
