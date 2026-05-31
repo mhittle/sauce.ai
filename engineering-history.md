@@ -136,6 +136,39 @@ these.
 
 ## 2026-05-31
 
+- **News Near You — `/local` page over the existing geo features (dev-agent
+  session, PR #TBD).** Shipped roadmap Pri 7 / LOE 4 from `ready-for-agent`.
+  The classifier already wrote `article_features.geo_lat/lng/place` on every
+  row (2026-05-20 migration applied 2026-05-26 via BUG-025) and
+  `ranking.build_filters_sql` already applied a haversine filter when
+  `geo_lat/lng/radius_mi` rode the weights dict, but that asset was buried as
+  a free-text "Near a place" control inside `/algo`. New `/local` page injects
+  a page-chosen place into a **copy** of the active weights and runs the same
+  scoring + filtering + diversification path as `/`, so local news = "my
+  algorithm, filtered to my place" with no risk of desync. Place precedence
+  (`?place=` -> `local_place` cookie -> `/algo` stored geo -> empty state)
+  lives in pure `app/geo_local.py` (Flask-free, gazetteer-free,
+  `geocode_query` injected for tests). `app/routes/local.py` is a thin Flask
+  layer; `local.html` shares `partials/feed_cards.html` (the partial gained
+  an optional `load_more_url` override so /local can page itself). New
+  "Near You" link in `.topnav` (BUG-022 `flex-wrap` absorbs it). **Design
+  choice — fallback path:** the spec offered a refactor extracting
+  `feed.index()`'s SELECT into a shared `_run_feed_query()`. Took the
+  documented fallback (re-compose the building blocks inside `local.py`)
+  because feed.py was freshly touched by BUG-030's selection/ranking split
+  (PR #144 merged earlier today) and parallel sessions are still in flight;
+  the smaller-surface route survives conflicts, and a future PR can extract
+  the shared helper from two callers more safely than from one. *Code:*
+  `app/geo_local.py` (new), `app/routes/local.py` (new), `app/__init__.py`
+  (register), `app/templates/local.html` (new), `app/templates/base.html`
+  (nav link), `app/templates/partials/feed_cards.html` (one-line
+  `load_more_url` override), `app/static/style.css` (10 lines for the
+  place-form), `tests/test_geo_local.py` (+18 pure), `tests/test_local_route.py`
+  (+5 integration). Full suite 621 pass. **Server state:** none. NOT
+  BUG-007 class — no migration, no cron, no env var, no new dep, no symlink.
+  Passenger restart on deploy so the new blueprint registers (standard).
+  *v2 deferred:* international gazetteer, browser Geolocation, "Local" rail
+  embedded at top of `/`, multiple saved places, per-source coverage area.
 - **Breaking-news email alerts — spec finalized + dispatched (PM session, roadmap-only).**
   Pressure-tested the existing `in-progress` spec against the live code (Explore
   pass): `send_digest.py` already splits `smtp_send()` from message-building
