@@ -164,8 +164,7 @@ these.
   `INSTALL.txt`. *Server state:* one new migration (`manual-actions.md` Open,
   full inline SQL) + a Python App restart on deploy (new route/blueprint
   surface). No new cron, no new env var required (knobs default), no new pip
-  dep. *(History is over its ~34 KB budget — archive oldest entries at
-  wrap-up before it breaks single-Read onboarding.)*
+  dep.
 
 - **"Tune from this article" — article-anchored weight nudges (interactive
   session, PR pending).** Shipped the Signal-Learning *wedge* (roadmap Pri 7,
@@ -199,6 +198,19 @@ these.
   done → moved to Completed: `AGENT_PUSH_TOKEN` rotated, PR #119 restart, and
   the 1-min `classify_pending --triggered-only` cron (installed 2026-05-27 as
   BUG-023 fix A). `manual-actions.md` Open is now empty.
+- **Roadmap: added "Steel-man — strongest opposing-view coverage of a story"
+  (backlog, Pri 7 / LOE 3; PR #146).** One-click strongest opposing coverage
+  on multi-source cards + the `/story` dossier, re-aiming existing
+  spectrum/dossier machinery (`pick_spectrum_sample`, `story.peek`,
+  `_fetch_cluster`, shared ±0.2 lean buckets); "strongest" = highest
+  `source_reputation`×`objectivity` opposing-bucket article (steel-man, not
+  strawman). v1 deterministic + LLM-free, no migration, NOT BUG-007 class.
+  Spec block + at-a-glance row only — left `backlog`, not `ready-for-agent`,
+  so no dev-agent dispatch.
+- **History archived to budget (this wrap-up).** Live file had grown to ~38 KB
+  (over the ~34 KB single-Read ceiling); moved the verbose 2026-05-22 entries
+  verbatim into `engineering-history-archive.md` and replaced them with tight
+  summaries → ~29.5 KB.
 
 ---
 
@@ -242,173 +254,37 @@ server-side migration referenced below was applied on prod and is in
 
 ### 2026-05-22
 
-- **Unique sources toggle — one article per source (PR drafted,
-  unattended dev-agent).** Per-profile boolean on `/algo`'s UI tab that
-  tightens the global per-source cap to 1 for the viewer. User framing:
-  "let me see a wider spread of sources, not three Inquirer stories in a
-  row." This is the user-controllable lever over the BUG-021 cap
-  (`FEED_MAX_PER_SOURCE`, default 3) already enforced by
-  `app/feed_diversify.py`. No DB migration, no new env var, no new cron,
-  no new dep — the flag is a new key `unique_sources` (boolean) inside
-  the existing free-form `user_algorithms.weights_json`; the ranking
-  layer already ignores unknown keys, so older profiles read the key as
-  "off" without backfill (NOT BUG-007 class). New pure helper
-  `feed_diversify.effective_source_cap(weights, default_cap)` — toggle on
-  → 1 regardless of the global cap (including when configured to 0 /
-  disabled); toggle off / absent → `default_cap`; never weakens an
-  already-tighter floor. `feed.index()` now resolves the effective cap
-  per request and clamps `fetch_budget(...)` to a new
-  `feed_diversify.MAX_FETCH_ROWS = 5000` ceiling so deep "Load more"
-  paging under cap=1 (multiplier ~31x) can't issue an unbounded `LIMIT`;
-  a short page near the end of the 7-day window is acceptable, an
-  unbounded fetch is not. Scope: `/` only — `/firehose`, `/search`,
-  `/saved`, and the digest are untouched (same scoping as BUG-021). The
-  cap is applied AFTER the SQL `ORDER BY`, so each source's surviving
-  article is the highest-ranked one for that source under the user's
-  algorithm; story-cluster dedup, jitter, source/keyword prefs,
-  category/sort, the 7-day window, and pagination stability (page N+1
-  agrees with page N) are unchanged. *Code touched:*
-  `news/app/feed_diversify.py` (+`MAX_FETCH_ROWS` constant,
-  +`effective_source_cap` helper), `news/app/routes/feed.py` (resolve
-  effective cap via `effective_source_cap(weights, default_cap)` and
-  clamp `fetch_budget(...)` at `MAX_FETCH_ROWS`),
-  `news/app/routes/algo.py` (`_parse_form_weights` writes
-  `weights["unique_sources"] = bool(form.get("unique_sources"))` on every
-  save so toggle-off clears a previously-saved truthy value — unchecked
-  HTML checkboxes don't submit),
-  `news/app/templates/algo.html` (+`Unique sources` feature-row with the
-  checkbox under Country filter, above Near a place — feed-shaping
-  control, not a per-feature slider, so it sits next to recency /
-  category / country rather than inside the weight grid). 10 new tests
-  in `test_feed_diversify.py` and `test_algo_unique_sources.py` pin
-  toggle-on/off/missing, override of a disabled global cap, "never
-  weakens a tighter floor," no-duplicate-source-ids regression, and
-  `MAX_FETCH_ROWS` ceiling sanity. Full suite: 530 passed. *Server
-  state touched:* none — template + thin-route + pure-helper change;
-  Passenger restart on deploy as usual.
-- **Demand-driven feed classification (PR #121, unattended dev-agent).**
-  Closes the "feed runs dry until the next 5-min cron tick" gap when an
-  active reader outpaces `classify_pending`. **No synchronous LLM on the
-  request path, no per-request fork/spawn** (nproc ceiling untouched):
-  feed page size 30→40, and after each feed load the route does two cheap
-  `COUNT(*)`s and, if the classified buffer ahead of the reader is < 400,
-  **touches** `logs/classify_topup.signal` (mtime-debounced ~60s,
-  failure-swallowed). `classify_pending.py` gains `--triggered-only`
-  (new every-1-min cron) which no-ops unless the signal is present AND
-  fresh, then acquires the existing `job_lock` and consumes the signal
-  inside it — so the cron stays the only process that launches a
-  classifier and the `*/5` tick remains the safety net. No migration /
-  schema / pip / restart. New pure `app/classify_topup.py` + 23 tests
-  (543 pass). *Code:* `app/classify_topup.py` (new), `routes/feed.py`,
-  `app/config.py` (4 `CLASSIFY_TOPUP_*` knobs), `jobs/classify_pending.py`,
-  `INSTALL.txt`, `tests/test_classify_topup.py`. *Server state:* one new
-  1-min cron entry (`manual-actions.md` Open, full crontab line inline).
-  No migration file → no `has-migration` label.
-- **Unique sources toggle — one article per source (spec'd + dispatched,
-  PM session).** New `ready-for-agent` roadmap item authored and merged
-  to `main` (PR #123), which dispatched the unattended Opus dev-agent
-  (~$8 paid run) to implement it. Feature: a per-profile checkbox on
-  `/algo` (UI tab) that forces the home feed to **at most one article per
-  source**. Design chosen to be migration-free and not BUG-007 class —
-  the flag rides as a new `unique_sources` boolean key inside the
-  existing free-form `user_algorithms.weights_json` (the ranking layer
-  ignores unknown keys; `parse_weights_json` round-trips the dict), and
-  the read path reuses the BUG-021 `app/feed_diversify.py` cap machinery
-  with the *effective* per-source cap forced to 1 (overriding the global
-  `FEED_MAX_PER_SOURCE` default of 3). Spec'd surfaces: `routes/algo.py`
-  `_parse_form_weights`, `templates/algo.html` (feed-shaping checkbox, not
-  a feature-row), `routes/feed.py` `index()` effective-cap resolution, and
-  a pure `effective_source_cap` helper for unit tests; over-fetch ceiling
-  flagged so cap=1 deep-paging can't issue an unbounded `LIMIT`. Scoped to
-  `/` only (firehose/search/saved/digest unchanged). *Server state
-  touched:* none planned (no migration/cron/env/dep). *Open:* the
-  dev-agent's implementation PR is pending — review + merge it through the
-  BUG-007 gate; no `needs-migration` follow-up expected.
-
-- **Fold per-algorithm Keywords into the Your Algorithm feature list (PR
-  drafted, unattended dev-agent).** UI polish on PR #82 + the
-  keywords-on-algo migration: the standalone **Keywords** tab on `/algo`
-  is gone; the add form + muted/boosted lists now render as a sibling
-  `.features.features-keywords` panel below the algo-form (sibling, not
-  nested, so per-keyword `<form>`s don't nest inside `#algo-form`). No DB
-  / route / ranking change — `/algo/keywords/{add,<id>/delete}` writes,
-  `_render_editor` context, and mute-wins/dedupe/100-cap semantics all
-  preserved; pytest green (520). *Code touched:*
-  `templates/algo.html`, `static/style.css` (+6 lines). *Server state:*
-  none (template-only; cPanel restart recommended on deploy).
-
-- **Agent fleet observability — weekly cost + activity rollup (PR
-  drafted, unattended dev-agent).** Closes the loop opened by the six
-  Phase-1..6 agent workflows shipped 2026-05-21 (PRs #103..#108): each
-  workflow carries a per-run budget cap but nothing aggregates what the
-  fleet actually *did*. Now: one append-only `agent_runs` row per agent
-  run (workflow, job, run_id, conclusion, duration_seconds,
-  est_cost_usd, pr_number, notes; mirrors the `llm_usage` table
-  pattern). A new HMAC-authenticated `POST /agent-ops/report-run`
-  endpoint (same `AGENT_OPS_SECRET` key as the Phase 4 executor —
-  no new secret) accepts the row from a final "Report agent run"
-  step appended to each of the six agent jobs (dev-agent.implement,
-  qa-code.bug007-gate, post-deploy.agent-qa, migration-executor.finalize,
-  bug-triage.triage, pm-agent.propose). The reporting step is gated
-  `if: always()` so a failed agent still records a row; a shared
-  `.github/scripts/report_agent_run.py` Python script signs and POSTs
-  via stdlib only (no new deps) and is failure-tolerant — any error
-  (missing secret, DNS, 5xx) logs and exits 0 so the reporting step
-  can never break the actual agent workflow. The per-job budget cap
-  is sent as `est_cost_usd` (with `notes:"budget-cap"` so future
-  iterations can swap in measured cost from action output without a
-  schema change). Read by new admin-only `GET /admin/agent-activity`
-  in the existing `admin_ops` blueprint: 14-day per-workflow rollup
-  (runs, successes, failures, total cost) + zero-filled per-day series
-  + totals; degrades to `table_missing: true` (still 200) if the
-  migration hasn't been applied yet, so the admin page never 500s.
-  PM agent (Phase 6) can now cite this endpoint instead of inferring
-  fleet activity from PRs. *Code touched:*
-  `news/seed/migrations/2026-05-22-agent-runs.sql` (new),
-  `news/seed/schema.sql` (+`agent_runs` CREATE TABLE after `llm_usage`),
-  `news/app/routes/agent_ops.py` (+`/report-run` route + pure helpers
-  `_int_in_range`, `_decimal_in_range`, regex validators),
-  `news/app/routes/admin_ops.py` (+`/agent-activity` route),
-  `news/app/security.py` (`agent_ops.report_run` added to
-  `_EXEMPT_ENDPOINTS` — HMAC over body is a stronger guard than CSRF
-  cookies a machine caller can't carry, same reasoning as the other
-  three `agent_ops.*` endpoints),
-  `.github/scripts/report_agent_run.py` (new), and a "Mark agent
-  start" + "Report agent run" step appended to dev-agent.yml,
-  qa-code.yml, post-deploy.yml, migration-executor.yml,
-  bug-triage.yml, pm-agent.yml. 10 new tests in `test_admin_ops.py`
-  and `test_agent_ops.py` (insert + clamping + invalid-workflow +
-  invalid-conclusion + HMAC enforcement + zero-fill + missing-table
-  degradation). *Server state touched:* one new migration —
-  `manual-actions.md` Open entry with full inline SQL; the PR
-  self-labels `needs-migration` so the Phase 4 executor applies it.
-  No new env var, no new cron, no new pip dep, no restart needed
-  (both routes attach to already-registered blueprints).
-
-- **Agent fleet operationalized + hardened (interactive session).** Took
-  the six merged-but-dormant workflows (PRs #103–#108) live and fixed
-  every gap the first real runs surfaced. Enablement: set
-  `AGENTS_ENABLED=true` + the secrets (`ANTHROPIC_API_KEY`,
-  `AGENT_PUSH_TOKEN`, `AGENT_OPS_SECRET`, smoke creds) and topped up API
-  credits. Fixes: (1) **headless tool permissions** — `claude-code-action`
-  auto-denies tool calls without a permission mode, so workers use
-  `--permission-mode bypassPermissions` and the BUG-007 gate (untrusted
-  diffs) uses `dontAsk` + a tight `--allowedTools` allowlist (PR #111);
-  (2) **event constraint** — the action only runs on
-  `pull_request*`/`issues`/`issue_comment`/`repository_dispatch`, NOT
-  push/schedule/workflow_dispatch, so dev-agent (PR #113) and
-  pm-agent/post-deploy (PR #116) do their logic then fan out a
-  `repository_dispatch` via `AGENT_PUSH_TOKEN` (the default
-  `GITHUB_TOKEN` can't trigger downstream runs); picker push now
-  rebases+retries (PR #116); (3) **migrate-after-deploy** —
-  `/agent-ops/run-migration` reads the file from prod disk, so migrations
-  apply only post-deploy: the dev agent now labels migration PRs
-  `has-migration` and a human applies `needs-migration` after deploy
-  (PR #115). The #114 `agent_runs` migration was applied to prod this way.
-  Docs: `agent-fleet.md` (fleet reference, PR #117) and
-  `pm-session-instructions.md` (this PR). #120 (demand-driven feed
-  classification) dispatched; implementation PR in flight. *Load-bearing
-  fleet config lives in `agent-fleet.md`.*
+- **Unique sources toggle — one article per source (PR #124/#125 dev-agent;
+  spec'd + dispatched via PR #123, PM session).** Per-profile `/algo` checkbox
+  forcing at most one article per source on `/`; rides as a `unique_sources`
+  bool inside `user_algorithms.weights_json` (ranking ignores unknown keys —
+  NOT BUG-007 class). New pure `feed_diversify.effective_source_cap` +
+  `MAX_FETCH_ROWS=5000` over-fetch ceiling for cap=1 deep paging. `/` only;
+  no server state. (Verbatim design in archive.)
+- **Demand-driven feed classification (PR #121, dev-agent).** Feed touches
+  `logs/classify_topup.signal` when the classified buffer ahead of the reader
+  drops < 400; a new `classify_pending --triggered-only` every-1-min cron
+  no-ops unless the signal is fresh, then runs under the existing `job_lock`
+  (the `*/5` tick stays the safety net). No sync LLM, no per-request spawn;
+  page size 30→40. New `app/classify_topup.py`. *Server:* one 1-min cron —
+  installed on prod (manual-actions Completed 2026-05-31; BUG-023 fix A).
+- **Fold per-algorithm Keywords into the Your Algorithm feature list
+  (PR #119, dev-agent).** Dropped the standalone `/algo` Keywords tab; the
+  add-form + muted/boosted lists render as a sibling `.features-keywords`
+  panel. Template/CSS only — no DB/route/ranking change.
+- **Agent fleet observability — weekly cost + activity rollup (PR #114,
+  dev-agent).** Append-only `agent_runs` row per agent run via HMAC
+  `POST /agent-ops/report-run`; read by admin `GET /admin/agent-activity`
+  (14-day rollup, degrades to `table_missing` if unapplied — never 500s).
+  *Server:* `agent_runs` migration (applied 2026-05-22, manual-actions
+  Completed).
+- **Agent fleet operationalized + hardened (interactive session).** Took the
+  six dormant workflows (PRs #103–#108) live: `AGENTS_ENABLED=true` + secrets
+  + API credits, and fixed headless tool perms (PR #111), the
+  `repository_dispatch` event constraint + push rebase/retry (PRs #113/#116),
+  and migrate-after-deploy via `has-migration`/`needs-migration` labels
+  (PR #115). Docs: `agent-fleet.md` (PR #117), `pm-session-instructions.md`.
+  *Load-bearing fleet config lives in `agent-fleet.md`.*
 
 ### 2026-05-21
 
