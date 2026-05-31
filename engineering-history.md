@@ -137,7 +137,7 @@ these.
 ## 2026-05-31
 
 - **News Near You — `/local` page over the existing geo features (dev-agent
-  session, PR #TBD).** Shipped roadmap Pri 7 / LOE 4 from `ready-for-agent`.
+  session, PR #160).** Shipped roadmap Pri 7 / LOE 4 from `ready-for-agent`.
   The classifier already wrote `article_features.geo_lat/lng/place` on every
   row (2026-05-20 migration applied 2026-05-26 via BUG-025) and
   `ranking.build_filters_sql` already applied a haversine filter when

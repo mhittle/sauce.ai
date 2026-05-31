@@ -1634,7 +1634,7 @@ narrative lives in `engineering-history.md` under the same date.
   `app/routes/local.py` + `app/templates/local.html`; reuses
   `partials/feed_cards.html` (added optional `load_more_url` override).
   Tests: 18 new in `tests/test_geo_local.py` (pure precedence + cookie)
-  + 5 in `tests/test_local_route.py` (route + cookie + nav). PR #TBD.
+  + 5 in `tests/test_local_route.py` (route + cookie + nav). PR #160.
 - **Tune from this article — article-anchored weight nudges** (Pri 7,
   LOE 4). "More / less like this" on feed cards previews which feature
   weights it would nudge, with Accept / Undo; mutates the active profile's

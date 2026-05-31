@@ -40,8 +40,8 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-31 — Browser verify: News Near You /local (PR #TBD)
-**Status:** open · **PR:** #TBD (News Near You) · **Opened:** 2026-05-31
+### 2026-05-31 — Browser verify: News Near You /local (PR #160)
+**Status:** open · **PR:** #160 (News Near You) · **Opened:** 2026-05-31
 
 New `/local` page reuses the existing geo filter from `ranking.build_filters_sql`
 and the same scoring path as `/`. **NOT BUG-007 class** — no migration / cron /
@@ -80,7 +80,7 @@ serves the *old* single-score behavior until restarted (no 500).
 **Action (cPanel):** Setup Python App → the `sauce.ai/news` app →
 **Restart**. This same restart also picks up the still-pending PR #140
 (NL keyword chips), PR #145 (TL;DR `feed.summary`), and the News Near
-You `/local` blueprint (PR #TBD) — one restart covers all of them.
+You `/local` blueprint (PR #160) — one restart covers all of them.
 
 **Verify (browser, signed in):** on `/`, switch between two *orthogonal*
 saved algorithm profiles (e.g. one weighting objectivity/analysis-depth,
