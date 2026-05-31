@@ -40,6 +40,34 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-05-31 — Browser verify: News Near You /local (PR #160)
+**Status:** open · **PR:** #160 (News Near You) · **Opened:** 2026-05-31
+
+New `/local` page reuses the existing geo filter from `ranking.build_filters_sql`
+and the same scoring path as `/`. **NOT BUG-007 class** — no migration / cron /
+env var / dep. The Passenger restart is bundled into the existing PR #144 / #140 /
+#145 restart entry below (one restart covers all of them); no separate prod
+action is needed here, only a smoke check after deploy.
+
+**Verify (browser, anon then signed-in):**
+1. Topnav now shows a **Near You** link (next to Feed) — click it.
+2. With no place set, the page shows a "Set your location" empty state and the
+   place form (no 500, no blank page).
+3. Enter a US ZIP (e.g. `98101`) and pick a radius — page reloads showing
+   articles within that radius of Seattle ranked by your algorithm; the place
+   sticks via a `local_place` cookie on the next visit.
+4. Try a junk place (`zzznotacity`) — the page shows "Couldn't find" without
+   wiping the previous cookie, never 500s.
+5. Signed-in: try two orthogonal saved algorithm profiles with the same place
+   — the visible article set should differ (BUG-030 selection still applies),
+   not just the order.
+
+If `/local` 500s on a first visit, check `news/logs/error.log` for an import
+error in the new blueprint; the most likely cause would be a missed Passenger
+restart (the topnav link 404s until the blueprint registers).
+
+---
+
 ### 2026-05-31 — Python App restart + browser verify: feed selection/ranking split (PR #144, BUG-030)
 **Status:** open · **PR:** #144 (merged 2026-05-31) · **Opened:** 2026-05-31
 
@@ -51,8 +79,8 @@ serves the *old* single-score behavior until restarted (no 500).
 
 **Action (cPanel):** Setup Python App → the `sauce.ai/news` app →
 **Restart**. This same restart also picks up the still-pending PR #140
-(NL keyword chips) and PR #145 (TL;DR `feed.summary`) route changes — one
-restart covers all three.
+(NL keyword chips), PR #145 (TL;DR `feed.summary`), and the News Near
+You `/local` blueprint (PR #160) — one restart covers all of them.
 
 **Verify (browser, signed in):** on `/`, switch between two *orthogonal*
 saved algorithm profiles (e.g. one weighting objectivity/analysis-depth,

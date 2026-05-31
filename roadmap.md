@@ -80,7 +80,7 @@ shipped.
 | 6 | 3 | infra, ops | Agent fleet observability — weekly cost + activity rollup | done |
 | 7 | 6 | new-feature, backend, ops, algo | Breaking-news email alerts (major-event detection → opt-in email) | done |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
-| 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | in-progress |
+| 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | done |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | proposed |
@@ -817,7 +817,7 @@ per-user lean profile); a "strongest agreeing coverage" inverse for finding
 corroboration.
 
 ### News Near You — local news section over the geo features we already compute
-**Priority:** 7 · **LOE:** 4 · **Category:** new-feature, ui, algo, backend · **Status:** in-progress
+**Priority:** 7 · **LOE:** 4 · **Category:** new-feature, ui, algo, backend · **Status:** done
 
 **User value / why now.** Google News's Local section is one of its
 stickiest, hardest-to-replicate surfaces — "what's happening where I am" is a
@@ -1786,6 +1786,20 @@ narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-05-31
 
+- **News Near You — local news section over the geo features we already
+  compute** (Pri 7, LOE 4). New `/local` page injects a page-chosen place
+  into a copy of the active weights and runs the same scoring + filtering
+  + diversification path as `/`, so local news = "my algorithm, filtered
+  to my place." Place via `?place=` -> `geocode_query` + `local_place`
+  cookie (1yr, `SameSite=Lax`); precedence param > cookie > `/algo` stored
+  geo > empty state. Radius dropdown with the existing
+  `GEO_RADIUS_DEFAULT_MI` / `GEO_RADIUS_MAX_MI` knobs. New `Near You`
+  topnav link. NOT BUG-007 class — no migration, no cron, no env, no dep.
+  US-only (v1, US Census gazetteer). New `app/geo_local.py` (pure) +
+  `app/routes/local.py` + `app/templates/local.html`; reuses
+  `partials/feed_cards.html` (added optional `load_more_url` override).
+  Tests: 18 new in `tests/test_geo_local.py` (pure precedence + cookie)
+  + 5 in `tests/test_local_route.py` (route + cookie + nav). PR #160.
 - **Tune from this article — article-anchored weight nudges** (Pri 7,
   LOE 4). "More / less like this" on feed cards previews which feature
   weights it would nudge, with Accept / Undo; mutates the active profile's

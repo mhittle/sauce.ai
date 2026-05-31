@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}News Near You{% endblock %}
+{% block content %}
+<header class="feed-header">
+  <h1>News Near You</h1>
+  <p class="muted">
+    Articles from the last 7 days whose location is within your chosen radius,
+    ranked by your algorithm. <span class="muted">US locations only (v1).</span>
+  </p>
+</header>
+
+<form class="local-place-form" method="get" action="{{ url_for('local.index') }}">
+  <label for="local-place">Place</label>
+  <input id="local-place" type="text" name="place"
+         value="{{ place_query or (place.label if place else '') }}"
+         placeholder="ZIP, city, or state (US)" autocomplete="off" />
+  <label for="local-radius">Radius (mi)</label>
+  <select id="local-radius" name="radius">
+    {% for opt in radius_options %}
+      <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %}>{{ opt.value }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Update</button>
+</form>
+
+{% if unresolved %}
+  <p class="local-unresolved muted">
+    Couldn't find <strong>{{ place_query }}</strong>. Try a US ZIP, "City, ST",
+    a state abbreviation, or a state name.
+  </p>
+{% elif not place %}
+  <p class="local-empty muted">
+    Set your location above to see local news. Try a ZIP code (<code>98101</code>),
+    a city ("Seattle, WA"), or a state ("Texas").
+  </p>
+{% else %}
+  <p class="local-header muted">
+    Showing articles within <strong>{{ '%.0f' % place.radius }}&nbsp;mi</strong>
+    of <strong>{{ place.label or 'your location' }}</strong>.
+  </p>
+
+  <div id="feed-cards" class="cards">
+    {% include "partials/feed_cards.html" %}
+  </div>
+
+  {% if articles and articles|length < 5 %}
+    <p class="local-thin muted">
+      Not much nearby right now — try a wider radius. Coverage grows as
+      the classifier finishes resolving article locations.
+    </p>
+  {% endif %}
+{% endif %}
+
+{% if current_user %}
+<script>
+  window.cardSignals = function (articleId, sourceId, initial, sourceName, initialSaved) {
+    return {
+      state: initial,
+      prompt: null,
+      saved: !!initialSaved,
+      async toggleSave() {
+        const r = await fetch("{{ url_for('saves.toggle', article_id=0) }}".replace("/0", "/" + articleId),
+                  { method: "POST", headers: { "Accept": "application/json", "X-CSRF-Token": window.csrfToken } });
+        if (!r.ok) return;
+        const data = await r.json();
+        this.saved = data.saved;
+      },
+      async vote(t) {
+        const r = await fetch("{{ url_for('signals.record', article_id=0, signal_type='X') }}"
+                    .replace("/0/X", "/" + articleId + "/" + t),
+                  { method: "POST", headers: { "Accept": "application/json", "X-CSRF-Token": window.csrfToken } });
+        if (!r.ok) return;
+        const data = await r.json();
+        this.state = data.state;
+        this.prompt = data.prompt
+          ? { source_id: data.prompt.source_id, source_name: data.prompt.source_name || sourceName }
+          : null;
+      },
+      async sourcePref(action) {
+        const fd = new FormData();
+        fd.append("action", action);
+        await fetch("{{ url_for('signals.source_pref', source_id=0) }}".replace("/0", "/" + sourceId),
+                    { method: "POST", body: fd, headers: { "X-CSRF-Token": window.csrfToken } });
+        this.prompt = null;
+      }
+    };
+  };
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (window.Alpine && e.detail && e.detail.target) {
+      window.Alpine.initTree(e.detail.target);
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

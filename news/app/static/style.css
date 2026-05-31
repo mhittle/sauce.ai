@@ -101,6 +101,16 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .empty { color: var(--muted); padding: 2em; text-align: center; }
 .load-more { grid-column: 1/-1; text-align: center; padding: 1em; }
 
+/* News Near You (/local) */
+.local-place-form { display: flex; align-items: center; gap: 0.6em; flex-wrap: wrap; margin: 0.8em 0 0.6em; padding-bottom: 0.6em; border-bottom: 1px solid var(--line); font-size: 0.9em; }
+.local-place-form label { color: var(--muted); }
+.local-place-form input[type="text"] { padding: 0.35em 0.6em; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); min-width: 14em; }
+.local-place-form select { padding: 0.3em 0.5em; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); }
+.local-place-form button { padding: 0.35em 0.9em; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.local-place-form button:hover { background: var(--surface-3); }
+.local-empty, .local-unresolved, .local-thin { padding: 1em 0; font-style: italic; }
+.local-header { margin: 0.6em 0 0.2em; }
+
 /* lean dot: --lean ranges -1..+1 */
 .lean-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
   background: hsl(calc(220 - (var(--lean) + 1) * 110), 80%, 55%);

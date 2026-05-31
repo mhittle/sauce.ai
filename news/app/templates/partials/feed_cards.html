@@ -95,7 +95,7 @@
   </article>
 {% endfor %}
   <div class="load-more">
-    <button hx-get="{{ url_for('feed.index', page=page+1, category=category or None, sort=(sort if sort and sort != 'relevance' else None)) }}"
+    <button hx-get="{{ load_more_url or url_for('feed.index', page=page+1, category=category or None, sort=(sort if sort and sort != 'relevance' else None)) }}"
             hx-target="closest .load-more" hx-swap="outerHTML"
             hx-select=".cards > *">Load more</button>
   </div>

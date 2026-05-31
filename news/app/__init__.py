@@ -52,6 +52,7 @@ def create_app():
     from .routes.search import bp as search_bp
     from .routes.gallery import bp as gallery_bp
     from .routes.lab import bp as lab_bp
+    from .routes.local import bp as local_bp
 
     app.register_blueprint(feed_bp)
     app.register_blueprint(algo_bp, url_prefix="/algo")
@@ -70,5 +71,6 @@ def create_app():
     app.register_blueprint(search_bp)
     app.register_blueprint(gallery_bp, url_prefix="/gallery")
     app.register_blueprint(lab_bp)
+    app.register_blueprint(local_bp)
 
     return app
