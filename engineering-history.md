@@ -140,6 +140,7 @@ these.
 - **BUG-028 — orthogonal algorithms surfaced the same articles; split
   SELECTION from RANKING on `/` (interactive session, PR pending).** User:
 - **BUG-029 — orthogonal algorithms surfaced the same articles; split
+- **BUG-030 — orthogonal algorithms surfaced the same articles; split
   SELECTION from RANKING on `/` (interactive session, PR #144).** User:
   switching to a different, supposedly orthogonal algorithm showed "a lot
   of the same articles." Review (no crash/arithmetic bug) found a design
@@ -164,8 +165,9 @@ these.
   `tests/test_ranking.py` (+6 affinity), `tests/test_feed_sort.py`
   (rank_for_display replaces the removed `_order_by_for_sort`). No
   migration/cron/dep; Passenger restart on deploy. Detail: `bugs.md`
-  BUG-029 (renumbered from BUG-028 — a parallel session merged a different
-  BUG-028, the "Why?" explainer 500, first).
+  BUG-030 (renumbered from BUG-028 → BUG-029 → BUG-030 — parallel sessions
+  merged a different BUG-028 ("Why?" explainer 500) and BUG-029 (NL builder
+  chat-box keywords) first).
 - **Manual-actions reconciliation.** User confirmed all three Open items
   done; moved to Completed (2026-05-31): every-1-min
   `classify_pending --triggered-only` cron (PR #121, also **BUG-023 fix

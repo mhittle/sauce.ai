@@ -134,7 +134,7 @@ def test_unique_sources_yields_no_duplicate_source_ids():
 
 
 def test_max_fetch_rows_is_a_sensible_ceiling():
-    # The ceiling bounds the FEED_SELECTION_POOL fetch (BUG-029): enough for
+    # The ceiling bounds the FEED_SELECTION_POOL fetch (BUG-030): enough for
     # many full pages, but not unbounded.
     assert MAX_FETCH_ROWS >= 30 * 31
     assert MAX_FETCH_ROWS <= 50_000

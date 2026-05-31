@@ -37,7 +37,7 @@ class Config:
     # BUG-021: cap how many articles a single source can occupy in one
     # page of `/`. 0 disables the cap.
     FEED_MAX_PER_SOURCE = int(os.environ.get("FEED_MAX_PER_SOURCE", "3"))
-    # BUG-029: size of the affinity-selected candidate SET on `/`. Weights
+    # BUG-030: size of the affinity-selected candidate SET on `/`. Weights
     # pick the top-N most-affine articles (membership); the sort then orders
     # them. Larger = more paging depth but more overlap between algorithms;
     # smaller = more distinct feeds but a shallower feed. Clamped at

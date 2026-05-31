@@ -94,14 +94,14 @@ verification), then re-test the describe flow. If chips still don't appear
 after a confirmed restart, escalate to hypothesis 3 (inspect the prompt/
 parse against live Haiku output). Status stays `open` until prod confirms
 chips render and keywords persist to the profile.
-### BUG-028 — Switching to an orthogonal algorithm surfaces largely the same articles
-**Status:** in-progress (fix written, PR pending) · **Reporter:** user · **Opened:** 2026-05-31
-### BUG-029 — Switching to an orthogonal algorithm surfaces largely the same articles
+### BUG-030 — Switching to an orthogonal algorithm surfaces largely the same articles
 **Status:** in-progress (fix written, PR #144) · **Reporter:** user · **Opened:** 2026-05-31
-**Note:** renumbered from BUG-028 → BUG-029 on 2026-05-31 to resolve a
-parallel-session BUG-ID collision (a separate, already-merged session used
-BUG-028 for the "Why?" ranking-explainer 500; see Resolved). PR #144
-title/commits may still say BUG-028.
+**Note:** renumbered BUG-028 → BUG-029 → **BUG-030** on 2026-05-31 to clear
+a cascade of parallel-session BUG-ID collisions: BUG-028 was taken by a
+merged session's "Why?" ranking-explainer 500 (see Resolved), and BUG-029
+by a merged session's "NL builder chat box keywords" bug (above). See
+`new-engineering-session-instructions.md` §7.4. PR #144 title/commits may
+still say BUG-028/BUG-029.
 
 User reports that loading one algorithm and then switching to a
 *different, supposedly orthogonal* algorithm shows "a lot of the same
