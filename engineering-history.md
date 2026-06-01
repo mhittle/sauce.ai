@@ -136,6 +136,26 @@ these.
 
 ## 2026-06-01
 
+- **PM session — Blindspot DISPATCHED (flipped `backlog → ready-for-agent`).**
+  Owner said go on the "category-of-one" feature. Before arming the paid run,
+  re-verified every load-bearing symbol the spec reuses against the live code
+  (not just the prior session's claim): `build_affinity_sql` (`ranking.py:256`),
+  `FEED_SELECTION_POOL` (`config.py:45`, read at `feed.py:229`),
+  `pick_spectrum_sample` (`spectrum.py:37`), `_fetch_cluster` (`story.py:73`),
+  `build_filters_sql` (`ranking.py:300`), `build_term_clauses`
+  (`term_prefs.py:73`), `lean_bucket` (`spectrum.py:23`); the outlet-burst query
+  (`breaking_alerts.py:160-168`, the `COUNT(DISTINCT a.source_id)` / `owner_id IS
+  NULL` / `GROUP BY a.story_id` / `HAVING outlet_count >=` shape); and
+  `feed.index()`'s selection stage (`feed.py:134-229`) that the new
+  `_selected_story_ids` helper must mirror byte-for-byte. All present and
+  matching the spec — confirmed buildable. Flipped the detail-section Status and
+  the at-a-glance row to `ready-for-agent` (title cells byte-identical, single
+  ready item). **NOT BUG-007 class**, signed-in only, purely additive (`index()`
+  output preserved), so it does not interact with the open BUG-031 anon-`/` 500
+  or the pending prod manual-actions. Dispatch fires on **merge of this roadmap
+  PR to `main`** (the picker runs on push to `main`, not the branch push), which
+  launches the ~$8 unattended Opus dev run that opens the implementation PR. No
+  feature code this session — PM dispatch only.
 - **PM session — "killer feature" spec: Blindspot (roadmap-only, NOT dispatched).**
   Owner asked to add "a killer feature that will set it apart from anything else."
   Framed the bar as *category-of-one*: the feature must require **both** of our
