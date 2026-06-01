@@ -43,7 +43,7 @@ Sort **Open** newest-first. **Completed** newest-first.
 ### 2026-05-31 — Re-test NL keyword chips after the x-data quote fix (BUG-029)
 **Status:** open · **PR:** BUG-029 final fix (`x-data` quoting) on branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
 ### 2026-06-01 — Migration + restart: Ask your feed (ask_queries)
-**Status:** open · **PR:** (Ask your feed — dev-agent, branch `claude/agent/ask-your-feed`) ·
+**Status:** open · **PR:** #166 (Ask your feed — dev-agent, branch `claude/agent/ask-your-feed`) ·
 **Opened:** 2026-06-01 · **File reference:** `news/seed/migrations/2026-06-01-ask-queries.sql`
 
 Backs the new signed-in `/ask` chat surface. **NOT BUG-007 class** — the

@@ -1194,7 +1194,7 @@ auto-refresh; surfacing the rail on mobile as a horizontally-scrollable
 carousel; folding the breaking-alerts detection signal in so "Brief" and
 "Breaking email" share one outlet-burst definition.
 ### Ask your feed (grounded conversational news over your personalized corpus)
-**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui, algo, backend · **Status:** done (PR pending, 2026-06-01)
+**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui, algo, backend · **Status:** done (PR #166, 2026-06-01)
 
 > **Shipped 2026-06-01 (dev-agent).** Signed-in `/ask` chat that retrieves
 > from the reader's *visible + un-muted* corpus over a ~21-day window

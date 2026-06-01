@@ -168,7 +168,7 @@ these.
   Dispatch note: flipping the row to `ready-for-agent` and merging to `main`
   fires the paid (~$8) dev run — left `backlog` pending the owner's go.
 - **Ask your feed — grounded conversational news (dev-agent unattended,
-  PR pending).** Shipped roadmap Pri 8 / LOE 6 from `ready-for-agent`.
+  PR #166).** Shipped roadmap Pri 8 / LOE 6 from `ready-for-agent`.
   New signed-in `/ask` chat that retrieves from the reader's own
   personalized corpus and grounds one Haiku call per turn on the result,
   with inline citations and a hard "I don't have coverage of that in your
