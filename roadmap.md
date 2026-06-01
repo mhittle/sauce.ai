@@ -83,10 +83,161 @@ shipped.
 | 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | done |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | in-progress |
+| 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
+| 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | proposed |
+| 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | backlog |
 
 ---
 
 ## Items in detail
+
+### Blindspot — the biggest stories your algorithm is hiding from you
+**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, algo, backend · **Status:** backlog
+
+**User value / why now — the "category of one" feature.** Every personalization
+engine on earth deepens the reader's bubble; we are the only product that can do
+the opposite *honestly*, because we own the two assets nobody else has together:
+(1) the reader's **own explicit, transparent algorithm** (their `weights_json` +
+keyword mutes + filters), and (2) our **cross-spectrum, multi-source dedup'd
+story clusters** with per-article `political_lean`. Blindspot uses the user's own
+algorithm against itself: it surfaces the biggest stories the world is covering
+right now that the reader's algorithm is **systematically suppressing** — and
+tells them *exactly which knob hid it* and shows the coverage across the
+spectrum. This is the most shareable, most on-thesis thing we can ship ("your
+algorithm hid 7 of the 10 biggest stories this week — here's what, and why"). A
+single-source reader or Google News structurally cannot build it: they don't have
+your algorithm to invert. It is the antidote-to-the-filter-bubble expression of
+the transparent-ranking thesis, and it reuses machinery already on prod.
+
+**What it is.** A new `/blindspot` ("Blindspot") page, signed-in only (it needs a
+real algorithm to invert). It lists the top N **high-coverage** story clusters
+(many independent outlets) that the user's **active profile would NOT surface**,
+each shown as: the canonical headline, an "N outlets covering this" count, a
+plain-language **why-it's-hidden** reason tied to the responsible control (with a
+link to `/algo` to change it), an inline **cross-spectrum coverage** strip
+(reusing the dossier's spectrum sample), and a link to the `/story/<id>` dossier.
+Anonymous visitors get an inviting empty state ("Build your algorithm first —
+then we'll show you what it's hiding"), not a meaningless default-weights list.
+
+**The core idea — "hidden" must be *true* relative to the live feed.** The whole
+credibility of the feature is that a blindspot is genuinely something `/` would
+not show this user. So the determination MUST reuse the exact selection machinery
+of `feed.index()` (post-BUG-030): the same `build_affinity_sql(weights)`
+selection signal, the same `algorithm_term_prefs` mute clauses
+(`term_prefs.build_term_clauses`), the same hard filters
+(`ranking.build_filters_sql` — category/country/geo/per-feature thresholds/source
+deny), and the same `(a.story_id IS NULL OR a.id = a.story_id)` canonical-member
++ visibility (`vis_sql`) + downvote (`down_filter`) predicates. Do **not** invent
+a parallel definition of "hidden."
+
+**How it's computed (v1 — deterministic, LLM-free, no process spawn):**
+1. **Big-story universe.** Run the outlet-burst query already used by
+   `news/jobs/breaking_alerts.py` (and specified for The Brief), over
+   `BLINDSPOT_WINDOW_HOURS` (default ~48), global outlets only
+   (`s.owner_id IS NULL`), `HAVING COUNT(DISTINCT a.source_id) >=
+   BLINDSPOT_MIN_OUTLETS` (default ~5), `ORDER BY outlet_count DESC LIMIT`
+   a generous candidate cap. This is "what matters to the world right now."
+2. **What the user's feed *would* surface.** Add a thin, behavior-preserving
+   helper `feed._selected_story_ids(weights, active_algo_id, *, limit)` that runs
+   the **same** selection SQL as `index()` (same affinity `ORDER BY`, same
+   `FEED_SELECTION_POOL` limit, same filters/mutes/visibility/downvote predicates)
+   but `SELECT`s only `a.story_id`. Returns the set of canonical story_ids the
+   home feed would put in front of this user. (Extracting/sharing the predicate
+   builders from `index()` is preferred; the documented fallback is to re-compose
+   the building blocks inside the new helper — justify in the PR, same call the
+   `/local` PR made.)
+3. **Blindspots = big stories NOT in that set.** For each, attach a
+   `hidden_reason` by re-checking which control excluded it, in priority order:
+   `muted` (matches an active-profile `mute` keyword), `filtered` (excluded by a
+   category/country/geo/threshold/source-deny hard filter), else `low_relevance`
+   (passes filters but ranks below the `FEED_SELECTION_POOL` affinity cutoff).
+   Order the final list by `outlet_count DESC` (importance), cap at
+   `BLINDSPOT_MAX_ITEMS` (default ~8).
+4. **Why + the knob.** Turn the flag into a transparent one-liner —
+   *"Muted by your keyword 'crypto'"*, *"Below your relevance bar"*, *"Outside
+   your category filter (World)"* — each linking to `/algo`. This transparency
+   payoff is the point; it is not optional polish.
+5. **The other side.** For each displayed blindspot, call
+   `story._fetch_cluster(story_id)` and render the cross-spectrum coverage with
+   the **already-shipped** `spectrum.pick_spectrum_sample(members, exclude_id,
+   limit=3)` (one per source, round-robin L/C/R), plus a link to the dossier.
+   (Do **not** depend on `pick_steelman` — it is not implemented yet; the
+   "strongest opposing" upgrade is a v2 once Steel-man merges.)
+
+**Sketch (files/surfaces to touch):**
+- `news/app/blindspot.py` (new, pure / Flask-free, mirrors `app/spectrum.py` /
+  `app/feed_diversify.py`): `classify_blindspots(big_stories, shown_story_ids,
+  mute_hits, filter_hits, *, max_items)` → ordered list of
+  `{story_id, outlet_count, hidden_reason}`; `reason_label(flags) -> str`. **This
+  is where the unit tests live** — no Flask/DB/LLM.
+- `news/app/routes/feed.py` — add the thin `_selected_story_ids(weights,
+  active_algo_id, *, limit)` helper reusing `index()`'s selection SQL/predicates
+  (behavior-preserving; `index()` output must be byte-for-byte unchanged — assert
+  via existing feed tests).
+- `news/app/routes/blindspot.py` (new blueprint, registered at root like
+  `local_bp`/`trending_bp`, route `GET /blindspot`, `@login_required`): run the
+  burst query, call `_selected_story_ids`, the mute/filter re-check, and
+  `classify_blindspots`; `_fetch_cluster` + `pick_spectrum_sample` per item;
+  render. Anonymous → empty/onboarding state (no 500).
+- `news/app/templates/blindspot.html` (new) + a small
+  `partials/blindspot_card.html` (or reuse the dossier spectrum partial);
+  `news/app/static/style.css` — a `.blindspot` block reusing lean-badge /
+  `.spectrum-peek` classes; dark-mode-aware.
+- `news/app/templates/base.html` — a **"Blindspot"** topnav link, signed-in only
+  (BUG-022 `flex-wrap` absorbs it; keep the label short).
+- `news/app/__init__.py` — `register_blueprint(blindspot_bp)`.
+- `news/app/config.py` — `BLINDSPOT_ENABLED` (default on), `BLINDSPOT_WINDOW_HOURS`
+  (48), `BLINDSPOT_MIN_OUTLETS` (5), `BLINDSPOT_MAX_ITEMS` (8), env-defaulted
+  (`os.environ.get(..., default)` pattern of the `FEED_*`/`SUMMARY_*` knobs).
+- `news/INSTALL.txt` — document the new env knobs (touches `config.py`, so the
+  BUG-007 gate expects an INSTALL.txt update in the PR).
+
+**Preserve / must-not-break:**
+- `/`, `/firehose`, `/search`, `/saved`, `/local`, and the digest are
+  **untouched**. If `index()` is refactored to share predicate builders, its
+  output must be byte-for-byte unchanged — the existing feed-route tests must pass
+  unchanged.
+- Reuse the shared `lean_bucket` ±0.2 thresholds (the `spectrum.py` sync note
+  governs); do not fork them.
+- "Hidden" is defined ONLY via the live feed-selection machinery — never a
+  second, drifting definition.
+
+**Constraints / watch-outs:**
+- **NOT BUG-007 class** — reads only columns/tables already on prod (`articles`,
+  `sources`, `article_features.{political_lean,objectivity,source_reputation}`,
+  `algorithm_term_prefs`). **No DB migration, no cron, no env var required (knobs
+  default), no new dependency, no symlink.** Passenger restart on deploy so the
+  new blueprint registers (standard).
+- **No synchronous LLM, no process spawn** — v1 is one indexed outlet-burst
+  `GROUP BY` + one affinity-ordered story_id SELECT + ≤`BLINDSPOT_MAX_ITEMS`
+  `_fetch_cluster` calls; same request-path cost class as `/local` and the
+  dossier peek. nproc ceiling untouched.
+- **Signed-in only** bounds concurrency at current DAU and keeps the feature
+  meaningful (a real algorithm to invert). Wrap the whole page body in
+  try/except so any failure degrades to a graceful "couldn't compute your
+  blindspots right now" panel, never a 500.
+- **Cost of the burst query:** a grouped scan over the window; the
+  `(story_id, published_at)` index supports it — keep the window tight and the
+  candidate `LIMIT` modest. If it ever shows in latency, the documented fallback
+  is to read the `trending_topics` snapshot the cron already maintains.
+
+**Test expectation:** `pytest news/tests/` stays green. New `tests/test_blindspot.py`
+covers `classify_blindspots` / `reason_label` purely: a big story in
+`shown_story_ids` is excluded; a big story absent from it is a blindspot ordered
+by `outlet_count`; `hidden_reason` priority (mute beats filter beats
+low-relevance); `max_items` cap; empty inputs → empty result; an unparsable/empty
+mute or filter set never raises. The existing feed-route tests must still pass
+unchanged (the `_selected_story_ids` extraction is behavior-preserving). No test
+requires Haiku, a live DB, or a browser.
+
+**v2 (out of scope):** a cached Haiku one-liner per blindspot ("the strongest case
+this coverage makes", keyed like `story_dossiers`); swap `pick_spectrum_sample`
+for `pick_steelman` once Steel-man merges; a weekly **"your blindspot"** email
+digest (reuses `mailer.py`); an in-feed Blindspot rail / a count badge on the nav
+link ("3 big stories you're missing"); a per-blindspot one-tap "show me more like
+this" that nudges the responsible weight (pairs with Tune-from-article); folding
+the outlet-burst definition shared with The Brief + breaking-alerts into one
+helper.
 
 ### Breaking-news email alerts (major-event detection → opt-in email)
 **Priority:** 7 · **LOE:** 6 · **Category:** new-feature, backend, ops, algo · **Status:** done (PR #132, merged 2026-05-31)
