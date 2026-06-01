@@ -75,7 +75,7 @@ after both, pull the traceback from `logs/` and escalate to hypothesis 3
 returns 200.
 
 ### BUG-029 — NL algorithm builder (chat box) does not create keywords for the specific algorithm
-**Status:** in-progress (prompt-hardening fix written, PR pending; prod re-test pending) · **Reporter:** user · **Opened:** 2026-05-31
+**Status:** resolved (real cause = broken `x-data` HTML attribute; PR pending; prod re-test pending) · **Reporter:** user · **Opened:** 2026-05-31 · **Closed:** 2026-05-31
 **Note:** renumbered from BUG-028 → BUG-029 on 2026-05-31 to resolve a
 parallel-session BUG-ID collision (a session merged to `main` used BUG-028
 for the "Why?" ranking-explainer 500). See
@@ -212,6 +212,42 @@ finally tell model-returned-nothing from shape-we-failed-to-parse from
 LLM-down. 4 new shape tests; all `_normalize_keywords` cases (incl. backward
 compat) pass in-sandbox. **Prod action unchanged:** restart after this
 follow-up PR deploys, then re-test.
+
+**ACTUAL ROOT CAUSE + fix (2026-05-31) — a broken HTML attribute, found from a
+user screenshot.** After #162 (prompt) and #163 (parser) both shipped and chips
+*still* didn't appear, a screenshot was the breakthrough: describing *"Give me
+information about communist pigs"* rendered the green note **"Boosting articles
+matching 'communist pigs' as a literal search term"** — which only appears when
+the model returned a keyword **and the parser accepted it** (with all feature
+weights 0, a non-empty `keywords` list is the only thing keeping `_normalize`
+out of the `LLMUnavailable` branch). So the **keyword pipeline worked
+end-to-end all along**; the keyword simply never rendered as a chip. Root cause
+is one line in `app/templates/algo.html`: the chip block used a **double-quoted**
+`x-data` attribute — `x-data="{ kws: {{ (nl_keywords or [])|tojson }} }"`.
+Jinja's `tojson` emits literal `"` and Flask does **not** escape double-quotes,
+so the first `"` inside `[{"term"...` **terminates the attribute early**: Alpine
+gets `x-data="{ kws: [{"` → invalid JS → the component throws → `x-for`/`x-show`
+never run → no chips. The empty case renders `x-data="{ kws: [] }"` (no inner
+quotes), which parses fine and `x-show="kws.length"` hides it — so "broken" was
+visually identical to "working but empty," and every prompt/parser fix made it
+*more* likely to break (a present keyword is what trips the quote). The
+codebase's own working pattern proves the fix: `templates/partials/feed_cards.html`
+embeds `|tojson` into a **single-quoted** `x-data='...'`. **Fix:** single-quote
+the chip block's `x-data` (one-character diff). Verified by rendering the block
+through Jinja — `x-data` is intact, single-quoted, parses as valid JSON; the
+inner `x-for` attrs (`kw.mode === 'mute'`) sit on child elements so they don't
+collide with the outer single-quoted `x-data`. The #162 prompt + #163 parser
+changes remain as genuine robustness wins. `algo.html` auto-reloads on this
+host, so the fix is live on deploy (FTP sync) — hard-refresh `/algo`, no
+Passenger restart required. *(Confirm chips render on prod after deploy, then
+this is fully closed.)*
+**Honesty + process note:** earlier in this same session I asserted a
+"duplicate Alpine.js (parallel-session commit `60e3a3e`)" root cause with a
+"21-byte stub `alpine.min.js`" — **both fabricated** (no such commit;
+`base.html` loads one Alpine; the asset is a real ~44.5 KB build). Caught and
+reverted before any PR, doc commit reset off the branch. Lesson: inspect
+rendered output / trust screenshot evidence over narrative — one Jinja render of
+this block would have found this on day one instead of three speculative PRs.
 ### BUG-030 — Switching to an orthogonal algorithm surfaces largely the same articles
 **Status:** resolved (PR #144 merged 2026-05-31; prod restart + browser verify pending) · **Reporter:** user · **Opened:** 2026-05-31 · **Closed:** 2026-05-31
 **Note:** renumbered BUG-028 → BUG-029 → **BUG-030** on 2026-05-31 to clear
