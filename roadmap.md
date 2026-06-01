@@ -1840,6 +1840,70 @@ are fine; if nothing meaningful surfaces, no PR is opened. New
 
 ---
 
+## PM proposals (2026-06-01)
+
+PM-agent suggestions from the 2026-06-01 cycle. Each is `status:
+proposed` — not yet authorized for dev. The human promotes a proposal
+to `ready-for-agent` (and folds its row into the at-a-glance table) to
+dispatch it. Telemetry (`/admin/cron-health`, `/admin/usage-summary`)
+was unavailable this run — `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` were
+not exported to the workflow environment, so the login flow could not
+authenticate. The rationale below cites engineering-history / bugs /
+roadmap signals only.
+
+### Rendered-template smoke pass in the pre-merge QA gate
+**Priority:** 6 · **LOE:** 3 · **Category:** infra, ui, ops · **Status:** proposed
+
+**Rationale:** BUG-029 (closed 2026-05-31, `bugs.md` lines ~216-250)
+cost three speculative PRs (#162 prompt hardening, #163 parser
+loosening, then the actual one-character template fix), plus a
+fabricated and reverted "duplicate Alpine.js / 21-byte stub" root
+cause that the engineering-history 2026-06-01 entry calls out by name
+("earlier this session I fabricated a 'duplicate Alpine.js (commit
+`60e3a3e`)' / '21-byte stub alpine.min.js' root cause — both false").
+Across all three speculative fixes the unit suite was green
+(`test_algo_nl.py` 21/21 throughout), because the defect lived in
+`templates/algo.html`: a `tojson`-emitted JSON payload was embedded
+inside a **double-quoted** `x-data="..."` attribute, so the first `"`
+inside `[{"term"...` truncated the attribute, Alpine threw, and the
+`x-for` chip block never rendered. The bug presented identically to
+"working but empty" (an empty `kws: []` had no inner quotes and parsed
+fine), which is why each upstream prompt/parser fix made the failure
+*more* likely instead of less. The closing honesty note in `bugs.md`
+BUG-029 is unambiguous: *"one Jinja render of this block would have
+found this on day one instead of three speculative PRs."* The class is
+not specific to one template — the same pattern (`|tojson` in a
+double-quoted attribute, Alpine/HTMX attribute typos, `{% block %}`
+left unclosed, `url_for` referencing a renamed endpoint) is a latent
+hazard everywhere Jinja meets Alpine/HTMX, which is now most pages
+(`/`, `/algo`, `/ask`, `/local`, `/firehose`, the gallery).
+
+Propose a small **pre-merge QA pass** that walks `app/templates/*.html`,
+renders each top-level template against a hand-written representative
+context fixture (one per route family — anon `/`, signed-in `/`,
+`/algo` editor, `/ask`, `/firehose`, `/story/<id>` dossier, the
+gallery), and asserts the result (a) parses as well-formed HTML via
+the stdlib `html.parser`, (b) contains no truncated quote inside any
+attribute starting with `x-` / `hx-` / `data-`, and (c) embeds every
+`|tojson` payload inside a **single-quoted** attribute or a
+`<script type="application/json">` block (the codebase's already-correct
+pattern, per `templates/partials/feed_cards.html`). Live in
+`tests/test_template_render.py` (pure, stdlib only — Jinja is already
+a dep via Flask), wired into the existing pytest run that the Phase 2
+QA gate (PR #104) executes on every PR, so a regression is caught
+before merge rather than after deploy. Fixtures stay deliberately
+shallow (canned dicts mirroring what the route layer passes); no
+Flask/DB/Anthropic needed. NOT BUG-007 class — pure test addition, no
+migration, no cron, no env var, no new dependency, no symlink. The
+guard test PR #163 already added against the `algo_nl` prompt
+regressing to "OPTIONAL" is precedent for this style of structural
+assertion. v2 (out of scope): expand to render the `partials/*.html`
+fragments under canonical contexts; an optional Playwright check on
+post-deploy QA (PR #105) for a final Alpine-actually-mounts assertion
+on the deployed page.
+
+---
+
 ## PM proposals (2026-05-25)
 
 PM-agent suggestions from the 2026-05-25 cycle. Each is `status:
