@@ -40,38 +40,31 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-05-31 — Python App restart + re-test: NL keyword fix (BUG-029)
-**Status:** open · **PR:** PR #162 (prompt hardening, MERGED) + follow-up PR (parser tolerance), branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
+### 2026-05-31 — Re-test NL keyword chips after the x-data quote fix (BUG-029)
+**Status:** open · **PR:** BUG-029 final fix (`x-data` quoting) on branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
 
-BUG-029 fix, two parts: (1) PR #162 rewrote `app/algo_nl.py` `_system_prompt()`
-so keyword extraction is mandatory when the reader names a subject; (2) the
-follow-up PR makes `_normalize_keywords` tolerant of the shapes Haiku actually
-returns (mode-keyed buckets, alternate term/mode keys, mode synonyms) — the old
-parser silently dropped them, which is why a restart after #162 alone didn't
-fix it. Both changes live in the **worker-loaded** `app/algo_nl.py`, so a
-restart is required **after the follow-up PR deploys** for the parser fix to
-take effect (the #162-only restart is now superseded). No DB migration, no
-cron, no env var, no new pip dep.
+The ACTUAL root cause of BUG-029 was a broken HTML attribute, not the prompt
+(#162) or the parser (#163): `app/templates/algo.html` rendered the keyword-chip
+block's data into a **double-quoted** `x-data="{ kws: …|tojson… }"`. `tojson`'s
+literal `"` characters truncated the attribute, so Alpine threw and the chips
+never rendered (the empty-list case had no inner quotes, so it looked fine —
+which is what masked the bug). Fixed by single-quoting the `x-data` (matching
+`feed_cards.html`'s working pattern). `algo.html` is a Jinja template and
+**auto-reloads on this host**, so the fix takes effect on deploy via FTP sync —
+**no Passenger restart required**. (The #162/#163 changes are still in and are
+genuine robustness improvements; no action needed for them.)
 
-**Action (cPanel):** Setup Python App → the `sauce.ai/news` app → **Restart**.
+**Action:** after this PR merges + deploys, **hard-refresh**
+`https://sauce.ai/news/algo` (Ctrl/Cmd-Shift-R) to drop the cached HTML.
 
-**Verify (signed-in browser):** go to `https://sauce.ai/news/algo`, type a
-description that names topics, e.g. *"more about climate policy and the LA
-Lakers, hide crypto and the royal family"*, click **Build from description**.
-A "Keywords from your description" box with removable chips (boost climate
-policy / boost la lakers / mute crypto / mute royal family) should now appear
-above the Save buttons. Click **Save as new profile** and confirm the terms
-land in that profile's lower **Keywords** panel. Server-side confirmation that
-Haiku is now returning keywords:
+**Verify (signed-in browser):** type a description naming subjects, e.g.
+*"information about communist pigs"* or *"more climate policy, hide crypto"*,
+click **Build from description** — the "Keywords from your description" chips
+should now appear above the Save buttons. Click **Save as new profile** and
+confirm the terms land in that profile's lower **Keywords** panel. If chips
+render → BUG-029 is resolved.
 
-```
-tail -100 /home/lt1ih6uyy2z6/public_html/sauce.ai/news/logs/*.log | grep "algo.describe nl_keywords="
-# expect a line like: algo.describe nl_keywords=4 desc_len=72
-```
-
-If chips still don't appear and the log shows `nl_keywords=0`, the model is
-still omitting the array — reopen BUG-029 against the prompt/parse path
-(`app/algo_nl.py`) rather than the deploy.
+No DB migration, no cron, no env var, no new pip dep, no restart.
 
 ### 2026-05-31 — Browser verify: News Near You /local (PR #160)
 **Status:** open · **PR:** #160 (News Near You) · **Opened:** 2026-05-31

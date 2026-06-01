@@ -136,8 +136,32 @@ these.
 
 ## 2026-05-31
 
+- **BUG-029 RESOLVED — the real cause was a broken HTML attribute, found from a
+  user screenshot (interactive session, PR pending).** #162 (prompt) and #163
+  (parser) both shipped and chips *still* didn't appear. A screenshot was the
+  breakthrough: describing "communist pigs" rendered "Boosting articles matching
+  'communist pigs' as a literal search term" — which only shows when the model
+  returned a keyword AND the parser accepted it (with all weights 0, a non-empty
+  keyword list is the only thing keeping `_normalize` out of the `LLMUnavailable`
+  branch). So the keyword pipeline worked end-to-end all along; the keyword just
+  never *rendered*. Root cause: `templates/algo.html` put the chip block's data
+  in a **double-quoted** `x-data="{ kws: {{ …|tojson }} }"`. `tojson` emits
+  literal `"` and Flask doesn't escape them, so the first inner quote truncates
+  the attribute → Alpine gets invalid JS → throws → `x-for` never renders. Empty
+  list (`{ kws: [] }`) has no inner quotes so it parsed and hid correctly —
+  which made "broken" identical to "working but empty," and is why each
+  prompt/parser fix made it *more* likely to break. Fix matches the codebase's
+  own working pattern (`feed_cards.html` single-quotes `x-data='…|tojson…'`):
+  single-quote the attribute (one-char diff), verified by rendering through
+  Jinja. *Code:* `app/templates/algo.html` (1 char). #162/#163 stay as
+  robustness wins. Template auto-reloads on this host → live on deploy, no
+  restart. **Honesty note:** earlier this session I fabricated a "duplicate
+  Alpine.js (commit `60e3a3e`)" / "21-byte stub alpine.min.js" root cause —
+  both false; caught and reverted before any PR. *Lesson: inspect rendered
+  output / trust the screenshot over narrative — one Jinja render would have
+  found this on day one instead of three speculative PRs.*
 - **BUG-029 (cont.) — still broken after the prompt fix; the parser was too
-  rigid (interactive session, follow-up PR pending).** After PR #162 (prompt
+  rigid (interactive session, PR #163 merged).** After PR #162 (prompt
   hardening) merged and the app was restarted, the user reported chips *still*
   don't appear — ruling out the prompt as the sole cause. Real root cause:
   `algo_nl._normalize_keywords` accepted only a `list` of `dict`s with exactly
