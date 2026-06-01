@@ -134,6 +134,40 @@ these.
 
 ---
 
+## 2026-06-01
+
+- **PM session — "killer feature" spec: Blindspot (roadmap-only, NOT dispatched).**
+  Owner asked to add "a killer feature that will set it apart from anything else."
+  Framed the bar as *category-of-one*: the feature must require **both** of our
+  non-copyable assets together — the reader's **own explicit transparent
+  algorithm** and our **cross-spectrum multi-source story clusters**. That test
+  selected **Blindspot — the biggest stories your algorithm is hiding from you**
+  over two strong alternatives (promote the existing `proposed` *Ask your feed*;
+  *"Read me my brief"* audio — explicitly **not** the killer, TTS is the least
+  uniquely-ours). Blindspot inverts personalization: it surfaces the
+  highest-outlet-count stories the user's **active profile would not surface**,
+  states *which knob hid it* (mute keyword / hard filter / low relevance) with a
+  link to `/algo`, and shows the cross-spectrum coverage + dossier link. **The
+  load-bearing design constraint:** "hidden" must be computed from the **live
+  `feed.index()` selection machinery** (post-BUG-030 `build_affinity_sql`, the
+  same `algorithm_term_prefs` mutes, `build_filters_sql`, visibility/downvote
+  predicates, `FEED_SELECTION_POOL` cutoff) — never a parallel definition — so a
+  blindspot is *genuinely* something `/` would not show. v1 is **deterministic,
+  LLM-free, no process spawn, NOT BUG-007 class** (reads existing
+  columns/tables; no migration/cron/env/dep): one outlet-burst `GROUP BY` (reused
+  from `breaking_alerts.py`) + a thin behavior-preserving
+  `feed._selected_story_ids()` helper + `_fetch_cluster` +
+  `spectrum.pick_spectrum_sample` (deliberately **not** `pick_steelman` — unmerged
+  — to avoid a false dependency). Signed-in only; anon gets an onboarding empty
+  state. Wrote a **build-ready** roadmap item (detail section + at-a-glance row,
+  byte-identical titles) at **Pri 8 / LOE 5**, **Status `backlog`** — tracked, not
+  dispatched. Pre-verified every reused symbol against the code (Explore pass:
+  `build_affinity_sql`, `_active_weights`, `lean_bucket`/`pick_spectrum_sample`,
+  `_fetch_cluster`, the burst query, `build_term_clauses`, blueprint/topnav
+  patterns, schema columns) so the sketch is feasible. **No code this session.**
+  Dispatch note: flipping the row to `ready-for-agent` and merging to `main`
+  fires the paid (~$8) dev run — left `backlog` pending the owner's go.
+
 ## 2026-05-31
 
 - **BUG-029 RESOLVED — the real cause was a broken HTML attribute, found from a
