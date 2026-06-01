@@ -99,6 +99,20 @@ class Config:
     BREAKING_MIN_OUTLETS = int(os.environ.get("BREAKING_MIN_OUTLETS", "12"))
     BREAKING_MAX_PER_DAY = int(os.environ.get("BREAKING_MAX_PER_DAY", "3"))
 
+    # Ask your feed (grounded conversational news). ASK_ENABLED is the
+    # master kill-switch. ASK_MODEL falls back to ANTHROPIC_MODEL when
+    # empty. WINDOW_DAYS widens the home-feed 7-day window so "this/last
+    # week" questions actually find context. MAX_CONTEXT_ARTICLES caps the
+    # numbered context block (cost + grounding density). MAX_PER_DAY is
+    # the per-user daily cap (cost ceiling). MAX_TURNS bounds carried
+    # multi-turn history.
+    ASK_ENABLED = os.environ.get("ASK_ENABLED", "1") not in ("0", "false", "False")
+    ASK_MODEL = os.environ.get("ASK_MODEL", "")
+    ASK_WINDOW_DAYS = int(os.environ.get("ASK_WINDOW_DAYS", "21"))
+    ASK_MAX_CONTEXT_ARTICLES = int(os.environ.get("ASK_MAX_CONTEXT_ARTICLES", "18"))
+    ASK_MAX_PER_DAY = int(os.environ.get("ASK_MAX_PER_DAY", "25"))
+    ASK_MAX_TURNS = int(os.environ.get("ASK_MAX_TURNS", "6"))
+
     DISCOVER_PROMOTION_SCORE_MIN = int(os.environ.get("DISCOVER_PROMOTION_SCORE_MIN", "3"))
     DISCOVER_PROMOTE_BUDGET_SECONDS = int(os.environ.get("DISCOVER_PROMOTE_BUDGET_SECONDS", "1500"))
     DISCOVER_PROMOTE_WORKERS = int(os.environ.get("DISCOVER_PROMOTE_WORKERS", "8"))

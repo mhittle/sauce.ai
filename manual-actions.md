@@ -42,6 +42,78 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ### 2026-05-31 — Re-test NL keyword chips after the x-data quote fix (BUG-029)
 **Status:** open · **PR:** BUG-029 final fix (`x-data` quoting) on branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
+### 2026-06-01 — Migration + restart: Ask your feed (ask_queries)
+**Status:** open · **PR:** #166 (Ask your feed — dev-agent, branch `claude/agent/ask-your-feed`) ·
+**Opened:** 2026-06-01 · **File reference:** `news/seed/migrations/2026-06-01-ask-queries.sql`
+
+Backs the new signed-in `/ask` chat surface. **NOT BUG-007 class** — the
+`/ask` route catches a missing-table `ProgrammingError` and falls back to
+an in-process daily `SlidingWindowLimiter`, so a missing migration never
+500s the page (the per-user daily cap becomes per-worker instead of
+global until the migration lands, acceptable for the brief
+migrate-after-deploy window). PR labeled `has-migration`; the post-deploy
+executor applies it. Apply once on prod via phpMyAdmin → SQL tab
+(database `lt1ih6uyy2z6_news`):
+
+```sql
+CREATE TABLE IF NOT EXISTS ask_queries (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id       INT UNSIGNED NOT NULL,
+  conversation  CHAR(40) NOT NULL DEFAULT '',
+  question      VARCHAR(2000) NOT NULL,
+  answered      TINYINT(1) NOT NULL DEFAULT 0,
+  article_ids   VARCHAR(500) NOT NULL DEFAULT '',
+  answer_text   TEXT NOT NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_ask_user_day (user_id, created_at),
+  KEY idx_ask_convo (conversation),
+  CONSTRAINT fk_ask_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Then:** Setup Python App → `sauce.ai/news` → **Restart** so the new
+`/ask` blueprint registers and the topnav **Ask** link (signed-in) stops
+404'ing.
+
+**Verify (signed-in browser):**
+
+1. Topnav now shows **Ask** between Saved and Your Algo — click it.
+2. Empty state shows the example prompts. Type *"what happened with the
+   budget bill this week?"*, submit. A grounded answer appears with
+   footnotes like `[1]`, `[2]` and a list of source links underneath
+   (dossier links for canonical multi-source members, direct article
+   URLs otherwise).
+3. Ask a follow-up in the same form (the hidden `conversation` field
+   carries it) — the model's reply should treat the earlier turn as
+   context.
+4. Ask something with no plausible coverage (e.g. *"who won the 1923
+   Mauritian curling championship?"*) — expect *"I don't have coverage
+   of that in your feed"* and NO citations.
+5. Optional DB checks:
+
+   ```sql
+   SELECT COUNT(*) FROM ask_queries;                     -- rises as users ask
+   SELECT user_id, COUNT(*) AS n FROM ask_queries
+    WHERE created_at >= UTC_DATE() GROUP BY user_id;     -- per-user daily count
+   SELECT model, SUM(input_tokens), SUM(output_tokens),
+          SUM(est_cost_usd) FROM llm_usage
+    WHERE ts >= UTC_DATE() GROUP BY model;               -- /admin/usage-summary cross-check
+   ```
+
+If `/ask` 500s on first visit, check `news/logs/error.log` for an import
+error in the new blueprint (most likely a missed Passenger restart). If
+the topnav Ask link 404s, the blueprint hasn't registered yet — restart.
+
+The six `ASK_*` knobs (`ASK_ENABLED`, `ASK_MODEL`, `ASK_WINDOW_DAYS`,
+`ASK_MAX_CONTEXT_ARTICLES`, `ASK_MAX_PER_DAY`, `ASK_MAX_TURNS`) are
+env-defaulted; no action required to ship. `ASK_ENABLED=0` is the
+instant kill-switch (a Python App restart picks it up).
+
+---
+
+### 2026-05-31 — Python App restart + re-test: NL keyword fix (BUG-029)
+**Status:** open · **PR:** PR #162 (prompt hardening, MERGED) + follow-up PR (parser tolerance), branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
 
 The ACTUAL root cause of BUG-029 was a broken HTML attribute, not the prompt
 (#162) or the parser (#163): `app/templates/algo.html` rendered the keyword-chip

@@ -388,6 +388,26 @@ CREATE TABLE IF NOT EXISTS llm_usage (
   KEY idx_llm_ts (ts)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Ask your feed (grounded conversational news). One row per submitted
+-- question; daily cap is a COUNT() over (user_id, created_at). NOT
+-- BUG-007 class: the /ask route catches a missing-table error and
+-- falls back to an in-process limiter, so a missing migration never
+-- 500s. See migrations/2026-06-01-ask-queries.sql.
+CREATE TABLE IF NOT EXISTS ask_queries (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id       INT UNSIGNED NOT NULL,
+  conversation  CHAR(40) NOT NULL DEFAULT '',
+  question      VARCHAR(2000) NOT NULL,
+  answered      TINYINT(1) NOT NULL DEFAULT 0,
+  article_ids   VARCHAR(500) NOT NULL DEFAULT '',
+  answer_text   TEXT NOT NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_ask_user_day (user_id, created_at),
+  KEY idx_ask_convo (conversation),
+  CONSTRAINT fk_ask_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Agent fleet observability: one row per GitHub Actions agent workflow
 -- run, appended by the HMAC /agent-ops/report-run endpoint from a final
 -- reporting step in each agent workflow. Read by GET /admin/agent-activity.

@@ -82,9 +82,9 @@ shipped.
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
 | 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | done |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
-| 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | in-progress |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
 | 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | backlog |
+| 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
 
 ---
 
@@ -1193,7 +1193,28 @@ auto-refresh; surfacing the rail on mobile as a horizontally-scrollable
 carousel; folding the breaking-alerts detection signal in so "Brief" and
 "Breaking email" share one outlet-burst definition.
 ### Ask your feed (grounded conversational news over your personalized corpus)
-**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui, algo, backend · **Status:** in-progress
+**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui, algo, backend · **Status:** done (PR #166, 2026-06-01)
+
+> **Shipped 2026-06-01 (dev-agent).** Signed-in `/ask` chat that retrieves
+> from the reader's *visible + un-muted* corpus over a ~21-day window
+> (`MATCH AGAINST` reusing the `/search` FULLTEXT path, plus the feed's
+> `vis_sql` + `user_source_prefs` + active-profile `algorithm_term_prefs`
+> mute fragments), then makes one Haiku call grounded on the numbered
+> articles with inline citations resolved to dossier/article links. New
+> pure `app/ask.py` (`query_terms`, `build_context_block`, `build_messages`,
+> `parse_answer`, `daily_cap_ok`, `ask_feed`, `serialize_history`,
+> `system_prompt`); thin `app/routes/ask.py` blueprint (`GET /ask`,
+> `POST /ask`); new `ask.html` + `partials/ask_answer.html`; "Ask" nav
+> link; six `ASK_*` env knobs (kill-switch, model override,
+> window/context/cap/turns). `has-migration` — one new `ask_queries`
+> table tolerated-absent (NOT BUG-007 class: route catches a missing-
+> table `ProgrammingError` and falls back to an in-process `SlidingWindow`
+> daily limiter so the page never 500s pre-migration). 28 new pure tests
+> in `tests/test_ask.py` cover `query_terms` reduction (incl. the
+> all-stopword short-circuit), context numbering, multi-turn assembly
+> with history truncation, out-of-set citation drop, no-coverage
+> detection, `LLMUnavailable` wrapping, daily-cap boundary, empty
+> retrieval short-circuit. Full suite 674 pass.
 
 **User value / why now.** Every feature this arc has handed the reader more
 *control* over their feed (sliders, NL builder, keyword mutes, profiles,
