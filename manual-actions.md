@@ -40,6 +40,53 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-06-01 — Python App restart: Blindspot blueprint
+**Status:** open · **PR:** Blindspot — dev-agent, branch `claude/agent/blindspot` ·
+**Opened:** 2026-06-01
+
+Backs the new signed-in `/blindspot` page (Pri 8 / LOE 5 roadmap item).
+**NOT BUG-007 class** — no migration, no cron, no new env var (4
+`BLINDSPOT_*` knobs default), no new pip dep, no symlink. The blueprint
+registers a new route at `GET /blindspot`, so Passenger has to reload
+imports before the topnav **Blindspot** link (signed-in) stops 404'ing.
+
+cPanel → Setup Python App → `sauce.ai/news` → **Restart**.
+
+**Verify (signed-in browser, must have an active algorithm):**
+
+1. Topnav shows **Blindspot** between Ask and Your Algo — click it.
+2. Page heading: "Blindspot — the biggest stories the world is covering
+   right now that your active algorithm would not show you."
+3. Each card shows:
+   - distinct-outlet count pill ("12 outlets")
+   - a reason chip with one of:
+     - **"Muted by your keyword 'X'"** (where X is one of your active
+       profile's mute keywords) + a "change in /algo" link
+     - **"Outside your hard filters"** + a "change in /algo" link
+     - **"Below your relevance bar"** + a "change in /algo" link
+   - the canonical headline (links to the `/story/<id>` dossier)
+   - the canonical summary
+   - a "Coverage across the spectrum" strip with up to 3 sibling
+     articles (one per source, L/C/R round-robin)
+4. Sanity: each story_id surfaced on `/blindspot` should be **absent**
+   from the same viewer's `/` feed (open the dossier link and confirm
+   `/?` doesn't list that story).
+5. Signed-out: visiting `/blindspot` shows the onboarding empty state
+   ("Build your algorithm first") with a Sign-up / Sign-in CTA — no
+   default-weights blindspot list.
+
+If `/blindspot` 500s on first visit, check `news/logs/error.log` for an
+import error in the new blueprint (most likely a missed Passenger
+restart). If the topnav Blindspot link 404s, the blueprint hasn't
+registered yet — restart.
+
+The four `BLINDSPOT_*` knobs (`BLINDSPOT_ENABLED`,
+`BLINDSPOT_WINDOW_HOURS`, `BLINDSPOT_MIN_OUTLETS`, `BLINDSPOT_MAX_ITEMS`)
+are env-defaulted; no action required to ship. `BLINDSPOT_ENABLED=0` is
+the instant kill-switch (a Python App restart picks it up — the page
+then renders an empty "Blindspot is currently disabled" state instead
+of running any SQL).
+
 ### 2026-05-31 — Re-test NL keyword chips after the x-data quote fix (BUG-029)
 **Status:** open · **PR:** BUG-029 final fix (`x-data` quoting) on branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
 ### 2026-06-01 — Migration + restart: Ask your feed (ask_queries)

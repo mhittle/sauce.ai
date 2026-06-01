@@ -136,6 +136,68 @@ these.
 
 ## 2026-06-01
 
+- **Blindspot — the biggest stories your algorithm is hiding from you
+  (dev-agent unattended, PR pending).** Shipped the roadmap Pri 8 / LOE 5
+  "category-of-one" feature from `ready-for-agent` (dispatched earlier this
+  same day; PM had already pressure-tested every reused symbol against the
+  live code, so all the surfaces existed as specced). New signed-in
+  `/blindspot` page that inverts the reader's own algorithm: shows the
+  highest-outlet-count stories the live home feed would NOT surface for
+  *this viewer*, names the responsible knob (mute keyword / hard filter /
+  low relevance) with a link to `/algo`, and renders the cross-spectrum
+  coverage strip via `_fetch_cluster` + `pick_spectrum_sample`. The
+  **honesty contract** the spec made load-bearing — "hidden must be true
+  relative to the live feed" — is enforced by a thin behavior-preserving
+  `feed._selected_story_ids(weights, active_algo_id, *, limit)` helper
+  that composes the **same** selection-stage building blocks as
+  `feed.index()` (`build_affinity_sql` + `build_filters_sql` +
+  `build_term_clauses` + visibility + downvote + canonical-member +
+  `FEED_SELECTION_POOL`-style limit), only `SELECT`ing `a.story_id`.
+  `index()` is byte-for-byte unchanged — the helper is added as a new
+  function, not extracted (the documented fallback the `/local` PR also
+  took, and right now BUG-030's split is freshly merged + a Steel-man
+  branch is parked at `in-progress`, so smaller surface beats refactor).
+  Pure `app/blindspot.py` carries the decision boundaries: priority
+  `mute > filter > low_relevance`, ordering by `outlet_count DESC` then
+  `story_id ASC` (deterministic tiebreak), `max_items` cap, sanitation
+  for non-int ids / bad outlet counts / empty inputs (22 tests, no
+  Flask/DB/LLM). The route runs three SELECTs: outlet-burst (same
+  `COUNT(DISTINCT a.source_id) ... HAVING outlet_count >= ...`
+  `GROUP BY a.story_id` `s.owner_id IS NULL` shape as
+  `breaking_alerts._candidate_query`, 48-hour window, ≥5 distinct
+  outlets, candidate cap 200); canonical title+summary IN-list; filter
+  survivors via a second `build_filters_sql` SELECT against the same
+  canonical-member ids (so a future filter added to `build_filters_sql`
+  is picked up automatically). Mute detection runs in Python against
+  the canonical title+summary using `term_prefs.normalize_term` so the
+  in-Python substring matcher can't drift from the SQL builder's
+  `_MATCH_EXPR`. `reason_label` quotes the matched term back to the
+  reader ("Muted by your keyword 'crypto'"), which is the transparency
+  payoff the spec called the point of the feature. Anon visitors and
+  signed-in users without an active algorithm get an onboarding empty
+  state (no SQL runs — a default-weights inversion would be nonsense).
+  Whole page body in try/except → graceful "couldn't compute" panel,
+  never a 500. Topnav link is signed-in only (absorbed by BUG-022
+  `.topnav` `flex-wrap`). **NOT BUG-007 class**: reads only
+  columns/tables already on prod, no migration, no cron, no new env
+  var (4 `BLINDSPOT_*` knobs default), no new pip dep, no symlink.
+  Passenger restart on deploy so the new blueprint registers
+  (`manual-actions.md` Open). *Code:* `app/blindspot.py` (new pure),
+  `app/routes/blindspot.py` (new blueprint), `app/routes/feed.py`
+  (+`_selected_story_ids` helper — `index()` unchanged),
+  `app/__init__.py` (register), `app/config.py` (+4 `BLINDSPOT_*`
+  knobs), `app/templates/blindspot.html` (new),
+  `app/templates/partials/blindspot_spectrum.html` (new),
+  `app/templates/base.html` (signed-in nav link),
+  `app/static/style.css` (+15 lines, .blindspot-*),
+  `INSTALL.txt` (knobs documented),
+  `tests/test_blindspot.py` (+22 pure),
+  `tests/test_blindspot_route.py` (+4 integration). Full suite **700
+  pass** (was 674). *Server state touched:* none new. *Open:* Passenger
+  restart + a signed-in browser smoke (visit `/blindspot` with an
+  active profile that has a "crypto" mute and a tight category filter —
+  expect cards labeled "Muted by your keyword 'crypto'" / "Outside your
+  hard filters" / "Below your relevance bar").
 - **PM session — Blindspot DISPATCHED (flipped `backlog → ready-for-agent`).**
   Owner said go on the "category-of-one" feature. Before arming the paid run,
   re-verified every load-bearing symbol the spec reuses against the live code
