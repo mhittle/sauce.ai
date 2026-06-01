@@ -83,7 +83,7 @@ shipped.
 | 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | done |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
-| 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | ready-for-agent |
+| 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | in-progress |
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
 
 ---
@@ -91,7 +91,7 @@ shipped.
 ## Items in detail
 
 ### Blindspot — the biggest stories your algorithm is hiding from you
-**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, algo, backend · **Status:** ready-for-agent
+**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, algo, backend · **Status:** in-progress
 
 **User value / why now — the "category of one" feature.** Every personalization
 engine on earth deepens the reader's bubble; we are the only product that can do
