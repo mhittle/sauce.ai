@@ -1,0 +1,19 @@
+<article class="ask-turn{% if not turn.answered %} ask-turn-nocoverage{% endif %}">
+  <p class="ask-question"><span class="ask-question-label">You asked</span>{{ turn.question }}</p>
+  <div class="ask-answer">
+    {% for paragraph in turn.answer.split('\n\n') %}
+      {% if paragraph.strip() %}<p>{{ paragraph }}</p>{% endif %}
+    {% endfor %}
+  </div>
+  {% if turn.citations %}
+    <ol class="ask-citations">
+      {% for c in turn.citations %}
+        <li value="{{ c.number or loop.index }}">
+          <a href="{{ c.story_url or c.url }}"{% if not c.story_url %} rel="noopener" target="_blank"{% endif %}>
+            <strong>{{ c.source_name }}</strong>{% if c.title %} &mdash; {{ c.title }}{% endif %}
+          </a>
+        </li>
+      {% endfor %}
+    </ol>
+  {% endif %}
+</article>

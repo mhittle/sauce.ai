@@ -167,6 +167,63 @@ these.
   patterns, schema columns) so the sketch is feasible. **No code this session.**
   Dispatch note: flipping the row to `ready-for-agent` and merging to `main`
   fires the paid (~$8) dev run — left `backlog` pending the owner's go.
+- **Ask your feed — grounded conversational news (dev-agent unattended,
+  PR pending).** Shipped roadmap Pri 8 / LOE 6 from `ready-for-agent`.
+  New signed-in `/ask` chat that retrieves from the reader's own
+  personalized corpus and grounds one Haiku call per turn on the result,
+  with inline citations and a hard "I don't have coverage of that in your
+  feed" refusal when retrieval returns nothing — *your news, queryable*.
+  **Retrieval reuses the `/search` FULLTEXT path** (`MATCH (a.title,
+  a.summary) AGAINST (%(q)s)`) but with the **feed's personalization
+  scoping** applied: the `vis_sql` owner-visibility clause, the
+  `user_source_prefs` mute join, and the active profile's
+  `algorithm_term_prefs` mutes via `build_term_clauses` — first returned
+  element only (boost expression is irrelevant to retrieval). Window is
+  `ASK_WINDOW_DAYS` (default 21), wider than the 7-day home feed so
+  "this/last week" questions work. Canonical members only
+  (`a.story_id IS NULL OR a.id = a.story_id`); top
+  `ASK_MAX_CONTEXT_ARTICLES` (default 18) by relevance then recency.
+  **Retrieval-quality fix the spec called out** lives in pure
+  `ask.query_terms`: lowercases, strips punctuation, drops a
+  stopword/interrogative set ("what/why/how/when/the/of/in/about/my/me/
+  …"), keeps salient content tokens. An all-stopword question reduces to
+  empty and short-circuits to the no-coverage path (no LLM call).
+  **Grounding** mirrors `algo_nl.interpret_algorithm` exactly: lazy
+  `anthropic` import, 30s timeout, `LLMUnavailable` → inline error
+  (never a 500), usage logged to `llm_usage` via the same writer pattern.
+  The system prompt instructs answer-only-from-the-numbered-articles +
+  cite with `[N]` + say "I don't have coverage" when they don't.
+  `parse_answer` strips any `[N]` whose number isn't in the retrieved
+  set so the model can't cite a story it wasn't given — the
+  anti-hallucination guard the spec marked as a hard requirement.
+  **Multi-turn** is `(role, text)` pairs from prior `ask_queries` rows
+  for the same `conversation` token, truncated to `ASK_MAX_TURNS`
+  (default 6). New `ask_queries` table is **NOT BUG-007 class**: the
+  route catches a missing-table `ProgrammingError` and falls back to an
+  in-process daily `SlidingWindowLimiter` so the page still works
+  pre-migration. CSRF stays on (signed-in form, unlike the anon
+  `lab.vote` exemption). HTMX-async with a spinner so the multi-second
+  call isn't visibly janky; signed-in only (bounds concurrency at DAU).
+  Cost ≈ one Haiku call per turn over ~18 short rows + ≤6 turns of
+  history ≈ a few cents/day per active user at the cap; visible in
+  `/admin/usage-summary`. *Code:* `app/ask.py` (new, pure), `app/routes/
+  ask.py` (new blueprint), `app/__init__.py` (register at `/ask`),
+  `app/config.py` (six `ASK_*` knobs), `seed/schema.sql` +
+  `seed/migrations/2026-06-01-ask-queries.sql` (new), `app/templates/
+  ask.html` (new), `app/templates/partials/ask_answer.html` (new),
+  `app/templates/base.html` (Ask nav link), `app/static/style.css`
+  (Ask + shared `.alert` / `.visually-hidden`), `INSTALL.txt`,
+  `tests/test_ask.py` (+28 pure). Full suite **674 pass**. *Server
+  state:* one new migration via `has-migration` (applied post-deploy by
+  the executor; `manual-actions.md` Open carries the full inline SQL +
+  account substituted) + a Passenger restart so the new `/ask`
+  blueprint registers. No new cron, no new env var required (knobs
+  default), no new pip dep, no new secret. *Open:* prod migration +
+  restart + a signed-in browser smoke (ask "what happened with the
+  budget bill this week?" — expect a paragraph with footnoted source
+  links pointing at dossiers/articles).
+
+---
 
 ## 2026-05-31
 

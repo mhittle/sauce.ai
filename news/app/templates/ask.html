@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Ask your feed{% endblock %}
+{% block content %}
+<header class="feed-header">
+  <h1>Ask your feed</h1>
+  <p class="muted">
+    Ask in plain language and get answers grounded only in articles your
+    own feed surfaced &mdash; muted sources and topics stay muted.
+    {% if max_per_day %}
+      <span class="ask-cap">Up to {{ max_per_day }} questions a day.</span>
+    {% endif %}
+  </p>
+</header>
+
+{% if error %}
+  <div class="alert {% if hold_reason == 'ratelimit' %}alert-warn{% else %}alert-error{% endif %}" role="status">
+    {{ error }}
+  </div>
+{% endif %}
+
+<div class="ask-chat" id="ask-chat">
+  {% if turns %}
+    {% for turn in turns %}
+      {% set conversation = conversation %}
+      {% include "partials/ask_answer.html" %}
+    {% endfor %}
+  {% else %}
+    <p class="empty ask-empty">
+      Try: <em>&ldquo;what's happening with the budget bill this week?&rdquo;</em>
+      or <em>&ldquo;summarize what my sources said about the Fed decision.&rdquo;</em>
+    </p>
+  {% endif %}
+</div>
+
+{% if ask_enabled %}
+<form class="ask-form"
+      method="post"
+      action="{{ url_for('ask.submit') }}"
+      hx-post="{{ url_for('ask.submit') }}"
+      hx-target="#ask-chat"
+      hx-swap="beforeend"
+      hx-disabled-elt="find button"
+      hx-indicator=".ask-spinner"
+      hx-on::after-request="if (event.detail.successful) { this.reset(); var c = document.getElementById('ask-chat'); if (c) c.scrollTop = c.scrollHeight; }">
+  {{ csrf_field() }}
+  <input type="hidden" name="conversation" value="{{ conversation }}" />
+  <label for="ask-q" class="visually-hidden">Your question</label>
+  <textarea id="ask-q" name="question" rows="3" maxlength="2000"
+            placeholder="Ask your feed&hellip;"
+            required>{{ question_draft }}</textarea>
+  <div class="ask-form-row">
+    <button type="submit">Ask</button>
+    <span class="ask-spinner" aria-hidden="true">Thinking&hellip;</span>
+    {% if conversation %}
+      <a class="ask-new" href="{{ url_for('ask.index') }}">Start a new conversation</a>
+    {% endif %}
+  </div>
+</form>
+{% endif %}
+{% endblock %}

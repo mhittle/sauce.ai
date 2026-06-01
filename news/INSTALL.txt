@@ -112,6 +112,15 @@ If that prints the path, you're ready.
         BREAKING_MIN_OUTLETS    12             (distinct-outlet floor for a candidate)
         BREAKING_MAX_PER_DAY    3              (per-user daily cap)
 
+    Optional (Ask your feed — grounded conversational news; sane
+    defaults, only set to override):
+        ASK_ENABLED             1              (kill-switch; set 0 to disable /ask)
+        ASK_MODEL               <blank>        (blank = reuse ANTHROPIC_MODEL)
+        ASK_WINDOW_DAYS         21             (retrieval window in days; widens the home feed's 7-day window)
+        ASK_MAX_CONTEXT_ARTICLES 18            (top-N retrieved articles fed to the model)
+        ASK_MAX_PER_DAY         25             (per-user daily cap on Ask submissions)
+        ASK_MAX_TURNS           6              (carried multi-turn history pairs)
+
     Do NOT set APPLICATION_ROOT. LiteSpeed/Passenger already
     mounts the app at /news via the "Application URL" setting;
     setting APPLICATION_ROOT in env vars causes a double-prefix

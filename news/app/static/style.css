@@ -597,3 +597,28 @@ main { max-width: 1280px; margin: 0 auto; padding: 1.5em 1.2em; }
 .gallery-empty { padding: 2em 0; text-align: center; }
 .gallery-copy, .gallery-share-email { font-size: 0.9em; }
 .gallery-card:target { box-shadow: 0 0 0 2px var(--accent); }
+
+/* Ask your feed */
+.ask-cap { color: var(--muted); font-size: 0.85em; margin-left: 0.4em; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.alert { border-left: 3px solid var(--line); padding: 0.6em 0.9em; margin: 1em 0; background: var(--card-bg, #fafafa); }
+.alert-warn { border-left-color: #c98a00; }
+.alert-error { border-left-color: #b71c1c; }
+.ask-chat { display: flex; flex-direction: column; gap: 1.4em; margin: 1em 0; }
+.ask-empty { text-align: left; padding: 1em 0; }
+.ask-empty em { font-style: italic; }
+.ask-turn { border-left: 3px solid var(--accent, #222); padding: 0.4em 0 0.6em 0.9em; }
+.ask-turn-nocoverage { border-left-color: var(--muted, #888); }
+.ask-question-label { display: block; color: var(--muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2em; }
+.ask-question { font-weight: 600; margin: 0 0 0.7em; }
+.ask-answer p { margin: 0 0 0.7em; line-height: 1.5; }
+.ask-citations { margin: 0.8em 0 0; padding-left: 1.4em; font-size: 0.9em; color: var(--muted); }
+.ask-citations li { margin-bottom: 0.2em; }
+.ask-citations a { color: inherit; text-decoration: underline; }
+.ask-form { margin-top: 1.2em; display: flex; flex-direction: column; gap: 0.6em; }
+.ask-form textarea { width: 100%; padding: 0.6em; border: 1px solid var(--line); border-radius: 6px; font: inherit; resize: vertical; min-height: 4.5em; }
+.ask-form-row { display: flex; align-items: center; gap: 1em; }
+.ask-form-row button { padding: 0.5em 1.2em; }
+.ask-spinner { color: var(--muted); font-size: 0.9em; display: none; }
+.htmx-request .ask-spinner { display: inline; }
+.ask-new { margin-left: auto; font-size: 0.9em; color: var(--muted); }
