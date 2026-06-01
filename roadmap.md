@@ -91,9 +91,9 @@ shipped.
 ## Items in detail
 
 ### Blindspot — the biggest stories your algorithm is hiding from you
-**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, algo, backend · **Status:** done (PR pending, merged 2026-06-01)
+**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, algo, backend · **Status:** done (PR #170, merged 2026-06-01)
 
-> **Shipped 2026-06-01 (dev-agent unattended).** A new `/blindspot` page
+> **Shipped 2026-06-01 (PR #170, dev-agent unattended).** A new `/blindspot` page
 > (signed-in topnav link) that uses the reader's own algorithm against
 > itself: surfaces the biggest stories the world is covering right now
 > that the live home feed would NOT show this viewer, names the

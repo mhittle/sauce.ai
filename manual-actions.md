@@ -41,7 +41,7 @@ Sort **Open** newest-first. **Completed** newest-first.
 ## Open
 
 ### 2026-06-01 — Python App restart: Blindspot blueprint
-**Status:** open · **PR:** Blindspot — dev-agent, branch `claude/agent/blindspot` ·
+**Status:** open · **PR:** #170 (Blindspot — dev-agent, branch `claude/agent/blindspot`) ·
 **Opened:** 2026-06-01
 
 Backs the new signed-in `/blindspot` page (Pri 8 / LOE 5 roadmap item).

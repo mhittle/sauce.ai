@@ -137,7 +137,7 @@ these.
 ## 2026-06-01
 
 - **Blindspot — the biggest stories your algorithm is hiding from you
-  (dev-agent unattended, PR pending).** Shipped the roadmap Pri 8 / LOE 5
+  (dev-agent unattended, PR #170).** Shipped the roadmap Pri 8 / LOE 5
   "category-of-one" feature from `ready-for-agent` (dispatched earlier this
   same day; PM had already pressure-tested every reused symbol against the
   live code, so all the surfaces existed as specced). New signed-in
