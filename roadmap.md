@@ -82,8 +82,7 @@ shipped.
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | in-progress |
 | 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | done |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
-| 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
-| 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | proposed |
+| 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | ready-for-agent |
 
 ---
 
@@ -1044,7 +1043,7 @@ auto-refresh; surfacing the rail on mobile as a horizontally-scrollable
 carousel; folding the breaking-alerts detection signal in so "Brief" and
 "Breaking email" share one outlet-burst definition.
 ### Ask your feed (grounded conversational news over your personalized corpus)
-**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui, algo, backend · **Status:** proposed
+**Priority:** 8 · **LOE:** 6 · **Category:** new-feature, ui, algo, backend · **Status:** ready-for-agent
 
 **User value / why now.** Every feature this arc has handed the reader more
 *control* over their feed (sliders, NL builder, keyword mutes, profiles,
@@ -1087,10 +1086,28 @@ feed path, **no process spawn**, no embeddings, no vector DB, no new pip dep.
    personalization scoping** applied: the `vis_sql` owner-visibility clause,
    the `user_source_prefs` mute join (`COALESCE(usp.weight,1.0) > 0`), and the
    active profile's `algorithm_term_prefs` mutes via
-   `term_prefs.build_term_clauses` (mute clauses only — boosts irrelevant to
-   retrieval). Window = `ASK_WINDOW_DAYS`. Dedup to canonical cluster members
+   `term_prefs.build_term_clauses` — **use only the first returned element
+   (`mute_sql`)**; the boost expression is irrelevant to retrieval. Window =
+   `ASK_WINDOW_DAYS`. Dedup to canonical cluster members
    (`a.story_id IS NULL OR a.id = a.story_id`). Take the top
    `ASK_MAX_CONTEXT_ARTICLES` (default ~18) by relevance, then recency.
+   **⚠️ Retrieval-quality requirement (do NOT skip — this is what makes or
+   breaks the headline demo): do NOT feed the raw question into `MATCH … AGAINST`.**
+   `/search` runs MySQL NATURAL LANGUAGE MODE over the raw query string, which
+   is fine for a keyword search box but poor for a *question* — interrogatives
+   and stopwords ("what", "happened", "with", "this week") dominate the match
+   and pull back weak, off-topic context, so the grounded answer disappoints
+   exactly when it is being shown off. Before building the MATCH query, reduce
+   the question to its **content terms** via a new pure
+   `ask.query_terms(question) -> str` helper: lowercase, strip punctuation,
+   drop a small stopword + interrogative-word set (`what/why/how/when/where/
+   who/which/did/does/is/are/the/a/of/in/on/about/my/me/…`), and keep the
+   remaining salient tokens (proper nouns / topic words). Run the FULLTEXT
+   match against that reduced term string. If reduction yields **zero** terms,
+   take the zero-retrieval short-circuit (skip the LLM, show "I don't have
+   coverage of that in your feed") rather than matching on an empty/stopword
+   string. (BOOLEAN MODE over the reduced terms is an acceptable alternative if
+   the dev finds NATURAL LANGUAGE MODE still under-recalls — justify in the PR.)
 2. **Ground** — one synchronous Haiku call via the **exact
    `algo_nl.interpret_algorithm` precedent**: lazy `anthropic` import, 30s
    timeout, `LLMUnavailable` → graceful inline error (never a 500), usage
@@ -1135,8 +1152,9 @@ for the same `conversation` token (a hidden field minted on first ask).
   question, context)` (assemble multi-turn message list), `parse_answer(text,
   allowed_ids)` (extract/validate citations, drop any cite not in the retrieved
   set — the model can't cite a story it wasn't given), `daily_cap_ok(count,
-  max_per_day)`, and `system_prompt()`. **No Flask/DB/Haiku here** — this is
-  where the unit tests live.
+  max_per_day)`, `query_terms(question)` (reduce a question to FULLTEXT content
+  terms — see the retrieval-quality requirement above), and `system_prompt()`.
+  **No Flask/DB/Haiku here** — this is where the unit tests live.
 - `news/app/routes/ask.py` (new blueprint, `url_prefix="/ask"`, all
   `@login_required`): `GET /ask` renders the chat page; `POST /ask` runs
   retrieve → ground → render for one turn (HTMX partial). Retrieval reuses the
@@ -1197,7 +1215,11 @@ or live Haiku): context block numbering/formatting; multi-turn message assembly
 (history truncated to `ASK_MAX_TURNS`); `parse_answer` keeps valid citations and
 **drops out-of-set citation ids**; `daily_cap_ok` boundary (at cap → blocked,
 under → allowed); empty-retrieval → no-coverage path; `LLMUnavailable` →
-graceful sentinel, never raises. No test requires a live DB, MTA, or browser.
+graceful sentinel, never raises; and **`query_terms` reduction** — a
+question like "what happened with the budget bill this week?" reduces to the
+content terms ("budget bill"), an all-stopword question ("what is going on?")
+reduces to empty (→ no-coverage short-circuit), and the reduced string is what
+feeds the FULLTEXT match. No test requires a live DB, MTA, or browser.
 
 **v2 (out of scope):** semantic/embeddings retrieval (beyond FULLTEXT) for
 fuzzy matches; a "Ask about this story" entry point on `/story/<id>` and feed
