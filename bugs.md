@@ -26,6 +26,51 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
+### BUG-032 — Full HTTPS outage: sauce.ai:443 not accepting TCP connections
+**Status:** open · **Reporter:** agent (post-deploy QA) · **Opened:** 2026-06-06
+
+Post-deploy QA agent (cron run 2026-06-06) found `sauce.ai:443` (IP 97.74.207.41)
+not accepting TCP connections on any route. DNS resolves correctly; the TCP SYN to
+port 443 receives no SYN-ACK and times out after 20–30 s. All tested routes
+(https://sauce.ai/news/, https://sauce.ai/news/auth/login,
+https://sauce.ai/news/firehose, https://sauce.ai/) return `curl exit 28
+(connection timeout)` with HTTP status 000.
+
+The prior smoke job reported `success`, so the outage began between the smoke
+check and this QA run. General internet connectivity from the QA runner is
+confirmed healthy (https://example.com/ returned 200 in the same run).
+
+This is distinct from BUG-031 (which observed HTTP 500 on `/` while
+`/auth/login` and `/firehose` returned 200). Here no HTTP response is
+received at all — the web server (LiteSpeed) or a network-layer firewall on
+the host is not accepting connections.
+
+**Diagnostic (from server shell):**
+```bash
+# confirm LiteSpeed is running
+ps aux | grep lsws | grep -v grep
+# check listening ports
+ss -tlnp | grep ':443'
+# check for nproc / fork-bomb exhaustion (BUG-001 class)
+cat /proc/user_beancounters 2>/dev/null || ulimit -u
+# check Passenger / Python App state
+ps aux | grep passenger | grep -v grep
+```
+
+**Leading hypotheses:**
+1. LiteSpeed/web server process crashed or was stopped (no listener on :443).
+2. CloudLinux nproc limit exhausted (BUG-001 class) — Passenger fork-bomb
+   caused the kernel to kill spawned processes; check `cron-health` for
+   `fork: Resource temporarily unavailable` entries.
+3. GoDaddy host-level network issue or maintenance blocking port 443.
+
+**Fix:** identify root cause from server shell, restart LiteSpeed or the
+Python App as appropriate, then re-run the QA checks.
+
+Deploy HEAD at time of detection: `53b0459` (Merge PR #168).
+
+---
+
 ### BUG-031 — Anonymous `/` (home feed) returns HTTP 500 after the PR #145 deploy
 **Status:** open · **Reporter:** post-deploy QA agent (was PR #147, closed) · **Opened:** 2026-05-31
 **Note:** originally auto-filed by the QA agent as a draft PR (#147) that
