@@ -1,0 +1,42 @@
+name: signal-ci
+
+# Tests + web build for sauce.ai/signal. Scoped to the signal/ folder so it
+# stays independent of the news pipeline.
+on:
+  push:
+    branches: [main]
+    paths: ["signal/**", ".github/workflows/signal-ci.yml"]
+  pull_request:
+    paths: ["signal/**", ".github/workflows/signal-ci.yml"]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: signal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        # No DB in CI; the suite's DB-backed endpoints degrade gracefully.
+        run: python -m pytest tests/ -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: signal/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: npm install
+      - name: Build
+        run: npm run build

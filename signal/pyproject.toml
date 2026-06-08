@@ -1,0 +1,14 @@
+[project]
+name = "sauce-signal"
+version = "0.1.0"
+description = "sauce.ai/signal — permit intelligence & distressed-project triage"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
