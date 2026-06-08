@@ -7,3 +7,10 @@ news/logs/*.log
 news/logs/*.lock
 .pytest_cache/
 .venv/
+venv/
+# signal/
+signal/web/node_modules/
+signal/web/dist/
+signal/.env
+*.egg-info/
+signal/web/*.tsbuildinfo

@@ -9,3 +9,10 @@ engineering-history-archive.md  merge=union
 roadmap.md                      merge=union
 bugs.md                         merge=union
 manual-actions.md               merge=union
+
+# sauce.ai/signal tracking docs — same rationale, scoped to the signal/ folder.
+signal/engineering-history.md          merge=union
+signal/engineering-history-archive.md  merge=union
+signal/roadmap.md                      merge=union
+signal/bugs.md                         merge=union
+signal/manual-actions.md               merge=union

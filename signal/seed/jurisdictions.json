@@ -1,0 +1,163 @@
+[
+  {
+    "slug": "chicago-il",
+    "name": "Chicago",
+    "state": "IL",
+    "source_type": "socrata",
+    "platform_domain": "data.cityofchicago.org",
+    "dataset_id": "ydr8-5enu",
+    "field_map": {
+      "permit_id": "permit_",
+      "permit_type": "permit_type",
+      "work_description": "work_description",
+      "valuation": "reported_cost",
+      "application_date": "application_start_date",
+      "issue_date": "issue_date",
+      "latitude": "latitude",
+      "longitude": "longitude"
+    },
+    "adapter_config": {"updated_field": "issue_date", "order_field": "issue_date"},
+    "notes": "Building Permits. Validate field map on first pull (PRD §6 field-mapping registry)."
+  },
+  {
+    "slug": "nyc-ny",
+    "name": "New York City",
+    "state": "NY",
+    "source_type": "socrata",
+    "platform_domain": "data.cityofnewyork.us",
+    "dataset_id": "ipu4-2q9a",
+    "field_map": {
+      "permit_id": "job__",
+      "permit_type": "permit_type",
+      "permit_subtype": "permit_subtype",
+      "status": "permit_status",
+      "work_description": "job_type",
+      "application_date": "filing_date",
+      "issue_date": "issuance_date",
+      "expiration_date": "expiration_date",
+      "address": "street_name",
+      "owner_name": "owner_s_business_name",
+      "contractor_name": "permittee_s_business_name",
+      "latitude": "gis_latitude",
+      "longitude": "gis_longitude"
+    },
+    "adapter_config": {"updated_field": "issuance_date"},
+    "notes": "DOB Permit Issuance. job__ is job-level, not permit-unique; validate dedup behavior."
+  },
+  {
+    "slug": "los-angeles-ca",
+    "name": "Los Angeles",
+    "state": "CA",
+    "source_type": "socrata",
+    "platform_domain": "data.lacity.org",
+    "dataset_id": "yv23-pmwf",
+    "field_map": {
+      "permit_id": "pcis_permit_no",
+      "permit_type": "permit_type",
+      "permit_subtype": "permit_sub_type",
+      "status": "status",
+      "last_status_change": "status_date",
+      "valuation": "valuation",
+      "use_type": "use_desc",
+      "issue_date": "issue_date",
+      "address": "address_start"
+    },
+    "adapter_config": {"updated_field": "status_date"},
+    "notes": "Building & Safety Permit Information. Geocode often in location_1; validate field map."
+  },
+  {
+    "slug": "austin-tx",
+    "name": "Austin",
+    "state": "TX",
+    "source_type": "socrata",
+    "platform_domain": "data.austintexas.gov",
+    "dataset_id": "3syk-w9eu",
+    "field_map": {
+      "permit_id": "permit_number",
+      "permit_type": "permit_type_desc",
+      "permit_subtype": "work_class",
+      "status": "status_current",
+      "work_description": "description",
+      "valuation": "total_job_valuation",
+      "application_date": "applied_date",
+      "issue_date": "issued_date",
+      "expiration_date": "expires_date",
+      "last_status_change": "status_date",
+      "address": "original_address1",
+      "contractor_name": "contractor_company_name",
+      "latitude": "latitude",
+      "longitude": "longitude"
+    },
+    "adapter_config": {"updated_field": "issued_date"},
+    "notes": "Issued Construction Permits. Rich schema; validate on first pull."
+  },
+  {
+    "slug": "seattle-wa",
+    "name": "Seattle",
+    "state": "WA",
+    "source_type": "socrata",
+    "platform_domain": "data.seattle.gov",
+    "dataset_id": "76t5-zqzr",
+    "field_map": {
+      "permit_id": "permitnum",
+      "permit_type": "permitclassmapped",
+      "permit_subtype": "permittypemapped",
+      "status": "statuscurrent",
+      "work_description": "description",
+      "valuation": "estprojectcost",
+      "application_date": "applieddate",
+      "issue_date": "issueddate",
+      "expiration_date": "expiresdate",
+      "address": "originaladdress1",
+      "contractor_name": "contractorcompanyname",
+      "latitude": "latitude",
+      "longitude": "longitude"
+    },
+    "adapter_config": {"updated_field": "issueddate"},
+    "notes": "Built Environment - Building Permits."
+  },
+  {
+    "slug": "san-francisco-ca",
+    "name": "San Francisco",
+    "state": "CA",
+    "source_type": "socrata",
+    "platform_domain": "data.sfgov.org",
+    "dataset_id": "i98e-djp9",
+    "field_map": {
+      "permit_id": "permit_number",
+      "permit_type": "permit_type_definition",
+      "status": "current_status",
+      "work_description": "description",
+      "valuation": "estimated_cost",
+      "application_date": "filed_date",
+      "issue_date": "issued_date",
+      "expiration_date": "permit_expiration_date",
+      "last_status_change": "current_status_date",
+      "address": "street_name",
+      "use_type": "proposed_use",
+      "latitude": "location.latitude",
+      "longitude": "location.longitude"
+    },
+    "adapter_config": {"updated_field": "issued_date"},
+    "notes": "Building Permits. Geo nested in location dict (dotted source key supported)."
+  },
+  {
+    "slug": "dallas-tx",
+    "name": "Dallas",
+    "state": "TX",
+    "source_type": "socrata",
+    "platform_domain": "www.dallasopendata.com",
+    "dataset_id": "e7gq-4sah",
+    "field_map": {
+      "permit_id": "permit_number",
+      "permit_type": "permit_type",
+      "work_description": "work_description",
+      "valuation": "estimated_cost",
+      "issue_date": "issued_date",
+      "address": "street_address",
+      "contractor_name": "contractor"
+    },
+    "adapter_config": {"updated_field": "issued_date"},
+    "notes": "Building Inspection / Permits. Validate dataset id + field map on first pull."
+  }
+]
