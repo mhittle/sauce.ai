@@ -35,6 +35,15 @@ docker compose exec api python jobs/ingest_solicitations.py --source samgov --si
 curl 'http://localhost:8000/api/solicitations?has_docs=true'
 ```
 
+State/county/local procurement sources are config-driven
+(`seed/procurement_sources.json`; `json` or `html` platform + a field map).
+Tune selectors against the live page, then ingest:
+
+```bash
+docker compose exec api python jobs/validate_procurement_source.py --slug ga-gpr
+docker compose exec api python jobs/ingest_procurement.py --slug ga-gpr   # or --all
+```
+
 ### Frontend (Vite dev server)
 
 ```bash
