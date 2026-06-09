@@ -159,5 +159,34 @@
     },
     "adapter_config": {"updated_field": "issued_date"},
     "notes": "Building Inspection / Permits. Validate dataset id + field map on first pull."
+  },
+  {
+    "slug": "cincinnati-oh",
+    "name": "Cincinnati",
+    "state": "OH",
+    "source_type": "socrata",
+    "platform_domain": "data.cincinnati-oh.gov",
+    "dataset_id": "uhjb-xac9",
+    "field_map": {
+      "permit_id": "permitnum",
+      "permit_type": "permittypemapped",
+      "permit_subtype": "workclassmapped",
+      "status": "statuscurrentmapped",
+      "work_description": "description",
+      "valuation": "estprojectcostdec",
+      "application_date": "applieddate",
+      "issue_date": "issueddate",
+      "expiration_date": "expiresdate",
+      "final_date": "completeddate",
+      "address": "originaladdress1",
+      "use_type": "proposeduse",
+      "units": "units",
+      "fees": "fee",
+      "parcel_apn": "pin",
+      "contractor_name": "companyname",
+      "source_url": "link"
+    },
+    "adapter_config": {"updated_field": "issueddate"},
+    "notes": "Cincinnati Building Permits. Field map validated against a live record (no geocode in dataset; pin = parcel for dedup). Closest Socrata metro to Louisville (~100mi)."
   }
 ]
