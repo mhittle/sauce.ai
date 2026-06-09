@@ -84,3 +84,68 @@ export async function fetchFacets(): Promise<SignalDef[]> {
   if (!res.ok) throw new Error(`signals ${res.status}`);
   return res.json();
 }
+
+// --- Solicitations (bid/plans track) ---------------------------------------
+export interface Solicitation {
+  id: number;
+  source_type: string;
+  title: string | null;
+  agency: string | null;
+  naics: string | null;
+  state: string | null;
+  place_city: string | null;
+  estimated_value: number | null;
+  posted_date: string | null;
+  due_date: string | null;
+  status: string | null;
+  source_url: string | null;
+  doc_count: number;
+}
+
+export interface SolicitationDoc {
+  name: string | null;
+  url: string;
+  doc_type: string;
+}
+
+export interface SolicitationDetail extends Solicitation {
+  description: string | null;
+  documents: SolicitationDoc[];
+}
+
+export interface SolicitationList {
+  total: number;
+  items: Solicitation[];
+}
+
+export interface SolicitationQuery {
+  state?: string;
+  source_type?: string;
+  q?: string;
+  has_docs: boolean;
+  sort: string;
+  dir: "asc" | "desc";
+  limit: number;
+  offset: number;
+}
+
+export async function fetchSolicitations(p: SolicitationQuery): Promise<SolicitationList> {
+  const qs = new URLSearchParams();
+  if (p.state) qs.set("state", p.state);
+  if (p.source_type) qs.set("source_type", p.source_type);
+  if (p.q) qs.set("q", p.q);
+  if (p.has_docs) qs.set("has_docs", "true");
+  qs.set("sort", p.sort);
+  qs.set("dir", p.dir);
+  qs.set("limit", String(p.limit));
+  qs.set("offset", String(p.offset));
+  const res = await fetch(`${BASE}/api/solicitations?${qs.toString()}`);
+  if (!res.ok) throw new Error(`solicitations ${res.status}`);
+  return res.json();
+}
+
+export async function fetchSolicitation(id: number): Promise<SolicitationDetail> {
+  const res = await fetch(`${BASE}/api/solicitations/${id}`);
+  if (!res.ok) throw new Error(`solicitation ${id}: ${res.status}`);
+  return res.json();
+}

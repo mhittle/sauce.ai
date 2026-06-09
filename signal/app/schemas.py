@@ -74,6 +74,17 @@ class SolicitationListOut(BaseModel):
     items: list[SolicitationOut]
 
 
+class SolicitationDocOut(BaseModel):
+    name: Optional[str] = None
+    url: str
+    doc_type: str = "attachment"
+
+
+class SolicitationDetailOut(SolicitationOut):
+    description: Optional[str] = None
+    documents: list[SolicitationDocOut] = []
+
+
 class JurisdictionOut(BaseModel):
     slug: str
     name: str

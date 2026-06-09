@@ -5,13 +5,14 @@ the table isn't present yet (migrate-after-deploy tolerance), never a 500.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..db import get_session
-from ..schemas import SolicitationListOut, SolicitationOut
+from ..schemas import (SolicitationDetailOut, SolicitationDocOut,
+                       SolicitationListOut, SolicitationOut)
 
 router = APIRouter(prefix="/api/solicitations", tags=["solicitations"])
 
@@ -70,3 +71,30 @@ def list_solicitations(
         total=total or 0,
         items=[SolicitationOut(**{k: r[k] for k in SolicitationOut.model_fields
                                   if k in r}) for r in rows])
+
+
+@router.get("/{solicitation_id}", response_model=SolicitationDetailOut)
+def get_solicitation(solicitation_id: int, sess: Session = Depends(get_session)):
+    try:
+        row = sess.execute(text("""
+            SELECT s.id, s.source_type, s.title, s.agency, s.description, s.naics,
+                   s.state, s.place_city, s.estimated_value, s.posted_date,
+                   s.due_date, s.status, s.source_url
+            FROM solicitations s WHERE s.id = :id
+        """), {"id": solicitation_id}).mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="solicitation not found")
+        docs = sess.execute(text("""
+            SELECT name, url, doc_type FROM solicitation_documents
+            WHERE solicitation_id = :id ORDER BY id
+        """), {"id": solicitation_id}).mappings().all()
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="database not ready")
+
+    return SolicitationDetailOut(
+        **{k: row[k] for k in SolicitationOut.model_fields if k in row},
+        description=row["description"],
+        doc_count=len(docs),
+        documents=[SolicitationDocOut(**dict(d)) for d in docs])

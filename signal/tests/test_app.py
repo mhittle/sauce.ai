@@ -59,6 +59,12 @@ def test_solicitations_degrades_without_db():
     assert body["total"] == 0 and body["items"] == []
 
 
+def test_solicitation_detail_no_db_is_not_500():
+    # Detail endpoint without a DB surfaces 503 (not ready), never a 500.
+    r = client.get("/api/solicitations/1")
+    assert r.status_code in (404, 503)
+
+
 def test_signals_catalog_includes_bid_signals():
     ids = {s["id"] for s in client.get("/api/signals").json()}
     assert {"bid_due_soon", "plans_available", "pre_permit_stage"} <= ids
