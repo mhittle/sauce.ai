@@ -48,6 +48,41 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Config-driven procurement-source framework (adapter library)
+
+**Context.** SAM.gov (federal) is the wrong firehose for commercial/MF leads;
+the public bids + plans live on state/county/local procurement systems. Owner
+wants to OWN the aggregation (not pay Shovels/PlanHub) by building a library
+of adapters. Decision: make sources **config-driven** (like Socrata field maps)
+rather than one-off scrapers.
+
+**What shipped.** `app/adapters/solicitations/config_source.py`: generic
+`JsonConfigAdapter` (SPA/JSON portals — Bonfire/OpenGov style, dotted field
+paths, stdlib) + `HtmlConfigAdapter` (server-rendered lists — CSS row/field
+selectors via BeautifulSoup), both parameterized by a source config.
+`seed/procurement_sources.json` is the source registry (slug, level
+state/county/local, platform, list_url, field map, documents). Generalized the
+ingest runner into `run_ingest_adapter` (shared by SAM.gov + config sources).
+Jobs: `validate_procurement_source.py` (live dry-run — prints extracted rows +
+empty-field counts, the selector-tuning loop) and `ingest_procurement.py`
+(`--slug` / `--all`). New dep `beautifulsoup4`.
+
+**Status.** Framework + validator + fixture tests are done/green (57). The two
+seeded GA/Bonfire configs are DRAFT (`active:false`) — selectors get tuned live
+via the validator before going active (GPR is ASP.NET and may need POST/
+Playwright). The pattern: adding a state/county/local source = a config entry +
+a validate-and-tune pass.
+
+**Code touched.** `app/adapters/solicitations/config_source.py` (new),
+`app/ingest/solicitations.py`, `jobs/{validate_procurement_source,ingest_procurement}.py`
+(new), `seed/procurement_sources.json` (new), `requirements.txt`, `INSTALL.md`,
+`tests/test_procurement_config.py` (new).
+
+**PRs.** Procurement-framework PR (this). Next: tune a first real source live
+(GA GPR or a Bonfire/Ionwave agency) to active; document download/parse.
+
+---
+
 ## 2026-06-09 — Inline PDF viewer for solicitation documents
 
 **Context.** Plan/spec links downloaded the file; owner wanted to view in-app.

@@ -1,0 +1,44 @@
+[
+  {
+    "slug": "ga-gpr",
+    "name": "Georgia Procurement Registry",
+    "level": "state",
+    "state": "GA",
+    "platform": "html",
+    "active": false,
+    "list_url": "https://ssl.doas.state.ga.us/gpr/index?persisted=true",
+    "config": {
+      "base_url": "https://ssl.doas.state.ga.us/gpr/",
+      "row_selector": "table tr",
+      "fields": {
+        "title": {"selector": "a", "attr": "text"},
+        "source_url": {"selector": "a", "attr": "href"},
+        "source_id": {"selector": "a", "attr": "href", "regex": "[?&]id=(\\d+)"}
+      }
+    },
+    "notes": "DRAFT selectors — GPR is ASP.NET; likely needs POST/viewstate or Playwright. Tune with jobs/validate_procurement_source.py before setting active. Covers GA state + county + local public-works >= $100k."
+  },
+  {
+    "slug": "example-bonfire-agency",
+    "name": "Example agency (Bonfire JSON pattern)",
+    "level": "local",
+    "state": null,
+    "platform": "json",
+    "active": false,
+    "list_url": "https://<agency>.bonfirehub.com/api/portal/opportunities?status=open",
+    "config": {
+      "records_path": "data",
+      "fields": {
+        "source_id": "id",
+        "title": "title",
+        "agency": "organization.name",
+        "due_date": "closeDate",
+        "posted_date": "openDate",
+        "status": "status",
+        "source_url": "publicUrl"
+      },
+      "documents": {"path": "documents", "name": "name", "url": "downloadUrl"}
+    },
+    "notes": "DRAFT — illustrates the JSON config pattern for SPA-backed portals (Bonfire/OpenGov). Replace <agency> + verify the JSON endpoint + field paths with the validator. Many agencies per platform => one config each."
+  }
+]

@@ -54,22 +54,21 @@ def _upsert(sess: Session, source_type: str, norm) -> int:
     return sol_id
 
 
-def run_solicitation_ingest(sess: Session, source_type: str,
-                            since: date | None = None) -> dict:
-    settings = get_settings()
+def run_ingest_adapter(sess: Session, source_label: str, adapter,
+                       since: date | None = None) -> dict:
+    """Run any solicitation adapter -> upsert + IngestRun. Shared by SAM.gov
+    and the config-driven procurement sources."""
     run_id = sess.execute(text("""
         INSERT INTO ingest_runs (jurisdiction_id, source_type, status)
         VALUES (NULL, :st, 'running') RETURNING id
-    """), {"st": source_type}).scalar()
+    """), {"st": source_label}).scalar()
     sess.commit()
 
     fetched = upserted = 0
     try:
-        adapter = build_solicitation_adapter(
-            source_type, samgov_api_key=settings.samgov_api_key)
         for norm in adapter.pull(since):
             fetched += 1
-            _upsert(sess, source_type, norm)
+            _upsert(sess, source_label, norm)
             upserted += 1
             if upserted % 200 == 0:
                 sess.commit()
@@ -92,3 +91,12 @@ def run_solicitation_ingest(sess: Session, source_type: str,
     return {"run_id": run_id, "status": status, "fetched": fetched,
             "upserted": upserted,
             "at": datetime.now(timezone.utc).isoformat()}
+
+
+def run_solicitation_ingest(sess: Session, source_type: str,
+                            since: date | None = None) -> dict:
+    """Built-in source types (samgov + scaffolds)."""
+    settings = get_settings()
+    adapter = build_solicitation_adapter(
+        source_type, samgov_api_key=settings.samgov_api_key)
+    return run_ingest_adapter(sess, source_type, adapter, since)
