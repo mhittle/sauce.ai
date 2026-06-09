@@ -40,8 +40,15 @@ State/county/local procurement sources are config-driven
 Tune selectors against the live page, then ingest:
 
 ```bash
-docker compose exec api python jobs/validate_procurement_source.py --slug ga-gpr
-docker compose exec api python jobs/ingest_procurement.py --slug ga-gpr   # or --all
+docker compose exec api python jobs/validate_procurement_source.py --slug ga-gainesville
+docker compose exec api python jobs/ingest_procurement.py --all           # all active sources
+```
+
+Scale out CivicPlus coverage (the same module runs on thousands of cities) by
+discovering verified municipalities from the CISA .gov domain list:
+
+```bash
+docker compose exec api python jobs/discover_civicplus.py --target 200 --limit 3000
 ```
 
 ### Frontend (Vite dev server)

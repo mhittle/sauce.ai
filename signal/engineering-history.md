@@ -48,6 +48,37 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Scale-out: 200+ CivicPlus sources via auto-discovery
+
+**Context.** "Run 200 more." Hand-writing 200 entries = guesswork; instead
+built discovery that finds real CivicPlus municipalities and emits verified
+config.
+
+**What shipped.**
+- Compact **`civicplus` platform** in `build_config_adapter`: an entry needs
+  only `{slug, domain, state}`; the adapter synthesizes the validated CivicPlus
+  config (`civicplus_config`/`civicplus_list_url`). Keeps the seed small at scale.
+- `jobs/discover_civicplus.py`: pulls the CISA `dotgov-data` .gov list (~11k
+  city/county domains), probes each `Bids.aspx` open page concurrently for the
+  CivicPlus marker, and seeds only domains with **current open bids** (verified,
+  immediately useful). Slug/domain dedup; respectful single GET per host.
+- Ran it (two passes): `procurement_sources.json` now has **210 sources** —
+  206 CivicPlus municipalities with open bids across 30+ states (MA/TX/NY/OH/
+  VA/GA/CA/FL…), all `active`. The 2 GA references converted to the compact form;
+  GPR/Bonfire kept as inactive drafts.
+
+**Ingest:** `python jobs/ingest_procurement.py --all` now pulls every active
+source into the Solicitations tab. (~12% of probed city/county .gov domains had
+open CivicPlus bids.)
+
+**Code touched.** `app/adapters/solicitations/config_source.py` (civicplus
+platform), `jobs/discover_civicplus.py` (new), `seed/procurement_sources.json`
+(210), `tests/test_procurement_config.py`, `INSTALL.md`. 60 tests green.
+
+**PRs.** Scale-out PR (this).
+
+---
+
 ## 2026-06-09 — First live procurement sources: CivicPlus (GA cities)
 
 **Context.** Tuned the first real sources against live pages (I have web access

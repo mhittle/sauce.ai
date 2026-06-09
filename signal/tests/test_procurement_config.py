@@ -144,6 +144,32 @@ def test_civicplus_pattern_live_shape():
     assert s.due_date == date(2026, 6, 25)     # "6/25/2026 2:00 PM" parsed
 
 
+def test_civicplus_platform_shortcut():
+    # Compact entry (slug + domain) synthesizes the validated CivicPlus config.
+    pytest.importorskip("bs4")
+    src = {"slug": "x", "state": "GA", "platform": "civicplus", "domain": "city.example"}
+    out = list(build_config_adapter(src, session=FakeSession(FakeResp(text=CIVICPLUS_HTML))).pull())
+    assert len(out) == 1 and out[0].source_id == "177"
+    assert out[0].source_url == "https://city.example/bids.aspx?bidID=177"
+    assert out[0].due_date == date(2026, 6, 25)
+
+
+def test_seed_procurement_sources_valid():
+    import json
+    import pathlib
+    data = json.loads((pathlib.Path(__file__).resolve().parents[1]
+                       / "seed" / "procurement_sources.json").read_text())
+    slugs = [s["slug"] for s in data]
+    assert len(slugs) == len(set(slugs)), "duplicate source slug"
+    assert len(data) >= 200
+    for s in data:
+        assert s["platform"] in ("civicplus", "json", "html")
+        if s["platform"] == "civicplus":
+            assert s.get("domain"), f"{s['slug']} missing domain"
+        else:
+            assert s.get("list_url"), f"{s['slug']} missing list_url"
+
+
 def test_html_config_extracts_rows_fields_and_docs():
     pytest.importorskip("bs4")
     from app.adapters.solicitations.config_source import HtmlConfigAdapter

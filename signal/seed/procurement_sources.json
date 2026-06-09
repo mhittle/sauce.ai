@@ -1,45 +1,23 @@
 [
   {
     "slug": "ga-gainesville",
-    "name": "Gainesville, GA (CivicPlus)",
+    "name": "Gainesville, GA",
     "level": "local",
     "state": "GA",
-    "platform": "html",
+    "platform": "civicplus",
+    "domain": "www.gainesville.org",
     "active": true,
-    "list_url": "https://www.gainesville.org/Bids.aspx?CatID=showStatus&txtSort=Category&Status=open",
-    "config": {
-      "base_url": "https://www.gainesville.org/",
-      "row_selector": ".listItemsRow.bid",
-      "fields": {
-        "title": {"selector": ".bidTitle a", "attr": "text"},
-        "source_url": {"selector": ".bidTitle a", "attr": "href"},
-        "source_id": {"selector": ".bidTitle a", "attr": "href", "regex": "bidID=(\\d+)"},
-        "status": {"selector": ".bidStatus div:nth-of-type(2) span", "attr": "text"},
-        "due_date": {"selector": ".bidStatus div:nth-of-type(2) span:nth-of-type(2)", "attr": "text"}
-      }
-    },
-    "notes": "Validated live 2026-06-09 (6 open bids w/ close dates). Plan PDFs live on each bids.aspx?bidID detail page (source_url) — list-only for now; detail-page doc fetch is a follow-up."
+    "notes": "Validated live 2026-06-09 (6 open construction bids w/ close dates). Reference CivicPlus source."
   },
   {
     "slug": "ga-marietta",
-    "name": "Marietta, GA (CivicPlus)",
+    "name": "Marietta, GA",
     "level": "local",
     "state": "GA",
-    "platform": "html",
+    "platform": "civicplus",
+    "domain": "www.mariettaga.gov",
     "active": true,
-    "list_url": "https://www.mariettaga.gov/Bids.aspx?CatID=showStatus&txtSort=Category&Status=open",
-    "config": {
-      "base_url": "https://www.mariettaga.gov/",
-      "row_selector": ".listItemsRow.bid",
-      "fields": {
-        "title": {"selector": ".bidTitle a", "attr": "text"},
-        "source_url": {"selector": ".bidTitle a", "attr": "href"},
-        "source_id": {"selector": ".bidTitle a", "attr": "href", "regex": "bidID=(\\d+)"},
-        "status": {"selector": ".bidStatus div:nth-of-type(2) span", "attr": "text"},
-        "due_date": {"selector": ".bidStatus div:nth-of-type(2) span:nth-of-type(2)", "attr": "text"}
-      }
-    },
-    "notes": "Validated live 2026-06-09 (extraction confirmed on 110 rows; 0 currently open). Same CivicPlus config as Gainesville — copy this block, change base_url/list_url/state to add any CivicPlus city."
+    "notes": "Validated live 2026-06-09 (extraction confirmed on 110 rows)."
   },
   {
     "slug": "ga-gpr",
@@ -53,12 +31,22 @@
       "base_url": "https://ssl.doas.state.ga.us/gpr/",
       "row_selector": "table tr",
       "fields": {
-        "title": {"selector": "a", "attr": "text"},
-        "source_url": {"selector": "a", "attr": "href"},
-        "source_id": {"selector": "a", "attr": "href", "regex": "[?&]id=(\\d+)"}
+        "title": {
+          "selector": "a",
+          "attr": "text"
+        },
+        "source_url": {
+          "selector": "a",
+          "attr": "href"
+        },
+        "source_id": {
+          "selector": "a",
+          "attr": "href",
+          "regex": "[?&]id=(\\d+)"
+        }
       }
     },
-    "notes": "DRAFT — ASP.NET; likely needs POST/viewstate or Playwright. Tune with validate_procurement_source.py before activating. Covers GA state + county + local public-works >= $100k."
+    "notes": "DRAFT \u2014 ASP.NET; likely needs POST/viewstate or Playwright. Tune with validate_procurement_source.py before activating. Covers GA state + county + local public-works >= $100k."
   },
   {
     "slug": "example-bonfire-agency",
@@ -79,8 +67,1866 @@
         "status": "status",
         "source_url": "publicUrl"
       },
-      "documents": {"path": "documents", "name": "name", "url": "downloadUrl"}
+      "documents": {
+        "path": "documents",
+        "name": "name",
+        "url": "downloadUrl"
+      }
     },
-    "notes": "DRAFT — illustrates the JSON config pattern for SPA-backed portals (Bonfire/OpenGov). Replace <agency> + verify the JSON endpoint + field paths with the validator."
+    "notes": "DRAFT \u2014 illustrates the JSON config pattern for SPA-backed portals (Bonfire/OpenGov). Replace <agency> + verify the JSON endpoint + field paths with the validator."
+  },
+  {
+    "slug": "wilbraham-ma",
+    "name": "Town Of Wilbraham",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "wilbraham-ma.gov",
+    "active": true
+  },
+  {
+    "slug": "rockislandcountyil",
+    "name": "County of Rock Island",
+    "level": "county",
+    "state": "IL",
+    "platform": "civicplus",
+    "domain": "rockislandcountyil.gov",
+    "active": true
+  },
+  {
+    "slug": "middletonma",
+    "name": "Town of Middleton",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "middletonma.gov",
+    "active": true
+  },
+  {
+    "slug": "paramusborough",
+    "name": "Borough of Paramus",
+    "level": "local",
+    "state": "NJ",
+    "platform": "civicplus",
+    "domain": "paramusborough.gov",
+    "active": true
+  },
+  {
+    "slug": "southburlingtonpolice",
+    "name": "South Burlington Police Department",
+    "level": "local",
+    "state": "VT",
+    "platform": "civicplus",
+    "domain": "southburlingtonpolice.gov",
+    "active": true
+  },
+  {
+    "slug": "middletownny",
+    "name": "City of Middletown",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "middletownny.gov",
+    "active": true
+  },
+  {
+    "slug": "northmiamifl",
+    "name": "City of North Miami",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "northmiamifl.gov",
+    "active": true
+  },
+  {
+    "slug": "galvestontx",
+    "name": "City of Galveston",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "galvestontx.gov",
+    "active": true
+  },
+  {
+    "slug": "libertymissouri",
+    "name": "City of Liberty",
+    "level": "local",
+    "state": "MO",
+    "platform": "civicplus",
+    "domain": "libertymissouri.gov",
+    "active": true
+  },
+  {
+    "slug": "westfargond",
+    "name": "State of ND",
+    "level": "local",
+    "state": "ND",
+    "platform": "civicplus",
+    "domain": "westfargond.gov",
+    "active": true
+  },
+  {
+    "slug": "marysvillewa",
+    "name": "City of Marysville",
+    "level": "local",
+    "state": "WA",
+    "platform": "civicplus",
+    "domain": "marysvillewa.gov",
+    "active": true
+  },
+  {
+    "slug": "williamsoncounty-tn",
+    "name": "Williamson County Tennessee Government",
+    "level": "county",
+    "state": "TN",
+    "platform": "civicplus",
+    "domain": "williamsoncounty-tn.gov",
+    "active": true
+  },
+  {
+    "slug": "cityofgaffney-sc",
+    "name": "City of Gaffney",
+    "level": "local",
+    "state": "SC",
+    "platform": "civicplus",
+    "domain": "cityofgaffney-sc.gov",
+    "active": true
+  },
+  {
+    "slug": "miamiok",
+    "name": "City of Miami",
+    "level": "local",
+    "state": "OK",
+    "platform": "civicplus",
+    "domain": "miamiok.gov",
+    "active": true
+  },
+  {
+    "slug": "lincolncountync",
+    "name": "Lincoln County",
+    "level": "county",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "lincolncountync.gov",
+    "active": true
+  },
+  {
+    "slug": "madisoncountytn",
+    "name": "Madison County Government",
+    "level": "county",
+    "state": "TN",
+    "platform": "civicplus",
+    "domain": "madisoncountytn.gov",
+    "active": true
+  },
+  {
+    "slug": "opalockafl",
+    "name": "City of Opalocka",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "opalockafl.gov",
+    "active": true
+  },
+  {
+    "slug": "yanceycountync",
+    "name": "Yancey County Courthouse",
+    "level": "county",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "yanceycountync.gov",
+    "active": true
+  },
+  {
+    "slug": "orangenj",
+    "name": "City of Orange Townhip",
+    "level": "local",
+    "state": "NJ",
+    "platform": "civicplus",
+    "domain": "orangenj.gov",
+    "active": true
+  },
+  {
+    "slug": "glennheightstx",
+    "name": "City of Glenn Heights",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "glennheightstx.gov",
+    "active": true
+  },
+  {
+    "slug": "jonesboroar",
+    "name": "City of Jonesboro",
+    "level": "local",
+    "state": "AR",
+    "platform": "civicplus",
+    "domain": "jonesboroar.gov",
+    "active": true
+  },
+  {
+    "slug": "kingstonma",
+    "name": "Town of Kingston",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "kingstonma.gov",
+    "active": true
+  },
+  {
+    "slug": "emporia-kansas",
+    "name": "City Of Emporia",
+    "level": "local",
+    "state": "KS",
+    "platform": "civicplus",
+    "domain": "emporia-kansas.gov",
+    "active": true
+  },
+  {
+    "slug": "indianolaiowa",
+    "name": "City of Indianola",
+    "level": "local",
+    "state": "IA",
+    "platform": "civicplus",
+    "domain": "indianolaiowa.gov",
+    "active": true
+  },
+  {
+    "slug": "cityofmidlandmi",
+    "name": "City of Midland",
+    "level": "local",
+    "state": "MI",
+    "platform": "civicplus",
+    "domain": "cityofmidlandmi.gov",
+    "active": true
+  },
+  {
+    "slug": "wichitafallstx",
+    "name": "City of Wichita Falls",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "wichitafallstx.gov",
+    "active": true
+  },
+  {
+    "slug": "antiochca",
+    "name": "City of Antioch",
+    "level": "local",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "antiochca.gov",
+    "active": true
+  },
+  {
+    "slug": "maplegrovemn",
+    "name": "City of Maple Grove",
+    "level": "local",
+    "state": "MN",
+    "platform": "civicplus",
+    "domain": "maplegrovemn.gov",
+    "active": true
+  },
+  {
+    "slug": "clarkcountyohio",
+    "name": "Clark County Board of Commission",
+    "level": "county",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "clarkcountyohio.gov",
+    "active": true
+  },
+  {
+    "slug": "pelhamalabama",
+    "name": "City of Pelham",
+    "level": "local",
+    "state": "AL",
+    "platform": "civicplus",
+    "domain": "pelhamalabama.gov",
+    "active": true
+  },
+  {
+    "slug": "mariposacounty",
+    "name": "Mariposa County",
+    "level": "county",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "mariposacounty.gov",
+    "active": true
+  },
+  {
+    "slug": "nantucket-ma",
+    "name": "Town of Nantucket",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "nantucket-ma.gov",
+    "active": true
+  },
+  {
+    "slug": "franklincountywa",
+    "name": "Franklin County Washington",
+    "level": "county",
+    "state": "WA",
+    "platform": "civicplus",
+    "domain": "franklincountywa.gov",
+    "active": true
+  },
+  {
+    "slug": "auburnny",
+    "name": "City of Auburn",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "auburnny.gov",
+    "active": true
+  },
+  {
+    "slug": "tomballtx",
+    "name": "City of Tomball",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "tomballtx.gov",
+    "active": true
+  },
+  {
+    "slug": "libertycountyga",
+    "name": "Liberty County, Georgia",
+    "level": "county",
+    "state": "GA",
+    "platform": "civicplus",
+    "domain": "libertycountyga.gov",
+    "active": true
+  },
+  {
+    "slug": "waterfordwi",
+    "name": "Village of Waterford",
+    "level": "local",
+    "state": "WI",
+    "platform": "civicplus",
+    "domain": "waterfordwi.gov",
+    "active": true
+  },
+  {
+    "slug": "shrewsburyma",
+    "name": "SELCO",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "shrewsburyma.gov",
+    "active": true
+  },
+  {
+    "slug": "sccwi",
+    "name": "St. Croix County Wisconsin",
+    "level": "county",
+    "state": "WI",
+    "platform": "civicplus",
+    "domain": "sccwi.gov",
+    "active": true
+  },
+  {
+    "slug": "southmiamifl",
+    "name": "City of South Miami",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "southmiamifl.gov",
+    "active": true
+  },
+  {
+    "slug": "brunswickme",
+    "name": "Town of Brunswick",
+    "level": "local",
+    "state": "ME",
+    "platform": "civicplus",
+    "domain": "brunswickme.gov",
+    "active": true
+  },
+  {
+    "slug": "wilmette",
+    "name": "Village of Wilmette",
+    "level": "local",
+    "state": "IL",
+    "platform": "civicplus",
+    "domain": "wilmette.gov",
+    "active": true
+  },
+  {
+    "slug": "idahofallsidaho",
+    "name": "City of Idaho Falls",
+    "level": "local",
+    "state": "ID",
+    "platform": "civicplus",
+    "domain": "idahofallsidaho.gov",
+    "active": true
+  },
+  {
+    "slug": "enfield-ct",
+    "name": "Town of Enfield",
+    "level": "local",
+    "state": "CT",
+    "platform": "civicplus",
+    "domain": "enfield-ct.gov",
+    "active": true
+  },
+  {
+    "slug": "gordoncountyga",
+    "name": "County of Gordon",
+    "level": "county",
+    "state": "GA",
+    "platform": "civicplus",
+    "domain": "gordoncountyga.gov",
+    "active": true
+  },
+  {
+    "slug": "portlandtx",
+    "name": "City of Portland",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "portlandtx.gov",
+    "active": true
+  },
+  {
+    "slug": "charleston-sc",
+    "name": "City of Charleston",
+    "level": "local",
+    "state": "SC",
+    "platform": "civicplus",
+    "domain": "charleston-sc.gov",
+    "active": true
+  },
+  {
+    "slug": "hendersonky",
+    "name": "City of Henderson, KY",
+    "level": "local",
+    "state": "KY",
+    "platform": "civicplus",
+    "domain": "hendersonky.gov",
+    "active": true
+  },
+  {
+    "slug": "grandcountyutah",
+    "name": "Grand County",
+    "level": "county",
+    "state": "UT",
+    "platform": "civicplus",
+    "domain": "grandcountyutah.gov",
+    "active": true
+  },
+  {
+    "slug": "sterlingheights",
+    "name": "City of Sterling Heights",
+    "level": "local",
+    "state": "MI",
+    "platform": "civicplus",
+    "domain": "sterlingheights.gov",
+    "active": true
+  },
+  {
+    "slug": "marshallcountyia",
+    "name": "Marshall County, Iowa",
+    "level": "county",
+    "state": "IA",
+    "platform": "civicplus",
+    "domain": "marshallcountyia.gov",
+    "active": true
+  },
+  {
+    "slug": "hohny",
+    "name": "Village of Hastings-on-Hudson",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "hohny.gov",
+    "active": true
+  },
+  {
+    "slug": "bisbeeaz",
+    "name": "City of Bisbee",
+    "level": "local",
+    "state": "AZ",
+    "platform": "civicplus",
+    "domain": "bisbeeaz.gov",
+    "active": true
+  },
+  {
+    "slug": "cityofdouglasga",
+    "name": "City of Douglas",
+    "level": "local",
+    "state": "GA",
+    "platform": "civicplus",
+    "domain": "cityofdouglasga.gov",
+    "active": true
+  },
+  {
+    "slug": "lumbertonnc",
+    "name": "City of Lumberton",
+    "level": "local",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "lumbertonnc.gov",
+    "active": true
+  },
+  {
+    "slug": "belaireks",
+    "name": "City of Bel Aire",
+    "level": "local",
+    "state": "KS",
+    "platform": "civicplus",
+    "domain": "belaireks.gov",
+    "active": true
+  },
+  {
+    "slug": "parkcountyco",
+    "name": "Park County Government",
+    "level": "county",
+    "state": "CO",
+    "platform": "civicplus",
+    "domain": "parkcountyco.gov",
+    "active": true
+  },
+  {
+    "slug": "upperuwchlan-pa",
+    "name": "Upper Uwchlan Township",
+    "level": "local",
+    "state": "PA",
+    "platform": "civicplus",
+    "domain": "upperuwchlan-pa.gov",
+    "active": true
+  },
+  {
+    "slug": "paradisevalleyaz",
+    "name": "Town of Paradise Valley",
+    "level": "local",
+    "state": "AZ",
+    "platform": "civicplus",
+    "domain": "paradisevalleyaz.gov",
+    "active": true
+  },
+  {
+    "slug": "acton-ma",
+    "name": "Town of Acton, Massachusetts",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "acton-ma.gov",
+    "active": true
+  },
+  {
+    "slug": "ontariocountyny",
+    "name": "Ontario County",
+    "level": "county",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "ontariocountyny.gov",
+    "active": true
+  },
+  {
+    "slug": "hempsteadny",
+    "name": "Town of Hempstead",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "hempsteadny.gov",
+    "active": true
+  },
+  {
+    "slug": "southportland",
+    "name": "City of South Portland",
+    "level": "local",
+    "state": "ME",
+    "platform": "civicplus",
+    "domain": "southportland.gov",
+    "active": true
+  },
+  {
+    "slug": "sanpabloca",
+    "name": "City of San Pablo",
+    "level": "local",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "sanpabloca.gov",
+    "active": true
+  },
+  {
+    "slug": "williamsburgva",
+    "name": "City of Williamsburg",
+    "level": "local",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "williamsburgva.gov",
+    "active": true
+  },
+  {
+    "slug": "buckscounty",
+    "name": "County of Bucks",
+    "level": "county",
+    "state": "PA",
+    "platform": "civicplus",
+    "domain": "buckscounty.gov",
+    "active": true
+  },
+  {
+    "slug": "eastonmd",
+    "name": "Town of Easton",
+    "level": "local",
+    "state": "MD",
+    "platform": "civicplus",
+    "domain": "eastonmd.gov",
+    "active": true
+  },
+  {
+    "slug": "abilenetx",
+    "name": "City of Abilene",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "abilenetx.gov",
+    "active": true
+  },
+  {
+    "slug": "brooklinema",
+    "name": "Town of Brookline",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "brooklinema.gov",
+    "active": true
+  },
+  {
+    "slug": "wyandottemi",
+    "name": "City of Wyandotte",
+    "level": "local",
+    "state": "MI",
+    "platform": "civicplus",
+    "domain": "wyandottemi.gov",
+    "active": true
+  },
+  {
+    "slug": "readingma",
+    "name": "Town of Reading",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "readingma.gov",
+    "active": true
+  },
+  {
+    "slug": "unioncountyga",
+    "name": "Union County Commissioner",
+    "level": "county",
+    "state": "GA",
+    "platform": "civicplus",
+    "domain": "unioncountyga.gov",
+    "active": true
+  },
+  {
+    "slug": "lowellma",
+    "name": "City of Lowell, Massachusetts",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "lowellma.gov",
+    "active": true
+  },
+  {
+    "slug": "mountdora",
+    "name": "City of Mount Dora",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "mountdora.gov",
+    "active": true
+  },
+  {
+    "slug": "waterville-me",
+    "name": "City of Waterville",
+    "level": "local",
+    "state": "ME",
+    "platform": "civicplus",
+    "domain": "waterville-me.gov",
+    "active": true
+  },
+  {
+    "slug": "dyersburgtn",
+    "name": "City of Dyersburg",
+    "level": "local",
+    "state": "TN",
+    "platform": "civicplus",
+    "domain": "dyersburgtn.gov",
+    "active": true
+  },
+  {
+    "slug": "loraincountyohio",
+    "name": "Lorain County Board of Commissioners",
+    "level": "county",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "loraincountyohio.gov",
+    "active": true
+  },
+  {
+    "slug": "annapolis",
+    "name": "City of Annapolis",
+    "level": "local",
+    "state": "MD",
+    "platform": "civicplus",
+    "domain": "annapolis.gov",
+    "active": true
+  },
+  {
+    "slug": "applevalleymn",
+    "name": "City of Apple Valley",
+    "level": "local",
+    "state": "MN",
+    "platform": "civicplus",
+    "domain": "applevalleymn.gov",
+    "active": true
+  },
+  {
+    "slug": "londonderrynh",
+    "name": "Town of Londonderry",
+    "level": "local",
+    "state": "NH",
+    "platform": "civicplus",
+    "domain": "londonderrynh.gov",
+    "active": true
+  },
+  {
+    "slug": "williamscountyoh",
+    "name": "Williams County Government",
+    "level": "county",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "williamscountyoh.gov",
+    "active": true
+  },
+  {
+    "slug": "needhamma",
+    "name": "Town of Needham",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "needhamma.gov",
+    "active": true
+  },
+  {
+    "slug": "stillwatercountymt",
+    "name": "Stillwater County, Montana",
+    "level": "county",
+    "state": "MT",
+    "platform": "civicplus",
+    "domain": "stillwatercountymt.gov",
+    "active": true
+  },
+  {
+    "slug": "auburnma",
+    "name": "Town of Auburn",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "auburnma.gov",
+    "active": true
+  },
+  {
+    "slug": "piquaoh",
+    "name": "City of Piqua",
+    "level": "local",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "piquaoh.gov",
+    "active": true
+  },
+  {
+    "slug": "ehamptonny",
+    "name": "Town of East Hampton",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "ehamptonny.gov",
+    "active": true
+  },
+  {
+    "slug": "cityoflamarque",
+    "name": "City of La Marque",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "cityoflamarque.gov",
+    "active": true
+  },
+  {
+    "slug": "bransonmo",
+    "name": "City of Branson",
+    "level": "local",
+    "state": "MO",
+    "platform": "civicplus",
+    "domain": "bransonmo.gov",
+    "active": true
+  },
+  {
+    "slug": "brightonny",
+    "name": "Town of Brighton",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "brightonny.gov",
+    "active": true
+  },
+  {
+    "slug": "loslunasnm",
+    "name": "Village of Los Lunas",
+    "level": "local",
+    "state": "NM",
+    "platform": "civicplus",
+    "domain": "loslunasnm.gov",
+    "active": true
+  },
+  {
+    "slug": "barharbormaine",
+    "name": "Town of Bar Harbor",
+    "level": "local",
+    "state": "ME",
+    "platform": "civicplus",
+    "domain": "barharbormaine.gov",
+    "active": true
+  },
+  {
+    "slug": "waterfordmi",
+    "name": "Charter Township of Waterford",
+    "level": "local",
+    "state": "MI",
+    "platform": "civicplus",
+    "domain": "waterfordmi.gov",
+    "active": true
+  },
+  {
+    "slug": "irvingtonny",
+    "name": "Village of Irvington",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "irvingtonny.gov",
+    "active": true
+  },
+  {
+    "slug": "holbrookma",
+    "name": "Town of Holbrook",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "holbrookma.gov",
+    "active": true
+  },
+  {
+    "slug": "angelfirenm",
+    "name": "Village of Angel Fire",
+    "level": "local",
+    "state": "NM",
+    "platform": "civicplus",
+    "domain": "angelfirenm.gov",
+    "active": true
+  },
+  {
+    "slug": "rogersar",
+    "name": "City of Rogers",
+    "level": "local",
+    "state": "AR",
+    "platform": "civicplus",
+    "domain": "rogersar.gov",
+    "active": true
+  },
+  {
+    "slug": "burlingtonvt",
+    "name": "City of Burlington",
+    "level": "local",
+    "state": "VT",
+    "platform": "civicplus",
+    "domain": "burlingtonvt.gov",
+    "active": true
+  },
+  {
+    "slug": "greatfallsmt",
+    "name": "City of Great Falls",
+    "level": "local",
+    "state": "MT",
+    "platform": "civicplus",
+    "domain": "greatfallsmt.gov",
+    "active": true
+  },
+  {
+    "slug": "martinsville-va",
+    "name": "City of Martinsville",
+    "level": "local",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "martinsville-va.gov",
+    "active": true
+  },
+  {
+    "slug": "bristoltn",
+    "name": "City of Bristol Tennessee",
+    "level": "local",
+    "state": "TN",
+    "platform": "civicplus",
+    "domain": "bristoltn.gov",
+    "active": true
+  },
+  {
+    "slug": "duvallwa",
+    "name": "City of Duvall",
+    "level": "local",
+    "state": "WA",
+    "platform": "civicplus",
+    "domain": "duvallwa.gov",
+    "active": true
+  },
+  {
+    "slug": "copperascovetx",
+    "name": "City of Copperas Cove",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "copperascovetx.gov",
+    "active": true
+  },
+  {
+    "slug": "cumberlandcountypa",
+    "name": "County of Cumberland",
+    "level": "county",
+    "state": "PA",
+    "platform": "civicplus",
+    "domain": "cumberlandcountypa.gov",
+    "active": true
+  },
+  {
+    "slug": "wyomingcountyny",
+    "name": "Wyoming County",
+    "level": "county",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "wyomingcountyny.gov",
+    "active": true
+  },
+  {
+    "slug": "londonderrynhfire",
+    "name": "Londonderry Fire Department",
+    "level": "local",
+    "state": "NH",
+    "platform": "civicplus",
+    "domain": "londonderrynhfire.gov",
+    "active": true
+  },
+  {
+    "slug": "newulmmn",
+    "name": "City of New Ulm",
+    "level": "local",
+    "state": "MN",
+    "platform": "civicplus",
+    "domain": "newulmmn.gov",
+    "active": true
+  },
+  {
+    "slug": "wvc-ut",
+    "name": "City of West Valley",
+    "level": "local",
+    "state": "UT",
+    "platform": "civicplus",
+    "domain": "wvc-ut.gov",
+    "active": true
+  },
+  {
+    "slug": "burlington-wi",
+    "name": "City of Burlington",
+    "level": "local",
+    "state": "WI",
+    "platform": "civicplus",
+    "domain": "burlington-wi.gov",
+    "active": true
+  },
+  {
+    "slug": "miltonmapolice",
+    "name": "Milton Police Department",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "miltonmapolice.gov",
+    "active": true
+  },
+  {
+    "slug": "aubreytx",
+    "name": "City of Aubrey",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "aubreytx.gov",
+    "active": true
+  },
+  {
+    "slug": "cityofshastalake",
+    "name": "City of Shasta Lake",
+    "level": "local",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "cityofshastalake.gov",
+    "active": true
+  },
+  {
+    "slug": "chnj",
+    "name": "Township of Cherry Hill",
+    "level": "local",
+    "state": "NJ",
+    "platform": "civicplus",
+    "domain": "chnj.gov",
+    "active": true
+  },
+  {
+    "slug": "centerline",
+    "name": "City of Center Line, Michigan",
+    "level": "local",
+    "state": "MI",
+    "platform": "civicplus",
+    "domain": "centerline.gov",
+    "active": true
+  },
+  {
+    "slug": "glencarbonil",
+    "name": "Village of Glen Carbon",
+    "level": "local",
+    "state": "IL",
+    "platform": "civicplus",
+    "domain": "glencarbonil.gov",
+    "active": true
+  },
+  {
+    "slug": "casagrandeaz",
+    "name": "City of Casa Grande",
+    "level": "local",
+    "state": "AZ",
+    "platform": "civicplus",
+    "domain": "casagrandeaz.gov",
+    "active": true
+  },
+  {
+    "slug": "alpinecountyca",
+    "name": "County of Alpine",
+    "level": "county",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "alpinecountyca.gov",
+    "active": true
+  },
+  {
+    "slug": "dhaz",
+    "name": "Town of Dewey-Humboldt",
+    "level": "local",
+    "state": "AZ",
+    "platform": "civicplus",
+    "domain": "dhaz.gov",
+    "active": true
+  },
+  {
+    "slug": "humalertca",
+    "name": "County of Humboldt",
+    "level": "county",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "humalertca.gov",
+    "active": true
+  },
+  {
+    "slug": "wgfl",
+    "name": "City of Winter Garden, FL",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "wgfl.gov",
+    "active": true
+  },
+  {
+    "slug": "desotocountyms",
+    "name": "Desoto County",
+    "level": "county",
+    "state": "MS",
+    "platform": "civicplus",
+    "domain": "desotocountyms.gov",
+    "active": true
+  },
+  {
+    "slug": "woodcountyohio",
+    "name": "Wood County Commissioners",
+    "level": "county",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "woodcountyohio.gov",
+    "active": true
+  },
+  {
+    "slug": "cityofmadisonsd",
+    "name": "City of Madison, SD",
+    "level": "local",
+    "state": "SD",
+    "platform": "civicplus",
+    "domain": "cityofmadisonsd.gov",
+    "active": true
+  },
+  {
+    "slug": "athenstx",
+    "name": "City of Athens",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "athenstx.gov",
+    "active": true
+  },
+  {
+    "slug": "readybuttemt",
+    "name": "Butte-Silver Bow Local Government",
+    "level": "county",
+    "state": "MT",
+    "platform": "civicplus",
+    "domain": "readybuttemt.gov",
+    "active": true
+  },
+  {
+    "slug": "salemnh",
+    "name": "Town of Salem New Hampshire",
+    "level": "local",
+    "state": "NH",
+    "platform": "civicplus",
+    "domain": "salemnh.gov",
+    "active": true
+  },
+  {
+    "slug": "freetownma",
+    "name": "Town of Freetown",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "freetownma.gov",
+    "active": true
+  },
+  {
+    "slug": "cityofchardon",
+    "name": "City of Chardon",
+    "level": "local",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "cityofchardon.gov",
+    "active": true
+  },
+  {
+    "slug": "pvtx",
+    "name": "Town of Providence Village",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "pvtx.gov",
+    "active": true
+  },
+  {
+    "slug": "northfieldma",
+    "name": "Town of Northfield",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "northfieldma.gov",
+    "active": true
+  },
+  {
+    "slug": "aptx",
+    "name": "City of Aransas Pass",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "aptx.gov",
+    "active": true
+  },
+  {
+    "slug": "lexingtonma",
+    "name": "Town of Lexington MA",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "lexingtonma.gov",
+    "active": true
+  },
+  {
+    "slug": "franklincountyva",
+    "name": "Franklin County VA",
+    "level": "county",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "franklincountyva.gov",
+    "active": true
+  },
+  {
+    "slug": "nortonva",
+    "name": "City of Norton",
+    "level": "local",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "nortonva.gov",
+    "active": true
+  },
+  {
+    "slug": "hopewellva",
+    "name": "CITY OF HOPEWELL",
+    "level": "local",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "hopewellva.gov",
+    "active": true
+  },
+  {
+    "slug": "chatham-ma",
+    "name": "City of Chatham",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "chatham-ma.gov",
+    "active": true
+  },
+  {
+    "slug": "tewksbury-ma",
+    "name": "Town of Tewksbury",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "tewksbury-ma.gov",
+    "active": true
+  },
+  {
+    "slug": "granby-ct",
+    "name": "Town of Granby",
+    "level": "local",
+    "state": "CT",
+    "platform": "civicplus",
+    "domain": "granby-ct.gov",
+    "active": true
+  },
+  {
+    "slug": "lawrenceburgtn",
+    "name": "City of Lawrenceburg",
+    "level": "local",
+    "state": "TN",
+    "platform": "civicplus",
+    "domain": "lawrenceburgtn.gov",
+    "active": true
+  },
+  {
+    "slug": "beverlyma",
+    "name": "City of Beverly MA",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "beverlyma.gov",
+    "active": true
+  },
+  {
+    "slug": "templeterrace",
+    "name": "City of Temple Terrace",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "templeterrace.gov",
+    "active": true
+  },
+  {
+    "slug": "denisontx",
+    "name": "City of Denison",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "denisontx.gov",
+    "active": true
+  },
+  {
+    "slug": "beaufortcountync",
+    "name": "Beaufort County Government",
+    "level": "county",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "beaufortcountync.gov",
+    "active": true
+  },
+  {
+    "slug": "buffalony",
+    "name": "City of Buffalo",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "buffalony.gov",
+    "active": true
+  },
+  {
+    "slug": "rileycountyks",
+    "name": "Riley County",
+    "level": "county",
+    "state": "KS",
+    "platform": "civicplus",
+    "domain": "rileycountyks.gov",
+    "active": true
+  },
+  {
+    "slug": "umatilla",
+    "name": "City of Umatilla",
+    "level": "local",
+    "state": "OR",
+    "platform": "civicplus",
+    "domain": "umatilla.gov",
+    "active": true
+  },
+  {
+    "slug": "hampton",
+    "name": "City of Hampton",
+    "level": "local",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "hampton.gov",
+    "active": true
+  },
+  {
+    "slug": "cityofcapitola",
+    "name": "City of Capitola",
+    "level": "local",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "cityofcapitola.gov",
+    "active": true
+  },
+  {
+    "slug": "westfordma",
+    "name": "Town of Westford, MA",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "westfordma.gov",
+    "active": true
+  },
+  {
+    "slug": "deerfieldnh",
+    "name": "Town of Deerfield",
+    "level": "local",
+    "state": "NH",
+    "platform": "civicplus",
+    "domain": "deerfieldnh.gov",
+    "active": true
+  },
+  {
+    "slug": "lancastercountypa",
+    "name": "County of Lancaster, Pa",
+    "level": "county",
+    "state": "PA",
+    "platform": "civicplus",
+    "domain": "lancastercountypa.gov",
+    "active": true
+  },
+  {
+    "slug": "bothellwa",
+    "name": "City of Bothell",
+    "level": "local",
+    "state": "WA",
+    "platform": "civicplus",
+    "domain": "bothellwa.gov",
+    "active": true
+  },
+  {
+    "slug": "frasercitymi",
+    "name": "City of Fraser",
+    "level": "local",
+    "state": "MI",
+    "platform": "civicplus",
+    "domain": "frasercitymi.gov",
+    "active": true
+  },
+  {
+    "slug": "gloucestercountynj",
+    "name": "County of Gloucester",
+    "level": "county",
+    "state": "NJ",
+    "platform": "civicplus",
+    "domain": "gloucestercountynj.gov",
+    "active": true
+  },
+  {
+    "slug": "collegeparkga",
+    "name": "City of College Park",
+    "level": "local",
+    "state": "GA",
+    "platform": "civicplus",
+    "domain": "collegeparkga.gov",
+    "active": true
+  },
+  {
+    "slug": "brunswickcountync",
+    "name": "Brunswick County",
+    "level": "county",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "brunswickcountync.gov",
+    "active": true
+  },
+  {
+    "slug": "pointpleasantbeach",
+    "name": "Borough of Point Pleasant Beach",
+    "level": "local",
+    "state": "NJ",
+    "platform": "civicplus",
+    "domain": "pointpleasantbeach.gov",
+    "active": true
+  },
+  {
+    "slug": "beaverutahsheriff",
+    "name": "Beaver County Sheriffs office",
+    "level": "county",
+    "state": "UT",
+    "platform": "civicplus",
+    "domain": "beaverutahsheriff.gov",
+    "active": true
+  },
+  {
+    "slug": "bgohio",
+    "name": "City of Bowling Green",
+    "level": "local",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "bgohio.gov",
+    "active": true
+  },
+  {
+    "slug": "cravencountync",
+    "name": "Craven County Government",
+    "level": "county",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "cravencountync.gov",
+    "active": true
+  },
+  {
+    "slug": "aledoil",
+    "name": "City of Aledo",
+    "level": "local",
+    "state": "IL",
+    "platform": "civicplus",
+    "domain": "aledoil.gov",
+    "active": true
+  },
+  {
+    "slug": "pittsylvaniacountyva",
+    "name": "Pittsylvania County Virginia",
+    "level": "county",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "pittsylvaniacountyva.gov",
+    "active": true
+  },
+  {
+    "slug": "nevadacountyca",
+    "name": "County of Nevada California",
+    "level": "county",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "nevadacountyca.gov",
+    "active": true
+  },
+  {
+    "slug": "lakestevenswa",
+    "name": "City of Lake Stevens",
+    "level": "local",
+    "state": "WA",
+    "platform": "civicplus",
+    "domain": "lakestevenswa.gov",
+    "active": true
+  },
+  {
+    "slug": "fairviewparkohio",
+    "name": "City of Fairview Park",
+    "level": "local",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "fairviewparkohio.gov",
+    "active": true
+  },
+  {
+    "slug": "tiftonga",
+    "name": "City of Tifton",
+    "level": "local",
+    "state": "GA",
+    "platform": "civicplus",
+    "domain": "tiftonga.gov",
+    "active": true
+  },
+  {
+    "slug": "gallatintn",
+    "name": "City of Gallatin",
+    "level": "local",
+    "state": "TN",
+    "platform": "civicplus",
+    "domain": "gallatintn.gov",
+    "active": true
+  },
+  {
+    "slug": "bristolva",
+    "name": "City of Bristol Virginia",
+    "level": "local",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "bristolva.gov",
+    "active": true
+  },
+  {
+    "slug": "eastlongmeadowma",
+    "name": "Town of East Longmeadow",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "eastlongmeadowma.gov",
+    "active": true
+  },
+  {
+    "slug": "loudoun",
+    "name": "Loudoun County Government",
+    "level": "county",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "loudoun.gov",
+    "active": true
+  },
+  {
+    "slug": "lakejackson-tx",
+    "name": "City of Lake Jackson",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "lakejackson-tx.gov",
+    "active": true
+  },
+  {
+    "slug": "somifl",
+    "name": "City of South Miami",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "somifl.gov",
+    "active": true
+  },
+  {
+    "slug": "charlottesville",
+    "name": "City of Charlottesville",
+    "level": "local",
+    "state": "VA",
+    "platform": "civicplus",
+    "domain": "charlottesville.gov",
+    "active": true
+  },
+  {
+    "slug": "columbuswi",
+    "name": "City of Columbus",
+    "level": "local",
+    "state": "WI",
+    "platform": "civicplus",
+    "domain": "columbuswi.gov",
+    "active": true
+  },
+  {
+    "slug": "osagebeach-mo",
+    "name": "City of Osage Beach",
+    "level": "local",
+    "state": "MO",
+    "platform": "civicplus",
+    "domain": "osagebeach-mo.gov",
+    "active": true
+  },
+  {
+    "slug": "kerrvilletx",
+    "name": "City of Kerrville",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "kerrvilletx.gov",
+    "active": true
+  },
+  {
+    "slug": "sleepyhollowny",
+    "name": "Village of Sleepy Hollow",
+    "level": "local",
+    "state": "NY",
+    "platform": "civicplus",
+    "domain": "sleepyhollowny.gov",
+    "active": true
+  },
+  {
+    "slug": "siloamsprings",
+    "name": "City of Siloam Springs",
+    "level": "local",
+    "state": "AR",
+    "platform": "civicplus",
+    "domain": "siloamsprings.gov",
+    "active": true
+  },
+  {
+    "slug": "southboroughma",
+    "name": "Town of Southborough",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "southboroughma.gov",
+    "active": true
+  },
+  {
+    "slug": "cumberlandri",
+    "name": "Town of Cumberland",
+    "level": "local",
+    "state": "RI",
+    "platform": "civicplus",
+    "domain": "cumberlandri.gov",
+    "active": true
+  },
+  {
+    "slug": "aikencountysc",
+    "name": "Aiken County Government",
+    "level": "county",
+    "state": "SC",
+    "platform": "civicplus",
+    "domain": "aikencountysc.gov",
+    "active": true
+  },
+  {
+    "slug": "gahanna",
+    "name": "City of Gahanna",
+    "level": "local",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "gahanna.gov",
+    "active": true
+  },
+  {
+    "slug": "natickma",
+    "name": "Town of Natick",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "natickma.gov",
+    "active": true
+  },
+  {
+    "slug": "gigharborwa",
+    "name": "City of Gig Harbor",
+    "level": "local",
+    "state": "WA",
+    "platform": "civicplus",
+    "domain": "gigharborwa.gov",
+    "active": true
+  },
+  {
+    "slug": "hooveralabama",
+    "name": "City of Hoover",
+    "level": "local",
+    "state": "AL",
+    "platform": "civicplus",
+    "domain": "hooveralabama.gov",
+    "active": true
+  },
+  {
+    "slug": "leominster-ma",
+    "name": "City Of Leominster",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "leominster-ma.gov",
+    "active": true
+  },
+  {
+    "slug": "templecityca",
+    "name": "City of Temple City",
+    "level": "local",
+    "state": "CA",
+    "platform": "civicplus",
+    "domain": "templecityca.gov",
+    "active": true
+  },
+  {
+    "slug": "braintreema",
+    "name": "Town of Braintree MA",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "braintreema.gov",
+    "active": true
+  },
+  {
+    "slug": "valdezak",
+    "name": "City of Valdez",
+    "level": "local",
+    "state": "AK",
+    "platform": "civicplus",
+    "domain": "valdezak.gov",
+    "active": true
+  },
+  {
+    "slug": "pendercountync",
+    "name": "Pender County Government",
+    "level": "county",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "pendercountync.gov",
+    "active": true
+  },
+  {
+    "slug": "northfieldmn",
+    "name": "City of Northfield",
+    "level": "local",
+    "state": "MN",
+    "platform": "civicplus",
+    "domain": "northfieldmn.gov",
+    "active": true
+  },
+  {
+    "slug": "nyecountynv",
+    "name": "County of Nye",
+    "level": "county",
+    "state": "NV",
+    "platform": "civicplus",
+    "domain": "nyecountynv.gov",
+    "active": true
+  },
+  {
+    "slug": "islandcountywa",
+    "name": "Island County Government",
+    "level": "county",
+    "state": "WA",
+    "platform": "civicplus",
+    "domain": "islandcountywa.gov",
+    "active": true
+  },
+  {
+    "slug": "moorecountync",
+    "name": "County of Moore",
+    "level": "county",
+    "state": "NC",
+    "platform": "civicplus",
+    "domain": "moorecountync.gov",
+    "active": true
+  },
+  {
+    "slug": "goddardks",
+    "name": "City of Goddard",
+    "level": "local",
+    "state": "KS",
+    "platform": "civicplus",
+    "domain": "goddardks.gov",
+    "active": true
+  },
+  {
+    "slug": "westutx",
+    "name": "City of West University Place",
+    "level": "local",
+    "state": "TX",
+    "platform": "civicplus",
+    "domain": "westutx.gov",
+    "active": true
+  },
+  {
+    "slug": "klamathcountyor",
+    "name": "Klamath County",
+    "level": "county",
+    "state": "OR",
+    "platform": "civicplus",
+    "domain": "klamathcountyor.gov",
+    "active": true
+  },
+  {
+    "slug": "beavercreektwpohio",
+    "name": "Beavercreek Township",
+    "level": "local",
+    "state": "OH",
+    "platform": "civicplus",
+    "domain": "beavercreektwpohio.gov",
+    "active": true
+  },
+  {
+    "slug": "cottagegroveor",
+    "name": "City of Cottage Grove",
+    "level": "local",
+    "state": "OR",
+    "platform": "civicplus",
+    "domain": "cottagegroveor.gov",
+    "active": true
+  },
+  {
+    "slug": "westerlyri",
+    "name": "Town of Westerly",
+    "level": "local",
+    "state": "RI",
+    "platform": "civicplus",
+    "domain": "westerlyri.gov",
+    "active": true
+  },
+  {
+    "slug": "daculaga",
+    "name": "City of Dacula, GA",
+    "level": "local",
+    "state": "GA",
+    "platform": "civicplus",
+    "domain": "daculaga.gov",
+    "active": true
+  },
+  {
+    "slug": "bismarcknd",
+    "name": "City of Bismarck",
+    "level": "local",
+    "state": "ND",
+    "platform": "civicplus",
+    "domain": "bismarcknd.gov",
+    "active": true
+  },
+  {
+    "slug": "qac",
+    "name": "Queen Anne's County Government",
+    "level": "county",
+    "state": "MD",
+    "platform": "civicplus",
+    "domain": "qac.gov",
+    "active": true
+  },
+  {
+    "slug": "greenwichct",
+    "name": "Town of Greenwich",
+    "level": "local",
+    "state": "CT",
+    "platform": "civicplus",
+    "domain": "greenwichct.gov",
+    "active": true
+  },
+  {
+    "slug": "salemma",
+    "name": "City of Salem, MA",
+    "level": "local",
+    "state": "MA",
+    "platform": "civicplus",
+    "domain": "salemma.gov",
+    "active": true
+  },
+  {
+    "slug": "clewiston-fl",
+    "name": "City of Clewiston",
+    "level": "local",
+    "state": "FL",
+    "platform": "civicplus",
+    "domain": "clewiston-fl.gov",
+    "active": true
+  },
+  {
+    "slug": "springfieldmo",
+    "name": "City of Springfield, State of Missouri",
+    "level": "local",
+    "state": "MO",
+    "platform": "civicplus",
+    "domain": "springfieldmo.gov",
+    "active": true
   }
 ]
