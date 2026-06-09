@@ -48,6 +48,33 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Detail-page document fetch (the bid packages)
+
+**Context.** CivicPlus list pages carry only the bid's detail link, not the
+attachments — so solicitations had no plan/spec docs.
+
+**What shipped.** `HtmlConfigAdapter` now supports a `detail` config block: per
+list row, it fetches the bid's detail page and extracts attachment links
+(degrades to [] on failure). Baked into the CivicPlus pattern via
+`.relatedDocuments a[href*="DocumentCenter"]`, so all 208 CivicPlus sources now
+pull their **bid packages** (incl. plan sets) into `solicitation_documents` →
+the Solicitations drawer, inline PDF viewer, and `has_docs` filter. Document
+type is guessed from the link text (plans/spec/addendum/attachment).
+
+**Validated live:** Gainesville bid 177 → 3 docs incl. "Compiled Plans"
+tagged `plans` + "Addendum No 1" tagged `addendum`.
+
+**Perf note.** Detail fetch = 1 extra GET per bid, so `ingest_procurement.py
+--all` now makes far more requests (hundreds–thousands across 208 sources).
+Fine for a scheduled job; revisit with concurrency/politeness if it gets heavy.
+
+**Code touched.** `app/adapters/solicitations/config_source.py`;
+`tests/test_procurement_config.py`. 62 tests green.
+
+**PRs.** Detail-doc-fetch PR (this).
+
+---
+
 ## 2026-06-09 — Solicitations: Source column + source filter
 
 **What shipped.** Solicitations table gained a **Source** column (`source_type`)

@@ -137,8 +137,40 @@ class JsonConfigAdapter(ConfigSolicitationAdapter):
             yield out
 
 
+def _guess_doc_type(name: str) -> str:
+    n = (name or "").lower()
+    if "plan" in n or "drawing" in n:
+        return "plans"
+    if "spec" in n:
+        return "spec"
+    if "addend" in n or "amend" in n:
+        return "addendum"
+    return "attachment"
+
+
 class HtmlConfigAdapter(ConfigSolicitationAdapter):
     source_type = "html"
+
+    def _fetch_documents(self, url: str, detail_cfg: dict) -> list[dict]:
+        """Fetch a solicitation's detail page and extract attachment links
+        (the actual bid package / plans). Failures degrade to []."""
+        from bs4 import BeautifulSoup
+        spec = detail_cfg.get("documents")
+        if not spec or not url:
+            return []
+        try:
+            html = _get(self.session, url).text
+        except requests.RequestException:
+            return []
+        soup = BeautifulSoup(html, "html.parser")
+        docs = []
+        for a in soup.select(spec["selector"]):
+            href = a.get("href")
+            if href:
+                name = a.get_text(" ", strip=True)
+                docs.append({"name": name, "url": urljoin(self.base_url, href),
+                             "doc_type": _guess_doc_type(name)})
+        return docs
 
     def _field(self, row, spec: dict) -> Optional[str]:
         el = row.select_one(spec["selector"]) if spec.get("selector") else row
@@ -156,7 +188,8 @@ class HtmlConfigAdapter(ConfigSolicitationAdapter):
     def fetch_raw(self, since: Optional[date] = None) -> Iterable[dict]:
         from bs4 import BeautifulSoup
         fields: dict = self.config["fields"]
-        docs_cfg = self.config.get("documents")
+        docs_cfg = self.config.get("documents")     # documents on the list row
+        detail_cfg = self.config.get("detail")      # documents on the detail page
         html = _get(self.session, self.list_url).text
         soup = BeautifulSoup(html, "html.parser")
         for row in soup.select(self.config["row_selector"]):
@@ -166,6 +199,8 @@ class HtmlConfigAdapter(ConfigSolicitationAdapter):
                     {"name": a.get_text(" ", strip=True),
                      "url": urljoin(self.base_url, a.get("href"))}
                     for a in row.select(docs_cfg["selector"]) if a.get("href")]
+            elif detail_cfg and out.get("source_url"):
+                out["documents"] = self._fetch_documents(out["source_url"], detail_cfg)
             yield out
 
 
@@ -185,6 +220,9 @@ def civicplus_config(domain: str) -> dict:
             "due_date": {"selector": ".bidStatus div:nth-of-type(2) span:nth-of-type(2)",
                          "attr": "text"},
         },
+        # Bid package (plans/specs/addenda) lives on each bid's detail page.
+        "detail": {"documents": {
+            "selector": '.relatedDocuments a[href*="DocumentCenter"]'}},
     }
 
 
