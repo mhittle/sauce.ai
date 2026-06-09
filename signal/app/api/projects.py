@@ -16,7 +16,16 @@ from ..signals.scoring import default_rule, why_flagged
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
-_SORTABLE = {"lead_score", "updated_at", "value_tier"}
+# friendly sort key -> SQL expression (whitelist; avoids injection)
+_SORT_COLUMNS = {
+    "lead_score": "p.lead_score",
+    "updated_at": "p.updated_at",
+    "value_tier": "p.value_tier",
+    "category": "p.category",
+    "status": "p.status",
+    "jurisdiction": "j.name",
+    "primary_address": "p.primary_address",
+}
 
 
 @router.get("", response_model=ProjectListOut)
@@ -29,10 +38,12 @@ def list_projects(
     q: str | None = None,
     signal: list[str] = Query(default=[]),     # e.g. ?signal=distress_stalled
     sort: str = "lead_score",
+    dir: str = "desc",
     limit: int = Query(50, le=500),
     offset: int = 0,
 ):
-    sort = sort if sort in _SORTABLE else "lead_score"
+    order_col = _SORT_COLUMNS.get(sort, "p.lead_score")
+    direction = "ASC" if dir.lower() == "asc" else "DESC"
     where = ["1=1"]
     params: dict = {"limit": limit, "offset": offset}
     if status:
@@ -61,7 +72,7 @@ def list_projects(
                    ST_Y(p.geom) AS latitude, ST_X(p.geom) AS longitude
             FROM projects p LEFT JOIN jurisdictions j ON j.id = p.jurisdiction_id
             WHERE {clause}
-            ORDER BY p.{sort} DESC NULLS LAST, p.id DESC
+            ORDER BY {order_col} {direction} NULLS LAST, p.id DESC
             LIMIT :limit OFFSET :offset
         """), params).mappings().all()
     except SQLAlchemyError:

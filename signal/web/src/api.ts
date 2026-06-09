@@ -12,6 +12,30 @@ export interface Project {
   updated_at: string | null;
 }
 
+export interface Permit {
+  permit_id: string;
+  permit_type: string | null;
+  work_description: string | null;
+  valuation: number | null;
+  status: string | null;
+  issue_date: string | null;
+  expiration_date: string | null;
+  contractor_name: string | null;
+  source_url: string | null;
+}
+
+export interface WhyRow {
+  signal: string;
+  value: unknown;
+  contribution: number;
+}
+
+export interface ProjectDetail extends Project {
+  permits: Permit[];
+  signals: Record<string, unknown>;
+  why_flagged: WhyRow[];
+}
+
 export interface ProjectList {
   total: number;
   items: Project[];
@@ -27,17 +51,31 @@ export interface SignalDef {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
-export async function fetchProjects(params: {
+export interface ProjectQuery {
   signals: string[];
-  min_score?: number;
   q?: string;
-}): Promise<ProjectList> {
+  sort: string;
+  dir: "asc" | "desc";
+  limit: number;
+  offset: number;
+}
+
+export async function fetchProjects(p: ProjectQuery): Promise<ProjectList> {
   const qs = new URLSearchParams();
-  params.signals.forEach((s) => qs.append("signal", s));
-  if (params.min_score) qs.set("min_score", String(params.min_score));
-  if (params.q) qs.set("q", params.q);
+  p.signals.forEach((s) => qs.append("signal", s));
+  if (p.q) qs.set("q", p.q);
+  qs.set("sort", p.sort);
+  qs.set("dir", p.dir);
+  qs.set("limit", String(p.limit));
+  qs.set("offset", String(p.offset));
   const res = await fetch(`${BASE}/api/projects?${qs.toString()}`);
   if (!res.ok) throw new Error(`projects ${res.status}`);
+  return res.json();
+}
+
+export async function fetchProject(id: number): Promise<ProjectDetail> {
+  const res = await fetch(`${BASE}/api/projects/${id}`);
+  if (!res.ok) throw new Error(`project ${id}: ${res.status}`);
   return res.json();
 }
 
