@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..schemas import (SolicitationDetailOut, SolicitationDocOut,
-                       SolicitationListOut, SolicitationOut)
+                       SolicitationListOut, SolicitationOut, SourceCountOut)
 
 router = APIRouter(prefix="/api/solicitations", tags=["solicitations"])
 
@@ -71,6 +71,21 @@ def list_solicitations(
         total=total or 0,
         items=[SolicitationOut(**{k: r[k] for k in SolicitationOut.model_fields
                                   if k in r}) for r in rows])
+
+
+# NOTE: declared before /{solicitation_id} so "sources" isn't parsed as an int.
+@router.get("/sources", response_model=list[SourceCountOut])
+def list_sources(sess: Session = Depends(get_session)):
+    """Distinct source_types present (with counts) — drives the source filter."""
+    try:
+        rows = sess.execute(text("""
+            SELECT source_type, count(*) AS count FROM solicitations
+            GROUP BY source_type ORDER BY count DESC, source_type
+        """)).mappings().all()
+    except SQLAlchemyError:
+        return []
+    return [SourceCountOut(source_type=r["source_type"], count=r["count"])
+            for r in rows]
 
 
 @router.get("/{solicitation_id}", response_model=SolicitationDetailOut)

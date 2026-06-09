@@ -156,3 +156,14 @@ export async function fetchSolicitation(id: number): Promise<SolicitationDetail>
   if (!res.ok) throw new Error(`solicitation ${id}: ${res.status}`);
   return res.json();
 }
+
+export interface SourceCount {
+  source_type: string;
+  count: number;
+}
+
+export async function fetchSolicitationSources(): Promise<SourceCount[]> {
+  const res = await fetch(`${BASE}/api/solicitations/sources`);
+  if (!res.ok) throw new Error(`sources ${res.status}`);
+  return res.json();
+}

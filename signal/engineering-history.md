@@ -48,6 +48,22 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Solicitations: Source column + source filter
+
+**What shipped.** Solicitations table gained a **Source** column (`source_type`)
+and a **source dropdown filter** in the sidebar. New `GET
+/api/solicitations/sources` returns distinct `source_type`s with counts (drives
+the dropdown; declared before `/{solicitation_id}` so "sources" isn't parsed as
+an int). The list endpoint already supported the `source_type` filter param.
+
+**Code touched.** `app/api/solicitations.py`, `app/schemas.py`
+(`SourceCountOut`); `web/src/{api.ts, SolicitationsTable.tsx, SolicitationsView.tsx}`;
+`tests/test_app.py`. 61 tests green; web build clean.
+
+**PRs.** Source-filter PR (this).
+
+---
+
 ## 2026-06-09 — Scale-out: 200+ CivicPlus sources via auto-discovery
 
 **Context.** "Run 200 more." Hand-writing 200 entries = guesswork; instead

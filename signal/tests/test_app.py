@@ -71,6 +71,12 @@ def test_document_view_no_db_is_not_500():
     assert r.status_code in (404, 503)
 
 
+def test_solicitation_sources_route_and_degradation():
+    # /sources must resolve (not be parsed as /{id}) and degrade to [] sans DB.
+    r = client.get("/api/solicitations/sources")
+    assert r.status_code == 200 and r.json() == []
+
+
 def test_signals_catalog_includes_bid_signals():
     ids = {s["id"] for s in client.get("/api/signals").json()}
     assert {"bid_due_soon", "plans_available", "pre_permit_stage"} <= ids

@@ -14,6 +14,8 @@ const dash = <span className="text-slate-300">—</span>;
 const COLUMNS: Column[] = [
   { key: "due_date", label: "Bid due", sortable: true,
     render: (s) => s.due_date ?? dash },
+  { key: "source_type", label: "Source", sortable: false,
+    render: (s) => <span className="text-xs text-slate-500">{s.source_type}</span> },
   { key: "title", label: "Title", sortable: false,
     render: (s) => s.title ?? dash },
   { key: "agency", label: "Agency", sortable: false,
