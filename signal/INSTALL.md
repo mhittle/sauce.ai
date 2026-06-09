@@ -56,12 +56,18 @@ uvicorn app.main:app --reload
 Railway builds from the `Dockerfile` (`railway.json` pins it) and injects
 `$PORT`. Two services + a database:
 
-1. **Postgres plugin** — Railway's managed Postgres. PostGIS/pgvector:
-   enable the extensions on the instance (Railway's Postgres supports
-   `CREATE EXTENSION`; `jobs/init_db.py` runs the `CREATE EXTENSION`
-   statements, but the extension binaries must exist on the plan — if a
-   plan lacks PostGIS/pgvector, use an external managed Postgres such as
-   Neon/Supabase/Crunchy and point `DATABASE_URL` at it).
+1. **Database (needs PostGIS *and* pgvector).** Railway's default Postgres
+   plugin ships neither, so use one of:
+   - **Self-hosted image (recommended):** deploy `seed/docker-db/Dockerfile`
+     as a service (set the service **Root Directory** to
+     `signal/seed/docker-db`), add a **Volume** mounted at
+     `/var/lib/postgresql/data`, and set `POSTGRES_USER/PASSWORD/DB`. The
+     image bakes `PGDATA=/var/lib/postgresql/data/pgdata` — Railway volumes
+     leave a `lost+found` at the mount root and `initdb` refuses a non-empty
+     data dir, so it must init into a subdirectory (don't remove that ENV).
+   - **External managed Postgres:** Neon/Supabase/Crunchy (all support both
+     extensions); point `DATABASE_URL` at it. `jobs/init_db.py` runs the
+     `CREATE EXTENSION` statements, but the binaries must exist on the plan.
 2. **API service** — deploy this repo's `signal/` dir; set env vars from
    `.env.example`. Start command comes from `railway.json`
    (`uvicorn app.main:app --host 0.0.0.0 --port $PORT`); health check `/health`.

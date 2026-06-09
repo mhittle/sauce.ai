@@ -15,6 +15,11 @@ deploys if a future session doesn't know it exists. Keep this current.
 - **Not deployed yet.** As of 2026-06-08 signal exists only in-repo (Phase 0
   framework). There is no Railway project, no managed Postgres, no prod data.
   First-deploy actions are queued in `manual-actions.md` (Open).
+- **DB image inits into a PGDATA subdir.** `seed/docker-db` sets
+  `PGDATA=/var/lib/postgresql/data/pgdata`. Railway (and most managed) volumes
+  leave a `lost+found` at the mount root, which makes `initdb` refuse a
+  non-empty data dir and crash-loop. Mount the volume at
+  `/var/lib/postgresql/data`; don't remove that ENV.
 - **DB requires PostGIS *and* pgvector.** `seed/schema.sql` runs
   `CREATE EXTENSION postgis | vector | pg_trgm`. The extension *binaries* must
   exist on whatever Postgres backs prod. Railway's bundled Postgres may not
@@ -36,6 +41,26 @@ deploys if a future session doesn't know it exists. Keep this current.
   `pytest signal/tests/` is green with only pytest installed. The
   FastAPI/SQLAlchemy boot tests are gated behind `importorskip`. Keep it that
   way — don't add heavy imports to the core.
+
+---
+
+## 2026-06-09 — Fix: DB image crash-loops on Railway volume (PGDATA subdir)
+
+**Context.** First Railway deploy of the `seed/docker-db` Postgres service
+crash-looped: `initdb: error: directory "/var/lib/postgresql/data" exists but
+is not empty ... lost+found`. Railway's volume leaves a `lost+found` at the
+mount root, so the postgis image's `initdb` refused to initialize.
+
+**Fix.** Bake `ENV PGDATA=/var/lib/postgresql/data/pgdata` into
+`seed/docker-db/Dockerfile` so Postgres inits into an empty subdirectory of the
+mount. Documented in `INSTALL.md` §2 + `manual-actions.md` MA-001 + the
+Load-bearing state section. Immediate unblock for an already-created service is
+the same `PGDATA` env var on the service.
+
+**Code touched.** `signal/seed/docker-db/Dockerfile`; docs (`INSTALL.md`,
+`manual-actions.md`, this file).
+
+**PRs.** Follow-up PR (deploy fix) off the merged Phase 0 framework.
 
 ---
 
