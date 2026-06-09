@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import {
   fetchSolicitation,
   fetchSolicitations,
+  fetchSolicitationSources,
   type Solicitation,
   type SolicitationDetail,
+  type SourceCount,
 } from "./api";
 import SolicitationsTable from "./SolicitationsTable";
 import SolicitationDrawer from "./SolicitationDrawer";
@@ -18,6 +20,8 @@ export default function SolicitationsView() {
   const [offset, setOffset] = useState(0);
   const [hasDocs, setHasDocs] = useState(false);
   const [stateFilter, setStateFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [sources, setSources] = useState<SourceCount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -26,10 +30,15 @@ export default function SolicitationsView() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
+    fetchSolicitationSources().then(setSources).catch(() => setSources([]));
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     fetchSolicitations({
       has_docs: hasDocs,
       state: stateFilter.trim().toUpperCase() || undefined,
+      source_type: sourceFilter || undefined,
       sort: sort.col,
       dir: sort.dir,
       limit: PAGE,
@@ -42,7 +51,7 @@ export default function SolicitationsView() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [hasDocs, stateFilter, sort, offset]);
+  }, [hasDocs, stateFilter, sourceFilter, sort, offset]);
 
   const onSort = (col: string) => {
     setOffset(0);
@@ -80,6 +89,19 @@ export default function SolicitationsView() {
               onChange={(e) => { setOffset(0); setStateFilter(e.target.value); }}
               placeholder="GA" maxLength={2}
               className="mt-1 w-full border rounded px-2 py-1 uppercase" />
+          </label>
+          <label className="block text-sm mt-2">
+            <span className="text-slate-500">Source</span>
+            <select value={sourceFilter}
+              onChange={(e) => { setOffset(0); setSourceFilter(e.target.value); }}
+              className="mt-1 w-full border rounded px-2 py-1">
+              <option value="">All sources</option>
+              {sources.map((s) => (
+                <option key={s.source_type} value={s.source_type}>
+                  {s.source_type} ({s.count})
+                </option>
+              ))}
+            </select>
           </label>
         </div>
       </aside>

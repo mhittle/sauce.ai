@@ -74,6 +74,11 @@ class SolicitationListOut(BaseModel):
     items: list[SolicitationOut]
 
 
+class SourceCountOut(BaseModel):
+    source_type: str
+    count: int
+
+
 class SolicitationDocOut(BaseModel):
     id: int
     name: Optional[str] = None
