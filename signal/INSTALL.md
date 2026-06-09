@@ -75,6 +75,11 @@ Railway builds from the `Dockerfile` (`railway.json` pins it) and injects
    - a separate Railway service running `python jobs/scheduler.py`
      (long-lived APScheduler), **or**
    - a Railway **cron** that runs `python jobs/daily_ingest.py` daily.
+4. **Web (frontend)** — a separate service, **Root Directory `signal/web`**
+   (builds `web/Dockerfile`: Vite build → nginx, SPA fallback, listens on
+   `$PORT`). Set `VITE_API_BASE` to the API service's public URL — it's
+   inlined at **build** time, so changing it requires a rebuild. The API's
+   `CORS_ORIGINS` must allow the web origin (`*` works for now).
 
 ### Required env vars
 
