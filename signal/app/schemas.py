@@ -75,6 +75,7 @@ class SolicitationListOut(BaseModel):
 
 
 class SolicitationDocOut(BaseModel):
+    id: int
     name: Optional[str] = None
     url: str
     doc_type: str = "attachment"

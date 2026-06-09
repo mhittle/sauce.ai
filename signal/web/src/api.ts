@@ -103,9 +103,16 @@ export interface Solicitation {
 }
 
 export interface SolicitationDoc {
+  id: number;
   name: string | null;
   url: string;
   doc_type: string;
+}
+
+// Inline viewer URL (proxied through the API so it renders instead of
+// downloading and the source api-key stays server-side).
+export function documentViewUrl(id: number): string {
+  return `${BASE}/api/documents/${id}`;
 }
 
 export interface SolicitationDetail extends Solicitation {

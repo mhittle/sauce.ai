@@ -65,6 +65,12 @@ def test_solicitation_detail_no_db_is_not_500():
     assert r.status_code in (404, 503)
 
 
+def test_document_view_no_db_is_not_500():
+    # Inline document proxy without a DB surfaces 503/404, never a 500.
+    r = client.get("/api/documents/1")
+    assert r.status_code in (404, 503)
+
+
 def test_signals_catalog_includes_bid_signals():
     ids = {s["id"] for s in client.get("/api/signals").json()}
     assert {"bid_due_soon", "plans_available", "pre_permit_stage"} <= ids
