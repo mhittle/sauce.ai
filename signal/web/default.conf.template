@@ -1,0 +1,12 @@
+# SPA served by nginx. ${PORT} is substituted by the nginx image's
+# envsubst entrypoint; $uri stays a literal nginx variable (not an env var).
+server {
+    listen       ${PORT};
+    server_name  _;
+    root         /usr/share/nginx/html;
+    index        index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

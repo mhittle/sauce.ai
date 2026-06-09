@@ -77,6 +77,16 @@ railway run python jobs/daily_ingest.py --slug chicago-il
 # correct seed/jurisdictions.json field maps and re-run as needed.
 ```
 
+### MA-006 — Deploy the web frontend (Railway service)
+New Railway service from the repo, **Root Directory `signal/web`** (builds
+`web/Dockerfile`). Set on that service:
+```
+VITE_API_BASE=<API service public URL, e.g. https://reliable-comfort-production-db32.up.railway.app>
+```
+`VITE_API_BASE` is inlined at build time (Vite), so changing it later requires
+a redeploy/rebuild. Ensure the API's `CORS_ORIGINS` allows the web origin
+(`*` is fine for now). Generate a public domain for the web service.
+
 ---
 
 ## Completed

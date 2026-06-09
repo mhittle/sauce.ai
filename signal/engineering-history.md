@@ -48,6 +48,28 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Web frontend: production Dockerfile (nginx) for Railway
+
+**Context.** `web/` only built to static files; needed a way to deploy it.
+
+**What shipped.** `web/Dockerfile` (multi-stage: Node build → nginx serve) +
+`web/default.conf.template` (SPA fallback, `listen ${PORT}` via the nginx
+image's envsubst) + `web/.dockerignore`. Deploy as a Railway service with Root
+Directory `signal/web`; `VITE_API_BASE` (API public URL) is inlined at build
+time. Docs: INSTALL §2.4, MA-006.
+
+**Deploy/infra note.** Live deploy in progress this session. Earlier deploy
+gremlins resolved: Railway volume `lost+found` (PGDATA subdir, #175); Railway
+startCommand `$PORT` not shell-expanded (#176); special-char DB password URL
+parse error (PG* vars, #177); and a **`PGDATA` env-var value typo** (value was
+`PGDATA=/var/lib/postgresql/data/pgdata` — stray prefix → Postgres wrote to
+ephemeral fs, wiping data every redeploy). Fix: set the value to the bare path.
+Chicago (~3.6k) + Cincinnati ingested and persisting.
+
+**PRs.** Frontend Dockerfile PR (this).
+
+---
+
 ## 2026-06-09 — DB config: encode special-char passwords (PG* vars)
 
 **Context.** Setting `DATABASE_URL` with an `openssl rand -base64` password
