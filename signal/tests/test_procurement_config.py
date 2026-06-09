@@ -144,6 +144,38 @@ def test_civicplus_pattern_live_shape():
     assert s.due_date == date(2026, 6, 25)     # "6/25/2026 2:00 PM" parsed
 
 
+class RoutingSession:
+    """Returns detail HTML for bid-detail URLs, list HTML otherwise."""
+    def __init__(self, list_html, detail_html):
+        self.list_html, self.detail_html = list_html, detail_html
+
+    def get(self, url, timeout=None, headers=None):
+        html = self.detail_html if "bidID=" in url else self.list_html
+        return FakeResp(text=html)
+
+
+CIVICPLUS_DETAIL_HTML = """
+<div class="relatedDocuments">
+  <a href="/DocumentCenter/View/15502">Connector Trails - Compiled Plans</a>
+  <a href="/DocumentCenter/View/15550">Addendum No 1</a>
+  <a href="https://elsewhere/other">unrelated</a>
+</div>
+"""
+
+
+def test_civicplus_detail_page_document_fetch():
+    pytest.importorskip("bs4")
+    src = {"slug": "x", "state": "GA", "platform": "civicplus", "domain": "city.example"}
+    sess = RoutingSession(CIVICPLUS_HTML, CIVICPLUS_DETAIL_HTML)
+    out = list(build_config_adapter(src, session=sess).pull())
+    assert len(out) == 1
+    docs = out[0].documents
+    assert len(docs) == 2                       # only the DocumentCenter links
+    assert docs[0].url == "https://city.example/DocumentCenter/View/15502"
+    assert docs[0].doc_type == "plans"          # "...Compiled Plans"
+    assert docs[1].doc_type == "addendum"
+
+
 def test_civicplus_platform_shortcut():
     # Compact entry (slug + domain) synthesizes the validated CivicPlus config.
     pytest.importorskip("bs4")
