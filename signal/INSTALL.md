@@ -44,6 +44,13 @@ docker compose exec api python jobs/validate_procurement_source.py --slug ga-gai
 docker compose exec api python jobs/ingest_procurement.py --all           # all active sources
 ```
 
+Classify solicitations for casework/cabinetry from their bid-package PDFs (flags
++ scores; cabinetry jobs then float to the top of the Solicitations view):
+
+```bash
+docker compose exec api python jobs/classify_solicitations.py --limit 200
+```
+
 Scale out CivicPlus coverage (the same module runs on thousands of cities) by
 discovering verified municipalities from the CISA .gov domain list:
 

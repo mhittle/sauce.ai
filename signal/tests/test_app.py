@@ -77,6 +77,12 @@ def test_solicitation_sources_route_and_degradation():
     assert r.status_code == 200 and r.json() == []
 
 
+def test_solicitations_cabinet_sort_and_filter_accepted():
+    r = client.get("/api/solicitations?sort=cabinet_score&dir=desc&cabinet=true")
+    assert r.status_code == 200
+    assert r.json()["items"] == []   # graceful w/o DB
+
+
 def test_signals_catalog_includes_bid_signals():
     ids = {s["id"] for s in client.get("/api/signals").json()}
     assert {"bid_due_soon", "plans_available", "pre_permit_stage"} <= ids

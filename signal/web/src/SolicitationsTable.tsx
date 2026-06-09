@@ -12,6 +12,14 @@ interface Column {
 const dash = <span className="text-slate-300">—</span>;
 
 const COLUMNS: Column[] = [
+  { key: "cabinet_score", label: "Cabinetry", sortable: true,
+    render: (s) => (s.cabinet_flag
+      ? <span className="rounded bg-amber-200 text-amber-900 px-1.5 py-0.5 text-xs font-semibold">
+          ✓{s.cabinet_score != null ? ` ${Number(s.cabinet_score).toFixed(2)}` : ""}
+        </span>
+      : (s.cabinet_score != null
+          ? <span className="text-xs text-slate-400">{Number(s.cabinet_score).toFixed(2)}</span>
+          : dash)) },
   { key: "due_date", label: "Bid due", sortable: true,
     render: (s) => s.due_date ?? dash },
   { key: "source_type", label: "Source", sortable: false,

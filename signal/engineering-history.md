@@ -48,6 +48,44 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Casework/cabinetry classification (triage by fit)
+
+**Context.** With bid-package PDFs flowing in, classify solicitations for
+casework/cabinetry and float the cabinetry jobs to the top. "Doesn't have to be
+100%" — flag the definite ones, score the rest.
+
+**What shipped.**
+- `app/signals/casework.py`: keyword/CSI classifier (`classify_casework` →
+  flag/score/matches; strong terms incl. casework/cabinet/millwork/countertop +
+  CSI 06 40/06 41/12 30/12 35 set the flag; weak terms nudge score). Pure/tested.
+- `app/ingest/pdftext.py`: best-effort PDF text extraction (pypdf, page/size
+  caps, degrades to ""). `app/ingest/classify.py` + `jobs/classify_solicitations.py`:
+  download each solicitation's docs, extract text, classify, store
+  `cabinet_flag`/`cabinet_score` (+ per-doc `text_extract`).
+- Schema: `solicitations.cabinet_flag/cabinet_score/classified_at` (ALTER ...
+  IF NOT EXISTS in schema.sql + migration). New dep `pypdf`.
+- API: `/api/solicitations` gains `cabinet` filter + `cabinet_score` sort, and
+  **defaults to cabinet_score desc** so cabinetry floats up; fields exposed.
+- UI: **Cabinetry** column (✓ + score badge, sortable) + **"Cabinetry only"**
+  filter; default sort cabinet-first.
+
+**Validated:** PDF extraction confirmed live (Gainesville 371-pg bid → 30k
+chars); civil/trail bids correctly score 0 (no false cabinetry). Classifier
+unit-tested on cabinetry vs civil text + CSI codes.
+
+**Perf/deploy.** classify downloads PDFs — heavy; use `--limit`/`--slug`. New
+columns: re-run `init_db.py` (idempotent ALTERs) after deploy.
+
+**Code touched.** `app/signals/casework.py`, `app/ingest/{pdftext,classify}.py`,
+`jobs/classify_solicitations.py` (new); `app/api/solicitations.py`,
+`app/schemas.py`, `seed/schema.sql` + migration, `requirements.txt`,
+`web/src/{api.ts,SolicitationsTable.tsx,SolicitationsView.tsx}`, tests, INSTALL.
+69 tests green.
+
+**PRs.** Cabinetry-classification PR (this).
+
+---
+
 ## 2026-06-09 — Detail-page document fetch (the bid packages)
 
 **Context.** CivicPlus list pages carry only the bid's detail link, not the
