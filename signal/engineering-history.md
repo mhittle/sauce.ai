@@ -48,6 +48,29 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Web UI: server-side sort + click-through project detail
+
+**Context.** Deployed Phase-0 table was read-only — no useful sort (only the
+loaded page sorted client-side) and no way to open a project.
+
+**What shipped.**
+- API: `/api/projects` sort is now a whitelist map (added `jurisdiction`→
+  `j.name`, `category`, `status`, `primary_address`) + a `dir` (asc|desc)
+  param. Detail endpoint already existed.
+- Web: clickable column headers drive **server-side** sort/paging (Prev/Next,
+  50/page, total count); rows are clickable and open a **detail drawer**
+  (`ProjectDrawer.tsx`) showing lead score, why-flagged contributions, all
+  signals, and the permit timeline with source-record links. Dropped the
+  `@tanstack/react-table` dep (hand-rolled table; bundle 197→150 KB).
+
+**Code touched.** `app/api/projects.py`; `web/src/{api,App,ProjectsTable}.tsx`,
+new `web/src/ProjectDrawer.tsx`, `web/package.json`; `tests/test_app.py`
+(sort/dir accepted). 44 tests green; web build clean.
+
+**PRs.** UI functionality PR (this).
+
+---
+
 ## 2026-06-09 — Web frontend: production Dockerfile (nginx) for Railway
 
 **Context.** `web/` only built to static files; needed a way to deploy it.

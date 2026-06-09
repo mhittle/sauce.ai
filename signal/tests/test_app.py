@@ -39,6 +39,14 @@ def test_projects_list_degrades_without_db():
     assert body["total"] == 0 and body["items"] == []
 
 
+def test_projects_list_accepts_sort_and_dir():
+    # Whitelisted sort keys + direction are accepted (no 500), incl. city.
+    for sort in ("jurisdiction", "category", "status", "lead_score"):
+        for dir_ in ("asc", "desc"):
+            r = client.get(f"/api/projects?sort={sort}&dir={dir_}")
+            assert r.status_code == 200
+
+
 def test_jurisdictions_degrades_without_db():
     r = client.get("/api/jurisdictions")
     assert r.status_code == 200 and r.json() == []
