@@ -17,7 +17,12 @@ chat when shipped. Never write real secret *values* here — document var names.
 
 ### MA-001 — Provision managed Postgres with PostGIS + pgvector
 The DB backing prod MUST have both PostGIS and pgvector (schema.sql creates
-them). Railway's bundled Postgres may lack one; if so use Neon/Supabase/Crunchy.
+them). Railway's bundled Postgres may lack one; deploy `seed/docker-db/`
+(image bundles both) or use Neon/Supabase/Crunchy.
+On Railway with a Volume, mount it at `/var/lib/postgresql/data`; the image
+sets `PGDATA=/var/lib/postgresql/data/pgdata` so initdb skips the volume's
+`lost+found` (otherwise: `initdb: error: directory ... exists but is not
+empty` crash-loop).
 Verify after provisioning:
 ```sql
 CREATE EXTENSION IF NOT EXISTS postgis;
