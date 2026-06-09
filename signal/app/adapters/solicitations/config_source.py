@@ -169,13 +169,43 @@ class HtmlConfigAdapter(ConfigSolicitationAdapter):
             yield out
 
 
+def civicplus_config(domain: str) -> dict:
+    """The validated CivicPlus `Bids.aspx` selectors. Identical across every
+    CivicPlus municipality, so a source only needs its domain."""
+    return {
+        "base_url": f"https://{domain}/",
+        "row_selector": ".listItemsRow.bid",
+        "fields": {
+            "title": {"selector": ".bidTitle a", "attr": "text"},
+            "source_url": {"selector": ".bidTitle a", "attr": "href"},
+            "source_id": {"selector": ".bidTitle a", "attr": "href",
+                          "regex": r"bidID=(\d+)"},
+            "status": {"selector": ".bidStatus div:nth-of-type(2) span",
+                       "attr": "text"},
+            "due_date": {"selector": ".bidStatus div:nth-of-type(2) span:nth-of-type(2)",
+                         "attr": "text"},
+        },
+    }
+
+
+def civicplus_list_url(domain: str) -> str:
+    return f"https://{domain}/Bids.aspx?CatID=showStatus&txtSort=Category&Status=open"
+
+
 def build_config_adapter(source_cfg: dict,
                          session: Optional[requests.Session] = None
                          ) -> ConfigSolicitationAdapter:
     platform = source_cfg.get("platform", "json")
+    if platform == "civicplus":
+        # Compact form: entry carries only `domain`; synthesize the config.
+        domain = source_cfg["domain"]
+        merged = dict(source_cfg)
+        merged.setdefault("list_url", civicplus_list_url(domain))
+        merged["config"] = civicplus_config(domain)
+        return HtmlConfigAdapter(merged, session)
     if platform == "json":
         return JsonConfigAdapter(source_cfg, session)
     if platform == "html":
         return HtmlConfigAdapter(source_cfg, session)
     raise ValueError(f"Unknown procurement platform: {platform!r} "
-                     f"(expected 'json' or 'html')")
+                     f"(expected 'civicplus', 'json', or 'html')")
