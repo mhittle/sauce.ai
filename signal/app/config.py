@@ -47,6 +47,7 @@ class Settings:
     database_url: str = field(default_factory=resolve_database_url)
     socrata_app_token: str | None = os.environ.get("SOCRATA_APP_TOKEN")
     paid_api_key: str | None = os.environ.get("SIGNAL_PAID_API_KEY")
+    samgov_api_key: str | None = os.environ.get("SAMGOV_API_KEY")
     anthropic_api_key: str | None = os.environ.get("ANTHROPIC_API_KEY")
     email_api_key: str | None = os.environ.get("EMAIL_API_KEY")
     crm_webhook_url: str | None = os.environ.get("CRM_WEBHOOK_URL")

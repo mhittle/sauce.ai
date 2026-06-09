@@ -53,6 +53,27 @@ class ProjectDetailOut(ProjectOut):
     why_flagged: list[dict] = []
 
 
+class SolicitationOut(BaseModel):
+    id: int
+    source_type: str
+    title: Optional[str] = None
+    agency: Optional[str] = None
+    naics: Optional[str] = None
+    state: Optional[str] = None
+    place_city: Optional[str] = None
+    estimated_value: Optional[float] = None
+    posted_date: Optional[date] = None
+    due_date: Optional[date] = None
+    status: Optional[str] = None
+    source_url: Optional[str] = None
+    doc_count: int = 0
+
+
+class SolicitationListOut(BaseModel):
+    total: int
+    items: list[SolicitationOut]
+
+
 class JurisdictionOut(BaseModel):
     slug: str
     name: str
