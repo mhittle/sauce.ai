@@ -80,7 +80,8 @@ Railway builds from the `Dockerfile` (`railway.json` pins it) and injects
 
 | Var | Purpose |
 |---|---|
-| `DATABASE_URL` | `postgresql+psycopg://…` (note the `+psycopg` driver) |
+| `DATABASE_URL` | `postgresql+psycopg://…` (note the `+psycopg` driver). URL-encode `+ / = @ :` in the password, **or** leave unset and use the PG* vars below. |
+| `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` | alternative to `DATABASE_URL`: set the password **raw** and the app encodes it (avoids "Could not parse SQLAlchemy URL" from special chars). |
 | `SOCRATA_APP_TOKEN` | free token; lifts SODA rate limits |
 | `SIGNAL_PAID_API_KEY` | leave unset to keep the paid adapter disabled |
 | `ANTHROPIC_API_KEY` | semantic scope classification (optional Phase 0) |
