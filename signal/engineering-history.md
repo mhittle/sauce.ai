@@ -48,6 +48,27 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Web UI: Solicitations tab + detail drawer
+
+**Context.** Solicitations had an API but no dashboard view.
+
+**What shipped.** Tabbed UI (Projects | Solicitations). New `GET
+/api/solicitations/{id}` detail endpoint (+ `SolicitationDetailOut`/`DocOut`
+schemas) returning the solicitation + its attached documents. Web: refactored
+the projects body into `ProjectsView`; added `SolicitationsView` +
+`SolicitationsTable` (server-side sort on due date / value, has-docs + state
+filters, paging) + `SolicitationDrawer` (fields, description, and **links to
+the attached plan/spec PDFs**, source-portal link).
+
+**Code touched.** `app/api/solicitations.py`, `app/schemas.py`; `web/src/`
+(`App` now a tab shell; new `ProjectsView`, `SolicitationsView`,
+`SolicitationsTable`, `SolicitationDrawer`; `api.ts`); `tests/test_app.py`.
+53 tests green; web build clean.
+
+**PRs.** Solicitations UI PR (this).
+
+---
+
 ## 2026-06-09 — Bid/plans track: Solicitation foundation + SAM.gov adapter
 
 **Context.** Product thesis expanded to rebuild PlanHub/ConstructConnect (not
