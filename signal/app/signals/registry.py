@@ -90,6 +90,14 @@ SIGNALS: tuple[SignalDef, ...] = (
     SignalDef("source_staleness_days", "Source freshness / staleness", "derived",
               "number", "per-jurisdiction last good pull"),
 
+    # ---- Bid/plans (solicitation track — PRD PlanHub model) ----------------
+    SignalDef("bid_due_soon", "Bid due soon", "derived", "bool",
+              "solicitation response deadline within N days"),
+    SignalDef("plans_available", "Plans available", "derived", "bool",
+              "solicitation has attached plan/spec documents"),
+    SignalDef("pre_permit_stage", "Pre-permit (bid) stage", "derived", "category",
+              "project seen as a public solicitation before any permit"),
+
     # ---- C) Enrichment (later phases — defined now so facets pre-exist) ----
     SignalDef("lien_filed", "Mechanic's lien filed", "enrichment", "bool",
               "external liens (phase 4)"),

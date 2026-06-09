@@ -38,6 +38,10 @@ def parse_date(value: Any) -> Optional[date]:
     if isinstance(value, (date, datetime)):
         return value.date() if isinstance(value, datetime) else value
     s = str(value).strip()
+    try:                       # ISO 8601 incl. tz offsets (e.g. 2026-06-15T17:00:00-04:00)
+        return datetime.fromisoformat(s).date()
+    except ValueError:
+        pass
     for fmt in _DATE_FORMATS:
         try:
             return datetime.strptime(s, fmt).date()

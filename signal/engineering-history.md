@@ -48,6 +48,39 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Bid/plans track: Solicitation foundation + SAM.gov adapter
+
+**Context.** Product thesis expanded to rebuild PlanHub/ConstructConnect (not
+just Shovels): aggregate **public bid-board solicitations + attached plan/spec
+PDFs**. Owner confirmed PlanHub's content is publicly sourced, so it's the same
+"long tail on a few platforms" pattern as permits.
+
+**What shipped.** New `Solicitation` source family alongside permits:
+- Schema: `solicitations` + `solicitation_documents` (seed/schema.sql +
+  migration `2026-06-09-solicitations.sql`).
+- `app/adapters/solicitations/`: `SolicitationAdapter` base + `NormalizedSolicitation`
+  (stdlib), concrete **SAM.gov** adapter (federal Contract Opportunities JSON
+  API, construction NAICS 236/237/238, `resourceLinks`→documents, paging +
+  backoff), registry, and **registered scaffolds** for TX ESBD / FL VBS / GA
+  GPR / BidNet / DemandStar (fail-safe `NotImplementedError` with entry URLs +
+  access notes until live-validated).
+- `app/ingest/solicitations.py` runner + `jobs/ingest_solicitations.py` CLI
+  (idempotent upsert of solicitations + doc metadata; logs an IngestRun).
+- API: `GET /api/solicitations` (filter by source/state/q/has_docs, sort by
+  due date; graceful-empty). Signals registry gained `bid_due_soon`,
+  `plans_available`, `pre_permit_stage`. `parse_date` now accepts ISO-8601 with
+  tz offsets (SAM deadlines). New env `SAMGOV_API_KEY`.
+
+**Code touched.** `app/adapters/solicitations/*` (new), `app/ingest/solicitations.py`,
+`jobs/ingest_solicitations.py`, `app/api/solicitations.py`, `app/{config,main,schemas}.py`,
+`app/adapters/base.py`, `app/signals/registry.py`, `seed/schema.sql` + migration,
+docs. 52 tests green.
+
+**PRs.** Roadmap (#181) + this foundation PR. Next: implement the scaffolded
+state/national scrapers; PDF download/parse → signals.
+
+---
+
 ## 2026-06-09 — Web UI: server-side sort + click-through project detail
 
 **Context.** Deployed Phase-0 table was read-only — no useful sort (only the

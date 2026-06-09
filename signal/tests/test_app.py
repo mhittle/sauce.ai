@@ -50,3 +50,15 @@ def test_projects_list_accepts_sort_and_dir():
 def test_jurisdictions_degrades_without_db():
     r = client.get("/api/jurisdictions")
     assert r.status_code == 200 and r.json() == []
+
+
+def test_solicitations_degrades_without_db():
+    r = client.get("/api/solicitations")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 0 and body["items"] == []
+
+
+def test_signals_catalog_includes_bid_signals():
+    ids = {s["id"] for s in client.get("/api/signals").json()}
+    assert {"bid_due_soon", "plans_available", "pre_permit_stage"} <= ids

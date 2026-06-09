@@ -28,6 +28,13 @@ docker compose exec api python jobs/daily_ingest.py --slug chicago-il
 curl 'http://localhost:8000/api/projects?signal=distress_stalled'
 ```
 
+Ingest federal bid solicitations (needs `SAMGOV_API_KEY`):
+
+```bash
+docker compose exec api python jobs/ingest_solicitations.py --source samgov --since 2026-05-01
+curl 'http://localhost:8000/api/solicitations?has_docs=true'
+```
+
 ### Frontend (Vite dev server)
 
 ```bash
@@ -89,6 +96,7 @@ Railway builds from the `Dockerfile` (`railway.json` pins it) and injects
 | `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` | alternative to `DATABASE_URL`: set the password **raw** and the app encodes it (avoids "Could not parse SQLAlchemy URL" from special chars). |
 | `SOCRATA_APP_TOKEN` | free token; lifts SODA rate limits |
 | `SIGNAL_PAID_API_KEY` | leave unset to keep the paid adapter disabled |
+| `SAMGOV_API_KEY` | SAM.gov Contract Opportunities key (free) for the bid/plans track (`jobs/ingest_solicitations.py`) |
 | `ANTHROPIC_API_KEY` | semantic scope classification (optional Phase 0) |
 | `FACILITY_LAT/LNG`, `SHIPPABLE_RADIUS_MI` | geo signals |
 | `EMAIL_API_KEY`, `CRM_WEBHOOK_URL` | digest + CRM push (later phases) |
