@@ -15,6 +15,10 @@ deploys if a future session doesn't know it exists. Keep this current.
 - **Not deployed yet.** As of 2026-06-08 signal exists only in-repo (Phase 0
   framework). There is no Railway project, no managed Postgres, no prod data.
   First-deploy actions are queued in `manual-actions.md` (Open).
+- **`railway.json` startCommand must be `sh -c`-wrapped.** Railway execs the
+  start command without a shell, so a bare `$PORT` is passed literally
+  (`Invalid value for '--port': '$PORT'`). The command is
+  `sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'`.
 - **DB image inits into a PGDATA subdir.** `seed/docker-db` sets
   `PGDATA=/var/lib/postgresql/data/pgdata`. Railway (and most managed) volumes
   leave a `lost+found` at the mount root, which makes `initdb` refuse a
@@ -41,6 +45,23 @@ deploys if a future session doesn't know it exists. Keep this current.
   `pytest signal/tests/` is green with only pytest installed. The
   FastAPI/SQLAlchemy boot tests are gated behind `importorskip`. Keep it that
   way — don't add heavy imports to the core.
+
+---
+
+## 2026-06-09 — Fix: Railway startCommand `$PORT` not expanded
+
+**Context.** API service crash-looped: `Error: Invalid value for '--port':
+'$PORT' is not a valid integer.` Railway runs `railway.json`'s `startCommand`
+without a shell, so `$PORT` was passed literally (the Dockerfile `CMD` already
+wraps in `sh -c`, but startCommand overrides it).
+
+**Fix.** Wrap the startCommand:
+`sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'`. Immediate
+unblock for a live service is the same string as a UI custom start command.
+
+**Code touched.** `signal/railway.json`; `engineering-history.md`.
+
+**PRs.** Follow-up deploy fix.
 
 ---
 
