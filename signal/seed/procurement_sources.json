@@ -1,5 +1,47 @@
 [
   {
+    "slug": "ga-gainesville",
+    "name": "Gainesville, GA (CivicPlus)",
+    "level": "local",
+    "state": "GA",
+    "platform": "html",
+    "active": true,
+    "list_url": "https://www.gainesville.org/Bids.aspx?CatID=showStatus&txtSort=Category&Status=open",
+    "config": {
+      "base_url": "https://www.gainesville.org/",
+      "row_selector": ".listItemsRow.bid",
+      "fields": {
+        "title": {"selector": ".bidTitle a", "attr": "text"},
+        "source_url": {"selector": ".bidTitle a", "attr": "href"},
+        "source_id": {"selector": ".bidTitle a", "attr": "href", "regex": "bidID=(\\d+)"},
+        "status": {"selector": ".bidStatus div:nth-of-type(2) span", "attr": "text"},
+        "due_date": {"selector": ".bidStatus div:nth-of-type(2) span:nth-of-type(2)", "attr": "text"}
+      }
+    },
+    "notes": "Validated live 2026-06-09 (6 open bids w/ close dates). Plan PDFs live on each bids.aspx?bidID detail page (source_url) — list-only for now; detail-page doc fetch is a follow-up."
+  },
+  {
+    "slug": "ga-marietta",
+    "name": "Marietta, GA (CivicPlus)",
+    "level": "local",
+    "state": "GA",
+    "platform": "html",
+    "active": true,
+    "list_url": "https://www.mariettaga.gov/Bids.aspx?CatID=showStatus&txtSort=Category&Status=open",
+    "config": {
+      "base_url": "https://www.mariettaga.gov/",
+      "row_selector": ".listItemsRow.bid",
+      "fields": {
+        "title": {"selector": ".bidTitle a", "attr": "text"},
+        "source_url": {"selector": ".bidTitle a", "attr": "href"},
+        "source_id": {"selector": ".bidTitle a", "attr": "href", "regex": "bidID=(\\d+)"},
+        "status": {"selector": ".bidStatus div:nth-of-type(2) span", "attr": "text"},
+        "due_date": {"selector": ".bidStatus div:nth-of-type(2) span:nth-of-type(2)", "attr": "text"}
+      }
+    },
+    "notes": "Validated live 2026-06-09 (extraction confirmed on 110 rows; 0 currently open). Same CivicPlus config as Gainesville — copy this block, change base_url/list_url/state to add any CivicPlus city."
+  },
+  {
     "slug": "ga-gpr",
     "name": "Georgia Procurement Registry",
     "level": "state",
@@ -16,7 +58,7 @@
         "source_id": {"selector": "a", "attr": "href", "regex": "[?&]id=(\\d+)"}
       }
     },
-    "notes": "DRAFT selectors — GPR is ASP.NET; likely needs POST/viewstate or Playwright. Tune with jobs/validate_procurement_source.py before setting active. Covers GA state + county + local public-works >= $100k."
+    "notes": "DRAFT — ASP.NET; likely needs POST/viewstate or Playwright. Tune with validate_procurement_source.py before activating. Covers GA state + county + local public-works >= $100k."
   },
   {
     "slug": "example-bonfire-agency",
@@ -39,6 +81,6 @@
       },
       "documents": {"path": "documents", "name": "name", "url": "downloadUrl"}
     },
-    "notes": "DRAFT — illustrates the JSON config pattern for SPA-backed portals (Bonfire/OpenGov). Replace <agency> + verify the JSON endpoint + field paths with the validator. Many agencies per platform => one config each."
+    "notes": "DRAFT — illustrates the JSON config pattern for SPA-backed portals (Bonfire/OpenGov). Replace <agency> + verify the JSON endpoint + field paths with the validator."
   }
 ]

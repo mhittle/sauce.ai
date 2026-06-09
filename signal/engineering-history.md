@@ -48,6 +48,35 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — First live procurement sources: CivicPlus (GA cities)
+
+**Context.** Tuned the first real sources against live pages (I have web access
+in-session). DemandStar/Bonfire are JS SPAs (uncurlable); GSFIC/GPR were
+sparse/ASP.NET. Winner: **CivicPlus `Bids.aspx`** — server-rendered, and the
+identical module runs on thousands of municipalities, so one config
+generalizes by domain swap.
+
+**What shipped.** Validated `HtmlConfigAdapter` end-to-end against
+**Gainesville, GA** (6 open construction bids w/ real close dates) and
+**Marietta, GA** (extraction confirmed on 110 rows) and seeded both **active**
+in `procurement_sources.json` (CivicPlus pattern: `.listItemsRow.bid` →
+title/source_url/bidID/status/close-date). Added a fixture regression test
+locking the CivicPlus row shape. Fixed `parse_date` to accept CivicPlus's
+`M/D/YYYY H:MM AM/PM` (no-seconds) datetimes.
+
+**How to add a CivicPlus city:** copy the `ga-marietta` block, change
+`base_url`/`list_url`/`state`, run `validate_procurement_source.py`, flip
+`active`. (Plan PDFs are on each `bids.aspx?bidID` detail page = `source_url`;
+list-only for now — detail-page doc fetch is the next follow-up.)
+
+**Code touched.** `seed/procurement_sources.json` (2 active GA sources),
+`app/adapters/base.py` (date format), `tests/test_procurement_config.py`
+(CivicPlus fixture). 58 tests green.
+
+**PRs.** First-live-sources PR (this).
+
+---
+
 ## 2026-06-09 — Config-driven procurement-source framework (adapter library)
 
 **Context.** SAM.gov (federal) is the wrong firehose for commercial/MF leads;

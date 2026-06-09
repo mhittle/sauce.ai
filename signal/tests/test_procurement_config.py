@@ -99,6 +99,51 @@ HTML_BODY = """
 """
 
 
+# Real CivicPlus "Bids.aspx" row shape (validated live against Gainesville/
+# Marietta GA, 2026-06-09). Locks the pattern that generalizes across cities.
+CIVICPLUS_SOURCE = {
+    "slug": "ga-civicplus", "state": "GA", "platform": "html",
+    "list_url": "https://city.example/Bids.aspx",
+    "config": {
+        "base_url": "https://city.example/",
+        "row_selector": ".listItemsRow.bid",
+        "fields": {
+            "title": {"selector": ".bidTitle a", "attr": "text"},
+            "source_url": {"selector": ".bidTitle a", "attr": "href"},
+            "source_id": {"selector": ".bidTitle a", "attr": "href", "regex": "bidID=(\\d+)"},
+            "status": {"selector": ".bidStatus div:nth-of-type(2) span", "attr": "text"},
+            "due_date": {"selector": ".bidStatus div:nth-of-type(2) span:nth-of-type(2)", "attr": "text"},
+        },
+    },
+}
+
+CIVICPLUS_HTML = """
+<div class="listItemsRow bid">
+  <div class="bidTitle"><span><a href="bids.aspx?bidID=177">Gainesville Connector Trails</a></span>
+    <br/><span><strong>Bid No.</strong> RFB-26-123</span></div>
+  <div class="bidStatus">
+    <div><span>Status:</span><br/><span>Closes:</span></div>
+    <div><span>Open</span><br/><span>6/25/2026 2:00 PM</span></div>
+  </div>
+</div>
+<div class="listItemsRow">ignored non-bid row</div>
+"""
+
+
+def test_civicplus_pattern_live_shape():
+    pytest.importorskip("bs4")
+    from app.adapters.solicitations.config_source import HtmlConfigAdapter
+    out = list(HtmlConfigAdapter(
+        CIVICPLUS_SOURCE, session=FakeSession(FakeResp(text=CIVICPLUS_HTML))).pull())
+    assert len(out) == 1                       # only the .bid row
+    s = out[0]
+    assert s.source_id == "177"
+    assert s.title == "Gainesville Connector Trails"
+    assert s.source_url == "https://city.example/bids.aspx?bidID=177"
+    assert s.status == "Open"
+    assert s.due_date == date(2026, 6, 25)     # "6/25/2026 2:00 PM" parsed
+
+
 def test_html_config_extracts_rows_fields_and_docs():
     pytest.importorskip("bs4")
     from app.adapters.solicitations.config_source import HtmlConfigAdapter
