@@ -48,6 +48,25 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Inline PDF viewer for solicitation documents
+
+**Context.** Plan/spec links downloaded the file; owner wanted to view in-app.
+
+**What shipped.** `GET /api/documents/{doc_id}` — streams a stored
+`solicitation_documents.url` back with `Content-Disposition: inline` so the
+browser renders it (and the SAM.gov api_key is injected server-side, never
+exposed). Bounded to URLs already in our DB (no open SSRF proxy). Drawer:
+clicking a document toggles an inline `<iframe>` preview pane; "↗ new tab"
+still opens it standalone. `SolicitationDocOut` now carries `id`.
+
+**Code touched.** `app/api/documents.py` (new), `app/main.py`,
+`app/schemas.py`, `app/api/solicitations.py`; `web/src/{api.ts,
+SolicitationDrawer.tsx}`; `tests/test_app.py`. 54 tests green; web build clean.
+
+**PRs.** Inline-PDF-viewer PR (this).
+
+---
+
 ## 2026-06-09 — Web UI: Solicitations tab + detail drawer
 
 **Context.** Solicitations had an API but no dashboard view.

@@ -85,7 +85,7 @@ def get_solicitation(solicitation_id: int, sess: Session = Depends(get_session))
         if not row:
             raise HTTPException(status_code=404, detail="solicitation not found")
         docs = sess.execute(text("""
-            SELECT name, url, doc_type FROM solicitation_documents
+            SELECT id, name, url, doc_type FROM solicitation_documents
             WHERE solicitation_id = :id ORDER BY id
         """), {"id": solicitation_id}).mappings().all()
     except HTTPException:

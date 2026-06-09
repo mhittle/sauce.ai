@@ -8,7 +8,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import health, jurisdictions, projects, signals, solicitations
+from .api import (documents, health, jurisdictions, projects, signals,
+                  solicitations)
 from .config import get_settings
 
 
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(jurisdictions.router)
     app.include_router(signals.router)
     app.include_router(solicitations.router)
+    app.include_router(documents.router)
 
     @app.get("/")
     def root():

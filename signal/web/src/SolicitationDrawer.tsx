@@ -1,4 +1,5 @@
-import type { SolicitationDetail } from "./api";
+import { useEffect, useState } from "react";
+import { documentViewUrl, type SolicitationDetail } from "./api";
 
 export default function SolicitationDrawer({
   detail, loading, onClose,
@@ -7,6 +8,10 @@ export default function SolicitationDrawer({
   loading: boolean;
   onClose: () => void;
 }) {
+  const [previewId, setPreviewId] = useState<number | null>(null);
+
+  // Reset the open preview whenever a different solicitation loads.
+  useEffect(() => { setPreviewId(null); }, [detail?.id]);
   return (
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
@@ -44,16 +49,35 @@ export default function SolicitationDrawer({
                 <p className="text-slate-400">No attached documents.</p>
               ) : (
                 <ul className="space-y-1">
-                  {detail.documents.map((d, i) => (
-                    <li key={i} className="border-b py-1">
-                      <a href={d.url} target="_blank" rel="noreferrer"
-                        className="text-amber-700 underline break-all">
+                  {detail.documents.map((d) => (
+                    <li key={d.id} className="border-b py-1">
+                      <button
+                        onClick={() => setPreviewId(previewId === d.id ? null : d.id)}
+                        className="text-left text-amber-700 underline break-all">
                         {d.name || d.url}
-                      </a>
+                      </button>
                       <span className="text-slate-400 text-xs"> · {d.doc_type}</span>
+                      <a href={documentViewUrl(d.id)} target="_blank" rel="noreferrer"
+                        className="text-slate-400 text-xs ml-2 no-underline hover:text-slate-600">
+                        ↗ new tab
+                      </a>
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {previewId !== null && (
+                <div className="mt-2 border rounded overflow-hidden">
+                  <div className="flex items-center justify-between bg-slate-100 px-2 py-1 text-xs text-slate-500">
+                    <span>Inline preview</span>
+                    <button onClick={() => setPreviewId(null)} className="hover:text-slate-800">close</button>
+                  </div>
+                  <iframe
+                    title="document-preview"
+                    src={documentViewUrl(previewId)}
+                    className="w-full h-[32rem] bg-white"
+                  />
+                </div>
               )}
             </section>
 
