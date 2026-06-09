@@ -67,6 +67,8 @@ class SolicitationOut(BaseModel):
     status: Optional[str] = None
     source_url: Optional[str] = None
     doc_count: int = 0
+    cabinet_flag: bool = False
+    cabinet_score: Optional[float] = None
 
 
 class SolicitationListOut(BaseModel):

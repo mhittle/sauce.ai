@@ -100,6 +100,8 @@ export interface Solicitation {
   status: string | null;
   source_url: string | null;
   doc_count: number;
+  cabinet_flag: boolean;
+  cabinet_score: number | null;
 }
 
 export interface SolicitationDoc {
@@ -130,6 +132,7 @@ export interface SolicitationQuery {
   source_type?: string;
   q?: string;
   has_docs: boolean;
+  cabinet: boolean;
   sort: string;
   dir: "asc" | "desc";
   limit: number;
@@ -142,6 +145,7 @@ export async function fetchSolicitations(p: SolicitationQuery): Promise<Solicita
   if (p.source_type) qs.set("source_type", p.source_type);
   if (p.q) qs.set("q", p.q);
   if (p.has_docs) qs.set("has_docs", "true");
+  if (p.cabinet) qs.set("cabinet", "true");
   qs.set("sort", p.sort);
   qs.set("dir", p.dir);
   qs.set("limit", String(p.limit));

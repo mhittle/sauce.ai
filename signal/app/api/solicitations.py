@@ -20,6 +20,7 @@ _SORT_COLUMNS = {
     "due_date": "s.due_date",
     "posted_date": "s.posted_date",
     "estimated_value": "s.estimated_value",
+    "cabinet_score": "s.cabinet_score",
 }
 
 
@@ -30,13 +31,14 @@ def list_solicitations(
     state: str | None = None,
     q: str | None = None,
     has_docs: bool = False,
-    sort: str = "due_date",
-    dir: str = "asc",
+    cabinet: bool = False,
+    sort: str = "cabinet_score",
+    dir: str = "desc",
     limit: int = Query(50, le=500),
     offset: int = 0,
 ):
-    order_col = _SORT_COLUMNS.get(sort, "s.due_date")
-    direction = "DESC" if dir.lower() == "desc" else "ASC"
+    order_col = _SORT_COLUMNS.get(sort, "s.cabinet_score")
+    direction = "ASC" if dir.lower() == "asc" else "DESC"
     where = ["1=1"]
     params: dict = {"limit": limit, "offset": offset}
     if source_type:
@@ -48,6 +50,8 @@ def list_solicitations(
     if has_docs:
         where.append("""EXISTS (SELECT 1 FROM solicitation_documents d
             WHERE d.solicitation_id = s.id)""")
+    if cabinet:
+        where.append("s.cabinet_flag = TRUE")
     clause = " AND ".join(where)
 
     try:
@@ -56,12 +60,12 @@ def list_solicitations(
         rows = sess.execute(text(f"""
             SELECT s.id, s.source_type, s.title, s.agency, s.naics, s.state,
                    s.place_city, s.estimated_value, s.posted_date, s.due_date,
-                   s.status, s.source_url,
+                   s.status, s.source_url, s.cabinet_flag, s.cabinet_score,
                    (SELECT count(*) FROM solicitation_documents d
                     WHERE d.solicitation_id = s.id) AS doc_count
             FROM solicitations s
             WHERE {clause}
-            ORDER BY {order_col} {direction} NULLS LAST, s.id DESC
+            ORDER BY {order_col} {direction} NULLS LAST, s.due_date ASC NULLS LAST, s.id DESC
             LIMIT :limit OFFSET :offset
         """), params).mappings().all()
     except SQLAlchemyError:

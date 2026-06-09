@@ -16,9 +16,10 @@ const PAGE = 50;
 export default function SolicitationsView() {
   const [items, setItems] = useState<Solicitation[]>([]);
   const [total, setTotal] = useState(0);
-  const [sort, setSort] = useState<SortState>({ col: "due_date", dir: "asc" });
+  const [sort, setSort] = useState<SortState>({ col: "cabinet_score", dir: "desc" });
   const [offset, setOffset] = useState(0);
   const [hasDocs, setHasDocs] = useState(false);
+  const [cabinetOnly, setCabinetOnly] = useState(false);
   const [stateFilter, setStateFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [sources, setSources] = useState<SourceCount[]>([]);
@@ -37,6 +38,7 @@ export default function SolicitationsView() {
     setLoading(true);
     fetchSolicitations({
       has_docs: hasDocs,
+      cabinet: cabinetOnly,
       state: stateFilter.trim().toUpperCase() || undefined,
       source_type: sourceFilter || undefined,
       sort: sort.col,
@@ -51,7 +53,7 @@ export default function SolicitationsView() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [hasDocs, stateFilter, sourceFilter, sort, offset]);
+  }, [hasDocs, cabinetOnly, stateFilter, sourceFilter, sort, offset]);
 
   const onSort = (col: string) => {
     setOffset(0);
@@ -78,6 +80,11 @@ export default function SolicitationsView() {
       <aside className="w-64 shrink-0 border-r p-4 space-y-4">
         <div>
           <h2 className="text-xs font-semibold uppercase text-slate-400 mb-1">Filters</h2>
+          <label className="flex items-center gap-2 text-sm cursor-pointer mb-2 font-medium text-amber-800">
+            <input type="checkbox" checked={cabinetOnly}
+              onChange={() => { setOffset(0); setCabinetOnly((v) => !v); }} />
+            Cabinetry only
+          </label>
           <label className="flex items-center gap-2 text-sm cursor-pointer mb-2">
             <input type="checkbox" checked={hasDocs}
               onChange={() => { setOffset(0); setHasDocs((v) => !v); }} />
