@@ -28,6 +28,7 @@ CANONICAL_FIELDS = (
 _DATE_FORMATS = (
     "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
     "%Y-%m-%d", "%m/%d/%Y", "%m/%d/%Y %H:%M:%S %p", "%m/%d/%Y %I:%M:%S %p",
+    "%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M",   # CivicPlus "6/10/2026 2:00 PM"
 )
 
 
