@@ -31,6 +31,10 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Coverage/freshness dashboard (UI) | 5 | 3 | ui | backlog |
 | Portal scrapers (Accela/eTRAKiT/CityView) | 5 | 8 | ingest | backlog |
 | Concrete paid-API adapter (e.g. Shovels.ai) | 4 | 4 | ingest | blocked |
+| Bid/plans — Solicitation foundation + SAM.gov adapter | 9 | 6 | ingest | in-progress |
+| Bid/plans — state platform adapters (TX/FL/GA) | 7 | 7 | ingest | backlog |
+| Bid/plans — national aggregator adapters (BidNet/DemandStar) | 6 | 7 | ingest | backlog |
+| Bid/plans — document store + PDF parse to signals | 7 | 7 | backend | backlog |
 | Enrichment signals (liens/litigation/news) | 4 | 8 | signals | backlog |
 | Autonomous agent fleet for signal | 3 | 7 | ops | backlog |
 
@@ -164,6 +168,66 @@ hardening. Facets already pre-defined in the registry (enrichment tier).
 Optionally mirror news's unattended agent fleet (dev/QA/PM/post-deploy) for
 signal once the product is established. Deliberately deferred — signal ships
 with just CI (`signal-ci.yml`) for now.
+
+---
+
+## Data-acquisition strategy (the "rebuild Shovels + PlanHub" plan)
+
+The product thesis is to recreate Shovels.ai (permit aggregation) **and**
+PlanHub/ConstructConnect (project + plans) entirely from **publicly accessible
+sources**. Both are the same architectural pattern as our permit work: a long
+tail of jurisdictions/agencies concentrated on a handful of platforms, each
+unlocked by a generic adapter behind the `SourceAdapter` interface. Two tracks:
+
+**Track A — Permits (Shovels model):** scale the existing permit ingestion —
+ArcGIS adapter → Socrata auto-discovery → portal scrapers (Accela/eTRAKiT/
+CityView) → contractor + inspections datasets → paid gap-fill. (Items above.)
+
+**Track B — Bids & plans (PlanHub model):** public procurement / bid boards
+post commercial construction solicitations **with plan + spec PDFs attached**.
+A new `Solicitation` entity + `solicitation_documents` store sits alongside
+Permit/Project; documents get parsed (text → the LLM scope pass) and feed the
+same signal engine. Permits catch a project at approval (+ distress);
+solicitations catch it **pre-construction, with plans**. Together = the full
+ConstructConnect/PlanHub picture. Compliance per PRD §16 (ToS/robots/rate
+limits, no CAPTCHA bypass; some portals require free registration — respect it).
+
+### Bid/plans — Solicitation foundation + SAM.gov adapter
+**Priority/LOE/Category/Status:** 9 / 6 / ingest / in-progress
+The "Socrata moment" for the PlanHub side. Add the `Solicitation` +
+`solicitation_documents` schema, a `SolicitationAdapter` base + registry, the
+new signals (`bid_due_soon`, `plans_available`, `pre_permit_stage`), and a
+concrete **SAM.gov** adapter (federal Contract Opportunities — clean public
+JSON API at `api.sam.gov/prod/opportunities/v2/search`, `api_key` query param,
+construction NAICS 236/237/238, `resourceLinks` = attachments). Job:
+`jobs/ingest_solicitations.py`. Needs env `SAMGOV_API_KEY` (free from
+SAM.gov/data.gov). Proves the end-to-end solicitation pipeline.
+
+### Bid/plans — state platform adapters (TX/FL/GA)
+**Priority/LOE/Category/Status:** 7 / 7 / ingest / backlog
+Concrete adapters for three public state systems (scaffolded + registered now,
+need live validation): **Texas ESBD** (`txsmartbuy.gov/esbd`, no login),
+**Florida VBS/MFMP** (vendor bid system, public), **Georgia GPR**
+(`ssl.doas.state.ga.us/gpr`, state + local public-works ≥ $100k; ties to the
+Atlanta facility). Mostly HTML — likely needs `requests`+parser or Playwright;
+respect ToS/robots.
+
+### Bid/plans — national aggregator adapters (BidNet/DemandStar)
+**Priority/LOE/Category/Status:** 6 / 7 / ingest / backlog
+Private platforms aggregating thousands of public agencies nationally
+(scaffolded + registered now): **BidNet Direct** (`bidnetdirect.com/
+solicitations/open-bids`) and **DemandStar** (`demandstar.com/browse-bids`).
+Public listings are browsable; full solicitation docs are partly gated behind
+free registration / paid tiers — capture what's publicly available, respect
+ToS. Each platform covers many agencies → high coverage per adapter.
+
+### Bid/plans — document store + PDF parse to signals
+**Priority/LOE/Category/Status:** 7 / 7 / backend / backlog
+Download attached plan/spec PDFs to object storage (metadata + links in
+`solicitation_documents`), extract text, and feed the LLM scope pass so
+cabinet-relevance/category/value-tier compute off the **actual drawings/specs**
+(richer than a permit's one-line description). Heavy PDFs → storage + OCR +
+anti-bot care.
 
 ---
 
