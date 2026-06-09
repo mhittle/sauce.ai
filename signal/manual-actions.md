@@ -33,9 +33,14 @@ SELECT extversion FROM pg_extension WHERE extname = 'vector';
 ```
 
 ### MA-002 — Set API service env vars on Railway
-Set these on the API service (names only; supply values in the Railway UI):
+Set these on the API service (names only; supply values in the Railway UI).
+For the DB connection use EITHER DATABASE_URL (URL-encode +,/,=,@,: in the
+password) OR the discrete PG* vars (password raw — the app encodes it; avoids
+"Could not parse SQLAlchemy URL"):
 ```
-DATABASE_URL   = postgresql+psycopg://<user>:<pass>@<host>:<port>/<db>
+DATABASE_URL   = postgresql+psycopg://<user>:<encoded-pass>@<host>:<port>/<db>
+# --- or, instead of DATABASE_URL: ---
+# PGHOST=<host>  PGPORT=<port>  PGUSER=signal  PGPASSWORD=<raw>  PGDATABASE=signal
 SOCRATA_APP_TOKEN = <free token from any Socrata portal's API page>
 SECRET_KEY     = <random 32+ char string>
 CORS_ORIGINS   = <frontend origin, or * for now>

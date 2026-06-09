@@ -48,6 +48,29 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — DB config: encode special-char passwords (PG* vars)
+
+**Context.** Setting `DATABASE_URL` with an `openssl rand -base64` password
+(contains `+ / =`) crashed every DB request with
+`sqlalchemy.exc.ArgumentError: Could not parse SQLAlchemy URL` — the unescaped
+password broke URL parsing in `get_session`'s dependency (a 500 that
+`/health/db`'s try/except can't catch, since it fires before the handler body).
+
+**Fix.** `config.resolve_database_url()` now prefers `DATABASE_URL` but falls
+back to discrete `PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE`, assembling the
+URL via `sqlalchemy.URL.create()` which **encodes the password safely** — set
+`PGPASSWORD` raw, no manual encoding. Docs updated (`.env.example`,
+`INSTALL.md`, MA-002). Immediate unblock for a live service: give the DB role
+an alphanumeric password (`ALTER ROLE signal PASSWORD '...'` via the DB
+service Console) and use it raw in `DATABASE_URL`.
+
+**Code touched.** `signal/app/config.py`; `signal/tests/test_config.py` (3
+tests, +43 total); docs.
+
+**PRs.** Follow-up deploy-hardening fix.
+
+---
+
 ## 2026-06-09 — Fix: Railway startCommand `$PORT` not expanded
 
 **Context.** API service crash-looped: `Error: Invalid value for '--port':
