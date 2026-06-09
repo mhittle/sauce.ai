@@ -48,6 +48,29 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Fix: classify chokes/spams on non-PDF attachments (ZIPs)
+
+**Context.** `classify_solicitations.py` spammed `invalid pdf header:
+b'PK\x03\x04'` / `EOF marker not found` — many bid attachments are ZIP
+archives (often the plan set), DOCX, etc., and pypdf warned once per file.
+Harmless (text → "") but noisy, and we were *missing* zipped plan sets.
+
+**Fix.** `pdftext.extract_pdf_text` now dispatches on magic bytes: `%PDF` →
+pypdf; `PK` → open the ZIP and extract text from its PDF members (recovers
+zipped plan/spec sets); else "". pypdf logging silenced. All failures still
+degrade to "".
+
+**Re-run note.** Solicitations processed before this got `classified_at` set
+(empty text). To pick up zipped plan sets, re-run
+`classify_solicitations.py --reclassify`.
+
+**Code touched.** `app/ingest/pdftext.py`; `tests/test_casework.py`. 68 tests
+green (+ZIP cases).
+
+**PRs.** PDF/ZIP fix (this).
+
+---
+
 ## 2026-06-09 — Casework/cabinetry classification (triage by fit)
 
 **Context.** With bid-package PDFs flowing in, classify solicitations for

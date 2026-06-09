@@ -38,3 +38,29 @@ def test_score_increases_with_more_terms():
 def test_extract_pdf_text_handles_non_pdf():
     assert extract_pdf_text(b"this is not a pdf") == ""
     assert extract_pdf_text(b"") == ""
+
+
+def test_extract_pdf_text_handles_bad_zip():
+    # PK magic but not a real archive -> degrades to "" (no crash/warning spam).
+    assert extract_pdf_text(b"PK\x03\x04 not really a zip") == ""
+
+
+def test_extract_pdf_text_zip_with_no_pdf_member():
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("notes.txt", "hello")
+    assert extract_pdf_text(buf.getvalue()) == ""
+
+
+def test_extract_pdf_text_pulls_pdf_out_of_zip(monkeypatch):
+    import io
+    import zipfile
+    from app.ingest import pdftext
+    monkeypatch.setattr(pdftext, "_pdf_text", lambda content, mp: "06 41 00 CASEWORK")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("Compiled Plans.pdf", b"%PDF-1.4 fake body")
+        zf.writestr("readme.txt", "x")
+    assert extract_pdf_text(buf.getvalue()) == "06 41 00 CASEWORK"
