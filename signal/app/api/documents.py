@@ -30,6 +30,21 @@ def _with_api_key(url: str) -> str:
     return url
 
 
+def sniff_content_type(first: bytes, upstream_ct: str | None) -> tuple[str, str]:
+    """Decide (Content-Type, disposition) from the file's magic bytes.
+
+    Sources like CivicPlus DocumentCenter serve PDFs as
+    application/octet-stream, which browsers DOWNLOAD instead of rendering
+    (in an iframe or a new tab). Forcing application/pdf for real PDFs fixes
+    both. ZIP plan sets can't render inline, so they're an attachment.
+    """
+    if first[:4] == b"%PDF":
+        return "application/pdf", "inline"
+    if first[:2] == b"PK":
+        return "application/zip", "attachment"
+    return (upstream_ct or "application/octet-stream"), "inline"
+
+
 @router.get("/{doc_id}")
 def view_document(doc_id: int, sess: Session = Depends(get_session)):
     try:
@@ -46,18 +61,24 @@ def view_document(doc_id: int, sess: Session = Depends(get_session)):
         raise HTTPException(status_code=400, detail="unsupported document url")
 
     try:
-        upstream = requests.get(_with_api_key(url), stream=True, timeout=30)
+        upstream = requests.get(_with_api_key(url), stream=True, timeout=60)
         upstream.raise_for_status()
     except requests.RequestException as exc:
         raise HTTPException(status_code=502,
                             detail=f"upstream fetch failed: {str(exc)[:200]}")
 
-    content_type = upstream.headers.get("Content-Type", "application/pdf")
+    # Peek the first bytes to set a real Content-Type (see sniff_content_type).
+    chunks = upstream.iter_content(chunk_size=65536)
+    first = next(chunks, b"")
+    content_type, disposition = sniff_content_type(
+        first, upstream.headers.get("Content-Type"))
     filename = (row["name"] or "document").replace('"', "")
 
     def stream():
         try:
-            for chunk in upstream.iter_content(chunk_size=8192):
+            if first:
+                yield first
+            for chunk in chunks:
                 if chunk:
                     yield chunk
         finally:
@@ -65,4 +86,4 @@ def view_document(doc_id: int, sess: Session = Depends(get_session)):
 
     return StreamingResponse(
         stream(), media_type=content_type,
-        headers={"Content-Disposition": f'inline; filename="{filename}"'})
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})

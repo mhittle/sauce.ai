@@ -48,6 +48,27 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Fix: PDF viewer downloads instead of rendering (content-type)
+
+**Context.** Inline viewer blank + "open in new tab" forced a download. The
+doc proxy passed through the upstream Content-Type; many sources (CivicPlus
+DocumentCenter on most cities) serve PDFs as `application/octet-stream`, which
+browsers download regardless of `inline` disposition.
+
+**Fix.** `documents.sniff_content_type` peeks the file's magic bytes:
+`%PDF` → `application/pdf` + inline (renders in iframe and new tab); `PK` →
+`application/zip` + attachment (can't preview a zip); else fall back to the
+upstream type. Bumped proxy timeout 30→60s for large plan PDFs.
+
+**Note.** If still blank after deploy, check the web service's `VITE_API_BASE`
+points at the API origin (else the iframe hits the SPA, not the proxy).
+
+**Code touched.** `app/api/documents.py`; `tests/test_documents.py`. 71 green.
+
+**PRs.** PDF-viewer content-type fix (this).
+
+---
+
 ## 2026-06-09 — Fix: classify chokes/spams on non-PDF attachments (ZIPs)
 
 **Context.** `classify_solicitations.py` spammed `invalid pdf header:
