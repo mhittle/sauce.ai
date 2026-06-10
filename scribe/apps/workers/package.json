@@ -1,0 +1,32 @@
+{
+  "name": "@scribe/workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "node --watch dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "@scribe/db": "workspace:*",
+    "@scribe/pricing": "workspace:*",
+    "@scribe/prompts": "workspace:*",
+    "@scribe/shared": "workspace:*",
+    "@scribe/storage": "workspace:*",
+    "bullmq": "^5.34.0",
+    "drizzle-orm": "^0.44.0",
+    "mupdf": "^1.3.0",
+    "pino": "^9.5.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

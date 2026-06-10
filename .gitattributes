@@ -16,3 +16,10 @@ signal/engineering-history-archive.md  merge=union
 signal/roadmap.md                      merge=union
 signal/bugs.md                         merge=union
 signal/manual-actions.md               merge=union
+
+# sauce.ai/scribe tracking docs — same rationale, scoped to the scribe/ folder.
+scribe/engineering-history.md          merge=union
+scribe/engineering-history-archive.md  merge=union
+scribe/roadmap.md                      merge=union
+scribe/bugs.md                         merge=union
+scribe/manual-actions.md               merge=union

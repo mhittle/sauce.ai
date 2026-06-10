@@ -1,0 +1,35 @@
+name: scribe-ci
+
+# Typecheck + unit tests + eval suite for sauce.ai/scribe. Scoped to the
+# scribe/ folder so it stays independent of the news and signal pipelines.
+on:
+  push:
+    branches: [main]
+    paths: ["scribe/**", ".github/workflows/scribe-ci.yml"]
+  pull_request:
+    paths: ["scribe/**", ".github/workflows/scribe-ci.yml"]
+
+jobs:
+  build-test-eval:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scribe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: scribe/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: scribe/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Test
+        run: pnpm test
+      - name: Eval suite
+        run: pnpm eval

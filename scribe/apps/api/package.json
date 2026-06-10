@@ -1,0 +1,37 @@
+{
+  "name": "@scribe/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "dev": "node --watch dist/server.js",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.0",
+    "@fastify/cors": "^11.0.0",
+    "@fastify/multipart": "^9.0.0",
+    "@scribe/db": "workspace:*",
+    "@scribe/export": "workspace:*",
+    "@scribe/freight": "workspace:*",
+    "@scribe/pricing": "workspace:*",
+    "@scribe/shared": "workspace:*",
+    "@scribe/storage": "workspace:*",
+    "bullmq": "^5.34.0",
+    "drizzle-orm": "^0.44.0",
+    "fastify": "^5.2.0",
+    "fastify-plugin": "^5.0.0",
+    "pdfkit": "^0.15.0",
+    "pino": "^9.5.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pdfkit": "^0.13.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
