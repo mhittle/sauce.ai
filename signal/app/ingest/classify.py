@@ -2,13 +2,15 @@
 
 For each solicitation: combine title + description + extracted text of its
 attached PDFs, run the casework classifier, and store `cabinet_flag` /
-`cabinet_score` (+ per-doc `text_extract`). Cabinetry jobs then float to the
-top of the Solicitations view. DB-backed; the classifier + PDF util are tested
-separately.
+`cabinet_score` (+ per-doc `text_extract` and a best-effort document `title`).
+Cabinetry jobs then float to the top of the Solicitations view. DB-backed; the
+classifier + PDF util are tested separately.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from typing import Optional
 
 import requests
 from sqlalchemy import text
@@ -16,10 +18,11 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..signals.casework import classify_casework
-from .pdftext import MAX_BYTES, extract_pdf_text
+from .pdftext import MAX_BYTES, extract_pdf_meta
 
 _UA = {"User-Agent": "Mozilla/5.0 sauce.ai-signal"}
 _TEXT_STORE_CHARS = 40_000
+_GENERIC_NAMES = {"download", "document", "view", "file", ""}
 
 
 def _with_api_key(url: str) -> str:
@@ -29,20 +32,51 @@ def _with_api_key(url: str) -> str:
     return url
 
 
-def _download(url: str) -> bytes | None:
+def _cd_filename(resp: requests.Response) -> Optional[str]:
+    cd = resp.headers.get("Content-Disposition", "")
+    m = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', cd, re.I)
+    if not m:
+        return None
+    from urllib.parse import unquote
+    name = unquote(m.group(1)).strip()
+    return re.sub(r"\.(pdf|zip|docx?|xlsx?)$", "", name, flags=re.I) or None
+
+
+def _download(url: str) -> tuple[bytes | None, Optional[str]]:
+    """Return (content, content-disposition filename)."""
     try:
-        resp = requests.get(_with_api_key(url), stream=True, timeout=45,
+        resp = requests.get(_with_api_key(url), stream=True, timeout=60,
                             headers=_UA)
         resp.raise_for_status()
+        fname = _cd_filename(resp)
         buf = bytearray()
         for chunk in resp.iter_content(chunk_size=65536):
             buf.extend(chunk)
             if len(buf) > MAX_BYTES:
                 resp.close()
-                return None
-        return bytes(buf)
+                return None, fname
+        return bytes(buf), fname
     except requests.RequestException:
+        return None, None
+
+
+def _meaningful(name: Optional[str]) -> Optional[str]:
+    if not name:
         return None
+    n = re.sub(r"\s+", " ", name).strip()
+    if n.lower() in _GENERIC_NAMES or n.isdigit() or len(n) < 4:
+        return None
+    return n
+
+
+def _pick_title(link_name, cd_name, pdf_title, url) -> Optional[str]:
+    for cand in (link_name, cd_name, pdf_title):
+        good = _meaningful(cand)
+        if good:
+            return good[:200]
+    base = url.rstrip("/").split("/")[-1]
+    base = re.sub(r"\.(pdf|zip|docx?|xlsx?)$", "", base, flags=re.I)
+    return _meaningful(base)
 
 
 def classify_solicitations(sess: Session, slug: str | None = None,
@@ -66,16 +100,21 @@ def classify_solicitations(sess: Session, slug: str | None = None,
     for r in rows:
         combined = " ".join(filter(None, [r["title"], r["description"]]))
         docs = sess.execute(text(
-            "SELECT id, url FROM solicitation_documents WHERE solicitation_id = :id"),
+            "SELECT id, url, name FROM solicitation_documents WHERE solicitation_id = :id"),
             {"id": r["id"]}).mappings().all()
         for d in docs:
-            content = _download(d["url"])
-            txt = extract_pdf_text(content) if content else ""
+            content, cd_name = _download(d["url"])
+            pdf_title, txt = extract_pdf_meta(content) if content else (None, "")
             if txt:
                 combined += "\n" + txt
-                sess.execute(text(
-                    "UPDATE solicitation_documents SET text_extract = :t WHERE id = :id"),
-                    {"t": txt[:_TEXT_STORE_CHARS], "id": d["id"]})
+            title = _pick_title(d["name"], cd_name, pdf_title, d["url"])
+            sess.execute(text("""
+                UPDATE solicitation_documents
+                SET text_extract = COALESCE(:t, text_extract),
+                    name = COALESCE(:title, name)
+                WHERE id = :id
+            """), {"t": txt[:_TEXT_STORE_CHARS] or None, "title": title,
+                   "id": d["id"]})
 
         result = classify_casework(combined)
         sess.execute(text("""

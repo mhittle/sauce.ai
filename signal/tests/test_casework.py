@@ -58,7 +58,7 @@ def test_extract_pdf_text_pulls_pdf_out_of_zip(monkeypatch):
     import io
     import zipfile
     from app.ingest import pdftext
-    monkeypatch.setattr(pdftext, "_pdf_text", lambda content, mp: "06 41 00 CASEWORK")
+    monkeypatch.setattr(pdftext, "_pdf_meta", lambda content, mp: (None, "06 41 00 CASEWORK"))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("Compiled Plans.pdf", b"%PDF-1.4 fake body")
