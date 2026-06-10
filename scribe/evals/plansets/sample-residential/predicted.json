@@ -1,0 +1,8 @@
+[
+  { "source_page": 4, "tag": "B24", "room": "Kitchen", "qty": 2, "category": "casework_base", "width_in": 24, "height_in": 34.5, "depth_in": 24, "door_style": "shaker", "material": "maple", "finish": "painted", "assembled": true, "notes": null, "confidence": 0.97 },
+  { "source_page": 4, "tag": "SB36", "room": "Kitchen", "qty": 1, "category": "casework_base", "width_in": 36, "height_in": 34.5, "depth_in": 24, "door_style": "shaker", "material": "maple", "finish": "painted", "assembled": true, "notes": null, "confidence": 0.95 },
+  { "source_page": 4, "tag": "W3030", "room": "Kitchen", "qty": 4, "category": "casework_wall", "width_in": 30, "height_in": 30, "depth_in": 12, "door_style": "shaker", "material": "maple", "finish": "painted", "assembled": true, "notes": null, "confidence": 0.96 },
+  { "source_page": 4, "tag": "W1830", "room": "Kitchen", "qty": 2, "category": "casework_wall", "width_in": 18, "height_in": 30, "depth_in": 12, "door_style": "shaker", "material": "maple", "finish": "painted", "assembled": true, "notes": null, "confidence": 0.94 },
+  { "source_page": 4, "tag": "TP2484", "room": "Kitchen", "qty": 1, "category": "casework_tall", "width_in": 24, "height_in": 84, "depth_in": 24, "door_style": "shaker", "material": "maple", "finish": "painted", "assembled": true, "notes": "pantry", "confidence": 0.9 },
+  { "source_page": 5, "tag": "VB30", "room": "Bath 1", "qty": 1, "category": "vanity", "width_in": 30, "height_in": 32.5, "depth_in": 21, "door_style": "shaker", "material": "maple", "finish": "painted", "assembled": true, "notes": null, "confidence": 0.92 }
+]

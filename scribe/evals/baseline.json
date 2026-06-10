@@ -1,0 +1,5 @@
+{
+  "recall": 1.0,
+  "precision": 1.0,
+  "note": "Synthetic placeholder fixture only. Replace with real public-plan-set fixtures (crawler finds, or grab from public bid boards), then re-baseline. From internal launch on, rep-corrected takeoffs auto-populate eval_fixtures (PRD §10)."
+}

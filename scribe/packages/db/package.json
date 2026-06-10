@@ -1,0 +1,31 @@
+{
+  "name": "@scribe/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp -r migrations dist/migrations",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "migrate": "node dist/migrate.js",
+    "seed": "node dist/seed.js"
+  },
+  "dependencies": {
+    "@scribe/export": "workspace:*",
+    "@scribe/pricing": "workspace:*",
+    "@scribe/shared": "workspace:*",
+    "drizzle-orm": "^0.44.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.20",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
