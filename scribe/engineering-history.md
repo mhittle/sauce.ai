@@ -47,6 +47,29 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-10 (b) — object storage: all-on-Railway via MinIO
+
+**Context:** Owner has no Cloudflare account; everything must run on
+Railway. The storage package was already endpoint-generic S3.
+
+**What shipped:** `packages/storage` now defaults to path-style addressing
+(`forcePathStyle`, opt-out `S3_FORCE_PATH_STYLE=0`) so MinIO works without
+wildcard DNS, plus an `R2_REGION` knob; `.env.example`, `INSTALL.md` §2, and
+`manual-actions.md` MA-001/MA-003 rewritten for a MinIO service + volume in
+the Railway project (public domain on the S3 API port so presigned URLs are
+browser-reachable; 90-day `prospect-docs/` lifecycle via `mc ilm`). R2/S3
+remain drop-in alternatives. Env var names keep the `R2_*` prefix to avoid
+churn — they're generic S3 settings.
+
+**Code touched:** `packages/storage/src/index.ts`, `.env.example`,
+`INSTALL.md`, `manual-actions.md`.
+
+**Deploy/infra state touched:** none yet (first deploy still pending).
+
+**PRs:** follow-up PR after #192.
+
+---
+
 ## 2026-06-10 — v1 framework: full scaffold through first-deploy readiness
 
 **Context:** Project start. PRD v1.2 (`PRD.md`) is the source of truth; the
