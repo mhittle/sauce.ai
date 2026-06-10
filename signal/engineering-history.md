@@ -48,6 +48,30 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-09 — Document titles (so you can tell the PDFs apart)
+
+**Context.** Docs showed no useful title (SAM attachments were all "download";
+others generic), making "open the right one" guesswork.
+
+**What shipped.** During the classify pass (already downloads each doc),
+compute a best-effort title via a fallback chain and store it on
+`solicitation_documents.name` (no schema change): meaningful link text →
+**download `Content-Disposition` filename** (SAM/many sites send the real name
+here) → PDF `/Title` metadata → first heading line → URL basename.
+`pdftext.extract_pdf_meta` now returns `(title, text)` from one parse; generic
+names ("download"/numeric/empty) are rejected. CivicPlus link names (already
+good) are preserved.
+
+**Re-run note.** `classify_solicitations.py --reclassify` to populate titles
+on already-classified rows.
+
+**Code touched.** `app/ingest/{pdftext,classify}.py`; `tests/{test_doc_titles,
+test_casework}.py`. 78 green.
+
+**PRs.** Doc-titles PR (this).
+
+---
+
 ## 2026-06-09 — Fix: PDF viewer downloads instead of rendering (content-type)
 
 **Context.** Inline viewer blank + "open in new tab" forced a download. The
