@@ -23,7 +23,8 @@ services (each with **root directory `scribe`**):
   build-time variable `VITE_API_URL` to the public URL of `scribe-api`
 
 Add the **Postgres** and **Redis** plugins (plain PG16 is fine — no
-extensions required).
+extensions required). Generate public domains for `scribe-api` and
+`scribe-web` (needed by MA-002/MA-004).
 
 ### MA-002 — Set service env vars
 Names only; values in the Railway UI (see `scribe/.env.example`):
@@ -40,11 +41,26 @@ Names only; values in the Railway UI (see `scribe/.env.example`):
 **`GOOGLE_CLIENT_ID` must be set on prod** — without it (and outside
 production NODE_ENV) the API runs in dev-bypass auth.
 
-### MA-003 — Create the Cloudflare R2 bucket
-Create a private bucket (name = `R2_BUCKET`), generate an S3 API token
-(access key + secret), and add a **90-day lifecycle delete rule scoped to
-the `prospect-docs/` prefix** (PRD §9). `R2_ENDPOINT` is
-`https://<account-id>.r2.cloudflarestorage.com`.
+### MA-003 — Add MinIO object storage to the Railway project
+All-on-Railway storage (owner decision 2026-06-10: no Cloudflare account —
+the storage package is generic S3-compatible and defaults to path-style
+addressing, which MinIO needs):
+1. In the same Railway project, deploy the **MinIO** template and attach a
+   **volume** (this is where all PDFs/page images/quote PDFs live — size it
+   generously, it grows with usage).
+2. Set/note `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` on the MinIO
+   service; generate a **public domain for the S3 API port (9000)** —
+   presigned URLs must be reachable from the browser.
+3. Open the MinIO console (port 9001) and create a private bucket `scribe`.
+4. Wire the app vars (MA-002): `R2_ENDPOINT=https://<minio domain>`,
+   `R2_ACCESS_KEY_ID=<root user>`, `R2_SECRET_ACCESS_KEY=<root password>`,
+   `R2_BUCKET=scribe`. (Better: create a MinIO service account scoped to
+   the bucket and use its key pair instead of root.)
+5. 90-day lifecycle on prospected docs (PRD §9), via the `mc` CLI:
+```bash
+mc alias set scribe https://<minio domain> <access key> <secret>
+mc ilm rule add scribe/scribe --expire-days 90 --prefix "prospect-docs/"
+```
 
 ### MA-004 — Create the Google OAuth client
 Google Cloud Console → Credentials → OAuth client (Web application):

@@ -51,10 +51,11 @@ cd apps/web && pnpm dev
 | Quote PDF | R2_* |
 | BigCommerce draft orders | BIGCOMMERCE_* (stubbed — returns 501 with explanation) |
 
-## 2. Railway deploy
+## 2. Railway deploy (everything runs on Railway)
 
-Three services from this repo + two plugins. **Every service sets its root
-directory to `scribe`** so the Docker build context is the monorepo root.
+Three services from this repo + Postgres + Redis + a MinIO service for
+object storage. **Every repo service sets its root directory to `scribe`**
+so the Docker build context is the monorepo root.
 
 | Service | Settings |
 |---|---|
@@ -63,6 +64,7 @@ directory to `scribe`** so the Docker build context is the monorepo root.
 | `scribe-web` | Root dir `scribe`; config path `scribe/apps/web/railway.json`; build-time var `VITE_API_URL` = public URL of scribe-api |
 | Postgres | Railway Postgres plugin (no extensions needed — plain PG16 works) |
 | Redis | Railway Redis plugin |
+| MinIO | Railway MinIO template + attached volume; public domain on the S3 API port. `R2_ENDPOINT` = that URL, keys = MinIO root user/service account, bucket `scribe`. Path-style addressing is the storage package's default. |
 
 Env vars (names only — values in the Railway UI; see `.env.example` for the
 full list):
@@ -89,8 +91,18 @@ Console with redirect URI `https://<api domain>/auth/google/callback`; put
 the allowed sign-in emails in `AUTH_ALLOWED_EMAILS` (first email becomes
 admin) before seeding, or add users later via Admin → Users.
 
-R2: create the bucket, keep it private, add a 90-day lifecycle rule on the
-`prospect-docs/` prefix (PRD §9).
+Object storage: create the private `scribe` bucket in the MinIO console,
+then add the 90-day lifecycle rule on the `prospect-docs/` prefix (PRD §9)
+with the `mc` CLI:
+
+```bash
+mc alias set scribe https://<minio domain> <access key> <secret>
+mc ilm rule add scribe/scribe --expire-days 90 --prefix "prospect-docs/"
+```
+
+(Cloudflare R2 or AWS S3 also work — the storage package is generic
+S3-compatible; set `S3_FORCE_PATH_STYLE=0` only if a provider requires
+virtual-hosted-style URLs.)
 
 ## 3. Migrate after deploy
 
