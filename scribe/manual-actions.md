@@ -67,15 +67,17 @@ Google Cloud Console → Credentials → OAuth client (Web application):
 - Authorized redirect URI: `https://<scribe-api domain>/auth/google/callback`
 Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` on `scribe-api`.
 
-### MA-005 — Run migrate + seed against prod
-After the first `scribe-api` deploy (one-off shell on the api service, or
-locally with prod `DATABASE_URL` + `AUTH_ALLOWED_EMAILS` exported):
-```bash
-node node_modules/@scribe/db/dist/migrate.js
-node node_modules/@scribe/db/dist/seed.js
+### MA-005 — Verify boot migration + seed on first api deploy
+Migrate + seed now run automatically when `scribe-api` boots (idempotent,
+advisory-locked). Verify in the api deploy logs:
+```
+migrations applied: 0001_init.sql   (or "migrations up to date")
+seed ensured
 ```
 Seeds product lines (rates marked NEEDS REVIEW), pricing config v1, export
-templates, org settings, Wave-1 crawler sources, and allowed users.
+templates, org settings, Wave-1 crawler sources, and allowed users from
+`AUTH_ALLOWED_EMAILS` (set it on the api service BEFORE this boot; first
+email = admin).
 
 ### MA-006 — Enter real pricing rates before the first external quote
 Admin → Pricing Editor: replace every NEEDS REVIEW placeholder rate and save

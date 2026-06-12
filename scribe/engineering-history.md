@@ -47,6 +47,25 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-10 (c) — boot-time migrate + seed (no local tooling for deploys)
+
+**Context:** Owner has no local checkout/toolchain; the manual migrate+seed
+step (old MA-005) was the only part of first-deploy that required one.
+
+**What shipped:** `apps/api/src/server.ts` runs `migrate()` + `seed()` before
+listening — pg advisory lock (727501) serializes replicas, failure is fatal
+in production (failed deploy > half-migrated app) and a warning otherwise,
+`SKIP_BOOT_MIGRATIONS=1` opts out. `@scribe/db` now exports `migrate`/`seed`.
+`INSTALL.md` and MA-005 rewritten: new migrations apply automatically on the
+deploy that ships them; seed reads `AUTH_ALLOWED_EMAILS` from the api env.
+
+**Code touched:** `apps/api/src/server.ts`, `packages/db/src/index.ts`,
+`INSTALL.md`, `manual-actions.md`.
+
+**PRs:** follow-up PR after #194.
+
+---
+
 ## 2026-06-10 (b) — object storage: all-on-Railway via MinIO
 
 **Context:** Owner has no Cloudflare account; everything must run on
