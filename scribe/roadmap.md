@@ -15,7 +15,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
 | v1 framework — monorepo, takeoff pipeline, pricing, freight, quotes, UI, crawler, evals | 10 | 9 | infra | done |
-| First Railway deploy (api/web/workers + PG + Redis + R2) | 10 | 4 | ops | backlog |
+| First Railway deploy (api/web/workers + PG + Redis + MinIO) | 10 | 4 | ops | done |
 | Validate extraction on real plan sets + first real eval fixtures | 10 | 5 | takeoff | backlog |
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
@@ -50,9 +50,11 @@ editor, admin screens, Socrata + SAM.gov crawler with scoring/dedupe/
 plan-discovery, eval harness, Railway/Docker configs, CI.
 
 ### First Railway deploy
-**Priority/LOE/Category/Status:** 10 / 4 / ops / backlog
-Provision services + plugins + R2 + OAuth, run migrate/seed, verify health.
-Steps queued as MA-001…MA-005 in `manual-actions.md`; see `INSTALL.md` §2.
+**Priority/LOE/Category/Status:** 10 / 4 / ops / done (PRs #194/#196/#197 +
+owner actions, 2026-06-12)
+All services live on Railway (api/web/workers + Postgres + Redis + MinIO);
+boot migrate+seed; bearer-token session for the cross-site Railway domains.
+MA-001…MA-005 completed; MA-006…MA-009 remain open in `manual-actions.md`.
 
 ### Validate extraction on real plan sets + first real eval fixtures
 **Priority/LOE/Category/Status:** 10 / 5 / takeoff / backlog

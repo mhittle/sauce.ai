@@ -1,83 +1,14 @@
 # sauce.ai/scribe — manual prod-action tracker
 
 Outstanding actions that must be performed manually on prod (DB migrations,
-env vars, Railway service setup, R2 rules). Anything in **Open** is
+env vars, Railway service setup, storage rules). Anything in **Open** is
 load-bearing for already-merged code. Each entry carries the **full
 command/steps inline** and is also pasted into chat when shipped. Never write
 real secret *values* here — document var names only.
 
-> First-deploy note: scribe isn't deployed yet, so the Open items below are
-> the **first-deploy bootstrap**. Once the owner runs them, move each to
-> Completed with the date.
-
 ---
 
 ## Open
-
-### MA-001 — Create the Railway project and three services
-In Railway, create project `scribe` from the `mhittle/sauce.ai` repo with
-services (each with **root directory `scribe`**):
-- `scribe-api` — config-as-code path `scribe/apps/api/railway.json`
-- `scribe-workers` — config-as-code path `scribe/apps/workers/railway.json`
-- `scribe-web` — config-as-code path `scribe/apps/web/railway.json`; set
-  build-time variable `VITE_API_URL` to the public URL of `scribe-api`
-
-Add the **Postgres** and **Redis** plugins (plain PG16 is fine — no
-extensions required). Generate public domains for `scribe-api` and
-`scribe-web` (needed by MA-002/MA-004).
-
-### MA-002 — Set service env vars
-Names only; values in the Railway UI (see `scribe/.env.example`):
-- `scribe-api`: `DATABASE_URL`, `REDIS_URL`, `R2_ENDPOINT`,
-  `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `SESSION_SECRET`
-  (long random), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-  `AUTH_ALLOWED_EMAILS` (comma-separated; first = admin),
-  `API_PUBLIC_URL`, `WEB_PUBLIC_URL`, `NODE_ENV=production`
-- `scribe-workers`: `DATABASE_URL`, `REDIS_URL`, `R2_*`,
-  `ANTHROPIC_API_KEY`, `TAKEOFF_TOKEN_BUDGET=2000000`,
-  `CRAWLER_DAILY_TOKEN_BUDGET=5000000`, optional `SAMGOV_API_KEY`,
-  optional `SOCRATA_APP_TOKEN`, `NODE_ENV=production`
-
-**`GOOGLE_CLIENT_ID` must be set on prod** — without it (and outside
-production NODE_ENV) the API runs in dev-bypass auth.
-
-### MA-003 — Add MinIO object storage to the Railway project
-All-on-Railway storage (owner decision 2026-06-10: no Cloudflare account —
-the storage package is generic S3-compatible and defaults to path-style
-addressing, which MinIO needs):
-1. In the same Railway project, deploy the **MinIO** template and attach a
-   **volume** (this is where all PDFs/page images/quote PDFs live — size it
-   generously, it grows with usage).
-2. Set/note `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` on the MinIO
-   service; generate a **public domain for the S3 API port (9000)** —
-   presigned URLs must be reachable from the browser.
-3. Open the MinIO console (port 9001) and create a private bucket `scribe`.
-4. Wire the app vars (MA-002): `R2_ENDPOINT=https://<minio domain>`,
-   `R2_ACCESS_KEY_ID=<root user>`, `R2_SECRET_ACCESS_KEY=<root password>`,
-   `R2_BUCKET=scribe`. (Better: create a MinIO service account scoped to
-   the bucket and use its key pair instead of root.)
-5. 90-day lifecycle on prospected docs (PRD §9), via the `mc` CLI:
-```bash
-mc alias set scribe https://<minio domain> <access key> <secret>
-mc ilm rule add scribe/scribe --expire-days 90 --prefix "prospect-docs/"
-```
-
-### MA-004 — Create the Google OAuth client
-Google Cloud Console → Credentials → OAuth client (Web application):
-- Authorized redirect URI: `https://<scribe-api domain>/auth/google/callback`
-Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` on `scribe-api`.
-
-### MA-005 — Verify boot migration + seed on first api deploy
-Migrate + seed now run automatically when `scribe-api` boots (idempotent,
-advisory-locked). Verify in the api deploy logs:
-```
-migrations applied: 0001_init.sql   (or "migrations up to date")
-seed ensured
-```
-Seeds product lines (rates marked NEEDS REVIEW), pricing config v1, export
-templates, org settings, Wave-1 crawler sources, and allowed users from
-`AUTH_ALLOWED_EMAILS` (set it on the api service BEFORE this boot; first
-email = admin).
 
 ### MA-006 — Enter real pricing rates before the first external quote
 Admin → Pricing Editor: replace every NEEDS REVIEW placeholder rate and save
@@ -94,8 +25,37 @@ ids / column names in the source config via the admin UI.
 Request a free api.data.gov key for SAM.gov and set `SAMGOV_API_KEY` on
 `scribe-workers`. Until set, the SAM.gov source records an error and skips.
 
+### MA-009 — MinIO lifecycle rule for prospect-docs/
+The MinIO console build lacked the Lifecycle settings page, so the 90-day
+expiry on crawler-downloaded docs (PRD §9) is not set. From any machine with
+`mc` (read creds from the Railway MinIO service variables — never paste them
+into chat):
+```bash
+mc alias set scribe https://<minio S3 API domain> <access key> <secret>
+mc ilm rule add scribe/scribe --expire-days 90 --prefix "prospect-docs/"
+mc ilm rule ls scribe/scribe
+```
+Until done, prospected PDFs accumulate on the volume (takeoffs/quotes are
+unaffected — they are not meant to expire).
+
 ---
 
 ## Completed
 
-_None yet._
+### 2026-06-12 — first production deploy (MA-001 … MA-005)
+- **MA-001** Railway project created from the GitHub repo: `scribe-api`
+  (https://scribe-api-production-757c.up.railway.app), `scribe-web`
+  (https://scribe-web-production.up.railway.app), `scribe-workers`, plus
+  Postgres and Redis plugins. All services root dir `scribe`, branch `main`.
+- **MA-002** Service env vars set; storage creds as project **shared
+  variables** (`R2_*`) referenced by api + workers; `VITE_API_URL` build-time
+  on web.
+- **MA-003** MinIO template service + volume; bucket `scribe`; S3 API on the
+  port-9000 public domain. Lifecycle rule deferred to **MA-009**.
+- **MA-004** Google OAuth client created. Gotcha hit: the redirect URI must
+  be the FULL `https://<api domain>/auth/google/callback` path — a bare
+  domain causes `redirect_uri_mismatch`.
+- **MA-005** Boot migrate + seed (#196) verified on prod: schema applied,
+  product lines/templates/sources/users seeded, `/health/db` green.
+
+Original step-by-step details preserved in `INSTALL.md` §2.
