@@ -47,6 +47,28 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-12 — SCR-001: cross-site session (login loop on Railway domains)
+
+**Context:** First prod login looped back to the sign-in screen. Web and api
+run on different `*.up.railway.app` subdomains; `up.railway.app` is on the
+Public Suffix List → cross-site, so browsers refuse the API's SameSite=Lax
+session cookie on the SPA's fetches and `/auth/me` 401s.
+
+**What shipped:** bearer-token session path alongside the cookie. OAuth
+callback redirects to `${WEB_PUBLIC_URL}/#session=<token>`; the SPA captures
+the fragment into localStorage before render (and strips it from the URL) and
+sends `Authorization: Bearer` on all API calls. The API accepts the token
+from header or cookie. Cookie path still works (top-level navigations like
+the CSV-export links send Lax cookies, and a future same-site custom-domain
+setup makes it primary again).
+
+**Code touched:** `apps/api/src/auth.ts`, `apps/api/src/routes/auth.ts`,
+`apps/web/src/api.ts`, `apps/web/src/main.tsx`, `bugs.md`.
+
+**PRs:** follow-up PR after #196.
+
+---
+
 ## 2026-06-10 (c) — boot-time migrate + seed (no local tooling for deploys)
 
 **Context:** Owner has no local checkout/toolchain; the manual migrate+seed

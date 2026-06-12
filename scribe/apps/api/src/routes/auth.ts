@@ -100,8 +100,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         await db.update(users).set({ name: info.name }).where(eq(users.id, u.id));
       }
 
-      reply.setCookie(SESSION_COOKIE, signSession(u.id), cookieOpts);
-      return reply.redirect(webUrl());
+      const token = signSession(u.id);
+      reply.setCookie(SESSION_COOKIE, token, cookieOpts);
+      // Cross-site deploys can't rely on the cookie (see auth.ts); hand the
+      // token to the SPA in the fragment — it never reaches servers or logs.
+      return reply.redirect(`${webUrl()}/#session=${token}`);
     }
   );
 }

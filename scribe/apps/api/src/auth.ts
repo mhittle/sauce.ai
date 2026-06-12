@@ -80,11 +80,21 @@ async function devUser(): Promise<SessionUser> {
   return { id: u.id, email: u.email, role: u.role as UserRole, name: u.name };
 }
 
+// The session travels as an HMAC-signed token, either in a cookie (same-site
+// deploys) or an Authorization: Bearer header (cross-site deploys — Railway's
+// up.railway.app is on the Public Suffix List, so web and api subdomains are
+// cross-site and browsers refuse the cookie on fetches).
+function sessionTokenFrom(req: FastifyRequest): string | null {
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) return header.slice("Bearer ".length);
+  return req.cookies[SESSION_COOKIE] ?? null;
+}
+
 export const authPlugin = fp(async (app) => {
   app.decorateRequest("user", null);
 
   app.addHook("onRequest", async (req) => {
-    const token = req.cookies[SESSION_COOKIE];
+    const token = sessionTokenFrom(req);
     if (token) {
       const userId = verifySession(token);
       if (userId) {

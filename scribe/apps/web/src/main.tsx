@@ -8,7 +8,10 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import "./styles.css";
+import { captureSessionFromUrl } from "./api";
 import { Layout } from "./pages/Layout";
+
+captureSessionFromUrl();
 import { DashboardPage } from "./pages/Dashboard";
 import { ProspectQueuePage } from "./pages/ProspectQueue";
 import { TakeoffsPage } from "./pages/Takeoffs";
