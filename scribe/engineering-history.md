@@ -12,22 +12,40 @@ sections below are durable — never archive them.
 State that lives outside the repo and will reintroduce fixed bugs / break
 deploys if a future session doesn't know it exists. Keep this current.
 
-- **Not deployed yet.** As of 2026-06-10 scribe exists only in-repo. There is
-  no Railway project, no prod DB, no R2 bucket, no Google OAuth client.
-  First-deploy actions are queued in `manual-actions.md` (MA-001…MA-008).
+- **Deployed 2026-06-12 (Railway project, all services live):**
+  - `scribe-api` → https://scribe-api-production-757c.up.railway.app
+  - `scribe-web` → https://scribe-web-production.up.railway.app
+  - `scribe-workers` (no domain), Railway **Postgres** + **Redis** plugins.
+  - **MinIO** template service + volume; bucket `scribe`; S3 API exposed on
+    the port-9000 public domain. Storage creds live as **project shared
+    variables** (`R2_*`) referenced by api + workers. The 90-day
+    `prospect-docs/` lifecycle rule is NOT configured yet (MA-009 — the
+    console build lacked the setting; use `mc ilm`).
+- **Schema is managed by api boot** (since #196): migrate + seed run before
+  listen, advisory-locked, fail-fast in production. Never hand-apply
+  migrations to prod; ship a migration file and deploy. `SKIP_BOOT_MIGRATIONS=1`
+  opts out.
+- **Google OAuth client** `241721814755-upo5…apps.googleusercontent.com` with
+  redirect URI `https://scribe-api-production-757c.up.railway.app/auth/google/callback`
+  (must be the full path — bare domain causes `redirect_uri_mismatch`).
+  `AUTH_ALLOWED_EMAILS` on the api service seeds users; first email = admin
+  (mhittle@gmail.com).
+- **web and api are CROSS-SITE** (`up.railway.app` is on the Public Suffix
+  List), so the SameSite=Lax cookie is never sent on SPA fetches. The
+  **bearer-token session** (#197: callback `#session=` fragment →
+  localStorage → `Authorization: Bearer`) is the load-bearing auth path —
+  don't remove it unless web+api move to one registrable custom domain. The
+  cookie still backs top-level navigations (CSV export links).
 - **Dev-bypass auth:** with `GOOGLE_CLIENT_ID` unset and
   `NODE_ENV != production`, every API request authenticates as a local admin
-  (`dev@scribe.local`). Prod MUST set `GOOGLE_CLIENT_ID`/`SECRET` and
-  `NODE_ENV=production`.
+  (`dev@scribe.local`). Prod has both set correctly.
 - **Railway build shape:** each service's root directory is `scribe` (the
   monorepo root is the Docker context); config-as-code lives at
   `scribe/apps/<svc>/railway.json`. The web image bakes `VITE_API_URL` at
   BUILD time — changing the API domain requires a web rebuild.
 - **Runtime images use `pnpm --filter <pkg> --prod deploy --legacy /out`** —
-  verified to produce a standalone runnable bundle (workspace deps' dist +
-  db migrations included). Docker daemon wasn't available in the build
-  sandbox, so the full `docker build` is unverified — treat the first Railway
-  build as a verification step.
+  verified standalone in the sandbox and now by real Railway builds (all
+  three Dockerfiles build and run in prod).
 - **Seeded pricing rates are placeholders** (`needs_review: true`); the API
   blocks `sent` quotes that price against them. Seeded Socrata field maps
   (SF/LA/NYC dataset ids + columns) are best-effort and must be validated on
@@ -44,6 +62,30 @@ deploys if a future session doesn't know it exists. Keep this current.
 - **`packages/db` copies `migrations/` into `dist/` at build** — the migrate
   runner resolves SQL files relative to its compiled location; a build step
   change that drops the copy breaks `pnpm db:migrate` in prod images.
+
+---
+
+## 2026-06-12 (b) — first production deploy completed (owner + session)
+
+**Context:** Owner worked through the first-deploy bootstrap with this
+session walking him through it (no local checkout — everything via the
+Railway/Google/MinIO UIs plus PRs #194/#196/#197).
+
+**What happened:** Railway project live (api/web/workers + Postgres + Redis
++ MinIO w/ volume + shared `R2_*` vars + bucket `scribe`); Google OAuth
+client created (first attempt registered the bare domain → 
+`redirect_uri_mismatch`; fixed to the full `/auth/google/callback` path);
+boot migrate+seed ran on the #196 deploy; #197 bearer-token session deployed
+and the new web bundle verified live. External checks green: `/health`,
+`/health/db`, OAuth redirect, CORS. MA-001…MA-005 moved to Completed;
+MA-009 added (MinIO lifecycle rule — console build lacked the setting).
+
+**Open items:** owner login confirmation (closes SCR-001), real pricing
+rates (MA-006), Socrata field-map validation (MA-007), SAM.gov key (MA-008),
+MinIO lifecycle via `mc` (MA-009), first real plan-set extraction +
+re-baseline evals (top roadmap item).
+
+**PRs:** #194, #196, #197 (all merged); this wrap-up PR (docs only).
 
 ---
 
@@ -65,7 +107,7 @@ setup makes it primary again).
 **Code touched:** `apps/api/src/auth.ts`, `apps/api/src/routes/auth.ts`,
 `apps/web/src/api.ts`, `apps/web/src/main.tsx`, `bugs.md`.
 
-**PRs:** follow-up PR after #196.
+**PRs:** #197 — bearer-token session fix (merged 2026-06-12; deployed and verified live).
 
 ---
 
@@ -84,7 +126,7 @@ deploy that ships them; seed reads `AUTH_ALLOWED_EMAILS` from the api env.
 **Code touched:** `apps/api/src/server.ts`, `packages/db/src/index.ts`,
 `INSTALL.md`, `manual-actions.md`.
 
-**PRs:** follow-up PR after #194.
+**PRs:** #196 — boot-time migrate + seed (merged 2026-06-12).
 
 ---
 
@@ -107,7 +149,7 @@ churn — they're generic S3 settings.
 
 **Deploy/infra state touched:** none yet (first deploy still pending).
 
-**PRs:** follow-up PR after #192.
+**PRs:** #194 — MinIO/path-style storage (merged 2026-06-10).
 
 ---
 
@@ -216,7 +258,7 @@ scribe-ci.yml` and `.gitattributes` at the repo root.
 **Deploy/infra state touched:** none (nothing deployed; bootstrap queued in
 `manual-actions.md`).
 
-**PRs:** this PR — v1 framework.
+**PRs:** #192 — v1 framework (merged 2026-06-10).
 
 **Open items:** first Railway deploy (MA-001…MA-005), real pricing rates
 (MA-006), Socrata field-map validation (MA-007), extraction validation on
