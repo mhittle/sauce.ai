@@ -78,13 +78,11 @@ full list):
   (optional), `SOCRATA_APP_TOKEN` (optional), `NODE_ENV=production`
 - **web:** `VITE_API_URL` (build-time)
 
-First-deploy bootstrap (also tracked in `manual-actions.md`):
-
-```bash
-# one-off task on the api service (or run locally against the prod DATABASE_URL)
-node node_modules/@scribe/db/dist/migrate.js
-node node_modules/@scribe/db/dist/seed.js
-```
+First-deploy bootstrap: **none** — the api runs migrations + seed on boot
+(idempotent, advisory-locked; `SKIP_BOOT_MIGRATIONS=1` opts out). Check the
+api deploy logs for `migrations applied: …` / `seed ensured`. The seed reads
+`AUTH_ALLOWED_EMAILS` from the api service env (first email = admin), so set
+it before the first boot.
 
 Google OAuth: create an OAuth client (web application) in Google Cloud
 Console with redirect URI `https://<api domain>/auth/google/callback`; put
@@ -104,12 +102,13 @@ mc ilm rule add scribe/scribe --expire-days 90 --prefix "prospect-docs/"
 S3-compatible; set `S3_FORCE_PATH_STYLE=0` only if a provider requires
 virtual-hosted-style URLs.)
 
-## 3. Migrate after deploy
+## 3. Migrations
 
-Migrations are tracked in `_migrations` and applied by
-`packages/db/src/migrate.ts` in filename order; it is idempotent. New
+Migrations are tracked in `_migrations` and applied in filename order on api
+boot (and by `pnpm db:migrate` locally); both paths are idempotent. New
 migrations go in `packages/db/migrations/NNNN_name.sql` (never edit applied
-files) — run `pnpm db:migrate` against prod after the deploy that ships them.
+files) — they apply automatically on the deploy that ships them. A failed
+migration fails the prod deploy by design.
 
 ## 4. Known v1 limits
 
