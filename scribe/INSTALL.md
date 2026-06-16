@@ -45,6 +45,7 @@ cd apps/web && pnpm dev
 | Feature | Needs |
 |---|---|
 | Upload + takeoff extraction | R2_* (object storage), ANTHROPIC_API_KEY, Redis, workers running |
+| AI cross-validation (optional, off by default) | OPENAI_API_KEY on workers + Admin → Branding & Freight toggle |
 | Spreadsheet intake (deterministic path) | R2_* + Redis only (model assist optional) |
 | Crawler (Socrata) | nothing extra (SOCRATA_APP_TOKEN recommended) |
 | Crawler (SAM.gov) | SAMGOV_API_KEY (free at sam.gov) |
@@ -75,7 +76,9 @@ full list):
   `WEB_PUBLIC_URL`, `NODE_ENV=production`
 - **workers:** `DATABASE_URL`, `REDIS_URL`, `R2_*`, `ANTHROPIC_API_KEY`,
   `TAKEOFF_TOKEN_BUDGET`, `CRAWLER_DAILY_TOKEN_BUDGET`, `SAMGOV_API_KEY`
-  (optional), `SOCRATA_APP_TOKEN` (optional), `NODE_ENV=production`
+  (optional), `SOCRATA_APP_TOKEN` (optional), `OPENAI_API_KEY` +
+  `OPENAI_VISION_MODEL` (optional — only for AI cross-validation),
+  `NODE_ENV=production`
 - **web:** `VITE_API_URL` (build-time)
 
 First-deploy bootstrap: **none** — the api runs migrations + seed on boot
@@ -125,3 +128,9 @@ migration fails the prod deploy by design.
 - **bull-board and Sentry not wired yet** (roadmap; pino logs are in).
 - **"Send" drafts a mailto** — the rep attaches the generated PDF manually
   (mailto cannot attach files); automated email drafting is on the roadmap.
+- **AI cross-validation is off by default and best-effort** — when enabled
+  (Admin → Branding & Freight) and `OPENAI_API_KEY` is set on workers, each
+  page is also extracted by OpenAI and disagreements lower the primary line's
+  confidence. OpenAI failures are logged as warnings and never fail a takeoff;
+  OpenAI tokens are tracked in the takeoff's `doc_summary` but are not counted
+  against the Anthropic per-takeoff budget.
