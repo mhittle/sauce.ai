@@ -1840,6 +1840,71 @@ are fine; if nothing meaningful surfaces, no PR is opened. New
 
 ---
 
+## PM proposals (2026-06-15)
+
+PM-agent suggestions from the 2026-06-15 cycle. Each is `status:
+proposed` — not yet authorized for dev. The human promotes a proposal
+to `ready-for-agent` (and folds its row into the at-a-glance table) to
+dispatch it. Telemetry (`/admin/cron-health`, `/admin/usage-summary`)
+was unavailable this run — `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` were
+not exported to the workflow environment, so the login POST returned
+HTTP 400. The rationale below cites engineering-history / bugs /
+roadmap signals only.
+
+### HMAC fleet-auth path for the admin telemetry reads
+**Priority:** 6 · **LOE:** 2 · **Category:** infra, ops · **Status:** proposed
+
+**Rationale:** The PM-agent telemetry reads (`/admin/cron-health`,
+`/admin/usage-summary`, `/admin/agent-activity`) all live in the
+`admin_ops` blueprint (`news/app/routes/admin_ops.py` lines 44/60/130)
+behind `@admin_required` — i.e. a session-cookie login as an admin
+user. The unattended fleet authenticates that gate via the
+`SMOKE_TEST_USER`/`SMOKE_TEST_PASS` GitHub-Actions secret pair plus a
+CSRF login flow. That path has now failed on two consecutive PM runs:
+the **2026-06-01** cycle (roadmap.md "## PM proposals (2026-06-01)"
+header, lines 1848–1852: *"Telemetry … was unavailable this run —
+`SMOKE_TEST_USER`/`SMOKE_TEST_PASS` were not exported to the workflow
+environment, so the login POST returned 'Invalid email or password.'"*)
+and **today's 2026-06-15** cycle (login POST returned **HTTP 400**;
+`SMOKE_TEST_USER` was unset in this workflow's env). Two consecutive
+blind-flying weeks is the signal: the brittleness isn't a one-off, it
+is the steady state of session-cookie auth for unattended workflows.
+The same gate also blocks the Phase 3 post-deploy QA reads, the Phase
+5 bug-triage reads, and any future fleet workflow that wants prod
+state. Worse, the task instructions themselves call out that the
+account "may or may not be admin — degrade gracefully" — so even when
+the login flow works, the read may still 302/403 if the account lacks
+the admin bit, and there is no recourse short of a human re-creating
+the account with admin.
+
+The fleet already has the right pattern in the next module over:
+`news/app/routes/agent_ops.py` accepts `POST /agent-ops/report-run`
+under an HMAC of `AGENT_OPS_SECRET` (shared across all six agent
+workflows), and the rest of the fleet bookkeeping uses the same key.
+Propose an additive read-only `agent_ops` route surface — e.g.
+`GET /agent-ops/cron-health` and `GET /agent-ops/usage-summary`
+(and, for parity, `/agent-ops/agent-activity`) — that returns the
+same payloads as the existing `admin_ops` handlers but authenticates
+via the existing `AGENT_OPS_SECRET` HMAC (timestamp + body signature)
+already used by `report-run`. Refactor each handler so the body
+(query helpers `_cron_log_path` / the `usage_summary` SELECTs / the
+`agent-activity` SELECTs) is a pure function the two blueprints
+share; `admin_ops` keeps `@admin_required` for the human admin UI,
+`agent_ops` enforces HMAC for fleet callers. Update the PM,
+post-deploy QA, and bug-triage prompts (`.github/agents/*.md`) plus
+`agent-fleet.md` to call the HMAC variants — the fleet stops
+depending on `SMOKE_TEST_USER`, the session-auth admin UI is
+unchanged for humans, and a missing/expired test account never
+silently blinds the agent fleet again. NOT BUG-007 class — pure code
+addition reading existing tables and the existing `cron.log`; no
+migration, no cron, no new env var (`AGENT_OPS_SECRET` exists), no
+new pip dep, no symlink, no Passenger oddities. Passenger restart on
+deploy so the new routes register (standard). Scope is small and
+on-pattern; the harder design call (auth model for fleet reads) was
+already made when `agent_ops.py` shipped.
+
+---
+
 ## PM proposals (2026-06-01)
 
 PM-agent suggestions from the 2026-06-01 cycle. Each is `status:
