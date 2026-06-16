@@ -65,6 +65,29 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-16 (b) — SCR-002: CORS blocked every SPA mutation (PUT/PATCH/DELETE)
+
+**Context:** The newly-shipped admin "AI Cross Validation" toggle did nothing
+when clicked (no error). Reproduced live in the owner's browser: clicking
+fired only the `OPTIONS` preflight (204) with no `PUT` following.
+
+**Root cause:** `@fastify/cors` in `apps/api/src/app.ts` was registered with
+only `origin`/`credentials` — no explicit `methods`. The deployed
+`Access-Control-Allow-Methods` was `GET,HEAD,POST`, so the cross-site browser
+(web and api on different `*.up.railway.app` subdomains) refused to send any
+`PUT`/`PATCH`/`DELETE`. Latent since first deploy — no mutation had been
+exercised in prod yet; it affected ALL saves (org-settings, pricing, line
+PATCH/DELETE, templates, sources), not just the toggle.
+
+**Fix:** explicit `methods: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS]` on
+the cors registration. Needs a `scribe-api` redeploy.
+
+**Code touched:** `apps/api/src/app.ts`, `bugs.md`.
+
+**PRs:** this PR (draft).
+
+---
+
 ## 2026-06-16 — AI cross-validation toggle (secondary OpenAI extraction)
 
 **Context:** Owner wanted a way to sanity-check the Anthropic extraction with

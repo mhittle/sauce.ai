@@ -20,6 +20,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: process.env.WEB_PUBLIC_URL?.split(",") ?? true,
     credentials: true,
+    // web and api are cross-site (different *.up.railway.app subdomains), so
+    // mutating verbs need an explicit preflight allow-list — the default omits
+    // PUT/PATCH/DELETE and silently blocks every save from the SPA (SCR-002).
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
   await app.register(cookie);
   await app.register(multipart, {
