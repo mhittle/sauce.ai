@@ -80,11 +80,12 @@ exercised in prod yet; it affected ALL saves (org-settings, pricing, line
 PATCH/DELETE, templates, sources), not just the toggle.
 
 **Fix:** explicit `methods: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS]` on
-the cors registration. Needs a `scribe-api` redeploy.
+the cors registration. Deployed via `scribe-api` redeploy; owner confirmed the
+toggle (and saves generally) now persist.
 
 **Code touched:** `apps/api/src/app.ts`, `bugs.md`.
 
-**PRs:** this PR (draft).
+**PRs:** #201 (merged + deployed 2026-06-16).
 
 ---
 
@@ -124,7 +125,9 @@ lines are never injected, only used to flag.
   MA-010 (set the key on workers — optional; toggle is a no-op without it).
 
 **Verified:** `pnpm build` (11/11), `pnpm test` (incl. 7 new cross-validation
-tests), `pnpm eval` green. Not yet exercised against a live OpenAI key.
+tests), `pnpm eval` green. Confirmed live in prod 2026-06-16 (key set per
+MA-010, toggle exercised on a real takeoff) — note SCR-002 (CORS) had to be
+fixed first before the toggle could be saved.
 
 **Code touched:** `packages/db/migrations/0002_cross_validation.sql`,
 `packages/db/src/schema.ts`, `packages/shared/src/cross-validation.ts` (+test,
@@ -134,8 +137,8 @@ tests), `pnpm eval` green. Not yet exercised against a live OpenAI key.
 `apps/api/src/routes/admin.ts`, `apps/web/src/pages/Admin.tsx`, `.env.example`,
 `INSTALL.md`, roadmap/manual-actions.
 
-**Open items:** set `OPENAI_API_KEY` on `scribe-workers` to actually use it
-(MA-010).
+**Open items:** none — `OPENAI_API_KEY` set and toggle confirmed working
+(MA-010 completed 2026-06-16).
 
 **PRs:** this PR (draft).
 

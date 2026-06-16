@@ -25,14 +25,6 @@ ids / column names in the source config via the admin UI.
 Request a free api.data.gov key for SAM.gov and set `SAMGOV_API_KEY` on
 `scribe-workers`. Until set, the SAM.gov source records an error and skips.
 
-### MA-010 — (Optional) OpenAI key for AI cross-validation
-The "AI Cross Validation" toggle (Admin → Branding & Freight) is off by
-default and is a no-op until `OPENAI_API_KEY` is set on `scribe-workers`.
-Optionally set `OPENAI_VISION_MODEL` (default `gpt-4.1`). With the key set and
-the toggle on, each takeoff page is also extracted by OpenAI and disagreements
-lower the primary (Anthropic) line confidence for review. Anthropic remains
-the source of truth; OpenAI failures are logged, never fatal.
-
 ### MA-009 — MinIO lifecycle rule for prospect-docs/
 The MinIO console build lacked the Lifecycle settings page, so the 90-day
 expiry on crawler-downloaded docs (PRD §9) is not set. From any machine with
@@ -49,6 +41,13 @@ unaffected — they are not meant to expire).
 ---
 
 ## Completed
+
+### 2026-06-16 — OpenAI key for AI cross-validation (MA-010)
+- **MA-010** `OPENAI_API_KEY` set on `scribe-workers`; "AI Cross Validation"
+  toggle (Admin → Branding & Freight) enabled and confirmed working on a live
+  takeoff. Anthropic remains source of truth; OpenAI disagreements lower the
+  primary line confidence for review. `OPENAI_VISION_MODEL` left at default
+  `gpt-4.1`.
 
 ### 2026-06-12 — first production deploy (MA-001 … MA-005)
 - **MA-001** Railway project created from the GitHub repo: `scribe-api`
