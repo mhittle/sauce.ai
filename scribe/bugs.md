@@ -23,25 +23,34 @@ _None._
 
 ## In progress
 
+_None._
+
+## Attempted (live workarounds / ongoing risk)
+
+_None._
+
+## Resolved
+
 ### SCR-002 — All SPA "save" actions (PUT/PATCH/DELETE) blocked by CORS
-- **Status:** in-progress (fix on branch; awaiting deploy + confirmation)
+- **Status:** resolved (fix deployed; owner confirmed the AI cross-validation
+  toggle persists 2026-06-16)
 - **Reported:** 2026-06-16 by owner (found while testing the AI cross-validation toggle)
 - **Description:** Flipping the admin "AI Cross Validation" toggle did nothing
-  with no error. Confirmed via the browser: clicking only fires the `OPTIONS`
-  preflight (204) — no `PUT` follows. The API's CORS response advertised
+  with no error. Confirmed via the browser: clicking only fired the `OPTIONS`
+  preflight (204) — no `PUT` followed. The API's CORS response advertised
   `Access-Control-Allow-Methods: GET,HEAD,POST`, so the browser refused to
   send the actual `PUT`. web and api are cross-site (different
-  `*.up.railway.app` subdomains), so this affects EVERY mutating call from the
+  `*.up.railway.app` subdomains), so this affected EVERY mutating call from the
   SPA (org-settings, pricing edits, line PATCH/DELETE, export templates,
   sources) — it was just latent because no PUT had been exercised in prod yet.
 - **Notes / fix:** `@fastify/cors` was registered without an explicit
   `methods` list; set it to include PUT/PATCH/DELETE (+OPTIONS) in
-  `apps/api/src/app.ts`. Needs a `scribe-api` redeploy.
-- **PR:** (this PR)
+  `apps/api/src/app.ts`. Deployed via `scribe-api` redeploy.
+- **PR:** #201
 
 ### SCR-001 — Login loops back to the sign-in screen on Railway domains
-- **Status:** in-progress (fix merged + deployed; awaiting owner login
-  confirmation to mark resolved)
+- **Status:** resolved (owner logging in and using the app normally as of
+  2026-06-16)
 - **Reported:** 2026-06-12 by owner
 - **Description:** Google sign-in completes but the app returns to the login
   screen. Root cause: web and api run on different `*.up.railway.app`
@@ -54,11 +63,3 @@ _None._
   top-level navigations (CSV export) and a future same-site custom domain.
   New web bundle verified live in prod 2026-06-12.
 - **PR:** #197
-
-## Attempted (live workarounds / ongoing risk)
-
-_None._
-
-## Resolved
-
-_None yet._
