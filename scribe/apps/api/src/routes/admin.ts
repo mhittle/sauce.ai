@@ -137,6 +137,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         pallet_rate_cents: z.number().int().nonnegative().optional(),
         pallet_config: PalletConfig.partial().optional(),
         freight_provider: z.enum(["flat_pallet", "uber_freight"]).optional(),
+        cross_validation_enabled: z.boolean().optional(),
       })
       .parse(req.body);
 
@@ -153,6 +154,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       set.palletRateCents = body.pallet_rate_cents;
     if (body.freight_provider !== undefined)
       set.freightProvider = body.freight_provider;
+    if (body.cross_validation_enabled !== undefined)
+      set.crossValidationEnabled = body.cross_validation_enabled;
     if (body.pallet_config !== undefined) {
       const rows = await db
         .select()

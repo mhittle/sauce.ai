@@ -17,6 +17,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | v1 framework — monorepo, takeoff pipeline, pricing, freight, quotes, UI, crawler, evals | 10 | 9 | infra | done |
 | First Railway deploy (api/web/workers + PG + Redis + MinIO) | 10 | 4 | ops | done |
 | Validate extraction on real plan sets + first real eval fixtures | 10 | 5 | takeoff | backlog |
+| AI cross-validation toggle (secondary OpenAI extraction → lower confidence on disagreement) | 6 | 4 | takeoff | done |
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
 | Quote email drafting w/ PDF attached (replace mailto) | 7 | 3 | backend | backlog |
@@ -67,6 +68,17 @@ synthetic `evals/plansets/sample-residential` fixture, re-baseline
 ### Real pricing rates entered
 **Priority/LOE/Category/Status:** 10 / 1 / pricing / backlog
 MA-006. Quotes are blocked from `sent` until NEEDS REVIEW rates are replaced.
+
+### AI cross-validation toggle
+**Priority/LOE/Category/Status:** 6 / 4 / takeoff / done (PR: this PR, 2026-06-16)
+Admin → Branding & Freight "AI Cross Validation" toggle (`org_settings.
+cross_validation_enabled`, migration 0002). Anthropic always extracts; when on
+and `OPENAI_API_KEY` is set, each page is re-extracted with OpenAI (`gpt-4.1`,
+`OPENAI_VISION_MODEL` override) using the same prompt/schema. The pure
+`applyCrossValidation` comparator (`@scribe/shared`) diffs tag/qty/dims and
+lowers the primary line confidence below the review threshold on disagreement
+(never injects OpenAI-only lines). Best-effort: OpenAI failures warn, never
+fail the takeoff. See MA-010.
 
 ### Validate seed Socrata field maps on first pull
 **Priority/LOE/Category/Status:** 8 / 2 / crawler / backlog

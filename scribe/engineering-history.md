@@ -65,6 +65,59 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-16 — AI cross-validation toggle (secondary OpenAI extraction)
+
+**Context:** Owner wanted a way to sanity-check the Anthropic extraction with
+a second model. Requirement: a toggle named "AI Cross Validation" in admin;
+Anthropic ALWAYS runs, and when the toggle is on the same page images also go
+to OpenAI through the same steps/output shape.
+
+**Design decisions (confirmed with owner):** results surface by *lowering the
+primary line's confidence on disagreement* (not a side-by-side UI); cross-val
+runs on the **extract** stage only (not classify); OpenAI model `gpt-4.1`
+(`OPENAI_VISION_MODEL` override). Anthropic stays the source of truth — OpenAI
+lines are never injected, only used to flag.
+
+**What shipped:**
+- **DB:** migration `0002_cross_validation.sql` + Drizzle mirror —
+  `org_settings.cross_validation_enabled bool default false`.
+- **Comparator:** pure IO-free `applyCrossValidation(primary, secondary)` in
+  `@scribe/shared` (tag/category match w/ 0.51" dim tolerance, one-to-one;
+  disagreement → conf ≤0.6 + note; primary-only → conf ≤0.7 + note;
+  secondary-only → flag, never injected) + 7 unit tests.
+- **Workers:** `lib/openai.ts` (lazy client, `openaiConfigured`,
+  `OPENAI_VISION_MODEL` default `gpt-4.1`); `takeoff/cross-validate.ts`
+  (same `EXTRACT_SYSTEM` + image via OpenAI chat-completions vision,
+  `response_format: json_object`, zod-validated, nomenclature-repaired);
+  `process.ts` reads the flag, threads it through the PDF + image paths,
+  best-effort per page (failures warn, never fail the takeoff), stores OpenAI
+  raw + token count in `doc_summary.cross_validation`. OpenAI tokens are NOT
+  counted against the Anthropic per-takeoff budget (different pricing).
+- **API/Web:** `PUT /admin/org-settings` accepts `cross_validation_enabled`
+  (GET already returns the row); "AI Cross Validation" checkbox added to
+  Admin → Branding & Freight.
+- **Docs:** `.env.example` (`OPENAI_API_KEY`, `OPENAI_VISION_MODEL`),
+  `INSTALL.md` (§1 table, workers env, §4 limits), `manual-actions.md`
+  MA-010 (set the key on workers — optional; toggle is a no-op without it).
+
+**Verified:** `pnpm build` (11/11), `pnpm test` (incl. 7 new cross-validation
+tests), `pnpm eval` green. Not yet exercised against a live OpenAI key.
+
+**Code touched:** `packages/db/migrations/0002_cross_validation.sql`,
+`packages/db/src/schema.ts`, `packages/shared/src/cross-validation.ts` (+test,
++index export), `apps/workers/src/lib/openai.ts`,
+`apps/workers/src/takeoff/cross-validate.ts`,
+`apps/workers/src/takeoff/process.ts`, `apps/workers/package.json` (openai dep),
+`apps/api/src/routes/admin.ts`, `apps/web/src/pages/Admin.tsx`, `.env.example`,
+`INSTALL.md`, roadmap/manual-actions.
+
+**Open items:** set `OPENAI_API_KEY` on `scribe-workers` to actually use it
+(MA-010).
+
+**PRs:** this PR (draft).
+
+---
+
 ## 2026-06-12 (b) — first production deploy completed (owner + session)
 
 **Context:** Owner worked through the first-deploy bootstrap with this

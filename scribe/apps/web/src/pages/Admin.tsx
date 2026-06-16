@@ -391,6 +391,7 @@ interface OrgSettingsData {
   defaultHandlingCents: number;
   palletRateCents: number;
   freightProvider: string;
+  crossValidationEnabled: boolean;
   logo_url: string | null;
 }
 
@@ -499,6 +500,29 @@ function OrgSettings() {
             }
           />
         </label>
+      </Card>
+
+      <Card>
+        <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+          Extraction
+        </h2>
+        <label className="flex items-center gap-2 py-1 text-sm">
+          <input
+            type="checkbox"
+            checked={s.crossValidationEnabled}
+            disabled={save.isPending}
+            onChange={(e) =>
+              save.mutate({ cross_validation_enabled: e.target.checked })
+            }
+          />
+          <span className="font-medium">AI Cross Validation</span>
+        </label>
+        <p className="text-xs text-zinc-400">
+          Always extracts with Anthropic. When on, each page is also sent to a
+          secondary OpenAI vision model; lines where the two models disagree
+          have their confidence lowered so they surface for review. Requires
+          OPENAI_API_KEY on the workers service.
+        </p>
       </Card>
     </div>
   );

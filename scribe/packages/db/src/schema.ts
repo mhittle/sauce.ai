@@ -188,6 +188,7 @@ export const orgSettings = pgTable("org_settings", {
   palletRateCents: bigint("pallet_rate_cents", { mode: "number" }).notNull().default(70000),
   palletConfig: jsonb("pallet_config").notNull().default({}),
   freightProvider: text("freight_provider").notNull().default("flat_pallet"),
+  crossValidationEnabled: boolean("cross_validation_enabled").notNull().default(false),
   updatedBy: uuid("updated_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

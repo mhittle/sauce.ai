@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import {
   evalFixtures,
   getDb,
+  orgSettings,
   pricingConfigs,
   takeoffLines,
   takeoffs,
@@ -18,10 +19,48 @@ import { matchLine } from "@scribe/pricing";
 import { EXTRACT_PROMPT_VERSION } from "@scribe/prompts";
 import { getObject, putObject } from "@scribe/storage";
 import { BudgetExceededError, TakeoffBudget } from "../lib/anthropic.js";
+import { openaiConfigured } from "../lib/openai.js";
 import { classifyPages } from "./classify.js";
+import { crossValidatePage } from "./cross-validate.js";
 import { extractPage } from "./extract.js";
 import { EXTRACTION_DPI, openPdf, THUMBNAIL_DPI } from "./pdf.js";
 import { parseSpreadsheet } from "./spreadsheet.js";
+
+// Optional secondary-model validation state, accumulated across pages.
+interface CrossVal {
+  enabled: boolean;
+  tokens: number;
+  secondaryRaws: unknown[];
+}
+
+// Best-effort: a cross-validation failure never fails the takeoff. On success
+// the returned extraction has primary lines with lowered confidence where the
+// two models disagree.
+async function runCrossValidation(
+  pageNumber: number,
+  png: Uint8Array,
+  extraction: PageExtraction,
+  crossVal: CrossVal,
+  warnings: string[],
+  log: Logger
+): Promise<PageExtraction> {
+  try {
+    const outcome = await crossValidatePage(pageNumber, png, extraction);
+    crossVal.tokens += outcome.tokens;
+    crossVal.secondaryRaws.push({ page: pageNumber, raw: outcome.secondaryRaw });
+    for (const f of outcome.flags) {
+      warnings.push(
+        `p${pageNumber}: cross-val ${f.kind}${f.tag ? ` ${f.tag}` : ""} — ${f.detail}`
+      );
+    }
+    return outcome.extraction;
+  } catch (err) {
+    const msg = String(err instanceof Error ? err.message : err);
+    log.warn({ pageNumber, err: msg }, "cross-validation skipped");
+    warnings.push(`p${pageNumber}: cross-validation skipped (${msg})`);
+    return extraction;
+  }
+}
 
 // Orchestrates one takeoff end-to-end: input → classified pages → extracted
 // lines → product-line matching → review queue (PRD §6).
@@ -35,6 +74,16 @@ export async function processTakeoff(
   if (rows.length === 0) throw new Error(`takeoff ${takeoffId} not found`);
   const takeoff = rows[0];
   const budget = new TakeoffBudget();
+
+  const settingsRows = await db
+    .select()
+    .from(orgSettings)
+    .where(eq(orgSettings.id, 1));
+  const crossVal: CrossVal = {
+    enabled: Boolean(settingsRows[0]?.crossValidationEnabled) && openaiConfigured(),
+    tokens: 0,
+    secondaryRaws: [],
+  };
 
   try {
     const file = await getObject(takeoff.sourceFileS3Key);
@@ -50,7 +99,7 @@ export async function processTakeoff(
     } = { uncertainties: [], unreadable_pages: [], warnings: [] };
 
     if (takeoff.sourceKind === "pdf") {
-      const result = await processPdf(takeoffId, file, budget, log);
+      const result = await processPdf(takeoffId, file, budget, crossVal, log);
       lines = result.lines;
       raws = result.raws;
       classified = result.classified;
@@ -66,10 +115,13 @@ export async function processTakeoff(
       // image: single-page vision extraction; store the image for provenance.
       await putObject(`takeoffs/${takeoffId}/pages/1.png`, file, "image/png");
       const { extraction, raw } = await extractPage(1, file, budget);
-      lines = extraction.lines;
       raws = [raw];
-      summary.uncertainties = extraction.uncertainties;
-      if (extraction.unreadable) summary.unreadable_pages = [1];
+      const validated = crossVal.enabled
+        ? await runCrossValidation(1, file, extraction, crossVal, summary.warnings, log)
+        : extraction;
+      lines = validated.lines;
+      summary.uncertainties = validated.uncertainties;
+      if (validated.unreadable) summary.unreadable_pages = [1];
     }
 
     // Match lines to product lines against the latest pricing snapshot.
@@ -127,7 +179,17 @@ export async function processTakeoff(
         pageCount,
         classifiedPages: classified,
         docConfidence,
-        docSummary: { ...summary, raw_outputs: raws },
+        docSummary: {
+          ...summary,
+          raw_outputs: raws,
+          cross_validation: crossVal.enabled
+            ? {
+                model: process.env.OPENAI_VISION_MODEL ?? "gpt-4.1",
+                tokens: crossVal.tokens,
+                secondary_outputs: crossVal.secondaryRaws,
+              }
+            : null,
+        },
         promptVersion: EXTRACT_PROMPT_VERSION,
         tokensUsed: budget.used,
         updatedAt: new Date(),
@@ -160,6 +222,7 @@ async function processPdf(
   takeoffId: string,
   file: Buffer,
   budget: TakeoffBudget,
+  crossVal: CrossVal,
   log: Logger
 ): Promise<{
   lines: CabinetLineItem[];
@@ -228,6 +291,16 @@ async function processPdf(
           `page ${pageInfo.page}: extraction failed (${String(err)})`
         );
         continue;
+      }
+      if (crossVal.enabled) {
+        extraction = await runCrossValidation(
+          pageInfo.page,
+          png,
+          extraction,
+          crossVal,
+          summary.warnings,
+          log
+        );
       }
       lines.push(...extraction.lines);
       summary.uncertainties.push(
