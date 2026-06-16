@@ -23,6 +23,22 @@ _None._
 
 ## In progress
 
+### SCR-002 — All SPA "save" actions (PUT/PATCH/DELETE) blocked by CORS
+- **Status:** in-progress (fix on branch; awaiting deploy + confirmation)
+- **Reported:** 2026-06-16 by owner (found while testing the AI cross-validation toggle)
+- **Description:** Flipping the admin "AI Cross Validation" toggle did nothing
+  with no error. Confirmed via the browser: clicking only fires the `OPTIONS`
+  preflight (204) — no `PUT` follows. The API's CORS response advertised
+  `Access-Control-Allow-Methods: GET,HEAD,POST`, so the browser refused to
+  send the actual `PUT`. web and api are cross-site (different
+  `*.up.railway.app` subdomains), so this affects EVERY mutating call from the
+  SPA (org-settings, pricing edits, line PATCH/DELETE, export templates,
+  sources) — it was just latent because no PUT had been exercised in prod yet.
+- **Notes / fix:** `@fastify/cors` was registered without an explicit
+  `methods` list; set it to include PUT/PATCH/DELETE (+OPTIONS) in
+  `apps/api/src/app.ts`. Needs a `scribe-api` redeploy.
+- **PR:** (this PR)
+
 ### SCR-001 — Login loops back to the sign-in screen on Railway domains
 - **Status:** in-progress (fix merged + deployed; awaiting owner login
   confirmation to mark resolved)
