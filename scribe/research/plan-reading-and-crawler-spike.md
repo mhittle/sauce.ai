@@ -302,6 +302,64 @@ input.
 
 ---
 
+## Validation against real plan sets (2026-06-17)
+
+Owner provided four real sets. Inspected with `pdfinfo` / `pdffonts` / rendered
+crops. These confirm the analysis and sharpen it. (Files contain client PII —
+"Weiss Residence", a street address — so they are **not** committed here; they
+live on the owner's machine and are strong fixture candidates pending consent.)
+
+| Set | Size | Text layer | What it is | Maps to |
+|---|---|---|---|---|
+| 2440 Piestewa "Floor Plan" | **36×24″ (Arch D)** | vector, embedded **+ unicode** | large-format floor plan | **A** |
+| KITCHEN FLOOR PLAN & ELEVATIONS | **36×24″ (Arch D)** | vector, embedded + unicode | enlarged plan + interior elevations + dimension callouts | **A** |
+| Highland Model B | **A1, rotated 90°** | Type 1, **not embedded, `uni: no`** | 3D model export; cover renders + a floor-plan-only sheet | **B (hardest)** |
+| Design.pdf | letter, 9 pp | vector, embedded | kitchen plan + numbered `ELV` callouts → elevations | **A + B1** |
+
+**A is confirmed empirically.** Rendering the 36″ kitchen sheet down to Sonnet's
+1568 px (what the model sees today): elevation *titles* legible, but the
+dimension callouts and notes are ~4–8 px and unreadable. Cropping a single
+elevation and rendering it at native 150 DPI (no downscale) makes the **same
+content fully legible** — the dimension run (`1 1/2"`, `24"`, `36"`, `21"`…),
+`FARMHOUSE SINK`, `DISHWASHER (CUSTOM PANEL)`, `INDUCTION RANGE`,
+`PARIS-INSET CABINETS / COLOR: BEIGE`, `4" ROLL-OUT TRAY IN DRAWER`, scale
+`1/2"=1'-0"`. Same pixel budget reaching the model; the only change is not
+squashing the whole sheet. This is the A2/A3 fix, proven.
+
+**New finding — "schedule-first" is the wrong default for residential.** *None*
+of these four sets contains a tabular cabinet schedule. The cabinet data lives
+in **dimensioned interior elevations** and **plan callouts**, not a
+`cabinet_schedule_table`. The current pipeline ranks schedules first and treats
+elevations as a supplement; real residential sets invert that. Recommend the
+classifier/extractor treat elevations + dimensioned plans as first-class
+sources, not fallbacks. (Doesn't change the §A mechanism, but raises §A's
+priority and reshapes §B.)
+
+**A4 (vector-text fast path) is viable for 3 of 4** — Piestewa, Kitchen, and
+Design all carry embedded vector text with a unicode map (extractable with zero
+model cost / zero downscaling). **Highland is the exception:** Type 1 fonts,
+not embedded, no ToUnicode (`uni: no`) → the text layer is unreliable, so
+Highland must go through vision. So A4 helps a lot but can't be the only path.
+
+**B splits into two real sub-cases (confirmed):**
+- **B1 — set has elevations** (Design.pdf, and the kitchen set): count boxes off
+  the elevations. This is the common, tractable case.
+- **B2 — floor-plan-only, no elevations** (Highland): the *only* cabinet signal
+  is kitchen/bath/closet runs drawn in plan (island, `DW`, `Range`, vanities,
+  W.I.C). Estimate must come from **scale-aware linear-foot measurement of the
+  plan** (Highland's title block gives `1/4"=1'-0"`). Highland is the hardest
+  case on every axis — 3D export, no schedule, no elevations, no usable text
+  layer — so it's the right worst-case fixture for B2, but B1 is where to start.
+
+**Net effect on recommendations:** §A unchanged in approach, higher priority
+(it's the gate for everything and real sets are large-format with tiny text).
+Add: stop treating schedules as the primary source. §B: build B1 (elevations)
+first; B2 (LF-from-plan) is a harder follow-on that Highland exercises. §A4:
+worth doing for the vector-text majority, with vision as the fallback for
+non-embedded sets like Highland.
+
+---
+
 ## Sources
 
 - Anthropic Vision reference (resolution limits, downscaling, tokenization):

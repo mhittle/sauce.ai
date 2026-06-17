@@ -92,9 +92,21 @@ adapter (behind the existing `fetchSince` interface) for **public** e-procuremen
 plan rooms (Bonfire/BidNet/DemandStar/PlanetBids/OpenGov) that publish drawings,
 + casework-relevance scoring in `score.ts` → one-click Run Takeoff.
 
+**Validated against 4 real owner-supplied sets** (not committed — client PII):
+a 36×24" Arch-D kitchen sheet, a 36×24" floor plan, a letter-size kitchen
+design (plan + ELV callouts), and Highland Model B (A1 3D export, floor-plan
+only). Crop test proved §A: the kitchen elevation is illegible squashed to
+1568px but fully legible cropped at native res. **Key new finding: none of the
+four has a tabular cabinet schedule** — cabinet data lives in dimensioned
+elevations + plan callouts, so "schedule-first" is the wrong default for
+residential. §B splits into B1 (elevations exist → box count) and B2
+(floor-plan-only like Highland → scale-aware LF). Vector-text fast path (§A4)
+viable for 3 of 4; Highland's fonts aren't embedded (`uni: no`) so it needs
+vision. Details in the spike doc's validation section.
+
 **Deliverable:** `scribe/research/plan-reading-and-crawler-spike.md` (full
-analysis, options, recommendations, LOE, sources). Roadmap seeded with three
-new backlog items (§A pri 8, §B/§C pri 6). No pipeline code changed.
+analysis, options, recommendations, LOE, validation, sources). Roadmap seeded
+with three new backlog items (§A pri 8, §B/§C pri 6). No pipeline code changed.
 
 **PRs:** this PR (docs only, draft).
 
