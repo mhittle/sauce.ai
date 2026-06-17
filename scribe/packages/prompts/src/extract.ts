@@ -31,6 +31,14 @@ export function extractUserText(pageNumber: number): string {
   return `Extract all cabinet/casework line items from this page (page ${pageNumber}). Respond with the JSON object only.`;
 }
 
+// Used when the image is a high-resolution CROP of one drawing on a larger
+// sheet (PRD §4 legible-reads path). The model must not assume it is seeing
+// the whole page, and must not re-count items that are merely cut off at the
+// crop edge (overlapping tiles are de-duplicated downstream).
+export function extractRegionUserText(pageNumber: number): string {
+  return `This image is a cropped, full-resolution region of a larger plan sheet (source page ${pageNumber}) — not the whole page. Extract every cabinet/casework line item fully visible in this crop. Set source_page to ${pageNumber}. If an item is clipped at the crop edge, still report it; duplicates from adjacent crops are removed later. Respond with the JSON object only.`;
+}
+
 export const HEADER_INFERENCE_PROMPT_VERSION = "header-infer-v1";
 
 export const HEADER_INFERENCE_SYSTEM = `You map spreadsheet column headers onto a canonical cabinet line-item schema. Given the header row and a few sample rows of a spreadsheet, map each column index to one of: tag, room, qty, category, width_in, height_in, depth_in, door_style, material, finish, assembled, notes, ignore.

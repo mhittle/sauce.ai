@@ -65,6 +65,42 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-17 (b) — A shipped: legible large-format reads (region-crop + tiling)
+
+**Context:** Followed the research spike (below) by building task A. Root cause:
+the extractor sent one full-page render to `claude-sonnet-4-6`, which downscales
+anything past 1568px long edge / ~1568 visual tokens, so a 36×24" sheet's
+schedule text collapsed to ~4px. Validated on the owner's real sheets — cropping
+a single elevation to native res makes the same content fully legible.
+
+**What shipped (workers-only; no migration, no new env var):**
+- **`@scribe/shared/regions.ts`** (pure, 18 unit tests): vision-budget math
+  (`fitDpi`, `needsRegioning`), `planRenderJobs` (fit a rect in one image or an
+  overlapping grid that respects the 1568px edge + 1568-token budget),
+  `mapBoxToPagePoints` / `padRectToPage`, `dedupeLines`, `PageRegions` zod.
+  Constants default to Sonnet's limits so an Opus high-res knob drops in later.
+- **`@scribe/prompts/regions.ts`**: `LOCATE_REGIONS_SYSTEM` + version; plus
+  `extractRegionUserText` (tells the model it's seeing a crop, not the page).
+- **`apps/workers/src/takeoff/pdf.ts`**: `renderRegion` (mupdf
+  `Pixmap`+`DrawDevice`+`page.run` clip render — validated against poppler) and
+  `pageDimsPt`.
+- **`takeoff/regions.ts`** `locateRegions` (best-effort vision segmentation) +
+  **`process.ts`** `readRelevantPage`: small pages keep the single-image path;
+  large sheets → locate drawings → crop+extract each at full res → dedupe within
+  a region. Detection/extraction failures fall back to whole-page tiling + warn.
+  Per-takeoff token budget still guards cost (large page ≈ 1 locate + 6–12 crop
+  extractions vs 1 before).
+
+**Verified:** `pnpm build` 11/11, `pnpm test` (+18), `pnpm eval` 100% (eval reads
+stored fixtures, unaffected). mupdf clip render confirmed to produce the
+legible elevation crop. **NOT yet verified with a live model** (no local key) —
+to be confirmed on the deployed `scribe-workers` by running a real takeoff of a
+large-format sheet and checking the Review screen.
+
+**PRs:** this PR.
+
+---
+
 ## 2026-06-17 — research spike: plan-reading + PlanHub-style discovery (A/B/C)
 
 **Context:** Owner asked for three improvements — (A) read small/illegible text
