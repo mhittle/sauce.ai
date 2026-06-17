@@ -17,6 +17,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | v1 framework — monorepo, takeoff pipeline, pricing, freight, quotes, UI, crawler, evals | 10 | 9 | infra | done |
 | First Railway deploy (api/web/workers + PG + Redis + MinIO) | 10 | 4 | ops | done |
 | Validate extraction on real plan sets + first real eval fixtures | 10 | 5 | takeoff | backlog |
+| Legible large-format reads — region-crop + tiling (research: research/plan-reading-and-crawler-spike.md §A) | 8 | 6 | takeoff | done |
+| Estimate from plans with no cabinet schedule — elevation/LF extraction (research: spike §B) | 6 | 6 | takeoff | backlog |
+| Public-plan-room crawler adapter + casework relevance scoring (PlanHub-style discovery; research: spike §C) | 6 | 6 | crawler | backlog |
 | AI cross-validation toggle (secondary OpenAI extraction → lower confidence on disagreement) | 6 | 4 | takeoff | done |
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
@@ -64,6 +67,39 @@ sets (bid boards), review outputs, hand-label gold lines, replace the
 synthetic `evals/plansets/sample-residential` fixture, re-baseline
 `evals/baseline.json`. PRD targets: ≥95% recall, ≥97% qty/dim accuracy,
 50-page set < 10 min.
+
+### Legible large-format reads — region-crop + tiling
+**Priority/LOE/Category/Status:** 8 / 6 / takeoff / done (this PR)
+Root cause confirmed: Sonnet 4.6 downscales any image past 1568px long edge, so
+a full E-size sheet rendered at 200 DPI (6800×8800) is squashed to ~1211×1568
+and schedule text becomes ~4px tall. **Shipped:** large-format relevant pages
+are segmented by a vision "locate" call into their distinct drawings; each
+drawing is cropped (mupdf clip render) and re-rendered at full resolution, with
+drawings too big for one image tiled and de-duplicated within the drawing.
+Pages that already fit legibly (≤ letter-ish) keep the single-image path. Pure
+planning/dedup math lives in `@scribe/shared regions.ts` (unit-tested);
+`apps/workers/src/takeoff/{pdf,regions,process}.ts` do the rendering + model
+calls. Best-effort: detection/extraction failures fall back to whole-page
+tiling and warn. Follow-ups still open: Opus-4.8 high-res model knob, and the
+vector-text fast path (§A4). Full analysis in the spike §A.
+
+### Estimate from plans with no cabinet schedule
+**Priority/LOE/Category/Status:** 6 / 6 / takeoff / backlog
+When a plan set has no schedule table, today's pipeline returns ~0 lines.
+Extend to count boxes off interior elevations (lower-confidence, `estimated`
+flag) and, as a follow-on, a scale-aware linear-foot ROM $ estimate gated like
+NEEDS-REVIEW (never flows to a `sent` quote). Depends on §A (elevations must be
+legible first). No new UI — estimated lines reuse the Review screen's existing
+low-confidence highlighting (owner decision 2026-06-17). See spike §B.
+
+### Public-plan-room crawler adapter + casework relevance scoring
+**Priority/LOE/Category/Status:** 6 / 6 / crawler / backlog
+"PlanHub-style" discovery done the defensible way: crawl public e-procurement
+plan rooms (Bonfire/BidNet/DemandStar/PlanetBids/OpenGov etc.) that publish
+solicitations with downloadable drawings — NOT the gated PlanHub/ConstructConnect/
+Dodge networks (login-walled, paid, ToS-prohibited; need a paid/partner feed,
+an owner decision). New adapter behind the existing `fetchSince` interface +
+casework-relevance scoring in `score.ts` → one-click Run Takeoff. See spike §C.
 
 ### Real pricing rates entered
 **Priority/LOE/Category/Status:** 10 / 1 / pricing / backlog

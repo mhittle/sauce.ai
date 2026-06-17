@@ -10,9 +10,16 @@ import {
 } from "@scribe/db";
 import {
   CabinetLineItem,
+  dedupeLines,
+  fitDpi,
+  mapBoxToPagePoints,
+  needsRegioning,
   PageClassification,
   PageExtraction,
+  padRectToPage,
+  planRenderJobs,
   PricingSnapshot,
+  RegionKind,
   RELEVANT_PAGE_CLASSES,
 } from "@scribe/shared";
 import { matchLine } from "@scribe/pricing";
@@ -23,8 +30,14 @@ import { openaiConfigured } from "../lib/openai.js";
 import { classifyPages } from "./classify.js";
 import { crossValidatePage } from "./cross-validate.js";
 import { extractPage } from "./extract.js";
-import { EXTRACTION_DPI, openPdf, THUMBNAIL_DPI } from "./pdf.js";
+import { OpenPdf, openPdf, THUMBNAIL_DPI } from "./pdf.js";
+import { locateRegions } from "./regions.js";
 import { parseSpreadsheet } from "./spreadsheet.js";
+
+// Region kinds worth cropping + extracting (PRD §4 legible-reads path).
+const EXTRACTABLE_REGION_KINDS: RegionKind[] = ["schedule", "elevation", "plan"];
+// Ignore detected boxes smaller than this — too small to be a real drawing.
+const MIN_REGION_IN = { width: 1.5, height: 1 };
 
 // Optional secondary-model validation state, accumulated across pages.
 interface CrossVal {
@@ -273,44 +286,161 @@ async function processPdf(
     };
 
     for (const pageInfo of relevant) {
-      const png = pdf.renderPage(pageInfo.page - 1, EXTRACTION_DPI);
-      // Persist for review-screen provenance (click line → source page).
-      await putObject(
-        `takeoffs/${takeoffId}/pages/${pageInfo.page}.png`,
-        png,
-        "image/png"
+      await readRelevantPage(
+        takeoffId,
+        pdf,
+        pageInfo.page,
+        budget,
+        crossVal,
+        log,
+        { lines, raws, summary }
       );
-      let extraction: PageExtraction;
-      try {
-        const result = await extractPage(pageInfo.page, png, budget);
-        extraction = result.extraction;
-        raws.push({ page: pageInfo.page, raw: result.raw });
-      } catch (err) {
-        if (err instanceof BudgetExceededError) throw err;
-        summary.warnings.push(
-          `page ${pageInfo.page}: extraction failed (${String(err)})`
-        );
-        continue;
-      }
-      if (crossVal.enabled) {
-        extraction = await runCrossValidation(
-          pageInfo.page,
-          png,
-          extraction,
-          crossVal,
-          summary.warnings,
-          log
-        );
-      }
-      lines.push(...extraction.lines);
-      summary.uncertainties.push(
-        ...extraction.uncertainties.map((u) => `p${pageInfo.page}: ${u}`)
-      );
-      if (extraction.unreadable) summary.unreadable_pages.push(pageInfo.page);
     }
 
     return { lines, raws, classified, pageCount, summary };
   } finally {
     pdf.close();
+  }
+}
+
+// Read one relevant page. Large-format sheets are downscaled past legibility if
+// sent whole (PRD §4), so they're segmented into their distinct drawings (one
+// vision "locate" call) and each drawing is cropped + re-rendered at full
+// resolution; drawings too big for one image are tiled and de-duplicated.
+// Pages that already fit legibly are sent as a single image, as before.
+async function readRelevantPage(
+  takeoffId: string,
+  pdf: OpenPdf,
+  page: number,
+  budget: TakeoffBudget,
+  crossVal: CrossVal,
+  log: Logger,
+  acc: {
+    lines: CabinetLineItem[];
+    raws: unknown[];
+    summary: { uncertainties: string[]; unreadable_pages: number[]; warnings: string[] };
+  }
+): Promise<void> {
+  const idx = page - 1;
+  const dims = pdf.pageDimsPt(idx);
+  const widthIn = dims.widthPt / 72;
+  const heightIn = dims.heightPt / 72;
+
+  // Full page rendered at (at most) the model's native resolution: used both as
+  // the review-screen provenance image and as the region-locate input.
+  const locateDpi = fitDpi(widthIn, heightIn);
+  const fullPng = pdf.renderPage(idx, locateDpi);
+  await putObject(`takeoffs/${takeoffId}/pages/${page}.png`, fullPng, "image/png");
+
+  const collect = (extraction: PageExtraction, into: CabinetLineItem[]): void => {
+    into.push(...extraction.lines);
+    acc.summary.uncertainties.push(
+      ...extraction.uncertainties.map((u) => `p${page}: ${u}`)
+    );
+    if (extraction.unreadable && !acc.summary.unreadable_pages.includes(page)) {
+      acc.summary.unreadable_pages.push(page);
+    }
+  };
+
+  // Small enough to read whole: single image, original behavior.
+  if (!needsRegioning(dims)) {
+    let extraction: PageExtraction;
+    try {
+      const result = await extractPage(page, fullPng, budget);
+      extraction = result.extraction;
+      acc.raws.push({ page, raw: result.raw });
+    } catch (err) {
+      if (err instanceof BudgetExceededError) throw err;
+      acc.summary.warnings.push(`page ${page}: extraction failed (${String(err)})`);
+      return;
+    }
+    if (crossVal.enabled) {
+      extraction = await runCrossValidation(
+        page,
+        fullPng,
+        extraction,
+        crossVal,
+        acc.summary.warnings,
+        log
+      );
+    }
+    collect(extraction, acc.lines);
+    return;
+  }
+
+  // Large format: locate the distinct drawings, fall back to the whole page.
+  const fullW = Math.round(widthIn * locateDpi);
+  const fullH = Math.round(heightIn * locateDpi);
+  let regions: { kind: RegionKind; rect: ReturnType<typeof padRectToPage> }[] = [];
+  try {
+    const located = await locateRegions(fullPng, fullW, fullH, budget);
+    regions = located.regions
+      .filter((r) => EXTRACTABLE_REGION_KINDS.includes(r.kind))
+      .map((r) => ({
+        kind: r.kind,
+        rect: padRectToPage(
+          mapBoxToPagePoints(r.box, { widthPx: fullW, heightPx: fullH }, dims),
+          0.04,
+          dims
+        ),
+      }))
+      .filter(
+        (r) =>
+          (r.rect.x1 - r.rect.x0) / 72 >= MIN_REGION_IN.width &&
+          (r.rect.y1 - r.rect.y0) / 72 >= MIN_REGION_IN.height
+      );
+  } catch (err) {
+    if (err instanceof BudgetExceededError) throw err;
+    acc.summary.warnings.push(
+      `page ${page}: region detection skipped (${String(err)}); tiling whole page`
+    );
+  }
+  if (regions.length === 0) {
+    regions = [
+      { kind: "other", rect: { x0: 0, y0: 0, x1: dims.widthPt, y1: dims.heightPt } },
+    ];
+  }
+
+  const jobs = regions.flatMap((r, i) =>
+    planRenderJobs(r.rect, dims, i, r.kind)
+  );
+  log.info(
+    { takeoffId, page, regions: regions.length, jobs: jobs.length },
+    "reading large-format page in regions"
+  );
+
+  // Extract each crop; de-duplicate within a region (overlapping tiles), but
+  // not across regions (distinct drawings legitimately repeat tags/sizes).
+  const linesByRegion = new Map<number, CabinetLineItem[]>();
+  for (const job of jobs) {
+    const crop = pdf.renderRegion(idx, job.rect, job.dpi);
+    let extraction: PageExtraction;
+    try {
+      const result = await extractPage(page, crop, budget, { region: true });
+      extraction = result.extraction;
+      acc.raws.push({ page, region: job.regionId, raw: result.raw });
+    } catch (err) {
+      if (err instanceof BudgetExceededError) throw err;
+      acc.summary.warnings.push(
+        `page ${page} region ${job.regionId}: extraction failed (${String(err)})`
+      );
+      continue;
+    }
+    if (crossVal.enabled) {
+      extraction = await runCrossValidation(
+        page,
+        crop,
+        extraction,
+        crossVal,
+        acc.summary.warnings,
+        log
+      );
+    }
+    const bucket = linesByRegion.get(job.regionId) ?? [];
+    collect(extraction, bucket);
+    linesByRegion.set(job.regionId, bucket);
+  }
+  for (const regionLines of linesByRegion.values()) {
+    acc.lines.push(...dedupeLines(regionLines));
   }
 }

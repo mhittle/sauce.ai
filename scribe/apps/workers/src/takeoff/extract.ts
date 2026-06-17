@@ -1,6 +1,7 @@
 import { PageExtraction, repairLine } from "@scribe/shared";
 import {
   EXTRACT_SYSTEM,
+  extractRegionUserText,
   extractUserText,
   SONNET_MODEL,
 } from "@scribe/prompts";
@@ -18,7 +19,8 @@ import {
 export async function extractPage(
   pageNumber: number,
   png: Uint8Array,
-  budget: TakeoffBudget
+  budget: TakeoffBudget,
+  opts: { region?: boolean } = {}
 ): Promise<{ extraction: PageExtraction; raw: unknown }> {
   const client = getAnthropic();
   const message = await client.messages.create({
@@ -30,7 +32,12 @@ export async function extractPage(
         role: "user",
         content: [
           imageBlock(png),
-          { type: "text", text: extractUserText(pageNumber) },
+          {
+            type: "text",
+            text: opts.region
+              ? extractRegionUserText(pageNumber)
+              : extractUserText(pageNumber),
+          },
         ],
       },
     ],

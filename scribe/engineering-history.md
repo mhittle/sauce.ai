@@ -65,6 +65,89 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-17 (b) — A shipped: legible large-format reads (region-crop + tiling)
+
+**Context:** Followed the research spike (below) by building task A. Root cause:
+the extractor sent one full-page render to `claude-sonnet-4-6`, which downscales
+anything past 1568px long edge / ~1568 visual tokens, so a 36×24" sheet's
+schedule text collapsed to ~4px. Validated on the owner's real sheets — cropping
+a single elevation to native res makes the same content fully legible.
+
+**What shipped (workers-only; no migration, no new env var):**
+- **`@scribe/shared/regions.ts`** (pure, 18 unit tests): vision-budget math
+  (`fitDpi`, `needsRegioning`), `planRenderJobs` (fit a rect in one image or an
+  overlapping grid that respects the 1568px edge + 1568-token budget),
+  `mapBoxToPagePoints` / `padRectToPage`, `dedupeLines`, `PageRegions` zod.
+  Constants default to Sonnet's limits so an Opus high-res knob drops in later.
+- **`@scribe/prompts/regions.ts`**: `LOCATE_REGIONS_SYSTEM` + version; plus
+  `extractRegionUserText` (tells the model it's seeing a crop, not the page).
+- **`apps/workers/src/takeoff/pdf.ts`**: `renderRegion` (mupdf
+  `Pixmap`+`DrawDevice`+`page.run` clip render — validated against poppler) and
+  `pageDimsPt`.
+- **`takeoff/regions.ts`** `locateRegions` (best-effort vision segmentation) +
+  **`process.ts`** `readRelevantPage`: small pages keep the single-image path;
+  large sheets → locate drawings → crop+extract each at full res → dedupe within
+  a region. Detection/extraction failures fall back to whole-page tiling + warn.
+  Per-takeoff token budget still guards cost (large page ≈ 1 locate + 6–12 crop
+  extractions vs 1 before).
+
+**Verified:** `pnpm build` 11/11, `pnpm test` (+18), `pnpm eval` 100% (eval reads
+stored fixtures, unaffected). mupdf clip render confirmed to produce the
+legible elevation crop. **NOT yet verified with a live model** (no local key) —
+to be confirmed on the deployed `scribe-workers` by running a real takeoff of a
+large-format sheet and checking the Review screen.
+
+**PRs:** this PR.
+
+---
+
+## 2026-06-17 — research spike: plan-reading + PlanHub-style discovery (A/B/C)
+
+**Context:** Owner asked for three improvements — (A) read small/illegible text
+on large plans, (B) estimate from plans with no cabinet schedule, (C) a
+PlanHub-style crawler for cabinet plan deals. Session was scoped as
+**research-only** (no production code); deliverable is a decision doc.
+
+**Key finding (A):** the extractor sends one full-page render at a fixed 200 DPI
+to `claude-sonnet-4-6`, whose native vision resolution is **1568 px long edge**.
+A 34×44" E-sheet at 200 DPI (6800×8800) is downscaled to ~1211×1568 before the
+model sees it, so schedule text (~25px) lands at ~4px — illegible. Raising DPI
+doesn't help (gets downscaled harder); the fix is **crop the schedule region /
+tile the page** so each region is rendered at ≤ the model's native resolution
+(≈1:1). Opus 4.8/Fable 5 raise the limit to 2576px (high-res vision) but a full
+E-sheet still downscales ~0.29×, so a model swap alone is insufficient.
+
+**Findings (B):** no-schedule plan sets yield ~0 lines today; industry practice
+is box-count off elevations + linear-foot runs off the floor plan. Recommend
+elevation extraction with an `estimated` flag + a gated LF ROM estimate (never
+to a `sent` quote). Depends on A.
+
+**Findings (C):** PlanHub/ConstructConnect/Dodge/BidClerk are gated, paid,
+ToS-prohibited — do NOT scrape. The defensible "PlanHub-style" path is a new
+adapter (behind the existing `fetchSince` interface) for **public** e-procurement
+plan rooms (Bonfire/BidNet/DemandStar/PlanetBids/OpenGov) that publish drawings,
++ casework-relevance scoring in `score.ts` → one-click Run Takeoff.
+
+**Validated against 4 real owner-supplied sets** (not committed — client PII):
+a 36×24" Arch-D kitchen sheet, a 36×24" floor plan, a letter-size kitchen
+design (plan + ELV callouts), and Highland Model B (A1 3D export, floor-plan
+only). Crop test proved §A: the kitchen elevation is illegible squashed to
+1568px but fully legible cropped at native res. **Key new finding: none of the
+four has a tabular cabinet schedule** — cabinet data lives in dimensioned
+elevations + plan callouts, so "schedule-first" is the wrong default for
+residential. §B splits into B1 (elevations exist → box count) and B2
+(floor-plan-only like Highland → scale-aware LF). Vector-text fast path (§A4)
+viable for 3 of 4; Highland's fonts aren't embedded (`uni: no`) so it needs
+vision. Details in the spike doc's validation section.
+
+**Deliverable:** `scribe/research/plan-reading-and-crawler-spike.md` (full
+analysis, options, recommendations, LOE, validation, sources). Roadmap seeded
+with three new backlog items (§A pri 8, §B/§C pri 6). No pipeline code changed.
+
+**PRs:** this PR (docs only, draft).
+
+---
+
 ## 2026-06-16 (b) — SCR-002: CORS blocked every SPA mutation (PUT/PATCH/DELETE)
 
 **Context:** The newly-shipped admin "AI Cross Validation" toggle did nothing
