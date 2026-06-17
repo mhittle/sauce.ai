@@ -12,6 +12,28 @@ Web access for this spike: confirmed (WebSearch + WebFetch).
 
 ---
 
+## Web/UI scope (owner decision, 2026-06-17)
+
+**"Just make results show up"** — no new React components. Reuse the screens
+already deployed on the scribe site; surface everything through them:
+
+- **A** is backend-only (extraction quality flows into the existing Takeoff
+  Review screen automatically). The optional "click line → source-region
+  highlight" is **out of scope** for now.
+- **B** adds **no new UI**: estimated lines ride the existing **low-confidence
+  highlighting** in the Review screen (set their confidence below the review
+  threshold + a `notes` string saying "estimated from elevation/plan"), and the
+  ROM-estimate send-block reuses the existing **NEEDS-REVIEW `sent`-quote gate**
+  (backend logic, not UI). No badges, no banners.
+- **C** surfaces through the existing **Prospect Queue** (discovered projects +
+  one-click Run Takeoff) and **Admin → Crawler Sources** (source CRUD already
+  there) — the new adapter type just needs to be selectable.
+
+This trims each LOE: B drops its UI work, A drops the highlight component, C adds
+no new screens. The recommendations below already assume this.
+
+---
+
 ## Background: what the extractor does today
 
 `apps/workers/src/takeoff/process.ts` → `processPdf`:

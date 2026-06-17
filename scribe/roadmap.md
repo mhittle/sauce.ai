@@ -85,7 +85,8 @@ When a plan set has no schedule table, today's pipeline returns ~0 lines.
 Extend to count boxes off interior elevations (lower-confidence, `estimated`
 flag) and, as a follow-on, a scale-aware linear-foot ROM $ estimate gated like
 NEEDS-REVIEW (never flows to a `sent` quote). Depends on §A (elevations must be
-legible first). See spike §B.
+legible first). No new UI — estimated lines reuse the Review screen's existing
+low-confidence highlighting (owner decision 2026-06-17). See spike §B.
 
 ### Public-plan-room crawler adapter + casework relevance scoring
 **Priority/LOE/Category/Status:** 6 / 6 / crawler / backlog
