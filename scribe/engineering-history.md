@@ -65,6 +65,41 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-17 — research spike: plan-reading + PlanHub-style discovery (A/B/C)
+
+**Context:** Owner asked for three improvements — (A) read small/illegible text
+on large plans, (B) estimate from plans with no cabinet schedule, (C) a
+PlanHub-style crawler for cabinet plan deals. Session was scoped as
+**research-only** (no production code); deliverable is a decision doc.
+
+**Key finding (A):** the extractor sends one full-page render at a fixed 200 DPI
+to `claude-sonnet-4-6`, whose native vision resolution is **1568 px long edge**.
+A 34×44" E-sheet at 200 DPI (6800×8800) is downscaled to ~1211×1568 before the
+model sees it, so schedule text (~25px) lands at ~4px — illegible. Raising DPI
+doesn't help (gets downscaled harder); the fix is **crop the schedule region /
+tile the page** so each region is rendered at ≤ the model's native resolution
+(≈1:1). Opus 4.8/Fable 5 raise the limit to 2576px (high-res vision) but a full
+E-sheet still downscales ~0.29×, so a model swap alone is insufficient.
+
+**Findings (B):** no-schedule plan sets yield ~0 lines today; industry practice
+is box-count off elevations + linear-foot runs off the floor plan. Recommend
+elevation extraction with an `estimated` flag + a gated LF ROM estimate (never
+to a `sent` quote). Depends on A.
+
+**Findings (C):** PlanHub/ConstructConnect/Dodge/BidClerk are gated, paid,
+ToS-prohibited — do NOT scrape. The defensible "PlanHub-style" path is a new
+adapter (behind the existing `fetchSince` interface) for **public** e-procurement
+plan rooms (Bonfire/BidNet/DemandStar/PlanetBids/OpenGov) that publish drawings,
++ casework-relevance scoring in `score.ts` → one-click Run Takeoff.
+
+**Deliverable:** `scribe/research/plan-reading-and-crawler-spike.md` (full
+analysis, options, recommendations, LOE, sources). Roadmap seeded with three
+new backlog items (§A pri 8, §B/§C pri 6). No pipeline code changed.
+
+**PRs:** this PR (docs only, draft).
+
+---
+
 ## 2026-06-16 (b) — SCR-002: CORS blocked every SPA mutation (PUT/PATCH/DELETE)
 
 **Context:** The newly-shipped admin "AI Cross Validation" toggle did nothing
