@@ -14,6 +14,7 @@ import { Layout } from "./pages/Layout";
 captureSessionFromUrl();
 import { DashboardPage } from "./pages/Dashboard";
 import { ProspectQueuePage } from "./pages/ProspectQueue";
+import { ProspectDetailPage } from "./pages/ProspectDetail";
 import { TakeoffsPage } from "./pages/Takeoffs";
 import { TakeoffReviewPage } from "./pages/TakeoffReview";
 import { QuotesPage } from "./pages/Quotes";
@@ -32,6 +33,12 @@ export const prospectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/prospects",
   component: ProspectQueuePage,
+});
+
+export const prospectDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/prospects/$projectId",
+  component: ProspectDetailPage,
 });
 
 export const takeoffsRoute = createRoute({
@@ -67,6 +74,7 @@ export const adminRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
   prospectsRoute,
+  prospectDetailRoute,
   takeoffsRoute,
   takeoffReviewRoute,
   quotesRoute,

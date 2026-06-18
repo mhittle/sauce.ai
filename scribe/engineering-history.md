@@ -65,6 +65,35 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-18 (b) — C shipped: prospect detail view + send any plan to takeoff
+
+**Context:** Task C (UI). The Prospect Queue only let you Triage/Ignore and (when
+a doc was filename-classified `plan_set`) Run Takeoff — no way to open a
+prospect, read its details, or see/preview the discovered drawings.
+
+**What shipped (web-only — no API/DB/migration; all endpoints already existed):**
+- **`View` button** on each Prospect Queue row → new route `/prospects/$projectId`.
+- **`apps/web/src/pages/ProspectDetail.tsx`** (new): fetches `GET /projects/:id`
+  and renders all project fields (address, jurisdiction, permit #, parcel, type,
+  valuation, GC, score + rationale, description) plus the full **documents list**.
+  Each doc shows its doc-class badge + page count, an **inline PDF preview**
+  (presigned URL from `GET /project-documents/:id/url` in an iframe, fetched on
+  demand + open-in-new-tab), and a **`Send to Takeoff`** button. Triage/Ignore
+  mirrored in the header.
+- **Send any document**, not only `plan_set` — `POST /takeoffs
+  {project_document_id}` already accepts any doc, and the crawler's filename
+  classifier (`run.ts` `classifyByFilename`) is rough, so a real plan can land as
+  `other`. The queue's existing `plan_set`-gated Run Takeoff button is unchanged.
+
+**Verified:** `pnpm build` 11/11, `pnpm test` 18/18, `pnpm eval` 100%. **Not yet
+verified live** — the presigned-URL iframe preview + takeoff-from-prospect only
+fully exercise on Railway (no local API/MinIO). Confirm on deployed `scribe-web`
+after merge: open a prospect with a discovered doc, preview it, send to takeoff.
+
+**PRs:** this PR (draft).
+
+---
+
 ## 2026-06-18 — B shipped: estimates for plans with no cabinet schedule
 
 **Context:** Task B — produce cabinet estimates when a set has no schedule.
