@@ -26,6 +26,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Quote email drafting w/ PDF attached (replace mailto) | 7 | 3 | backend | backlog |
 | OCR fallback for scan-only PDFs (tesseract) | 7 | 5 | takeoff | backlog |
 | Sheet-index classification shortcut | 6 | 4 | takeoff | backlog |
+| Prospect detail view — open project details + preview/send any discovered plan to takeoff | 6 | 2 | ui | done |
 | Review screen: click line → source region highlight | 6 | 5 | ui | backlog |
 | Eval fixture export job (eval_fixtures → evals/plansets) | 6 | 2 | algo | backlog |
 | Remaining Wave-1 permit adapters (San Diego, San Jose, Sacramento, Miami-Dade, Orlando, Tampa, Jacksonville) | 6 | 3 | crawler | backlog |
@@ -147,6 +148,18 @@ PRD §6.2: read the cover-sheet index to pre-select candidate pages, confirm
 by vision. Prompt already exists (`SHEET_INDEX_SYSTEM`); needs page-label →
 page-number resolution. Current thumbnail batching is ~25 calls per 200
 pages (within the <40 target), so this is an optimization, not a blocker.
+
+### Prospect detail view — open project details + preview/send any discovered plan to takeoff
+**Priority/LOE/Category/Status:** 6 / 2 / ui / done (PR: this PR, 2026-06-18)
+The Prospect Queue only exposed Triage/Ignore + a `plan_set`-gated Run Takeoff
+button — no way to inspect a prospect or see its drawings. Added a `View` button
+→ new `/prospects/$projectId` route (`ProspectDetail.tsx`) showing all project
+fields + score rationale and the full document list, each with an inline PDF
+preview (presigned `/project-documents/:id/url` in an iframe + open-in-new-tab)
+and a `Send to Takeoff` button. Frontend-only — reuses existing endpoints
+(`GET /projects/:id`, `GET /project-documents/:id/url`, `POST /takeoffs
+{project_document_id}`); any document is sendable, not just `plan_set`, since
+filename classification is rough.
 
 ### Review screen: click line → source region highlight
 **Priority/LOE/Category/Status:** 6 / 5 / ui / backlog

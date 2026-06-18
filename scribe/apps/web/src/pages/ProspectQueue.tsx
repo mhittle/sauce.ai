@@ -70,6 +70,7 @@ export function ProspectQueuePage() {
       )}
       <ProjectTable
         projects={aboveFold}
+        onView={(id) => navigate({ to: "/prospects/$projectId", params: { projectId: id } })}
         onIgnore={(id) => patch.mutate({ id, status: "ignored" })}
         onTriage={(id) => patch.mutate({ id, status: "triaged" })}
         onRunTakeoff={(docId) => runTakeoff.mutate(docId)}
@@ -81,6 +82,7 @@ export function ProspectQueuePage() {
           </h2>
           <ProjectTable
             projects={belowFold}
+            onView={(id) => navigate({ to: "/prospects/$projectId", params: { projectId: id } })}
             onIgnore={(id) => patch.mutate({ id, status: "ignored" })}
             onTriage={(id) => patch.mutate({ id, status: "triaged" })}
             onRunTakeoff={(docId) => runTakeoff.mutate(docId)}
@@ -93,11 +95,13 @@ export function ProspectQueuePage() {
 
 function ProjectTable({
   projects,
+  onView,
   onIgnore,
   onTriage,
   onRunTakeoff,
 }: {
   projects: Project[];
+  onView: (id: string) => void;
   onIgnore: (id: string) => void;
   onTriage: (id: string) => void;
   onRunTakeoff: (docId: string) => void;
@@ -164,6 +168,7 @@ function ProjectTable({
                   <Badge tone={statusTone(p.status)}>{p.status}</Badge>
                 </td>
                 <td className="space-x-1 whitespace-nowrap px-3 py-2">
+                  <Button onClick={() => onView(p.id)}>View</Button>
                   {planDoc && (
                     <Button
                       variant="primary"
