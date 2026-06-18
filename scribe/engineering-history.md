@@ -84,6 +84,9 @@ prospect, read its details, or see/preview the discovered drawings.
   {project_document_id}` already accepts any doc, and the crawler's filename
   classifier (`run.ts` `classifyByFilename`) is rough, so a real plan can land as
   `other`. The queue's existing `plan_set`-gated Run Takeoff button is unchanged.
+- **Source link** on the detail page: renders the prospect's `sourceRefs[].url`
+  (the crawl origin — Socrata/SAM.gov listing) as external links, labelled by
+  `external_id`.
 
 **Verified:** `pnpm build` 11/11, `pnpm test` 18/18, `pnpm eval` 100%. **Not yet
 verified live** — the presigned-URL iframe preview + takeoff-from-prospect only
