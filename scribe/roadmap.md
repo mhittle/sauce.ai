@@ -18,7 +18,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | First Railway deploy (api/web/workers + PG + Redis + MinIO) | 10 | 4 | ops | done |
 | Validate extraction on real plan sets + first real eval fixtures | 10 | 5 | takeoff | backlog |
 | Legible large-format reads — region-crop + tiling (research: research/plan-reading-and-crawler-spike.md §A) | 8 | 6 | takeoff | done |
-| Estimate from plans with no cabinet schedule — elevation/LF extraction (research: spike §B) | 6 | 6 | takeoff | backlog |
+| Estimate from plans with no cabinet schedule — floor-plan/elevation estimation (research: spike §B) | 6 | 6 | takeoff | done |
 | Public-plan-room crawler adapter + casework relevance scoring (PlanHub-style discovery; research: spike §C) | 6 | 6 | crawler | backlog |
 | AI cross-validation toggle (secondary OpenAI extraction → lower confidence on disagreement) | 6 | 4 | takeoff | done |
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
@@ -84,13 +84,21 @@ tiling and warn. Follow-ups still open: Opus-4.8 high-res model knob, and the
 vector-text fast path (§A4). Full analysis in the spike §A.
 
 ### Estimate from plans with no cabinet schedule
-**Priority/LOE/Category/Status:** 6 / 6 / takeoff / backlog
-When a plan set has no schedule table, today's pipeline returns ~0 lines.
-Extend to count boxes off interior elevations (lower-confidence, `estimated`
-flag) and, as a follow-on, a scale-aware linear-foot ROM $ estimate gated like
-NEEDS-REVIEW (never flows to a `sent` quote). Depends on §A (elevations must be
-legible first). No new UI — estimated lines reuse the Review screen's existing
-low-confidence highlighting (owner decision 2026-06-17). See spike §B.
+**Priority/LOE/Category/Status:** 6 / 6 / takeoff / done (this PR)
+**Shipped:** when classification finds no `cabinet_schedule_table`, the pipeline
+enters estimation mode — it also reads `floor_plan` pages (ignored before) and
+runs a dedicated `ESTIMATE_SYSTEM` prompt that infers cabinetry from floor
+plans/interior elevations (kitchen base+wall runs, islands, vanities, closets)
+using printed dims/scale, emitting standard-size boxes that sum to each run.
+Every estimation line is flagged `estimated` + capped to low confidence +
+`[ESTIMATED]`-prefixed note (`markEstimated` in `@scribe/shared`), so it surfaces
+in the Review screen's existing low-confidence highlighting and never reads as a
+schedule-grade quantity; a doc-summary banner says no schedule was found. Builds
+on §A region-crop (the kitchen comes back as one legible `plan` region).
+**Warn-only** per owner decision 2026-06-17 — no API/send-gate change, no
+migration (the flag rides the note prefix; `eval_fixtures` capture it in JSON).
+Grounded in the Highland Model B set (floor-plan-only, no schedule). Follow-ups:
+LF→$ ROM pricing, and a hard estimated-line send-gate if wanted. See spike §B.
 
 ### Public-plan-room crawler adapter + casework relevance scoring
 **Priority/LOE/Category/Status:** 6 / 6 / crawler / backlog

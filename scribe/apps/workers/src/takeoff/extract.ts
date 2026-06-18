@@ -1,5 +1,7 @@
-import { PageExtraction, repairLine } from "@scribe/shared";
+import { markEstimated, PageExtraction, repairLine } from "@scribe/shared";
 import {
+  ESTIMATE_SYSTEM,
+  estimateUserText,
   EXTRACT_SYSTEM,
   extractRegionUserText,
   extractUserText,
@@ -20,25 +22,22 @@ export async function extractPage(
   pageNumber: number,
   png: Uint8Array,
   budget: TakeoffBudget,
-  opts: { region?: boolean } = {}
+  opts: { region?: boolean; estimate?: boolean } = {}
 ): Promise<{ extraction: PageExtraction; raw: unknown }> {
   const client = getAnthropic();
+  const userText = opts.estimate
+    ? estimateUserText(pageNumber)
+    : opts.region
+      ? extractRegionUserText(pageNumber)
+      : extractUserText(pageNumber);
   const message = await client.messages.create({
     model: SONNET_MODEL,
     max_tokens: 16000,
-    system: EXTRACT_SYSTEM,
+    system: opts.estimate ? ESTIMATE_SYSTEM : EXTRACT_SYSTEM,
     messages: [
       {
         role: "user",
-        content: [
-          imageBlock(png),
-          {
-            type: "text",
-            text: opts.region
-              ? extractRegionUserText(pageNumber)
-              : extractUserText(pageNumber),
-          },
-        ],
+        content: [imageBlock(png), { type: "text", text: userText }],
       },
     ],
   });
@@ -83,6 +82,12 @@ export async function extractPage(
     }));
   }
   void ambiguous;
+
+  // No-schedule estimate (PRD §4): flag every line + cap confidence so it
+  // surfaces for review and never reads as a schedule-grade quantity.
+  if (opts.estimate) {
+    repaired.lines = repaired.lines.map(markEstimated);
+  }
 
   return { extraction: repaired, raw };
 }

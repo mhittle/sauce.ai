@@ -192,6 +192,7 @@ function rowToLine(
       get("notes") != null && get("notes") !== "" ? String(get("notes")) : null,
     // Deterministic intake: high confidence; tag/dim conflicts lower it below.
     confidence: 0.95,
+    estimated: false,
   };
   return repairLine(line);
 }
