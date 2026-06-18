@@ -69,7 +69,7 @@ synthetic `evals/plansets/sample-residential` fixture, re-baseline
 50-page set < 10 min.
 
 ### Legible large-format reads — region-crop + tiling
-**Priority/LOE/Category/Status:** 8 / 6 / takeoff / done (this PR)
+**Priority/LOE/Category/Status:** 8 / 6 / takeoff / done (#203, 2026-06-17; verified live 2026-06-18)
 Root cause confirmed: Sonnet 4.6 downscales any image past 1568px long edge, so
 a full E-size sheet rendered at 200 DPI (6800×8800) is squashed to ~1211×1568
 and schedule text becomes ~4px tall. **Shipped:** large-format relevant pages
@@ -84,7 +84,7 @@ tiling and warn. Follow-ups still open: Opus-4.8 high-res model knob, and the
 vector-text fast path (§A4). Full analysis in the spike §A.
 
 ### Estimate from plans with no cabinet schedule
-**Priority/LOE/Category/Status:** 6 / 6 / takeoff / done (this PR)
+**Priority/LOE/Category/Status:** 6 / 6 / takeoff / done (#204, 2026-06-18; verified live 2026-06-18)
 **Shipped:** when classification finds no `cabinet_schedule_table`, the pipeline
 enters estimation mode — it also reads `floor_plan` pages (ignored before) and
 runs a dedicated `ESTIMATE_SYSTEM` prompt that infers cabinetry from floor

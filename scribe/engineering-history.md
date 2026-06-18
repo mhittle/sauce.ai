@@ -103,7 +103,9 @@ Highland / the Piestewa floor plan and checking the Review screen for low-conf
 
 **Follow-ups:** LF→$ ROM pricing; optional hard estimated-line send-gate.
 
-**PRs:** this PR.
+**PRs:** #204 (merged 2026-06-18). Owner confirmed estimates work live on real
+plan sets (Highland / Piestewa) 2026-06-18 — the "not yet model-verified" caveat
+is closed.
 
 ---
 
@@ -135,11 +137,10 @@ a single elevation to native res makes the same content fully legible.
 
 **Verified:** `pnpm build` 11/11, `pnpm test` (+18), `pnpm eval` 100% (eval reads
 stored fixtures, unaffected). mupdf clip render confirmed to produce the
-legible elevation crop. **NOT yet verified with a live model** (no local key) —
-to be confirmed on the deployed `scribe-workers` by running a real takeoff of a
-large-format sheet and checking the Review screen.
+legible elevation crop.
 
-**PRs:** this PR.
+**PRs:** #203 (merged 2026-06-17). Owner confirmed large-format reads work live
+2026-06-18.
 
 ---
 
