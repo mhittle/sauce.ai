@@ -37,6 +37,11 @@ export const CabinetLineItem = z.object({
   assembled: z.boolean().nullable(),
   notes: z.string().nullable(),
   confidence: z.number().min(0).max(1),
+  // True when this line was estimated from a floor plan / interior elevation
+  // rather than read off a cabinet schedule (PRD §4 — no-schedule sets).
+  // Estimated lines are forced to low confidence and noted so they surface for
+  // review and never pass as schedule-grade quantities. Defaults false.
+  estimated: z.boolean().default(false),
 });
 export type CabinetLineItem = z.infer<typeof CabinetLineItem>;
 

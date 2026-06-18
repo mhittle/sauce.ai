@@ -14,6 +14,7 @@ import {
   fitDpi,
   mapBoxToPagePoints,
   needsRegioning,
+  PageClass,
   PageClassification,
   PageExtraction,
   padRectToPage,
@@ -259,21 +260,34 @@ async function processPdf(
     }
 
     const classified = await classifyPages(thumbnails, budget);
+
+    // No cabinet schedule → estimation mode (PRD §4): also read floor plans, and
+    // flag everything extracted as an estimate (handled per-line in extractPage).
+    const estimationMode = !classified.some(
+      (c) => c.class === "cabinet_schedule_table"
+    );
+    const relevantClasses: PageClass[] = estimationMode
+      ? [...RELEVANT_PAGE_CLASSES, "floor_plan"]
+      : RELEVANT_PAGE_CLASSES;
+
     const relevant = classified
-      .filter((c) => RELEVANT_PAGE_CLASSES.includes(c.class))
-      // Schedules first; elevations as supplement (PRD §6.3).
+      .filter((c) => relevantClasses.includes(c.class))
+      // Schedules first, then finish schedules, elevations, floor plans last
+      // (least precise source — PRD §6.3).
       .sort((a, b) => {
         const rank = (c: PageClassification) =>
           c.class === "cabinet_schedule_table"
             ? 0
             : c.class === "finish_schedule"
               ? 1
-              : 2;
+              : c.class === "floor_plan"
+                ? 3
+                : 2;
         return rank(a) - rank(b);
       });
 
     log.info(
-      { takeoffId, relevant: relevant.map((r) => r.page) },
+      { takeoffId, estimationMode, relevant: relevant.map((r) => r.page) },
       "classified pages"
     );
 
@@ -284,6 +298,11 @@ async function processPdf(
       unreadable_pages: [] as number[],
       warnings: [] as string[],
     };
+    if (estimationMode) {
+      summary.uncertainties.push(
+        "No cabinet schedule detected — quantities below are ESTIMATED from the floor plan/elevations and must be verified before quoting."
+      );
+    }
 
     for (const pageInfo of relevant) {
       await readRelevantPage(
@@ -293,6 +312,7 @@ async function processPdf(
         budget,
         crossVal,
         log,
+        estimationMode,
         { lines, raws, summary }
       );
     }
@@ -315,6 +335,7 @@ async function readRelevantPage(
   budget: TakeoffBudget,
   crossVal: CrossVal,
   log: Logger,
+  estimate: boolean,
   acc: {
     lines: CabinetLineItem[];
     raws: unknown[];
@@ -346,7 +367,7 @@ async function readRelevantPage(
   if (!needsRegioning(dims)) {
     let extraction: PageExtraction;
     try {
-      const result = await extractPage(page, fullPng, budget);
+      const result = await extractPage(page, fullPng, budget, { estimate });
       extraction = result.extraction;
       acc.raws.push({ page, raw: result.raw });
     } catch (err) {
@@ -416,7 +437,10 @@ async function readRelevantPage(
     const crop = pdf.renderRegion(idx, job.rect, job.dpi);
     let extraction: PageExtraction;
     try {
-      const result = await extractPage(page, crop, budget, { region: true });
+      const result = await extractPage(page, crop, budget, {
+        region: true,
+        estimate,
+      });
       extraction = result.extraction;
       acc.raws.push({ page, region: job.regionId, raw: result.raw });
     } catch (err) {

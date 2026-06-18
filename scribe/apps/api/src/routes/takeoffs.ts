@@ -11,7 +11,7 @@ import {
   takeoffLines,
   evalFixtures,
 } from "@scribe/db";
-import { ExportTemplate, SourceKind } from "@scribe/shared";
+import { ESTIMATED_NOTE_PREFIX, ExportTemplate, SourceKind } from "@scribe/shared";
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
@@ -276,6 +276,9 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         assembled: l.assembled,
         notes: l.notes,
         confidence: l.confidence,
+        // No estimated column on takeoff_lines; the [ESTIMATED] note prefix
+        // (set in the worker) carries the flag.
+        estimated: l.notes?.startsWith(ESTIMATED_NOTE_PREFIX) ?? false,
       }));
 
       reply

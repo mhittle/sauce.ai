@@ -65,6 +65,48 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-18 — B shipped: estimates for plans with no cabinet schedule
+
+**Context:** Task B — produce cabinet estimates when a set has no schedule.
+Grounded in the owner's **Highland Model B** set: its only cabinet signal is the
+**floor plan** (kitchen run + island, 5 bath vanities, closets); the pages
+labelled "ELEVATIONS" are *exterior* elevations, and the rest are 3D views. So
+floor-plan estimation is the core — the research-doc assumption that no-schedule
+sets still have interior elevations to box-count didn't hold.
+
+**What shipped (workers/shared/prompts only — no API change, no migration):**
+- **Estimation mode** (`process.ts`): when classification finds no
+  `cabinet_schedule_table`, the pipeline also reads `floor_plan` pages (ignored
+  before) and runs in estimate mode; a doc-summary banner records "no schedule
+  found — quantities ESTIMATED, verify before quoting."
+- **`ESTIMATE_SYSTEM` prompt** (`@scribe/prompts/estimate.ts`): infers cabinetry
+  from a floor plan / interior elevation (kitchen base+wall runs less appliance
+  gaps, islands, vanities, closets) using printed dims + drawing scale, emits
+  standard-size boxes summing to each run; explicitly ignores exterior
+  elevations / 3D / site plans (returns empty). Same `PageExtraction` shape →
+  reuses the repair/match/review path.
+- **`markEstimated`** (`@scribe/shared/estimate.ts`, unit-tested): sets
+  `estimated: true` (new `CabinetLineItem` field, default false), caps confidence
+  ≤ 0.5 (below the 0.8 review threshold), prefixes `[ESTIMATED]` to notes.
+  Builds on §A: a large floor plan's kitchen comes back as one legible `plan`
+  region, so estimation reasons over a whole drawing, not blind tiles.
+- **No DB column / API gate** (owner "warn-only"): the flag rides the note prefix
+  (CSV export derives `estimated` from it) + low confidence; `eval_fixtures`
+  capture `estimated` in their JSON. Send safety leans on the existing low-conf
+  review + the `needs_review`/unpriced send gates.
+
+**Verified:** `pnpm build` 11/11, `pnpm test` (+5 estimate tests), `pnpm eval`
+100% (fixtures back-compat via the field default). **Not yet verified with a live
+model** (no local key) — confirm on deployed `scribe-workers` by uploading
+Highland / the Piestewa floor plan and checking the Review screen for low-conf
+`[ESTIMATED]` lines. Single-image (non-PDF) uploads stay normal-extract for now.
+
+**Follow-ups:** LF→$ ROM pricing; optional hard estimated-line send-gate.
+
+**PRs:** this PR.
+
+---
+
 ## 2026-06-17 (b) — A shipped: legible large-format reads (region-crop + tiling)
 
 **Context:** Followed the research spike (below) by building task A. Root cause:

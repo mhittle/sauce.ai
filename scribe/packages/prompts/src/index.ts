@@ -5,6 +5,7 @@
 export * from "./classify.js";
 export * from "./extract.js";
 export * from "./regions.js";
+export * from "./estimate.js";
 export * from "./crawler.js";
 
 // Model tiers (PRD §4): Sonnet-tier for classification + extraction vision,
