@@ -21,9 +21,14 @@ are best-effort. Trigger each source once (Admin → Crawler Sources → Run
 now), inspect `last_error` and a few inserted projects, and correct dataset
 ids / column names in the source config via the admin UI.
 
-### MA-008 — (Optional) SAM.gov API key
+### MA-008 — SAM.gov API key (now load-bearing)
 Request a free api.data.gov key for SAM.gov and set `SAMGOV_API_KEY` on
 `scribe-workers`. Until set, the SAM.gov source records an error and skips.
+As of 2026-06-18 (c) SAM.gov is the **only active crawler source** (the three
+permit datasets were paused — they carry no drawings), so without this key the
+Prospect Queue stays empty. The key is also required to *download* SAM.gov
+attachments (it's appended to resource links at fetch time). Re-enable a permit
+source in Admin → Crawler Sources if permit-only signals are wanted.
 
 ### MA-009 — MinIO lifecycle rule for prospect-docs/
 The MinIO console build lacked the Lifecycle settings page, so the 90-day

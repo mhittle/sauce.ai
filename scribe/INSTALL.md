@@ -121,6 +121,13 @@ migration fails the prod deploy by design.
 - **PDF extraction pipeline is built but not yet validated on live plan
   sets** — first real takeoffs should be reviewed closely; the eval corpus
   starts from them.
+- **SAM.gov is the only active crawler source by default** (migration
+  `0003`). The three permit datasets (SF/LA/NYC Socrata) are seeded/migrated to
+  `inactive` because they carry no drawings; SAM.gov federal solicitations
+  attach public plan PDFs. So `SAMGOV_API_KEY` is required for any prospects to
+  appear, and SAM.gov attachment downloads are PDF-only (zip bundles are
+  skipped). Re-enable a permit source in Admin → Crawler Sources for permit
+  signals.
 - **No OCR fallback yet** for scan-only PDFs (roadmap).
 - **Sheet-index classification shortcut not implemented** — all pages get
   thumbnail classification (still ~25 low-res calls for a 200-page set).

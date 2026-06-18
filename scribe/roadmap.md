@@ -20,6 +20,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Legible large-format reads — region-crop + tiling (research: research/plan-reading-and-crawler-spike.md §A) | 8 | 6 | takeoff | done |
 | Estimate from plans with no cabinet schedule — floor-plan/elevation estimation (research: spike §B) | 6 | 6 | takeoff | done |
 | Public-plan-room crawler adapter + casework relevance scoring (PlanHub-style discovery; research: spike §C) | 6 | 6 | crawler | backlog |
+| Crawl drawings only — pause permit datasets, make SAM.gov the active source + fix attachment download | 6 | 2 | crawler | done |
 | AI cross-validation toggle (secondary OpenAI extraction → lower confidence on disagreement) | 6 | 4 | takeoff | done |
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
@@ -109,6 +110,21 @@ solicitations with downloadable drawings — NOT the gated PlanHub/ConstructConn
 Dodge networks (login-walled, paid, ToS-prohibited; need a paid/partner feed,
 an owner decision). New adapter behind the existing `fetchSince` interface +
 casework-relevance scoring in `score.ts` → one-click Run Takeoff. See spike §C.
+Investigated 2026-06-18 (c): the candidate portals are either undocumented JS
+SPAs (PlanetBids) or require registration to download documents (Bonfire,
+DemandStar) — which violates the public-data-only rule — so none is cleanly
+crawlable today. Still backlog; needs a portal that publishes a documented
+no-login listing+download API, or a partner/paid feed (owner decision).
+
+### Crawl drawings only — SAM.gov as the active source
+**Priority/LOE/Category/Status:** 6 / 2 / crawler / done (PR: this PR, 2026-06-18)
+Of the four seeded sources, only SAM.gov attaches drawings; the three Socrata
+permit datasets are signals with no documents. Paused the permit datasets
+(`status=inactive`, kept + re-enableable in Admin) via seed + migration `0003`,
+kept SAM.gov active with broadened casework keywords, and fixed attachment
+download (`SAMGOV_API_KEY` appended to `sam.gov` resource links at fetch time,
+never persisted). Feeds the new prospect detail view directly. SAM.gov key
+(MA-008) is now load-bearing — no key, no prospects.
 
 ### Real pricing rates entered
 **Priority/LOE/Category/Status:** 10 / 1 / pricing / backlog

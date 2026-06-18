@@ -9,8 +9,11 @@ import { migrate } from "./migrate.js";
 
 const SEED_SOURCES = [
   {
+    // Permit datasets are signals only — they carry no drawings, so they are
+    // seeded paused. Re-enable from Admin if permit signals are wanted.
     name: "San Francisco permits (Socrata)",
     type: "socrata",
+    status: "inactive",
     base_url: "https://data.sfgov.org",
     config: {
       dataset: "i98e-djp9",
@@ -28,6 +31,7 @@ const SEED_SOURCES = [
   {
     name: "Los Angeles permits (Socrata)",
     type: "socrata",
+    status: "inactive",
     base_url: "https://data.lacity.org",
     config: {
       dataset: "nbyu-2ha9",
@@ -45,6 +49,7 @@ const SEED_SOURCES = [
   {
     name: "NYC DOB permits (Socrata)",
     type: "socrata",
+    status: "inactive",
     base_url: "https://data.cityofnewyork.us",
     config: {
       dataset: "ipu4-2q9a",
@@ -60,12 +65,21 @@ const SEED_SOURCES = [
     },
   },
   {
+    // Federal solicitations frequently attach full plan sets as public PDFs —
+    // the active drawings-bearing source. Needs the free SAMGOV_API_KEY.
     name: "SAM.gov solicitations",
     type: "samgov",
+    status: "active",
     base_url: "https://api.sam.gov",
     config: {
-      // NAICS/keywords tuned for casework-bearing solicitations
-      keywords: ["cabinet", "casework", "millwork", "renovation kitchen"],
+      // keywords tuned for casework-bearing solicitations
+      keywords: [
+        "cabinet",
+        "casework",
+        "millwork",
+        "architectural woodwork",
+        "kitchen renovation",
+      ],
       jurisdiction: "Federal",
     },
   },
@@ -137,10 +151,10 @@ export async function seed(): Promise<void> {
 
   for (const s of SEED_SOURCES) {
     await pool.query(
-      `INSERT INTO sources (name, type, base_url, config)
-       SELECT $1, $2, $3, $4
+      `INSERT INTO sources (name, type, status, base_url, config)
+       SELECT $1, $2, $3, $4, $5
        WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name = $1)`,
-      [s.name, s.type, s.base_url, JSON.stringify(s.config)]
+      [s.name, s.type, s.status, s.base_url, JSON.stringify(s.config)]
     );
   }
 
