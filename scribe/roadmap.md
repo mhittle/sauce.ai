@@ -156,7 +156,8 @@ button — no way to inspect a prospect or see its drawings. Added a `View` butt
 → new `/prospects/$projectId` route (`ProspectDetail.tsx`) showing all project
 fields + score rationale and the full document list, each with an inline PDF
 preview (presigned `/project-documents/:id/url` in an iframe + open-in-new-tab)
-and a `Send to Takeoff` button. Frontend-only — reuses existing endpoints
+and a `Send to Takeoff` button, plus the prospect's source link(s)
+(`sourceRefs[].url`, the crawl origin). Frontend-only — reuses existing endpoints
 (`GET /projects/:id`, `GET /project-documents/:id/url`, `POST /takeoffs
 {project_document_id}`); any document is sendable, not just `plan_set`, since
 filename classification is rough.

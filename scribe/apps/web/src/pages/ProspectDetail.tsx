@@ -26,9 +26,15 @@ interface ProjectDetail {
   status: string;
   cabinetRelevanceScore: number | null;
   scoreRationale: string | null;
-  sourceRefs: unknown;
+  sourceRefs: SourceRef[];
   createdAt: string;
   documents: ProjectDoc[];
+}
+
+interface SourceRef {
+  source_id?: string;
+  external_id?: string;
+  url?: string;
 }
 
 function docTone(docClass: string): "green" | "blue" | "zinc" {
@@ -135,6 +141,31 @@ export function ProspectDetailPage() {
             />
             <Field label="GC" value={p.gcName} />
             <Field label="Score rationale" value={p.scoreRationale} />
+            {(Array.isArray(p.sourceRefs) ? p.sourceRefs : []).some(
+              (r) => r.url
+            ) && (
+              <div>
+                <dt className="text-zinc-500">Source</dt>
+                <dd className="space-y-1">
+                  {(Array.isArray(p.sourceRefs) ? p.sourceRefs : [])
+                    .filter((r) => r.url)
+                    .map((r, i) => (
+                      <a
+                        key={r.url ?? i}
+                        href={r.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block truncate text-blue-600 hover:underline"
+                        title={r.url}
+                      >
+                        {r.external_id
+                          ? `${r.external_id} ↗`
+                          : `${r.url} ↗`}
+                      </a>
+                    ))}
+                </dd>
+              </div>
+            )}
             {p.description && (
               <div>
                 <dt className="text-zinc-500">Description</dt>
