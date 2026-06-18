@@ -175,6 +175,17 @@ async function upsertProject(
   }
 }
 
+// SAM.gov resource-download links require the api_key; add it at fetch time
+// only so the secret never persists to project_documents.fetched_from_url.
+function authedDocUrl(url: string): string {
+  const key = process.env.SAMGOV_API_KEY;
+  if (!key) return url;
+  const u = new URL(url);
+  if (!u.host.endsWith("sam.gov")) return url;
+  u.searchParams.set("api_key", key);
+  return u.toString();
+}
+
 function classifyByFilename(url: string): string {
   const lower = url.toLowerCase();
   if (/(plan|drawing|dwg|arch|a\d{3})/.test(lower)) return "plan_set";
@@ -190,7 +201,7 @@ async function discoverDocuments(
   const db = getDb();
   for (const url of urls.slice(0, MAX_DOCS_PER_PROJECT)) {
     try {
-      const res = await politeFetch(url);
+      const res = await politeFetch(authedDocUrl(url));
       if (!res.ok) continue;
       const contentType = res.headers.get("content-type") ?? "";
       const buf = Buffer.from(await res.arrayBuffer());

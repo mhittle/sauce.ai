@@ -50,6 +50,11 @@ deploys if a future session doesn't know it exists. Keep this current.
   blocks `sent` quotes that price against them. Seeded Socrata field maps
   (SF/LA/NYC dataset ids + columns) are best-effort and must be validated on
   first pull (MA-007).
+- **SAM.gov is the only active crawler source** (since 2026-06-18 (c), migration
+  `0003`). The three Socrata permit datasets are seeded/migrated `inactive` (no
+  drawings); SAM.gov attaches public plan PDFs. So `SAMGOV_API_KEY` on
+  `scribe-workers` (MA-008) is **load-bearing** — without it the Prospect Queue
+  is empty. Re-enable a permit source from Admin if permit signals are wanted.
 - **The eval baseline (`evals/baseline.json`) is synthetic** (placeholder
   fixture at 100%/100%). Replace fixtures with real labeled plan sets before
   trusting the regression gate.
@@ -62,6 +67,48 @@ deploys if a future session doesn't know it exists. Keep this current.
 - **`packages/db` copies `migrations/` into `dist/` at build** — the migrate
   runner resolves SQL files relative to its compiled location; a build step
   change that drops the copy breaks `pnpm db:migrate` in prod images.
+
+---
+
+## 2026-06-18 (c) — crawl drawings only: SAM.gov active, permit datasets paused
+
+**Context:** Owner wanted the prospector to use sources that actually carry
+**drawings** (so the new detail view has plans to preview / send to takeoff),
+keeping the permit sources but not running them. Researched the "PlanHub-style"
+plan rooms (spike §C): PlanetBids is an undocumented JS SPA (probes returned the
+app shell / 405), Bonfire + DemandStar require registration to download docs
+(violates the public-data-only rule), and PlanHub/ConstructConnect/Dodge are
+paid + ToS-prohibited. So no municipal plan room is cleanly crawlable today.
+**Of the four seeded sources, SAM.gov is the only one that attaches public plan
+PDFs** — the three Socrata sources are permit *signals* (`document_urls: []`).
+Owner chose "SAM.gov only."
+
+**What shipped (workers/db only — no API/web change):**
+- **Paused the permit datasets:** SF/LA/NYC Socrata sources → `status=inactive`
+  in `seed.ts` (fresh installs) + migration `0003_drawings_sources.sql`
+  (already-seeded prod). Kept, not deleted — re-enableable from Admin → Crawler
+  Sources. `runAllSources` only runs `active` sources.
+- **SAM.gov kept active + tuned:** broadened casework keywords (added
+  "architectural woodwork", "kitchen renovation"); migration mirrors it.
+- **Fixed SAM.gov attachment download** (`run.ts` `authedDocUrl`): the resource
+  links require the api_key, so it's appended **at fetch time only** for
+  `*.sam.gov` hosts — the clean URL is what persists to
+  `project_documents.fetched_from_url` and what gets logged, so the secret never
+  lands in the DB or logs. Downloads stay PDF-only (zip bundles skipped — noted
+  as a follow-up).
+- **Seed INSERT now sets `status`** (was relying on the column default).
+
+**Load-bearing:** **MA-008 (SAMGOV_API_KEY on `scribe-workers`) is now
+load-bearing** — with the permit sources paused, SAM.gov is the only active
+source, so without the key the Prospect Queue stays empty and no attachments
+download. Updated MA-008, INSTALL §4, roadmap.
+
+**Verified:** `pnpm build` 11/11, `pnpm test` 18/18, `pnpm eval` 100%. **Not
+verified live** (no local SAM.gov key / Railway worker): after merge, set
+`SAMGOV_API_KEY`, run the SAM.gov source from Admin, and confirm prospects with
+downloaded plan PDFs appear in the detail view.
+
+**PRs:** this PR (draft) — rides with the prospect-detail-view branch.
 
 ---
 
