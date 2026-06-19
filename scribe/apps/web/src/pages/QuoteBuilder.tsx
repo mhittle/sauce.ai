@@ -42,12 +42,23 @@ interface QuoteDetail {
     };
     freight_verification_required: boolean;
   };
+  door_tiers: Record<
+    "low" | "medium" | "high",
+    {
+      door_sqft: number;
+      front_sqft: number;
+      door_cents: number;
+      front_cents: number;
+      total_cents: number;
+    }
+  >;
 }
 
 export function QuoteBuilderPage() {
   const { quoteId } = quoteBuilderRoute.useParams();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [tier, setTier] = useState<"low" | "medium" | "high">("medium");
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => apiGet<Me>("/auth/me") });
   const q = useQuery({
@@ -265,6 +276,45 @@ export function QuoteBuilderPage() {
                 <Badge tone="amber">required before send</Badge>
               )}
             </label>
+          </Card>
+
+          <Card>
+            <h2 className="mb-1 text-sm font-semibold text-zinc-500">
+              Door &amp; Drawer Pricing
+            </h2>
+            <p className="mb-2 text-xs text-zinc-400">
+              Doors + drawer fronts only — cabinet boxes not yet priced.
+            </p>
+            <div className="space-y-1">
+              {(["low", "medium", "high"] as const).map((t) => {
+                const dt = quote.door_tiers[t];
+                const label = { low: "Value", medium: "Standard", high: "Premium" }[t];
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTier(t)}
+                    className={`flex w-full items-center justify-between rounded border px-2 py-1 text-sm ${
+                      tier === t
+                        ? "border-emerald-500 bg-emerald-50 font-medium"
+                        : "border-zinc-200 hover:border-zinc-300"
+                    }`}
+                  >
+                    <span>{label}</span>
+                    <span>{formatUsd(dt.total_cents)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-zinc-400">
+              {formatUsd(quote.door_tiers[tier].door_cents)} doors +{" "}
+              {formatUsd(quote.door_tiers[tier].front_cents)} fronts ·{" "}
+              {(
+                quote.door_tiers[tier].door_sqft +
+                quote.door_tiers[tier].front_sqft
+              ).toFixed(0)}{" "}
+              ft²
+            </p>
           </Card>
 
           <Card>

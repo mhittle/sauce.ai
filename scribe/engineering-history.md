@@ -161,10 +161,19 @@ doors + 22 ft² fronts → LOW $7,700 / MED $9,603 / HIGH $14,106. Quote was
 Aries/Pecan (premium) so HIGH ≈ $14.1k is the analog; doors are ~half the
 $27,733 subtotal (boxes still needed for the full total).
 
-**Verified:** `pnpm build` 11/11, `pnpm test` (+4; pricing 30), `pnpm eval` 100%.
+**Wired into the app:** `GET /quotes/:id` now returns `door_tiers`
+(`priceFacesByTier` over the takeoff lines; `priceFacesByTier` accepts a minimal
+`FaceLike` so the API's DbLine maps in). QuoteBuilder shows a **"Door & Drawer
+Pricing"** card — Low/Med/High selectable buttons with each tier's total, labeled
+"doors + drawer fronts only — boxes not yet priced." Selection is local state
+(not persisted; no migration). The existing product-line Totals card is
+unchanged (still placeholder/NEEDS-REVIEW for boxes).
 
-**Open items:** surface the 3 tiers in the quote builder (API + web); cabinet-box
-price source (the other ~half of the subtotal).
+**Verified:** `pnpm build` 11/11 (incl. web), `pnpm test` (+4; pricing 30),
+`pnpm eval` 100%.
+
+**Open items:** persist the chosen tier + fold it into the quote total once the
+**cabinet-box price source** lands (the other ~half of the subtotal).
 
 **PRs:** this PR (branch `scribe/door-tier-pricing`).
 

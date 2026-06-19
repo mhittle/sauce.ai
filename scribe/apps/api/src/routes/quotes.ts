@@ -9,6 +9,7 @@ import {
   takeoffs,
 } from "@scribe/db";
 import { QUOTE_VALIDITY_DAYS } from "@scribe/shared";
+import { priceFacesByTier } from "@scribe/pricing";
 import { getObject, putObject, signedGetUrl } from "@scribe/storage";
 import {
   loadLatestPricingConfig,
@@ -117,7 +118,22 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       handling_cents: quote.handlingCents,
       freight_override_cents: quote.freightCents,
     });
-    return { ...quote, pricing: run, pricing_config_version: config.version };
+    // Doors-only low/mid/high $/ft² pricing of the door + drawer-front faces
+    // (boxes/hardware not yet priced). Lets the rep see and pick a tier.
+    const doorTiers = priceFacesByTier(
+      lines.map((l) => ({
+        category: l.category,
+        width_in: l.widthIn,
+        height_in: l.heightIn,
+        qty: l.qty,
+      }))
+    );
+    return {
+      ...quote,
+      pricing: run,
+      pricing_config_version: config.version,
+      door_tiers: doorTiers,
+    };
   });
 
   // Re-prices against the quote's PINNED pricing config (reproducibility).
