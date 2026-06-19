@@ -42,11 +42,12 @@ interface QuoteDetail {
     };
     freight_verification_required: boolean;
   };
-  door_tiers: Record<
+  quote_tiers: Record<
     "low" | "medium" | "high",
     {
-      door_sqft: number;
-      front_sqft: number;
+      label: string;
+      box_count: number;
+      box_cents: number;
       door_cents: number;
       front_cents: number;
       total_cents: number;
@@ -280,15 +281,15 @@ export function QuoteBuilderPage() {
 
           <Card>
             <h2 className="mb-1 text-sm font-semibold text-zinc-500">
-              Door &amp; Drawer Pricing
+              Estimated Price (boxes + doors)
             </h2>
             <p className="mb-2 text-xs text-zinc-400">
-              Doors + drawer fronts only — cabinet boxes not yet priced.
+              Pick a tier. Base is the real Shaker rate; Upgraded/Premium are
+              estimated. Drawer boxes &amp; hardware not yet included.
             </p>
             <div className="space-y-1">
               {(["low", "medium", "high"] as const).map((t) => {
-                const dt = quote.door_tiers[t];
-                const label = { low: "Value", medium: "Standard", high: "Premium" }[t];
+                const qt = quote.quote_tiers[t];
                 return (
                   <button
                     key={t}
@@ -300,20 +301,20 @@ export function QuoteBuilderPage() {
                         : "border-zinc-200 hover:border-zinc-300"
                     }`}
                   >
-                    <span>{label}</span>
-                    <span>{formatUsd(dt.total_cents)}</span>
+                    <span>{qt.label}</span>
+                    <span>{formatUsd(qt.total_cents)}</span>
                   </button>
                 );
               })}
             </div>
             <p className="mt-2 text-xs text-zinc-400">
-              {formatUsd(quote.door_tiers[tier].door_cents)} doors +{" "}
-              {formatUsd(quote.door_tiers[tier].front_cents)} fronts ·{" "}
-              {(
-                quote.door_tiers[tier].door_sqft +
-                quote.door_tiers[tier].front_sqft
-              ).toFixed(0)}{" "}
-              ft²
+              {formatUsd(quote.quote_tiers[tier].box_cents)} boxes (
+              {quote.quote_tiers[tier].box_count}) +{" "}
+              {formatUsd(
+                quote.quote_tiers[tier].door_cents +
+                  quote.quote_tiers[tier].front_cents
+              )}{" "}
+              doors/fronts
             </p>
           </Card>
 

@@ -9,7 +9,7 @@ import {
   takeoffs,
 } from "@scribe/db";
 import { QUOTE_VALIDITY_DAYS } from "@scribe/shared";
-import { priceFacesByTier } from "@scribe/pricing";
+import { priceQuoteTiers } from "@scribe/pricing";
 import { getObject, putObject, signedGetUrl } from "@scribe/storage";
 import {
   loadLatestPricingConfig,
@@ -118,13 +118,14 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       handling_cents: quote.handlingCents,
       freight_override_cents: quote.freightCents,
     });
-    // Doors-only low/mid/high $/ft² pricing of the door + drawer-front faces
-    // (boxes/hardware not yet priced). Lets the rep see and pick a tier.
-    const doorTiers = priceFacesByTier(
+    // Low/mid/high quote pricing: cabinet BOXES (validated pricing.js formula)
+    // + door/front FACES (Shaker-anchored tiers). Lets the rep pick a tier.
+    const quoteTiers = priceQuoteTiers(
       lines.map((l) => ({
         category: l.category,
         width_in: l.widthIn,
         height_in: l.heightIn,
+        depth_in: l.depthIn,
         qty: l.qty,
       }))
     );
@@ -132,7 +133,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       ...quote,
       pricing: run,
       pricing_config_version: config.version,
-      door_tiers: doorTiers,
+      quote_tiers: quoteTiers,
     };
   });
 

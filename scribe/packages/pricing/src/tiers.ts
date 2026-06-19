@@ -7,20 +7,34 @@ export interface FaceLike {
   qty: number;
 }
 
-// Baked low/mid/high door & drawer-front price tiers (PRD §6.4). CabinetNow
-// prices doors/fronts by the square foot, keyed on style × material; rather
-// than ping Airtable per quote, we bake three $/ft² tiers derived from the
-// catalog percentiles (style folded in) and let the rep pick one.
+// Door & drawer-front price tiers (PRD §6.4), priced by the square foot.
 //
-// Source: `scribe/scripts/airtable-pricing-explore.mjs` (percentiles of
-// `Material Master 2021`). Doors = `cabinet door` category, fronts = `solid`.
-// Re-run that script and update these numbers if the price book changes.
-//
-//   low  = p25   mid = p50   high = p90
-//   doors  $45.26 / $57.15 / $83.96 per ft²
-//   fronts $44.72 / $51.05 / $74.92 per ft²
+// Anchored on REAL Shaker 3/4 rates from Airtable `Material Master 2021`
+// (Shaker is CabinetNow's most common + cheapest door style — verified live: a
+// 15×30 Aries Natural-Birch door is $111.78 = exactly the Airtable $/ft², so
+// the Airtable "Price" IS the real per-ft² rate). The BASE tier is the real
+// cheapest Shaker (paint-grade); the pricier tiers are ESTIMATED multipliers
+// above it, chosen to span the real Shaker material range (paint-grade →
+// mid wood → premium painted/taction, ~$23→$86/ft² for doors). Surface a
+// disclaimer (DOOR_TIER_DISCLAIMER) so the rep knows base is real and the
+// upgrades are estimates.
 
 export type TierName = "low" | "medium" | "high";
+
+// Real cheapest Shaker 3/4 (paint-grade), $/ft² → integer cents. From Airtable.
+export const SHAKER_BASE_DOOR_CENTS_PER_SQFT = 2274; // $22.74/ft²
+export const SHAKER_BASE_FRONT_CENTS_PER_SQFT = 3310; // $33.10/ft²
+
+// Estimated upgrade multipliers above the Shaker base. low = real Shaker base;
+// medium ≈ mid wood (Maple/Cherry Shaker), high ≈ premium painted/taction.
+export const TIER_MULTIPLIERS: Record<TierName, number> = {
+  low: 1.0,
+  medium: 1.6,
+  high: 2.5,
+};
+
+export const DOOR_TIER_DISCLAIMER =
+  "Base (Value) is the real Shaker paint-grade rate; Upgraded/Premium tiers are estimates for nicer door styles and finishes.";
 
 export interface DoorTier {
   label: string;
@@ -28,10 +42,18 @@ export interface DoorTier {
   front_cents_per_sqft: number;
 }
 
+function tier(label: string, mult: number): DoorTier {
+  return {
+    label,
+    door_cents_per_sqft: Math.round(SHAKER_BASE_DOOR_CENTS_PER_SQFT * mult),
+    front_cents_per_sqft: Math.round(SHAKER_BASE_FRONT_CENTS_PER_SQFT * mult),
+  };
+}
+
 export const DOOR_TIERS: Record<TierName, DoorTier> = {
-  low: { label: "Value", door_cents_per_sqft: 4526, front_cents_per_sqft: 4472 },
-  medium: { label: "Standard", door_cents_per_sqft: 5715, front_cents_per_sqft: 5105 },
-  high: { label: "Premium", door_cents_per_sqft: 8396, front_cents_per_sqft: 7492 },
+  low: tier("Shaker (base)", TIER_MULTIPLIERS.low),
+  medium: tier("Upgraded", TIER_MULTIPLIERS.medium),
+  high: tier("Premium", TIER_MULTIPLIERS.high),
 };
 
 export interface TierFacePricing {
