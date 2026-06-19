@@ -144,6 +144,51 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (b) — reading overhaul (no-schedule estimation) + pricing groundwork
+
+**Context:** Validated the no-schedule estimator (B) end-to-end against a real
+CabinetNow quote ("MidMod - Piestawa Peak", subtotal $27,733.68) + its floor
+plan (2440 Piestewa). Goal: get the estimated line items to roughly match the
+quote's ~24 cabinets, as the precursor to hitting the price within 10%.
+
+**Pricing model learned (not built yet):** a CabinetNow quote = 3 priced lists
+(doors/fronts by **ft² × style × material**, cabinet **boxes** per unit, drawer
+boxes/hardware) − a **flat 10% discount**. Door/front $/ft² lives in **Airtable**
+(`Material Master 2021`, base `appBoHee0bMpXB0WK`; `Price = Base×Mult+Tackons`).
+Percentile tiers ($/ft²): doors $45/$57/$84, fronts $45/$51/$75 (low/mid/high).
+Doors-only back-test: doors are ~30–54% of the subtotal → **boxes are the other
+~half** (box price source still TBD). The current `packages/pricing` prices ONE
+blended `framed-casework` line per cabinet — no door/box decomposition — so it
+can't reproduce a CabinetNow total yet. See memory + `scribe/scripts/`.
+
+**Reading shipped (workers/shared/prompts; merged-to-main pending PR):**
+- **Lenient line parse** (`extract.ts`): one malformed line (qty 0 / stray gap
+  marker) no longer throws away the whole page/region.
+- **Estimate prompt v2**: lay out the run like an estimator — enumerate EVERY
+  cabinet, place specials at sink/range/DW/fridge/corner, add uppers + tall
+  pantries, tag each with type + door/drawer config, stay in scope.
+- **Per-room segmentation** (`LOCATE_ROOMS` + `locateRooms`): split a whole-house
+  floor plan into per-room crops so each room is laid out coherently; floor plans
+  use room segmentation, sheets use drawing segmentation.
+- **Lenient region parse** (`parsePageRegionsLenient`, +`PageRegion`): a malformed
+  box no longer discards the locate result.
+- **Estimation reads each region as one image** (no fragmenting a room).
+- Local harness `apps/workers/scripts/estimate-floorplan.mjs` runs the real
+  modules on a PDF (needs `ANTHROPIC_API_KEY`). Result on Piestewa: 6 vague
+  generic boxes → **24 tagged cabinets** w/ config, kitchen enumerated by wall.
+
+**Verified:** `pnpm build` 11/11, `pnpm test` (+region-parse tests; shared 45),
+`pnpm eval` 100%. Reading validated live via the local harness (real model).
+
+**Open items:** bath-vanity consistency (77" master double flickers — model
+variance); doors-aware pricing (Airtable tiers + box→door/front decomposition);
+cabinet-box price source. **Security:** an Anthropic API key was shared in chat
+this session for local runs — rotate it.
+
+**PRs:** this PR (branch `scribe/reading-cabinet-schedule`).
+
+---
+
 ## 2026-06-18 — B shipped: estimates for plans with no cabinet schedule
 
 **Context:** Task B — produce cabinet estimates when a set has no schedule.
