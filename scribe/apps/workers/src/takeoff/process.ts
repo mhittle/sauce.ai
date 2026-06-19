@@ -422,6 +422,44 @@ async function readRelevantPage(
     ];
   }
 
+  // Estimation reads each region as ONE coherent image: a room must not be
+  // fragmented across tiles, or the model can't lay out its whole cabinet run.
+  // (Schedule/elevation extraction still tiles for legibility — below.)
+  if (estimate) {
+    for (const region of regions) {
+      const wIn = (region.rect.x1 - region.rect.x0) / 72;
+      const hIn = (region.rect.y1 - region.rect.y0) / 72;
+      const crop = pdf.renderRegion(idx, region.rect, fitDpi(wIn, hIn));
+      let extraction: PageExtraction;
+      try {
+        const result = await extractPage(page, crop, budget, {
+          region: true,
+          estimate: true,
+        });
+        extraction = result.extraction;
+        acc.raws.push({ page, region: region.kind, raw: result.raw });
+      } catch (err) {
+        if (err instanceof BudgetExceededError) throw err;
+        acc.summary.warnings.push(
+          `page ${page} (${region.kind}): estimate failed (${String(err)})`
+        );
+        continue;
+      }
+      if (crossVal.enabled) {
+        extraction = await runCrossValidation(
+          page,
+          crop,
+          extraction,
+          crossVal,
+          acc.summary.warnings,
+          log
+        );
+      }
+      collect(extraction, acc.lines);
+    }
+    return;
+  }
+
   const jobs = regions.flatMap((r, i) =>
     planRenderJobs(r.rect, dims, i, r.kind)
   );
