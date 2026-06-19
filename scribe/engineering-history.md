@@ -144,6 +144,44 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (e) — cabinet-box pricing + Shaker-anchored door tiers → within 10%
+
+**Context:** Closing the gap to the real CabinetNow quote ($27,733.68 subtotal).
+Owner supplied the store's `pricing.js` (box pricing source) and confirmed two
+live prices that calibrated everything.
+
+**Shipped (`@scribe/pricing`):**
+- **`boxes.ts`** — port of `pricing.js` `cabinetBoxes()`: per-family (base/wall/
+  tall/vanity) carcass surface-area + face-frame rail model × species rail rates
+  × the ×5 "cnowservice" markup (+$100 oversize). **Validated: a 36×34×24 Red
+  Oak base = $732.65 vs the live site's $734.83 (0.3%).** Cheapest species =
+  Poplar; material only swings a box ~12% (carcass/shelf are flat).
+- **`tiers.ts` reworked** — door/front $/ft² now **anchored on real Shaker 3/4
+  rates from Airtable** (Shaker = most common + cheapest; base = paint-grade
+  $22.74 door / $33.10 front). Confirmed the Airtable "Price" IS the real $/ft²
+  (a 15×30 Aries Natural-Birch door = $111.78 = $35.77/ft² exactly). Pricier
+  tiers are ESTIMATED multipliers (×1.6 / ×2.5) with a `DOOR_TIER_DISCLAIMER`.
+- **`quote-tiers.ts`** `priceQuoteTiers` — combines boxes (per-tier species) +
+  door/front faces into one low/mid/high total. `GET /quotes/:id` returns
+  `quote_tiers`; QuoteBuilder shows an "Estimated Price (boxes + doors)" card
+  with a selectable tier + disclaimer.
+
+**Result (quote's actual items through the combined pricer):** LOW $26,239
+(−5%), MEDIUM $29,746 (+7%), HIGH $33,884 (+22%). The real Aries/Pecan quote
+sits between LOW and MEDIUM — **both within 10% of $27,733.** Target hit.
+
+**Still open:** drawer boxes + Blum glides + shelf pins + toe-kick (the quote's
+3rd list, small $); tall/corner box geometry is approximated (base validated,
+talls looser); persist the chosen tier into the quote total; the old product-
+line "Priced lines" panel still shows placeholder NEEDS-REVIEW alongside the new
+tier card.
+
+**Verified:** `pnpm build` 11/11, `pnpm test` (pricing 36), `pnpm eval` 100%.
+
+**PRs:** this PR (branch `scribe/cabinet-box-pricing`).
+
+---
+
 ## 2026-06-18 (d) — door/front tier pricing (low/mid/high $/ft²)
 
 **Context:** With cabinets expanding into door/front faces (2026-06-18 (c)), price
