@@ -144,6 +144,31 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (c) — box→door/front expansion (estimate line items)
+
+**Context:** Live review of the no-schedule estimate showed only cabinet boxes;
+the owner's CabinetNow quote has cabinet boxes PLUS a separate door & drawer-front
+list (doors priced by ft²). Those faces are derived from the boxes, not read off
+the plan.
+
+**Shipped:** `expandToComponents` in `@scribe/shared` (pure, 8 tests) — given a
+cabinet's category + width + height + door/drawer config (parsed from the
+estimator's notes, with standard fallbacks: sink base→2 doors, *-drawers→3
+fronts, surrounds/panels/cubbies→none), it generates the door (`door`) and
+drawer-front (`drawer_front`) face line items at standard sizes (wall = full
+height; base/tall/vanity less a 4.5" toe-kick; stacked drawers short). Wired into
+`process.ts`: in estimation mode each cabinet spawns its faces, appended to the
+takeoff lines. Local harness now emits ~22 boxes + ~43 door/front pieces (quote
+has ~52). Faces are `estimated` + low-confidence and currently match no product
+line (priced once the Airtable ft² tiers land — next).
+
+**Verified:** `pnpm build` 11/11, `pnpm test` (+8; shared 53), `pnpm eval` 100%.
+Validated live via the local harness (real model).
+
+**PRs:** this PR (branch `scribe/cabinet-door-expansion`).
+
+---
+
 ## 2026-06-18 (b) — reading overhaul (no-schedule estimation) + pricing groundwork
 
 **Context:** Validated the no-schedule estimator (B) end-to-end against a real

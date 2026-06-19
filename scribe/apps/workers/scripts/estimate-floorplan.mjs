@@ -10,6 +10,7 @@
 import { readFileSync } from "node:fs";
 import {
   dedupeLines,
+  expandToComponents,
   fitDpi,
   mapBoxToPagePoints,
   needsRegioning,
@@ -139,6 +140,8 @@ async function main() {
     const lines = [];
     for (const p of relevant)
       lines.push(...(await readPage(pdf, p.page, estimationMode, p.class)));
+
+    if (estimationMode) lines.push(...lines.flatMap((l) => expandToComponents(l)));
 
     // Report
     console.log(`\n===== ${lines.length} LINE ITEMS (tokens used: ${budget.used}) =====`);
