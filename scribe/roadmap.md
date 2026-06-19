@@ -23,6 +23,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Crawl drawings only — pause permit datasets, make SAM.gov the active source + fix attachment download | 6 | 2 | crawler | done |
 | AI cross-validation toggle (secondary OpenAI extraction → lower confidence on disagreement) | 6 | 4 | takeoff | done |
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
+| Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition (match CabinetNow quotes ±10%) | 9 | 7 | pricing | backlog |
+| No-schedule reading: bath-vanity consistency + tighter kitchen recall | 6 | 3 | takeoff | backlog |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
 | Quote email drafting w/ PDF attached (replace mailto) | 7 | 3 | backend | backlog |
 | OCR fallback for scan-only PDFs (tesseract) | 7 | 5 | takeoff | backlog |
@@ -129,6 +131,24 @@ never persisted). Feeds the new prospect detail view directly. SAM.gov key
 ### Real pricing rates entered
 **Priority/LOE/Category/Status:** 10 / 1 / pricing / backlog
 MA-006. Quotes are blocked from `sent` until NEEDS REVIEW rates are replaced.
+
+### Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition
+**Priority/LOE/Category/Status:** 9 / 7 / pricing / backlog
+A CabinetNow quote = doors/fronts (ft²×style×material) + boxes (per unit) +
+drawer-boxes/hardware − flat 10%. Today `packages/pricing` prices one blended
+`framed-casework` line per cabinet, so it can't reproduce a quote. Build: an
+Airtable fetch → baked low/mid/high $/ft² tiers (done: percentiles in
+`scribe/scripts/`), a box→door/front/drawer-box expansion catalog, and a quote
+path that produces low/mid/high totals. Validate against the Piestewa quote
+($27,733.68 subtotal) within 10%. Box price source still TBD (doors ≈ half the
+order). See `[[scribe-cabinetnow-pricing-model]]` memory + spike.
+
+### No-schedule reading: bath-vanity consistency + tighter kitchen recall
+**Priority/LOE/Category/Status:** 6 / 3 / takeoff / backlog
+Follow-on to the 2026-06-18 reading overhaul. Kitchen now enumerates well; the
+77" master double vanity flickers across runs (model variance) and a few kitchen
+specials (trash/blind-corner/2nd pantry) are inconsistent. Tighten the estimate
+prompt / room-locate for baths; measure recall against the quote's box list.
 
 ### AI cross-validation toggle
 **Priority/LOE/Category/Status:** 6 / 4 / takeoff / done (PR: this PR, 2026-06-16)

@@ -1,4 +1,9 @@
-import { markEstimated, PageExtraction, repairLine } from "@scribe/shared";
+import {
+  CabinetLineItem,
+  markEstimated,
+  PageExtraction,
+  repairLine,
+} from "@scribe/shared";
 import {
   ESTIMATE_SYSTEM,
   estimateUserText,
@@ -44,7 +49,18 @@ export async function extractPage(
   budget.record(message.usage);
 
   const raw = extractJson(textOf(message));
-  const extraction = PageExtraction.parse(raw);
+  // Parse lines leniently: one malformed line (e.g. qty 0, a stray "gap"
+  // marker) must NOT discard the whole page/region's extraction.
+  const rawObj = (raw ?? {}) as Record<string, unknown>;
+  const rawLines = Array.isArray(rawObj.lines) ? rawObj.lines : [];
+  const validLines = rawLines.flatMap((l) => {
+    const parsed = CabinetLineItem.safeParse({
+      ...(l as object),
+      source_page: (l as { source_page?: unknown }).source_page ?? pageNumber,
+    });
+    return parsed.success ? [parsed.data] : [];
+  });
+  const extraction = PageExtraction.parse({ ...rawObj, lines: validLines });
 
   const repaired = {
     ...extraction,

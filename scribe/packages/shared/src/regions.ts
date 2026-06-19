@@ -64,21 +64,32 @@ export const RegionKind = z.enum([
 ]);
 export type RegionKind = z.infer<typeof RegionKind>;
 
-// Output of the vision "locate" call: distinct drawings on a sheet, in pixel
-// coordinates relative to the image the model was sent.
+// One located region in pixel coordinates of the sent image.
+export const PageRegion = z.object({
+  kind: RegionKind,
+  // [x0, y0, x1, y1] in pixels of the sent image.
+  box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  confidence: z.number().min(0).max(1).default(0.5),
+});
+export type PageRegion = z.infer<typeof PageRegion>;
+
+// Output of the vision "locate" call: distinct drawings / rooms on a sheet.
 export const PageRegions = z.object({
-  regions: z
-    .array(
-      z.object({
-        kind: RegionKind,
-        // [x0, y0, x1, y1] in pixels of the sent image.
-        box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
-        confidence: z.number().min(0).max(1).default(0.5),
-      })
-    )
-    .default([]),
+  regions: z.array(PageRegion).default([]),
 });
 export type PageRegions = z.infer<typeof PageRegions>;
+
+// Lenient parse: keep the well-formed regions, drop malformed ones (a single
+// bad box from the model must not discard the whole locate result).
+export function parsePageRegionsLenient(raw: unknown): PageRegions {
+  const obj = (raw ?? {}) as { regions?: unknown };
+  const arr = Array.isArray(obj.regions) ? obj.regions : [];
+  const regions = arr.flatMap((r) => {
+    const parsed = PageRegion.safeParse(r);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return { regions };
+}
 
 const PT_PER_IN = 72;
 

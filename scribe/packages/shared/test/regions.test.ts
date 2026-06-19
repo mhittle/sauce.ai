@@ -8,6 +8,7 @@ import {
   MODEL_MAX_TOKENS,
   needsRegioning,
   padRectToPage,
+  parsePageRegionsLenient,
   planRenderJobs,
   VISUAL_PATCH_PX,
 } from "../src/regions.js";
@@ -163,6 +164,28 @@ describe("padRectToPage / clampRectToPage", () => {
       { widthPt: 200, heightPt: 200 }
     );
     expect(r).toEqual({ x0: 0, y0: 0, x1: 200, y1: 200 });
+  });
+});
+
+describe("parsePageRegionsLenient", () => {
+  it("keeps well-formed regions and drops malformed ones", () => {
+    const out = parsePageRegionsLenient({
+      regions: [
+        { kind: "plan", box: [0, 0, 100, 100], confidence: 0.9 },
+        { kind: "plan", box: [[1, 2], 3, 4] }, // malformed box (nested array)
+        { kind: "elevation", box: [10, 10, 50, 50] }, // confidence defaults
+        { box: [0, 0, 1, 1] }, // missing kind
+      ],
+    });
+    expect(out.regions).toHaveLength(2);
+    expect(out.regions[0].kind).toBe("plan");
+    expect(out.regions[1].confidence).toBe(0.5);
+  });
+
+  it("returns empty regions for junk input", () => {
+    expect(parsePageRegionsLenient(null).regions).toEqual([]);
+    expect(parsePageRegionsLenient({}).regions).toEqual([]);
+    expect(parsePageRegionsLenient({ regions: "nope" }).regions).toEqual([]);
   });
 });
 

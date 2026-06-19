@@ -32,7 +32,7 @@ import { classifyPages } from "./classify.js";
 import { crossValidatePage } from "./cross-validate.js";
 import { extractPage } from "./extract.js";
 import { OpenPdf, openPdf, THUMBNAIL_DPI } from "./pdf.js";
-import { locateRegions } from "./regions.js";
+import { locateRegions, locateRooms } from "./regions.js";
 import { parseSpreadsheet } from "./spreadsheet.js";
 
 // Region kinds worth cropping + extracting (PRD §4 legible-reads path).
@@ -313,6 +313,7 @@ async function processPdf(
         crossVal,
         log,
         estimationMode,
+        pageInfo.class,
         { lines, raws, summary }
       );
     }
@@ -336,6 +337,7 @@ async function readRelevantPage(
   crossVal: CrossVal,
   log: Logger,
   estimate: boolean,
+  pageClass: PageClass,
   acc: {
     lines: CabinetLineItem[];
     raws: unknown[];
@@ -394,7 +396,12 @@ async function readRelevantPage(
   const fullH = Math.round(heightIn * locateDpi);
   let regions: { kind: RegionKind; rect: ReturnType<typeof padRectToPage> }[] = [];
   try {
-    const located = await locateRegions(fullPng, fullW, fullH, budget);
+    // No-schedule estimation on a floor plan: segment by ROOM so each room's
+    // cabinetry is laid out from a coherent crop. Otherwise locate drawings.
+    const located =
+      estimate && pageClass === "floor_plan"
+        ? await locateRooms(fullPng, fullW, fullH, budget)
+        : await locateRegions(fullPng, fullW, fullH, budget);
     regions = located.regions
       .filter((r) => EXTRACTABLE_REGION_KINDS.includes(r.kind))
       .map((r) => ({
@@ -420,6 +427,44 @@ async function readRelevantPage(
     regions = [
       { kind: "other", rect: { x0: 0, y0: 0, x1: dims.widthPt, y1: dims.heightPt } },
     ];
+  }
+
+  // Estimation reads each region as ONE coherent image: a room must not be
+  // fragmented across tiles, or the model can't lay out its whole cabinet run.
+  // (Schedule/elevation extraction still tiles for legibility — below.)
+  if (estimate) {
+    for (const region of regions) {
+      const wIn = (region.rect.x1 - region.rect.x0) / 72;
+      const hIn = (region.rect.y1 - region.rect.y0) / 72;
+      const crop = pdf.renderRegion(idx, region.rect, fitDpi(wIn, hIn));
+      let extraction: PageExtraction;
+      try {
+        const result = await extractPage(page, crop, budget, {
+          region: true,
+          estimate: true,
+        });
+        extraction = result.extraction;
+        acc.raws.push({ page, region: region.kind, raw: result.raw });
+      } catch (err) {
+        if (err instanceof BudgetExceededError) throw err;
+        acc.summary.warnings.push(
+          `page ${page} (${region.kind}): estimate failed (${String(err)})`
+        );
+        continue;
+      }
+      if (crossVal.enabled) {
+        extraction = await runCrossValidation(
+          page,
+          crop,
+          extraction,
+          crossVal,
+          acc.summary.warnings,
+          log
+        );
+      }
+      collect(extraction, acc.lines);
+    }
+    return;
   }
 
   const jobs = regions.flatMap((r, i) =>
