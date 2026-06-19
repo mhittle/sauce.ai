@@ -144,6 +144,32 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (d) — door/front tier pricing (low/mid/high $/ft²)
+
+**Context:** With cabinets expanding into door/front faces (2026-06-18 (c)), price
+those faces. Owner decision: bake the tiers (don't ping Airtable per quote) and
+offer low/mid/high for the rep to pick.
+
+**Shipped:** `@scribe/pricing/tiers.ts` — baked `DOOR_TIERS` ($/ft² for door +
+drawer-front, low/mid/high = catalog p25/p50/p90 from
+`scripts/airtable-pricing-explore.mjs`: doors $45/$57/$84, fronts $45/$51/$75) +
+`priceFacesByTier(lines)` (pure, 4 tests) summing door/front ft² × tier rate.
+Doors-only (boxes excluded). Harness wired to print the 3 tier totals.
+
+**Validated end-to-end on the Piestewa plan (read → expand → price):** 148 ft²
+doors + 22 ft² fronts → LOW $7,700 / MED $9,603 / HIGH $14,106. Quote was
+Aries/Pecan (premium) so HIGH ≈ $14.1k is the analog; doors are ~half the
+$27,733 subtotal (boxes still needed for the full total).
+
+**Verified:** `pnpm build` 11/11, `pnpm test` (+4; pricing 30), `pnpm eval` 100%.
+
+**Open items:** surface the 3 tiers in the quote builder (API + web); cabinet-box
+price source (the other ~half of the subtotal).
+
+**PRs:** this PR (branch `scribe/door-tier-pricing`).
+
+---
+
 ## 2026-06-18 (c) — box→door/front expansion (estimate line items)
 
 **Context:** Live review of the no-schedule estimate showed only cabinet boxes;
