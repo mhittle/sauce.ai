@@ -1,4 +1,11 @@
-import type { CabinetLineItem } from "@scribe/shared";
+// Minimal shape the tier pricer needs (CabinetLineItem and the API's DbLine
+// both satisfy it structurally).
+export interface FaceLike {
+  category: string;
+  width_in: number | null;
+  height_in: number | null;
+  qty: number;
+}
 
 // Baked low/mid/high door & drawer-front price tiers (PRD §6.4). CabinetNow
 // prices doors/fronts by the square foot, keyed on style × material; rather
@@ -35,7 +42,7 @@ export interface TierFacePricing {
   total_cents: number;
 }
 
-function sqft(line: CabinetLineItem): number {
+function sqft(line: FaceLike): number {
   if (line.width_in == null || line.height_in == null) return 0;
   return ((line.width_in * line.height_in) / 144) * line.qty;
 }
@@ -45,7 +52,7 @@ function sqft(line: CabinetLineItem): number {
 // varies by style/material choice. Sums areas first, then applies the rate, so
 // rounding happens once per tier.
 export function priceFacesByTier(
-  lines: CabinetLineItem[]
+  lines: FaceLike[]
 ): Record<TierName, TierFacePricing> {
   let doorSqft = 0;
   let frontSqft = 0;
