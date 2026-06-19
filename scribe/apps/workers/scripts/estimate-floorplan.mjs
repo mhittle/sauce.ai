@@ -19,7 +19,7 @@ import {
 } from "@scribe/shared";
 import { openPdf, THUMBNAIL_DPI } from "../dist/takeoff/pdf.js";
 import { classifyPages } from "../dist/takeoff/classify.js";
-import { locateRegions } from "../dist/takeoff/regions.js";
+import { locateRegions, locateRooms } from "../dist/takeoff/regions.js";
 import { extractPage } from "../dist/takeoff/extract.js";
 import { TakeoffBudget, BudgetExceededError } from "../dist/lib/anthropic.js";
 
@@ -30,7 +30,7 @@ const log = {
 
 const EXTRACTABLE = ["schedule", "elevation", "plan"];
 
-async function readPage(pdf, page, estimate) {
+async function readPage(pdf, page, estimate, pageClass) {
   const idx = page - 1;
   const dims = pdf.pageDimsPt(idx);
   const widthIn = dims.widthPt / 72;
@@ -49,7 +49,10 @@ async function readPage(pdf, page, estimate) {
   const fullH = Math.round(heightIn * locateDpi);
   let regions = [];
   try {
-    const located = await locateRegions(fullPng, fullW, fullH, budget);
+    const located =
+      estimate && pageClass === "floor_plan"
+        ? await locateRooms(fullPng, fullW, fullH, budget)
+        : await locateRegions(fullPng, fullW, fullH, budget);
     regions = located.regions
       .filter((r) => EXTRACTABLE.includes(r.kind))
       .map((r) => ({
@@ -134,7 +137,8 @@ async function main() {
     console.error(`estimationMode=${estimationMode} relevant pages=${relevant.map((r) => r.page)}`);
 
     const lines = [];
-    for (const p of relevant) lines.push(...(await readPage(pdf, p.page, estimationMode)));
+    for (const p of relevant)
+      lines.push(...(await readPage(pdf, p.page, estimationMode, p.class)));
 
     // Report
     console.log(`\n===== ${lines.length} LINE ITEMS (tokens used: ${budget.used}) =====`);

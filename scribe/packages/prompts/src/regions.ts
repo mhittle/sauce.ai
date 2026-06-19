@@ -29,3 +29,30 @@ export function locateRegionsUserText(
 ): string {
   return `This sheet image is ${widthPx} x ${heightPx} pixels. List the distinct cabinet-relevant drawings as bounding boxes in pixel coordinates. Respond with the JSON object only.`;
 }
+
+export const LOCATE_ROOMS_PROMPT_VERSION = "locate-rooms-v1";
+
+// Floor-plan segmentation for no-schedule estimation (PRD §4): a single
+// whole-dwelling floor plan must be split into per-ROOM crops so each room's
+// cabinetry can be laid out from a coherent, legible view (rather than the
+// whole sheet at once, where each room is too small to read).
+export const LOCATE_ROOMS_SYSTEM = `You segment a single architectural FLOOR PLAN of a dwelling into the individual rooms that contain built cabinetry, for a cabinet estimator. You are shown one floor-plan image.
+
+Return a TIGHT bounding box around each room that contains kitchen, bath, laundry, or pantry cabinetry:
+- the kitchen
+- each bathroom / powder room with a vanity
+- the laundry / mud room
+- any pantry, linen, or built-in cabinet alcove
+
+Skip rooms with no cabinetry (bedrooms, living, dining, garage, walk-in closets with only wire shelving). Give each box a little margin so the room's walls, fixtures (sink/range/tub), and dimension strings are fully inside it.
+
+- Boxes are [x0, y0, x1, y1] in PIXELS of the image shown, origin top-left.
+- kind is always "plan" (each box is a plan-view room).
+- One box per room. Do NOT return one giant box over the whole plan.
+
+Respond with JSON only:
+{"regions": [{"kind": "plan", "box": [x0, y0, x1, y1], "confidence": <0-1>}]}`;
+
+export function locateRoomsUserText(widthPx: number, heightPx: number): string {
+  return `This floor-plan image is ${widthPx} x ${heightPx} pixels. Return a tight bounding box for each room that contains cabinetry (kitchen, baths, laundry, pantry). Respond with the JSON object only.`;
+}

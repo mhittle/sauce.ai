@@ -32,7 +32,7 @@ import { classifyPages } from "./classify.js";
 import { crossValidatePage } from "./cross-validate.js";
 import { extractPage } from "./extract.js";
 import { OpenPdf, openPdf, THUMBNAIL_DPI } from "./pdf.js";
-import { locateRegions } from "./regions.js";
+import { locateRegions, locateRooms } from "./regions.js";
 import { parseSpreadsheet } from "./spreadsheet.js";
 
 // Region kinds worth cropping + extracting (PRD §4 legible-reads path).
@@ -313,6 +313,7 @@ async function processPdf(
         crossVal,
         log,
         estimationMode,
+        pageInfo.class,
         { lines, raws, summary }
       );
     }
@@ -336,6 +337,7 @@ async function readRelevantPage(
   crossVal: CrossVal,
   log: Logger,
   estimate: boolean,
+  pageClass: PageClass,
   acc: {
     lines: CabinetLineItem[];
     raws: unknown[];
@@ -394,7 +396,12 @@ async function readRelevantPage(
   const fullH = Math.round(heightIn * locateDpi);
   let regions: { kind: RegionKind; rect: ReturnType<typeof padRectToPage> }[] = [];
   try {
-    const located = await locateRegions(fullPng, fullW, fullH, budget);
+    // No-schedule estimation on a floor plan: segment by ROOM so each room's
+    // cabinetry is laid out from a coherent crop. Otherwise locate drawings.
+    const located =
+      estimate && pageClass === "floor_plan"
+        ? await locateRooms(fullPng, fullW, fullH, budget)
+        : await locateRegions(fullPng, fullW, fullH, budget);
     regions = located.regions
       .filter((r) => EXTRACTABLE_REGION_KINDS.includes(r.kind))
       .map((r) => ({
