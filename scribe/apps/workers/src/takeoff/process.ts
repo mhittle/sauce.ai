@@ -22,6 +22,7 @@ import {
   PricingSnapshot,
   RegionKind,
   RELEVANT_PAGE_CLASSES,
+  expandToComponents,
 } from "@scribe/shared";
 import { matchLine } from "@scribe/pricing";
 import { EXTRACT_PROMPT_VERSION } from "@scribe/prompts";
@@ -316,6 +317,15 @@ async function processPdf(
         pageInfo.class,
         { lines, raws, summary }
       );
+    }
+
+    // No-schedule estimation: each cabinet box also has doors + drawer fronts
+    // (priced separately by ft²). Spawn those face line items so the schedule
+    // mirrors a real quote (cabinet boxes + a door/drawer list).
+    if (estimationMode) {
+      const faces = lines.flatMap((l) => expandToComponents(l));
+      lines.push(...faces);
+      log.info({ takeoffId, faces: faces.length }, "expanded cabinets into door/front faces");
     }
 
     return { lines, raws, classified, pageCount, summary };
