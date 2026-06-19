@@ -96,6 +96,14 @@ export function QuoteBuilderPage() {
   const totals = quote.pricing.totals;
   const isAdmin = me.data?.role === "admin" || me.data?.role === "sales";
 
+  // Unified totals: the selected tier's estimate (boxes + doors) is the
+  // subtotal; markup/handling/freight apply on top. (The old product-line
+  // `totals` is kept only for freight + the lead-time/needs-review banners.)
+  const tierSubtotalCents = quote.quote_tiers[tier].total_cents;
+  const tierMarkupCents = Math.round((tierSubtotalCents * quote.markupPct) / 100);
+  const tierGrandTotalCents =
+    tierSubtotalCents + tierMarkupCents + quote.handlingCents + totals.freight_cents;
+
   return (
     <div>
       <PageTitle
@@ -231,8 +239,8 @@ export function QuoteBuilderPage() {
             </label>
             {isAdmin && (
               <p className="mt-2 text-xs text-zinc-500">
-                Margin: {formatUsd(totals.markup_cents)} on{" "}
-                {formatUsd(totals.subtotal_cents)}
+                Margin: {formatUsd(tierMarkupCents)} on{" "}
+                {formatUsd(tierSubtotalCents)}
               </p>
             )}
           </Card>
@@ -320,16 +328,20 @@ export function QuoteBuilderPage() {
 
           <Card>
             <h2 className="mb-2 text-sm font-semibold text-zinc-500">Totals</h2>
-            <Row label="Subtotal" value={formatUsd(totals.subtotal_cents)} />
-            <Row label="Markup" value={formatUsd(totals.markup_cents)} />
-            <Row label="Handling" value={formatUsd(totals.handling_cents)} />
+            <Row
+              label={`Subtotal (${quote.quote_tiers[tier].label})`}
+              value={formatUsd(tierSubtotalCents)}
+            />
+            <Row label="Markup" value={formatUsd(tierMarkupCents)} />
+            <Row label="Handling" value={formatUsd(quote.handlingCents)} />
             <Row label="Freight" value={formatUsd(totals.freight_cents)} />
             <div className="mt-1 border-t border-zinc-200 pt-1">
-              <Row label="Total" value={formatUsd(totals.total_cents)} bold />
+              <Row label="Total" value={formatUsd(tierGrandTotalCents)} bold />
             </div>
             <p className="mt-2 text-xs text-zinc-400">
+              Subtotal is the selected {quote.quote_tiers[tier].label} estimate
+              (boxes + doors); drawer boxes &amp; hardware not yet included.
               Valid until {quote.validUntil ?? "—"} (10-day price lock).
-              Customer must verify all measurements and quantities.
             </p>
           </Card>
         </div>

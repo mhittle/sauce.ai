@@ -144,6 +144,27 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (f) — unify quote Totals with the tier estimate (web)
+
+**Context:** The Quote Builder showed two disagreeing numbers — the new
+"Estimated Price (boxes + doors)" tier card vs. the old "Totals" card (still
+driven by the placeholder product-line run).
+
+**Shipped:** QuoteBuilder Totals now uses the **selected tier** as its subtotal
+(`quote_tiers[tier].total_cents`), with markup/handling/freight applied on top;
+the admin margin note matches. Picking a tier in the estimate card updates the
+Total. The product-line `run` is kept only for freight + the lead-time /
+needs-review banners. Web-only, no API change.
+
+**Open:** retire the placeholder "Priced lines (pricing config v1)" panel
+entirely; persist the chosen tier server-side. Separately, the live estimate
+reads low vs the quote because the takeoff detected ~20 boxes vs the quote's
+~29 (reading completeness, not pricing).
+
+**PRs:** this PR (branch `scribe/unify-quote-totals`).
+
+---
+
 ## 2026-06-18 (e) — cabinet-box pricing + Shaker-anchored door tiers → within 10%
 
 **Context:** Closing the gap to the real CabinetNow quote ($27,733.68 subtotal).
