@@ -148,6 +148,17 @@ async function main() {
     const byCat = {};
     for (const l of lines) byCat[l.category] = (byCat[l.category] ?? 0) + l.qty;
     console.log("by category:", byCat);
+
+    const { priceFacesByTier } = await import("@scribe/pricing");
+    const tiers = priceFacesByTier(lines);
+    console.log("\n===== DOOR/FRONT PRICING BY TIER (doors-only; boxes not included) =====");
+    for (const t of ["low", "medium", "high"]) {
+      const p = tiers[t];
+      console.log(
+        `  ${t.toUpperCase().padEnd(7)} doors ${p.door_sqft}ft² $${(p.door_cents / 100).toFixed(0)} + ` +
+          `fronts ${p.front_sqft}ft² $${(p.front_cents / 100).toFixed(0)} = $${(p.total_cents / 100).toFixed(0)}`
+      );
+    }
     console.log("\n#  room | tag | qty | WxHxD | conf | notes");
     lines.forEach((l, i) =>
       console.log(
