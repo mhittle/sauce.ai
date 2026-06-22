@@ -78,20 +78,27 @@ export async function extractPage(
     : opts.region
       ? extractRegionUserText(pageNumber)
       : extractUserText(pageNumber);
-  const message = await client.messages.create({
-    model: SONNET_MODEL,
-    max_tokens: 32000,
-    // Pin temperature so the same plan reads consistently run-to-run (the API
-    // default is 1.0 → different cabinets each reprocess).
-    temperature: 0,
-    system: opts.estimate ? ESTIMATE_SYSTEM : EXTRACT_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: [imageBlock(png), { type: "text", text: userText }],
-      },
-    ],
-  });
+  // Stream and collect the final message: at max_tokens this high the SDK
+  // refuses a non-streaming request (it may exceed the 10-min non-streaming
+  // limit). Streaming costs the same — billing is per token generated, and
+  // max_tokens is only a ceiling. finalMessage() yields the same Message shape
+  // (usage, content, stop_reason) the rest of this function expects.
+  const message = await client.messages
+    .stream({
+      model: SONNET_MODEL,
+      max_tokens: 32000,
+      // Pin temperature so the same plan reads consistently run-to-run (the API
+      // default is 1.0 → different cabinets each reprocess).
+      temperature: 0,
+      system: opts.estimate ? ESTIMATE_SYSTEM : EXTRACT_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [imageBlock(png), { type: "text", text: userText }],
+        },
+      ],
+    })
+    .finalMessage();
   budget.record(message.usage);
 
   const text = textOf(message);
