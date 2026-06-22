@@ -50,6 +50,8 @@ interface QuoteDetail {
       box_cents: number;
       door_cents: number;
       front_cents: number;
+      drawer_box_count: number;
+      hardware_cents: number;
       total_cents: number;
     }
   >;
@@ -289,11 +291,11 @@ export function QuoteBuilderPage() {
 
           <Card>
             <h2 className="mb-1 text-sm font-semibold text-zinc-500">
-              Estimated Price (boxes + doors)
+              Estimated Price (boxes + doors + hardware)
             </h2>
             <p className="mb-2 text-xs text-zinc-400">
               Pick a tier. Base is the real Shaker rate; Upgraded/Premium are
-              estimated. Drawer boxes &amp; hardware not yet included.
+              estimated. Boxes &amp; hardware stay constant across tiers.
             </p>
             <div className="space-y-1">
               {(["low", "medium", "high"] as const).map((t) => {
@@ -322,7 +324,10 @@ export function QuoteBuilderPage() {
                 quote.quote_tiers[tier].door_cents +
                   quote.quote_tiers[tier].front_cents
               )}{" "}
-              doors/fronts
+              doors/fronts +{" "}
+              {formatUsd(quote.quote_tiers[tier].hardware_cents)} hardware (
+              {quote.quote_tiers[tier].drawer_box_count} drawer box
+              {quote.quote_tiers[tier].drawer_box_count === 1 ? "" : "es"})
             </p>
           </Card>
 
@@ -340,8 +345,9 @@ export function QuoteBuilderPage() {
             </div>
             <p className="mt-2 text-xs text-zinc-400">
               Subtotal is the selected {quote.quote_tiers[tier].label} estimate
-              (boxes + doors); drawer boxes &amp; hardware not yet included.
-              Valid until {quote.validUntil ?? "—"} (10-day price lock).
+              (boxes + doors + drawer-box hardware). Glides, shelf pins &amp;
+              toe-kick not yet included. Valid until {quote.validUntil ?? "—"}{" "}
+              (10-day price lock).
             </p>
           </Card>
         </div>
