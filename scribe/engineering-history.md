@@ -144,6 +144,32 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (g) — drawer-box hardware: CabinetNow's 3rd list (one rolled-up line)
+
+**Context:** The tier estimate priced only CabinetNow's first two lists (doors/
+fronts by ft², cabinet boxes per unit). The third list — drawer boxes + hardware
+— was missing, so the estimate ran ~9% light.
+
+**Shipped:** ported the live store's `pricing.js` `drawerBoxes()` formula into
+`@scribe/pricing` `hardware.ts` (per box: perimeter = 2·W+2·D; a tier line
+`slope·perimeter+intercept` picked by drawer-front HEIGHT; then
+`((tier×materialMult)+$10.06)×1.5`). `priceHardware(lines)` makes **one dovetail
+drawer box per `drawer_front` face** (the expand step already emits those) and
+sums to a **single rolled-up "Hardware" subtotal** (not a line per piece, per
+owner). Wired into `priceQuoteTiers` as a constant across tiers (drawer-box
+species isn't the rep's door-style choice — matches how CabinetNow's lists #2/#3
+stay flat). QuoteBuilder shows boxes + doors/fronts + hardware in the breakdown
+and Totals. Back-test on the Piestewa quote: 18 boxes add ~$2,387, LOW now
+**+3%** vs $27,733.68 (was −5% without hardware).
+
+**Open:** glides, shelf pins & toe-kick skin are option SKUs (not formulas in
+pricing.js) — still not modelled, but they're the small remainder. The live
+under-count (~20 vs ~29 boxes, reading completeness) still applies.
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
 ## 2026-06-18 (f) — unify quote Totals with the tier estimate (web)
 
 **Context:** The Quote Builder showed two disagreeing numbers — the new

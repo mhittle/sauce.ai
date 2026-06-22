@@ -57,9 +57,12 @@ console.log(`Boxes are ~${((total / QUOTE_SUBTOTAL) * 100).toFixed(0)}% of the f
 // Full quote-tier estimate: boxes (per-tier species) + doors/fronts (Shaker
 // tiers). The quote's door list ≈ 161.6 ft² doors + 19.7 ft² fronts; feed that
 // area as synthetic face lines (1 ft² each × qty).
+// Doors as raw area (1 ft² each). Drawer fronts as ~18 real boxes of 21"w ×
+// 7.5"h (= 19.7 ft² total) so the SAME lines drive both face area AND the
+// per-box hardware count.
 const faceLines = [
   { category: "door", width_in: 12, height_in: 12, qty: 161.6 },
-  { category: "drawer_front", width_in: 12, height_in: 12, qty: 19.7 },
+  { category: "drawer_front", width_in: 21, height_in: 7.5, qty: 18 },
 ];
 const boxLines = BOXES.map(([, cat, w, h, d, qty]) => ({
   category: cat,
@@ -69,12 +72,12 @@ const boxLines = BOXES.map(([, cat, w, h, d, qty]) => ({
   qty,
 }));
 const tiers = priceQuoteTiers([...boxLines, ...faceLines]);
-console.log("\n=== FULL QUOTE-TIER ESTIMATE (boxes + doors/fronts) vs $27,733.68 ===");
+console.log("\n=== FULL QUOTE-TIER ESTIMATE (boxes + doors/fronts + hardware) vs $27,733.68 ===");
 for (const t of ["low", "medium", "high"]) {
   const q = tiers[t];
   const tot = q.total_cents / 100;
   const delta = ((tot - QUOTE_SUBTOTAL) / QUOTE_SUBTOTAL) * 100;
   console.log(
-    `  ${t.toUpperCase().padEnd(7)} boxes $${(q.box_cents / 100).toFixed(0)} + doors/fronts $${((q.door_cents + q.front_cents) / 100).toFixed(0)} = $${tot.toFixed(0)}  (${delta >= 0 ? "+" : ""}${delta.toFixed(0)}% vs quote)`
+    `  ${t.toUpperCase().padEnd(7)} boxes $${(q.box_cents / 100).toFixed(0)} + doors/fronts $${((q.door_cents + q.front_cents) / 100).toFixed(0)} + hardware $${(q.hardware_cents / 100).toFixed(0)} (${q.drawer_box_count} boxes) = $${tot.toFixed(0)}  (${delta >= 0 ? "+" : ""}${delta.toFixed(0)}% vs quote)`
   );
 }

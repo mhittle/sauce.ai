@@ -55,7 +55,9 @@ describe("priceQuoteTiers", () => {
       { category: "drawer_front", width_in: 24, height_in: 6, depth_in: 0.75, qty: 3 },
     ];
     const t = priceQuoteTiers(lines);
-    expect(t.low.total_cents).toBe(t.low.box_cents + t.low.door_cents + t.low.front_cents);
+    expect(t.low.total_cents).toBe(
+      t.low.box_cents + t.low.door_cents + t.low.front_cents + t.low.hardware_cents
+    );
     expect(t.low.total_cents).toBeLessThan(t.medium.total_cents);
     expect(t.medium.total_cents).toBeLessThan(t.high.total_cents);
     expect(t.low.box_count).toBe(1);
