@@ -177,7 +177,11 @@ that truncates → reproduces on every reprocess. Smaller rooms parse fine.
   (truncation only loses the last, incomplete cabinet). Used as a fallback when
   parse throws or yields zero lines, so a region is never silently emptied.
 - Raised `max_tokens` 16000 → **32000** (billed only for tokens used) to avoid
-  truncation in the first place.
+  truncation in the first place. At that ceiling the SDK refuses a non-streaming
+  request ("Streaming is required for operations that may take longer than 10
+  minutes"), so the extract call now uses `messages.stream(...).finalMessage()`
+  — same Message shape, same per-token cost. Re-validated live after the switch:
+  no error, kitchen present, 23 boxes, MEDIUM −7% / HIGH +7% (within 10%).
 - Surface a visible "response truncated (max_tokens) — verify" uncertainty when
   `stop_reason === max_tokens`, so a partial read is never silent again.
 
