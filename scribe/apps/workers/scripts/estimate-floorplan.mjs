@@ -149,14 +149,28 @@ async function main() {
     for (const l of lines) byCat[l.category] = (byCat[l.category] ?? 0) + l.qty;
     console.log("by category:", byCat);
 
-    const { priceFacesByTier } = await import("@scribe/pricing");
-    const tiers = priceFacesByTier(lines);
-    console.log("\n===== DOOR/FRONT PRICING BY TIER (doors-only; boxes not included) =====");
+    const { priceQuoteTiers, isCabinetBox } = await import("@scribe/pricing");
+    const boxLines = lines.filter((l) => isCabinetBox(l.category));
+    const boxUnits = boxLines.reduce((a, l) => a + l.qty, 0);
+    console.log(`\nBOX COUNT: ${boxUnits} units across ${boxLines.length} types (quote has 29 units / 24 types)`);
+    const tiers = priceQuoteTiers(
+      lines.map((l) => ({
+        category: l.category,
+        width_in: l.width_in,
+        height_in: l.height_in,
+        depth_in: l.depth_in,
+        qty: l.qty,
+      }))
+    );
+    console.log("===== FULL TIER PRICING (boxes + doors/fronts + hardware) vs $27,733.68 =====");
     for (const t of ["low", "medium", "high"]) {
       const p = tiers[t];
+      const tot = p.total_cents / 100;
+      const delta = ((tot - 27733.68) / 27733.68) * 100;
       console.log(
-        `  ${t.toUpperCase().padEnd(7)} doors ${p.door_sqft}ft² $${(p.door_cents / 100).toFixed(0)} + ` +
-          `fronts ${p.front_sqft}ft² $${(p.front_cents / 100).toFixed(0)} = $${(p.total_cents / 100).toFixed(0)}`
+        `  ${t.toUpperCase().padEnd(7)} boxes $${(p.box_cents / 100).toFixed(0)} + ` +
+          `doors/fronts $${((p.door_cents + p.front_cents) / 100).toFixed(0)} + ` +
+          `hw $${(p.hardware_cents / 100).toFixed(0)} = $${tot.toFixed(0)} (${delta >= 0 ? "+" : ""}${delta.toFixed(0)}%)`
       );
     }
     console.log("\n#  room | tag | qty | WxHxD | conf | notes");

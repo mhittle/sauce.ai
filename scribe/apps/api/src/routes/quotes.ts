@@ -9,7 +9,7 @@ import {
   takeoffs,
 } from "@scribe/db";
 import { QUOTE_VALIDITY_DAYS } from "@scribe/shared";
-import { priceQuoteTiers } from "@scribe/pricing";
+import { priceQuoteTiers, priceQuoteLineItems, type TierName } from "@scribe/pricing";
 import { getObject, putObject, signedGetUrl } from "@scribe/storage";
 import {
   loadLatestPricingConfig,
@@ -220,7 +220,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  app.post<{ Params: { id: string } }>(
+  app.post<{ Params: { id: string }; Querystring: { tier?: string } }>(
     "/quotes/:id/pdf",
     async (req, reply) => {
       const db = getDb();
@@ -258,38 +258,92 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      const lineById = new Map(lines.map((l) => [l.id, l]));
-      const plById = new Map(
-        config.snapshot.product_lines.map((p) => [p.id, p])
+      // Price the customer-facing list with the same tier model the web Quote
+      // Builder shows (boxes + doors/fronts + one rolled-up hardware line). The
+      // selected tier is passed from the UI; default to medium.
+      const tier: TierName =
+        req.query.tier === "low" || req.query.tier === "high"
+          ? req.query.tier
+          : "medium";
+      const itemized = priceQuoteLineItems(
+        lines.map((l) => ({
+          category: l.category,
+          width_in: l.widthIn,
+          height_in: l.heightIn,
+          depth_in: l.depthIn,
+          qty: l.qty,
+          tag: l.tag,
+          room: l.room,
+          material: l.material,
+          finish: l.finish,
+        })),
+        tier
       );
+
+      const KIND_LABEL: Record<string, string> = {
+        box: "Cabinet box",
+        door: "Door",
+        drawer_front: "Drawer front",
+        hardware: "Hardware",
+      };
+      const HARDWARE_ROOM = "Hardware & Accessories";
+      const displayLines = itemized.items.map((it) => {
+        if (it.kind === "hardware") {
+          return {
+            tag: "Hardware",
+            room: HARDWARE_ROOM,
+            description: `Dovetail drawer boxes — ${it.qty} pc, soft-close ready`,
+            qty: it.qty,
+            unit_cents: it.unit_cents,
+            total_cents: it.total_cents,
+          };
+        }
+        const s = it.source as unknown as {
+          width_in: number | null;
+          height_in: number | null;
+          depth_in?: number | null;
+          tag: string | null;
+          room: string | null;
+          material: string | null;
+          finish: string | null;
+        };
+        const dims = [s.width_in, s.height_in, s.depth_in]
+          .map((d) => (d == null ? "—" : `${d}"`))
+          .join(" × ");
+        const matFinish = [s.material, s.finish].filter(Boolean).join(" ");
+        return {
+          tag: s.tag,
+          room: s.room,
+          description: `${KIND_LABEL[it.kind]} ${dims}${matFinish ? ` · ${matFinish}` : ""}`.trim(),
+          qty: it.qty,
+          unit_cents: it.unit_cents,
+          total_cents: it.total_cents,
+        };
+      });
+      // Group by room (stable), hardware last.
+      const roomKey = (l: { room: string | null }) =>
+        l.room === HARDWARE_ROOM ? "￿" : l.room ?? "Other";
+      displayLines.sort((a, b) => roomKey(a).localeCompare(roomKey(b)));
+
+      const subtotalCents = itemized.subtotal_cents;
+      const markupCents = Math.round((subtotalCents * quote.markupPct) / 100);
+      const freightCents = run.totals.freight_cents;
+      const totalCents =
+        subtotalCents + markupCents + quote.handlingCents + freightCents;
 
       const pdf = await renderQuotePdf({
         quote_number: quote.id.slice(0, 8).toUpperCase(),
         created_at: quote.createdAt,
         valid_until: quote.validUntil ? new Date(quote.validUntil) : null,
         customer_company: customerCompany,
-        lines: run.priced.map((p) => {
-          const l = lineById.get(p.takeoff_line_id)!;
-          const pl = plById.get(p.product_line_id);
-          const dims = [l.widthIn, l.heightIn, l.depthIn]
-            .map((d) => (d == null ? "—" : `${d}"`))
-            .join(" × ");
-          return {
-            tag: l.tag,
-            room: l.room,
-            description: `${pl?.name ?? p.product_line_id} ${dims} ${l.material ?? ""} ${l.finish ?? ""}`.trim(),
-            qty: l.qty,
-            unit_cents: p.unit_cents,
-            total_cents: p.total_cents,
-            lead_time_days: p.lead_time_days,
-          };
-        }),
-        subtotal_cents: run.totals.subtotal_cents,
-        markup_cents: run.totals.markup_cents,
-        handling_cents: run.totals.handling_cents,
-        freight_cents: run.totals.freight_cents,
+        tier_label: itemized.tier_label,
+        lines: displayLines,
+        subtotal_cents: subtotalCents,
+        markup_cents: markupCents,
+        handling_cents: quote.handlingCents,
+        freight_cents: freightCents,
         freight_pallets: quote.freightPallets,
-        total_cents: run.totals.total_cents,
+        total_cents: totalCents,
         max_lead_time_days: quote.maxLeadTimeDays,
         settings,
         logo,

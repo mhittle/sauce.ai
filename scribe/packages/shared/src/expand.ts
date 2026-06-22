@@ -80,8 +80,10 @@ export function expandToComponents(cab: CabinetLineItem): CabinetLineItem[] {
   if (doors === 0 && drawers === 0) {
     if (/sink/.test(tag)) doors = 2;
     else if (/drawer/.test(tag)) drawers = 3;
-    else if (/fridge|refrigerator|surround|panel|filler|cubby|locker|open/.test(tag))
-      return []; // surrounds / panels / open cubbies have no doors or fronts
+    else if (
+      /fridge|refrigerator|surround|panel|filler|cubb|locker|open|appliance|range slot/.test(tag)
+    )
+      return []; // surrounds / panels / open cubbies / appliance slots have no faces
     else doors = w >= 24 ? 2 : 1;
   }
 

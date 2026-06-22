@@ -144,6 +144,80 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (i) — estimate prompt v3: corners, specialty bases, fillers, vanity sizing
+
+**Context:** Comparing our reprocessed takeoff to the real Piestewa quote
+(pages 27-28) showed the reading under-detects: ~17 boxes vs the quote's 29. It
+missed corners (Easy-Reach / Blind), specialty bases (Oven/Trash/Microwave),
+fillers + end panels, Base Full-Height fridge surrounds, deep/wide wall runs;
+rounded odd widths to standard; undersized the double-sink vanity (read 36" vs
+77"); and invented Island/Bev-Fridge/Optional-Wall units not on the plan.
+
+**Shipped:** `@scribe/prompts` estimate prompt → **v3** (`estimate-v3`):
+- CORNERS MANDATORY — one corner cabinet at every inside corner where runs meet
+  (Easy-Reach Corner Base/Wall, or Blind Corner when runs are unequal).
+- Explicit specialty bases listed individually: Oven Base, Trash Pullout Base,
+  Microwave Over Drawer Base.
+- Fillers (1-3") + End Panels (~1.5") to make runs sum — emitted as
+  casework_base with "Filler"/"End Panel" in the tag so [[expand.ts]] skips
+  faces (no phantom doors) but they still box-price.
+- Fridge surround modelled as Base Full-Height end panels + deep wall/bridge.
+- Vanity sized to the FULL run; double-sink = one wide 4-drawer unit, not 36".
+- Keep the odd width a run requires (37.25", 49.375"); don't force round numbers.
+- Don't INVENT cabinets that aren't drawn (no "optional"/"beverage fridge").
+
+Tests: shared 54 pass incl. new filler/end-panel & "cubbies" → no-faces coverage.
+
+**Validated live** (estimate-floorplan.mjs on the 2440 E Piestewa plan):
+box count **25 units / 24 types** (was ~17; quote = 29/24), and full tier
+pricing **MEDIUM $27,721 = −0%** vs the $27,733.68 subtotal (LOW −11%, HIGH
++14%). v3 now emits the corners (Easy-Reach Corner Base/Wall), Oven Base, fridge
+full-height surround panels, and run-sized vanities (38.5/30/27) it used to
+miss. Follow-on fix: expand.ts no-faces regex now also catches "cubbies"
+(plural) + appliance/range slots (was spawning ~$360 of phantom doors on the
+open CUBBIES unit). Residual: still a few boxes short of 29 (no Trash Base /
+Blind Corner / multi Base-Full-Height — partly plan-specific), and a "Range
+Base" appliance-slot is still emitted as a box.
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
+## 2026-06-18 (h) — branded quote PDF + tier-priced itemized list
+
+**Context:** The "Generate PDF" output was barebones — rows OVERLAPPED (a
+long Tag wrapped but the row only advanced one line, so the next row crashed
+into it), no branding, and it showed the OLD product-line subtotal ($10,962)
+instead of the tier estimate the web UI shows.
+
+**Shipped:**
+- Rewrote `apps/api/src/lib/quote-pdf.ts`: per-row height = max cell height
+  (`heightOfString`) so nothing overlaps; CabinetNow maroon header/title band +
+  quote meta; room-grouped rows (subheaders) with zebra striping; right-aligned
+  money; totals box; tier label. Verified with a render preview.
+- New `priceQuoteLineItems(lines, tier)` in `@scribe/pricing` (single source of
+  truth): prices each read line for the tier (boxes per unit, doors/fronts by
+  ft²) + ONE rolled-up hardware row; items sum to subtotal. Exported
+  `TIER_BOX_SPECIES`.
+- `POST /quotes/:id/pdf?tier=` now prices via the tier model (was product-line
+  `run`); web passes the selected tier. PDF + web now show the same number.
+
+**Confirmed against the real quote (pages 27-28):** CabinetNow's quote IS three
+lists — Doors/Fronts, CABINET BOXES (incl. a Toe Kick Skin line), DRAWER BOXES &
+HARDWARE (Dovetail boxes + Blum 563H glide kits ×9 + Bulk Shelf Pins ×3) —
+SUBTOTAL $27,733.68 − 10% = $24,960.31. Exactly the reverse-engineered model.
+
+**Open (reading, next):** extraction under-detects/mis-sizes vs the real 29-box
+list — misses corners (Easy Reach / Blind Corner), specialty bases (Oven/Trash/
+Microwave), fillers/end-panels/toe-kick, Base Full Height, Deep Wall, big wall
+runs; rounds widths (37.25→36, 49.375→40, 77→36) and undersizes the double-sink
+vanity; invents Island/Bev-Fridge/Optional-Wall. Glides/pins/toe-kick still
+unpriced. Persist tier server-side (currently query param, default medium).
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
 ## 2026-06-18 (g) — drawer-box hardware: CabinetNow's 3rd list (one rolled-up line)
 
 **Context:** The tier estimate priced only CabinetNow's first two lists (doors/
