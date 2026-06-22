@@ -144,6 +144,41 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (h) — branded quote PDF + tier-priced itemized list
+
+**Context:** The "Generate PDF" output was barebones — rows OVERLAPPED (a
+long Tag wrapped but the row only advanced one line, so the next row crashed
+into it), no branding, and it showed the OLD product-line subtotal ($10,962)
+instead of the tier estimate the web UI shows.
+
+**Shipped:**
+- Rewrote `apps/api/src/lib/quote-pdf.ts`: per-row height = max cell height
+  (`heightOfString`) so nothing overlaps; CabinetNow maroon header/title band +
+  quote meta; room-grouped rows (subheaders) with zebra striping; right-aligned
+  money; totals box; tier label. Verified with a render preview.
+- New `priceQuoteLineItems(lines, tier)` in `@scribe/pricing` (single source of
+  truth): prices each read line for the tier (boxes per unit, doors/fronts by
+  ft²) + ONE rolled-up hardware row; items sum to subtotal. Exported
+  `TIER_BOX_SPECIES`.
+- `POST /quotes/:id/pdf?tier=` now prices via the tier model (was product-line
+  `run`); web passes the selected tier. PDF + web now show the same number.
+
+**Confirmed against the real quote (pages 27-28):** CabinetNow's quote IS three
+lists — Doors/Fronts, CABINET BOXES (incl. a Toe Kick Skin line), DRAWER BOXES &
+HARDWARE (Dovetail boxes + Blum 563H glide kits ×9 + Bulk Shelf Pins ×3) —
+SUBTOTAL $27,733.68 − 10% = $24,960.31. Exactly the reverse-engineered model.
+
+**Open (reading, next):** extraction under-detects/mis-sizes vs the real 29-box
+list — misses corners (Easy Reach / Blind Corner), specialty bases (Oven/Trash/
+Microwave), fillers/end-panels/toe-kick, Base Full Height, Deep Wall, big wall
+runs; rounds widths (37.25→36, 49.375→40, 77→36) and undersizes the double-sink
+vanity; invents Island/Bev-Fridge/Optional-Wall. Glides/pins/toe-kick still
+unpriced. Persist tier server-side (currently query param, default medium).
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
 ## 2026-06-18 (g) — drawer-box hardware: CabinetNow's 3rd list (one rolled-up line)
 
 **Context:** The tier estimate priced only CabinetNow's first two lists (doors/

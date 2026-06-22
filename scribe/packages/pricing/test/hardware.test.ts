@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { priceDrawerBoxCents, priceHardware } from "../src/hardware.js";
-import { priceQuoteTiers } from "../src/quote-tiers.js";
+import { priceQuoteTiers, priceQuoteLineItems } from "../src/quote-tiers.js";
 
 describe("priceDrawerBoxCents", () => {
   it("matches the pricing.js drawerBoxes() formula for a standard box", () => {
@@ -63,5 +63,32 @@ describe("priceQuoteTiers hardware", () => {
     expect(t.low.total_cents).toBe(
       t.low.box_cents + t.low.door_cents + t.low.front_cents + t.low.hardware_cents
     );
+  });
+});
+
+describe("priceQuoteLineItems", () => {
+  const lines = [
+    { category: "casework_base", width_in: 36, height_in: 34.5, depth_in: 24, qty: 1 },
+    { category: "door", width_in: 18, height_in: 24, depth_in: 0.75, qty: 2 },
+    { category: "drawer_front", width_in: 33, height_in: 5, depth_in: 0.75, qty: 3 },
+  ];
+
+  it("itemizes per line, rolls hardware into one row, and sums to subtotal", () => {
+    const q = priceQuoteLineItems(lines, "medium");
+    // box + door + drawer_front + one hardware row
+    expect(q.items.length).toBe(4);
+    const hw = q.items.filter((i) => i.kind === "hardware");
+    expect(hw).toHaveLength(1);
+    expect(hw[0].qty).toBe(3); // one drawer box per drawer front
+    const sum = q.items.reduce((a, i) => a + i.total_cents, 0);
+    expect(sum).toBe(q.subtotal_cents);
+  });
+
+  it("subtotal matches the rolled-up priceQuoteTiers total for the tier", () => {
+    const q = priceQuoteLineItems(lines, "low");
+    const t = priceQuoteTiers(lines);
+    // Per-line door/front rounding can differ by a cent or two from the
+    // area-first aggregate; allow a tiny tolerance.
+    expect(Math.abs(q.subtotal_cents - t.low.total_cents)).toBeLessThan(10);
   });
 });

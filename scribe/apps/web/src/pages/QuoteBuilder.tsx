@@ -87,7 +87,7 @@ export function QuoteBuilderPage() {
 
   const generatePdf = useMutation({
     mutationFn: () =>
-      apiSend<{ url: string }>("POST", `/quotes/${quoteId}/pdf`),
+      apiSend<{ url: string }>("POST", `/quotes/${quoteId}/pdf?tier=${tier}`),
     onSuccess: (r) => window.open(r.url, "_blank"),
     onError: (e) => setError(e.message),
   });
