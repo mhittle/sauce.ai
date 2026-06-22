@@ -68,6 +68,15 @@ describe("expandToComponents", () => {
     expect(expandToComponents(cab({ tag: "Cubby/Locker Base 48", notes: null }))).toEqual([]);
   });
 
+  it("fillers and end panels (emitted as base) spawn no door/front faces", () => {
+    expect(
+      expandToComponents(cab({ tag: "Base Filler 3", notes: "filler", width_in: 3 }))
+    ).toEqual([]);
+    expect(
+      expandToComponents(cab({ tag: "Base End Panel 1.5", notes: "end panel", width_in: 1.5 }))
+    ).toEqual([]);
+  });
+
   it("returns nothing for non-cabinet categories or missing dims", () => {
     expect(expandToComponents(cab({ category: "countertop" }))).toEqual([]);
     expect(expandToComponents(cab({ width_in: null }))).toEqual([]);

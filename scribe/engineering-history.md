@@ -144,6 +144,36 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (i) — estimate prompt v3: corners, specialty bases, fillers, vanity sizing
+
+**Context:** Comparing our reprocessed takeoff to the real Piestewa quote
+(pages 27-28) showed the reading under-detects: ~17 boxes vs the quote's 29. It
+missed corners (Easy-Reach / Blind), specialty bases (Oven/Trash/Microwave),
+fillers + end panels, Base Full-Height fridge surrounds, deep/wide wall runs;
+rounded odd widths to standard; undersized the double-sink vanity (read 36" vs
+77"); and invented Island/Bev-Fridge/Optional-Wall units not on the plan.
+
+**Shipped:** `@scribe/prompts` estimate prompt → **v3** (`estimate-v3`):
+- CORNERS MANDATORY — one corner cabinet at every inside corner where runs meet
+  (Easy-Reach Corner Base/Wall, or Blind Corner when runs are unequal).
+- Explicit specialty bases listed individually: Oven Base, Trash Pullout Base,
+  Microwave Over Drawer Base.
+- Fillers (1-3") + End Panels (~1.5") to make runs sum — emitted as
+  casework_base with "Filler"/"End Panel" in the tag so [[expand.ts]] skips
+  faces (no phantom doors) but they still box-price.
+- Fridge surround modelled as Base Full-Height end panels + deep wall/bridge.
+- Vanity sized to the FULL run; double-sink = one wide 4-drawer unit, not 36".
+- Keep the odd width a run requires (37.25", 49.375"); don't force round numbers.
+- Don't INVENT cabinets that aren't drawn (no "optional"/"beverage fridge").
+
+Tests: shared 54 pass incl. new filler/end-panel → no-faces coverage. NOT yet
+validated live (needs ANTHROPIC_API_KEY + the Piestewa plan via the
+`estimate-floorplan.mjs` harness) — run before claiming the box count matches.
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
 ## 2026-06-18 (h) — branded quote PDF + tier-priced itemized list
 
 **Context:** The "Generate PDF" output was barebones — rows OVERLAPPED (a
