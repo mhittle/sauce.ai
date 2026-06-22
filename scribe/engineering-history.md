@@ -144,6 +144,51 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (k) — pin temperature 0 on takeoff vision calls (reproducible reads)
+
+**Context:** Reprocessing the same plan gave a DIFFERENT cabinet list each run.
+None of the worker vision calls set `temperature`, so they ran at the API
+default 1.0 — both extraction AND the `locateRooms` region split resample every
+time, compounding the drift.
+
+**Shipped:** `temperature: 0` on the four takeoff calls — extract.ts (extract/
+estimate), regions.ts (locate rooms/regions), classify.ts (page class),
+spreadsheet.ts (header inference). Reads are now near-deterministic for a given
+plan. (Vision isn't bit-identical even at temp 0, but variance drops sharply.)
+Crawler `score.ts` left as-is (not in the takeoff path).
+
+**PRs:** branch `scribe/fix-truncated-region-drop` (with (j)).
+
+---
+
+## 2026-06-18 (j) — fix silent whole-region drop on truncated extraction
+
+**Context:** A deployed (v3) takeoff returned ONLY the bathroom + laundry
+cabinets — the entire New Kitchen was missing. Cause: `extractPage` sends the
+cabinet-dense kitchen crop, the model's JSON response exceeds `max_tokens`
+(16000) and is truncated; `extractJson` does a hard `JSON.parse` → throws;
+`readRelevantPage` catches it and `continue`s, dropping the whole region (only a
+warning, easily missed). Kitchen is always the biggest region → always the one
+that truncates → reproduces on every reprocess. Smaller rooms parse fine.
+
+**Shipped (apps/workers extract.ts):**
+- `salvageLineObjects(text)` — string-aware brace scanner that recovers every
+  complete `{...}` from the `"lines"` array when the top-level parse fails
+  (truncation only loses the last, incomplete cabinet). Used as a fallback when
+  parse throws or yields zero lines, so a region is never silently emptied.
+- Raised `max_tokens` 16000 → **32000** (billed only for tokens used) to avoid
+  truncation in the first place.
+- Surface a visible "response truncated (max_tokens) — verify" uncertainty when
+  `stop_reason === max_tokens`, so a partial read is never silent again.
+
+Tests: workers 13 pass incl. 3 new salvage cases (truncated mid-array; braces
+inside strings; no-array). The earlier verbose `[ESTIMATED] …` notes inflate
+output length and were the practical trigger.
+
+**PRs:** branch `scribe/fix-truncated-region-drop`.
+
+---
+
 ## 2026-06-18 (i) — estimate prompt v3: corners, specialty bases, fillers, vanity sizing
 
 **Context:** Comparing our reprocessed takeoff to the real Piestewa quote

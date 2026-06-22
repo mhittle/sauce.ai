@@ -30,6 +30,7 @@ export async function classifyPages(
     const message = await client.messages.create({
       model: SONNET_MODEL,
       max_tokens: 2000,
+      temperature: 0,
       system: CLASSIFY_SYSTEM,
       messages: [
         {
