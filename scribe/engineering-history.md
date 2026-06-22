@@ -166,9 +166,18 @@ rounded odd widths to standard; undersized the double-sink vanity (read 36" vs
 - Keep the odd width a run requires (37.25", 49.375"); don't force round numbers.
 - Don't INVENT cabinets that aren't drawn (no "optional"/"beverage fridge").
 
-Tests: shared 54 pass incl. new filler/end-panel → no-faces coverage. NOT yet
-validated live (needs ANTHROPIC_API_KEY + the Piestewa plan via the
-`estimate-floorplan.mjs` harness) — run before claiming the box count matches.
+Tests: shared 54 pass incl. new filler/end-panel & "cubbies" → no-faces coverage.
+
+**Validated live** (estimate-floorplan.mjs on the 2440 E Piestewa plan):
+box count **25 units / 24 types** (was ~17; quote = 29/24), and full tier
+pricing **MEDIUM $27,721 = −0%** vs the $27,733.68 subtotal (LOW −11%, HIGH
++14%). v3 now emits the corners (Easy-Reach Corner Base/Wall), Oven Base, fridge
+full-height surround panels, and run-sized vanities (38.5/30/27) it used to
+miss. Follow-on fix: expand.ts no-faces regex now also catches "cubbies"
+(plural) + appliance/range slots (was spawning ~$360 of phantom doors on the
+open CUBBIES unit). Residual: still a few boxes short of 29 (no Trash Base /
+Blind Corner / multi Base-Full-Height — partly plan-specific), and a "Range
+Base" appliance-slot is still emitted as a box.
 
 **PRs:** branch `scribe/drawer-box-hardware`.
 

@@ -66,6 +66,8 @@ describe("expandToComponents", () => {
   it("returns nothing for fridge surrounds / panels / cubbies", () => {
     expect(expandToComponents(cab({ tag: "Tall Refrigerator Surround 36" }))).toEqual([]);
     expect(expandToComponents(cab({ tag: "Cubby/Locker Base 48", notes: null }))).toEqual([]);
+    // plural "Cubbies" must also be treated as open (no doors)
+    expect(expandToComponents(cab({ tag: "Cubbies Base 48", notes: null }))).toEqual([]);
   });
 
   it("fillers and end panels (emitted as base) spawn no door/front faces", () => {
