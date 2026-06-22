@@ -81,6 +81,9 @@ export async function extractPage(
   const message = await client.messages.create({
     model: SONNET_MODEL,
     max_tokens: 32000,
+    // Pin temperature so the same plan reads consistently run-to-run (the API
+    // default is 1.0 → different cabinets each reprocess).
+    temperature: 0,
     system: opts.estimate ? ESTIMATE_SYSTEM : EXTRACT_SYSTEM,
     messages: [
       {

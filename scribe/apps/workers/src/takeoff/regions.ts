@@ -28,6 +28,9 @@ async function locate(
   const message = await client.messages.create({
     model: SONNET_MODEL,
     max_tokens: 2000,
+    // Deterministic region splitting — varying crops change which cabinets are
+    // read, a major source of run-to-run quote drift.
+    temperature: 0,
     system,
     messages: [
       {

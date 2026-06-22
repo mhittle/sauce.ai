@@ -107,6 +107,7 @@ async function modelAssistMapping(
   const message = await client.messages.create({
     model: HAIKU_MODEL,
     max_tokens: 1000,
+    temperature: 0,
     system: HEADER_INFERENCE_SYSTEM,
     messages: [
       {

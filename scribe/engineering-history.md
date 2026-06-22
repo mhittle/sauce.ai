@@ -144,6 +144,23 @@ after merge: open a prospect with a discovered doc, preview it, send to takeoff.
 
 ---
 
+## 2026-06-18 (k) — pin temperature 0 on takeoff vision calls (reproducible reads)
+
+**Context:** Reprocessing the same plan gave a DIFFERENT cabinet list each run.
+None of the worker vision calls set `temperature`, so they ran at the API
+default 1.0 — both extraction AND the `locateRooms` region split resample every
+time, compounding the drift.
+
+**Shipped:** `temperature: 0` on the four takeoff calls — extract.ts (extract/
+estimate), regions.ts (locate rooms/regions), classify.ts (page class),
+spreadsheet.ts (header inference). Reads are now near-deterministic for a given
+plan. (Vision isn't bit-identical even at temp 0, but variance drops sharply.)
+Crawler `score.ts` left as-is (not in the takeoff path).
+
+**PRs:** branch `scribe/fix-truncated-region-drop` (with (j)).
+
+---
+
 ## 2026-06-18 (j) — fix silent whole-region drop on truncated extraction
 
 **Context:** A deployed (v3) takeoff returned ONLY the bathroom + laundry
