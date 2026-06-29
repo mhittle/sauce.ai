@@ -171,3 +171,23 @@ export async function fetchSolicitationSources(): Promise<SourceCount[]> {
   if (!res.ok) throw new Error(`sources ${res.status}`);
   return res.json();
 }
+
+// Hand a bid PDF to scribe to start a quote takeoff. The bytes are fetched and
+// forwarded server-side; here we just trigger it and get a link back.
+export interface ScribeHandoff {
+  takeoff_id: string | null;
+  status: string | null;
+  review_url: string | null;
+}
+
+export async function sendDocToScribe(
+  solicitationId: number, docId: number): Promise<ScribeHandoff> {
+  const res = await fetch(
+    `${BASE}/api/solicitations/${solicitationId}/documents/${docId}/send-to-scribe`,
+    { method: "POST" });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `send-to-scribe ${res.status}`);
+  }
+  return res.json();
+}

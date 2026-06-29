@@ -56,6 +56,12 @@ class Settings:
     shippable_radius_mi: float = _flt("SHIPPABLE_RADIUS_MI", 500.0)
     secret_key: str = os.environ.get("SECRET_KEY", "dev-insecure-change-me")
     cors_origins: str = os.environ.get("CORS_ORIGINS", "*")
+    # Scribe connector: send a bid PDF to scribe to be quoted. The API URL +
+    # shared service token are required for the handoff; the web URL is only
+    # used to build a deep link back to the takeoff review screen.
+    scribe_api_url: str | None = os.environ.get("SCRIBE_API_URL")
+    scribe_service_token: str | None = os.environ.get("SCRIBE_SERVICE_TOKEN")
+    scribe_web_url: str | None = os.environ.get("SCRIBE_WEB_URL")
 
 
 def get_settings() -> Settings:

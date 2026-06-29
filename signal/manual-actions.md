@@ -87,6 +87,22 @@ VITE_API_BASE=<API service public URL, e.g. https://reliable-comfort-production-
 a redeploy/rebuild. Ensure the API's `CORS_ORIGINS` allows the web origin
 (`*` is fine for now). Generate a public domain for the web service.
 
+### MA-007 — Wire the scribe connector (shared service token)
+The "quote in scribe" button on a solicitation's PDFs POSTs the PDF to scribe's
+`/takeoffs`. It needs a shared secret on BOTH services:
+```
+# On the scribe API service:
+SERVICE_TOKEN        = <random 32+ char string>
+# On the signal API service (same value + scribe URLs):
+SCRIBE_API_URL       = https://reliable-comfort-production-db32.up.railway.app   # scribe API origin
+SCRIBE_SERVICE_TOKEN = <same value as scribe's SERVICE_TOKEN>
+SCRIBE_WEB_URL       = https://scribe-web-production.up.railway.app              # for the deep link
+```
+NOTE: the example URLs above are placeholders — use scribe's actual API/web
+public domains (NOT signal's). With the token unset on either side the button
+returns 503 (connector disabled), which is the safe default. The token maps to
+a single `signal-connector@scribe.local` estimator user created on first use.
+
 ---
 
 ## Completed
