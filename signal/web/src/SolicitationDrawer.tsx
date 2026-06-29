@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { documentViewUrl, type SolicitationDetail } from "./api";
+import {
+  documentViewUrl, sendDocToScribe, type SolicitationDetail,
+} from "./api";
 
 export default function SolicitationDrawer({
   detail, loading, onClose,
@@ -61,6 +63,7 @@ export default function SolicitationDrawer({
                         className="text-slate-400 text-xs ml-2 no-underline hover:text-slate-600">
                         ↗ new tab
                       </a>
+                      <ScribeButton solicitationId={detail.id} docId={d.id} />
                     </li>
                   ))}
                 </ul>
@@ -90,6 +93,53 @@ export default function SolicitationDrawer({
           </div>
         )}
       </aside>
+    </>
+  );
+}
+
+// Send one PDF to scribe to start a quote takeoff. Self-contained state so each
+// document row tracks its own handoff independently.
+function ScribeButton({ solicitationId, docId }: { solicitationId: number; docId: number }) {
+  const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send() {
+    setState("sending");
+    setError(null);
+    try {
+      const res = await sendDocToScribe(solicitationId, docId);
+      setReviewUrl(res.review_url);
+      setState("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed");
+      setState("error");
+    }
+  }
+
+  if (state === "done") {
+    return reviewUrl ? (
+      <a href={reviewUrl} target="_blank" rel="noreferrer"
+        className="text-emerald-700 text-xs ml-2 underline">
+        ✓ open quote in scribe →
+      </a>
+    ) : (
+      <span className="text-emerald-700 text-xs ml-2">✓ sent to scribe</span>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={send}
+        disabled={state === "sending"}
+        title="Send this PDF to scribe to start a quote"
+        className="text-amber-700 text-xs ml-2 underline disabled:opacity-50">
+        {state === "sending" ? "sending…" : "→ quote in scribe"}
+      </button>
+      {state === "error" && (
+        <span className="text-red-600 text-xs ml-2" title={error ?? undefined}>failed</span>
+      )}
     </>
   );
 }

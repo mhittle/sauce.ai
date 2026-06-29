@@ -124,6 +124,8 @@ Railway builds from the `Dockerfile` (`railway.json` pins it) and injects
 | `FACILITY_LAT/LNG`, `SHIPPABLE_RADIUS_MI` | geo signals |
 | `EMAIL_API_KEY`, `CRM_WEBHOOK_URL` | digest + CRM push (later phases) |
 | `SECRET_KEY`, `CORS_ORIGINS` | web |
+| `SCRIBE_API_URL`, `SCRIBE_SERVICE_TOKEN` | scribe connector — POST a bid PDF to scribe's `/takeoffs` to start a quote. The token must equal scribe's own `SERVICE_TOKEN`. Both unset → the "quote in scribe" button is disabled (503). |
+| `SCRIBE_WEB_URL` | scribe web origin; only used to build the "open quote in scribe" deep link |
 
 ### First deploy
 

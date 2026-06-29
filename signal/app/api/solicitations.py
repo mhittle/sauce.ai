@@ -5,14 +5,17 @@ the table isn't present yet (migrate-after-deploy tolerance), never a 500.
 """
 from __future__ import annotations
 
+import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..db import get_session
+from ..integrations import scribe
 from ..schemas import (SolicitationDetailOut, SolicitationDocOut,
                        SolicitationListOut, SolicitationOut, SourceCountOut)
+from .documents import _with_api_key
 
 router = APIRouter(prefix="/api/solicitations", tags=["solicitations"])
 
@@ -117,3 +120,52 @@ def get_solicitation(solicitation_id: int, sess: Session = Depends(get_session))
         description=row["description"],
         doc_count=len(docs),
         documents=[SolicitationDocOut(**dict(d)) for d in docs])
+
+
+@router.post("/{solicitation_id}/documents/{doc_id}/send-to-scribe")
+def send_document_to_scribe(
+    solicitation_id: int, doc_id: int, sess: Session = Depends(get_session)):
+    """Hand a bid PDF to scribe to start a quote takeoff.
+
+    Fetches the document server-side (so the source api-key stays here), checks
+    it's actually a PDF, and POSTs the bytes to scribe. Returns the new takeoff
+    id + a deep link to review it in scribe.
+    """
+    if not scribe.is_configured():
+        raise HTTPException(status_code=503,
+                            detail="scribe connector not configured")
+    try:
+        row = sess.execute(text(
+            "SELECT url, name FROM solicitation_documents "
+            "WHERE id = :doc AND solicitation_id = :sol"),
+            {"doc": doc_id, "sol": solicitation_id}).mappings().first()
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="database not ready")
+    if not row:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    url = row["url"]
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="unsupported document url")
+
+    try:
+        upstream = requests.get(_with_api_key(url), timeout=60)
+        upstream.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502,
+                            detail=f"upstream fetch failed: {str(exc)[:200]}")
+
+    data = upstream.content
+    if data[:4] != b"%PDF":
+        raise HTTPException(
+            status_code=400,
+            detail="document is not a PDF (scribe takeoffs need a PDF plan/spec)")
+
+    filename = (row["name"] or f"solicitation-{solicitation_id}-doc-{doc_id}")
+    try:
+        return scribe.send_pdf_to_scribe(filename, data)
+    except scribe.ScribeNotConfigured:
+        raise HTTPException(status_code=503,
+                            detail="scribe connector not configured")
+    except scribe.ScribeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))

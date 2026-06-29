@@ -58,6 +58,36 @@ export function devBypassEnabled(): boolean {
   return !process.env.GOOGLE_CLIENT_ID && process.env.NODE_ENV !== "production";
 }
 
+// Service-to-service auth: a trusted caller (e.g. sauce.ai/signal sending a bid
+// PDF to be quoted) presents `Authorization: Bearer ${SERVICE_TOKEN}`. It maps
+// to a single machine user so takeoffs still have a valid uploadedBy. Disabled
+// unless SERVICE_TOKEN is set; compared timing-safe.
+const SERVICE_EMAIL = "signal-connector@scribe.local";
+
+function tokensMatch(presented: string, expected: string): boolean {
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+async function serviceUser(): Promise<SessionUser> {
+  const db = getDb();
+  const existing = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, SERVICE_EMAIL));
+  if (existing.length > 0) {
+    const u = existing[0];
+    return { id: u.id, email: u.email, role: u.role as UserRole, name: u.name };
+  }
+  const [u] = await db
+    .insert(users)
+    .values({ email: SERVICE_EMAIL, name: "Signal Connector", role: "estimator" })
+    .returning();
+  return { id: u.id, email: u.email, role: u.role as UserRole, name: u.name };
+}
+
 async function devUser(): Promise<SessionUser> {
   const db = getDb();
   const existing = await db
@@ -110,6 +140,15 @@ export const authPlugin = fp(async (app) => {
           };
           return;
         }
+      }
+    }
+    const serviceToken = process.env.SERVICE_TOKEN;
+    if (!req.user && serviceToken && token && tokensMatch(token, serviceToken)) {
+      try {
+        req.user = await serviceUser();
+        return;
+      } catch {
+        // DB not up yet — fall through (unauthenticated).
       }
     }
     if (devBypassEnabled() && req.url.startsWith("/") && !req.user) {
