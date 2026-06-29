@@ -70,6 +70,68 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-29 — estimate reading-accuracy backtest vs 10 real CRM quotes
+
+**Context:** Owner pulled 10 real CabinetNow deals from the Zoho CRM (Custom
+Cabinetry pipeline) into `~/Desktop/Scribe Testing/Quote 1..10`, each folder with
+an INPUT (plan/design/image) + the actual quote packet PDF. Goal: backtest the
+no-schedule estimator end-to-end (input → estimate → tier price) against the real
+quote totals, in a closed feedback loop, to drive most within ±10%.
+
+**Harness, not deployed:** all runs used `apps/workers/scripts/estimate-floorplan.mjs`
+(reads a PDF, runs the REAL classify/locate/extract modules + pricing). Needs
+`ANTHROPIC_API_KEY` in `apps/workers/.env` (owner reused the prior key — still
+**MA-011 rotate**). Images converted to PDF via `sips`. Ground-truth totals pulled
+from each packet via `pdftotext` (older packets show `SUBTOTAL`, newer ones a
+single `Total`; both = deal AMOUNT in Zoho, cross-checked).
+
+**Infra built (in the test folder, reusable):** `run-parallel.sh` (all 9 at once,
+~5 min, no Anthropic rate-limiting), `run-median.sh` / `run-r3.sh` (median-of-3),
+`parse-median.sh` (median box count + tier totals + diff%). NOTE: a `run_in_background`
+Bash job is killed at ~10 min wall — keep each background batch under that (one
+parallel round of 9 ≈ 5 min is safe; 3 rounds must be split).
+
+**Key findings (median-of-3, stable):** pricing is validated — the gap is READING
+(box count), not pricing. 3/9 within ±10% on best tier (Q8 Piestewa HIGH −7%,
+Q9 Maurer LOW +7%, Q10 Black Wind MED +8%). Failure buckets:
+- **Over-read** (Q5 +48%, Q7 +53%): same kitchen enumerated once per view
+  (plan + each elevation) and summed; Q7 also model over-enumeration (~37 types
+  for one kitchen, run-splitting + island/elevation re-counts).
+- **Under-read** (Q1 −38%, Q6 −33%, Q3 −25%): large multi-room / multi-page
+  architectural sets — estimator finds far too few boxes.
+- **Image inputs collapse** (Q2 −92%): a single low-detail render yields ~2 boxes.
+- **Run-to-run variance is large even at temp 0** (Piestewa: 5/21/24 boxes across
+  identical runs) — median-of-3 was needed just to get stable signal.
+
+**Changes made (branch `scribe/estimate-reading-accuracy`, commit b861b69 —
+EXPERIMENTAL, NOT merged/deployed):**
+- `packages/prompts/src/estimate.ts` → **v4**: fillers sparing (was emitting ~11
+  per kitchen), "count each cabinet once" across plan+elevations, per-room realism
+  cap (~12–25 kitchen cabinets). Mixed result — helped over-readers, over-corrected
+  some under (Q3 flipped).
+- `apps/workers/src/takeoff/process.ts`: cross-view collapse in estimation mode
+  (per normalized room, keep MAX count per tag across views). Weak alone (tags
+  differ across views).
+- `apps/workers/scripts/estimate-floorplan.mjs` (HARNESS ONLY): whole-page-once for
+  elevation/millwork sheets (Q7 81→55 boxes), **non-estimate cross-page dedup**
+  (Q9 50→25 boxes, +72%→+7% LOW — the biggest win), and universal door/front
+  expansion. **These three are NOT in `process.ts` yet** — they must be ported to
+  the real pipeline before any deploy.
+
+**Decision:** do NOT merge/deploy yet. The fixes that moved the needle are
+harness-only and prod ≠ what we tested; results are mixed (3/9). Bank the
+diagnosis, port + validate next.
+
+**Owner deliverable:** Google Sheet
+(`docs.google.com/spreadsheets/d/1p-mtMjr2PuXCizPrIkA6Za9u7uSNQB6GFXTSS_53a9s`)
+populated with Quote Total / Generated Total (median) / Price-difference-% formula
+/ per-deal Analysis column.
+
+**Open items → next session:** see roadmap "Estimate reading accuracy — close to
+±10% on real quotes" + new bugs SCR-003..006.
+
+---
+
 ## 2026-06-23 — session wrap-up: streaming fix validated; branch ready to merge
 
 **Context:** Continuation session after context compaction. Branch

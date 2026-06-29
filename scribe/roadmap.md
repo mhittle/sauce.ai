@@ -25,6 +25,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
 | Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition (match CabinetNow quotes ±10%) | 9 | 7 | pricing | done |
 | No-schedule reading: consistency hardening + tighter kitchen recall | 6 | 3 | takeoff | in-progress |
+| Estimate reading accuracy — most real CRM quotes within ±10% | 9 | 8 | takeoff | in-progress |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
 | Quote email drafting w/ PDF attached (replace mailto) | 7 | 3 | backend | backlog |
 | OCR fallback for scan-only PDFs (tesseract) | 7 | 5 | takeoff | backlog |
@@ -151,6 +152,26 @@ sizing still flickers (77" master double), ~6-box gap vs the real 29-box quote
 (Trash Base, Blind Corner, multi Base-Full-Height undetected). **Next session:**
 audit prompt/locate prompt for remaining gaps; consider multi-pass verify or
 deterministic rule-based corner injection.
+
+### Estimate reading accuracy — most real CRM quotes within ±10%
+**Priority/LOE/Category/Status:** 9 / 8 / takeoff / in-progress (2026-06-29)
+Backtested 10 real CabinetNow quotes (Zoho CRM) through the estimate harness;
+pricing validated, READING (box count) is the gap. Baseline 3/9 within ±10%
+(see engineering-history 2026-06-29). WIP on branch `scribe/estimate-reading-accuracy`
+(commit b861b69, NOT deployed). Ordered next steps:
+1. **Port harness-proven fixes into `process.ts`** (real pipeline) — whole-page-once
+   for elevation sheets, non-estimate cross-page dedup, universal door/front
+   expansion. Right now prod ≠ what was tested; this is the gate before any PR.
+2. **Tame run-to-run variance** (5/21/24 boxes on same plan at temp 0) — median-of-N
+   in the pipeline, or stronger determinism. Tuning is noise until this is fixed.
+3. **Over-readers** (Q5/Q7): rein in per-view re-enumeration + model over-splitting
+   (SCR-003). 4. **Under-readers** (Q1/Q3/Q6): large multi-room/multi-page plans
+   read too few boxes (SCR-004) — likely per-room locate + read-more, carefully.
+5. **Image inputs** (Q2): a single render collapses (SCR-005) — needs a distinct path.
+6. Re-run median-of-3 backtest after each change; target most of the 9 within ±10%.
+7. Only then: consolidate into ONE PR with the before/after scorecard as evidence.
+Test assets: `~/Desktop/Scribe Testing/` (Quote 1..10 + run-*.sh + parse-median.sh
++ results sheet). See `[[scribe-crm-quote-backtest]]` memory.
 
 ### AI cross-validation toggle
 **Priority/LOE/Category/Status:** 6 / 4 / takeoff / done (PR: this PR, 2026-06-16)
