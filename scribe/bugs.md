@@ -20,15 +20,20 @@ Format:
 ## Open
 
 ### SCR-006 — Estimate reads vary wildly run-to-run (same plan, temp 0)
-- **Status:** open
+- **Status:** attempted (variance tamed; under-read bias remains → SCR-004)
 - **Reported:** 2026-06-29 by session (CRM backtest)
 - **Description:** The same floor plan gives very different box counts across
   identical runs even at temperature 0 — e.g. Piestewa returned 5, 21, and 24
   boxes on three runs. Makes any single-run estimate unreliable and makes prompt
   tuning fight noise.
-- **Notes / fix:** worked around in testing with median-of-3 (`run-median.sh`).
-  Real fix TBD: pipeline-side median-of-N, or stronger determinism in
-  locate/extract. Top priority for the reading-accuracy work.
+- **Notes / fix:** 2026-06-29 (b) — pipeline-side **median-of-N consensus** added
+  to `process.ts` (estimate pages read N times) via shared `pickMedian`; env
+  `ESTIMATE_CONSENSUS_N` (default 3). Mirrored in the harness so a single run is
+  prod-equivalent. Q8 went 5/21/24 → 19/19/24 — the catastrophic outlier is gone.
+  2026-06-29 (c) — consensus now selects the median by `boxFaceArea` (a quote-total
+  proxy = Σ width×height), NOT box count: two reads with the same count can price
+  −6% vs −28% by size. NOT yet deployed. Residual spread is sizing/under-read bias
+  (SCR-004), not selectable noise.
 
 ### SCR-005 — Single-image inputs estimate almost nothing
 - **Status:** open
@@ -57,10 +62,12 @@ Format:
   enumerated once per view and summed → 2–4× over-count (Q7 81 boxes for one
   kitchen, +114%). Two sub-causes: (a) per-view re-enumeration with no cross-view
   dedup, (b) model over-splitting one sheet into ~37 cabinet "types".
-- **Notes / fix:** partial fixes on branch `scribe/estimate-reading-accuracy`:
-  cross-view collapse + whole-page-once (Q7 81→55), non-estimate cross-page dedup
-  (Q9 +72%→+7%). Harness-only fixes must be ported to `process.ts`. The model
-  over-splitting (Q7) is prompt/model-quality — not fully solved.
+- **Notes / fix:** cross-view collapse + whole-page-once (Q7 81→55), non-estimate
+  cross-page dedup (Q9 +72%→+7%). 2026-06-29 (b): all three **ported into
+  `process.ts`** (prod now matches the harness; cross-view collapse shared via
+  `@scribe/shared` `collapseCrossViewDuplicates`). The model over-splitting (Q7
+  still +33% LOW / 39 box) is prompt/model-quality — not fully solved; that's the
+  open Step-3 work.
 
 ## In progress
 

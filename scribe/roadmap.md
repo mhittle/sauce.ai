@@ -157,19 +157,38 @@ deterministic rule-based corner injection.
 **Priority/LOE/Category/Status:** 9 / 8 / takeoff / in-progress (2026-06-29)
 Backtested 10 real CabinetNow quotes (Zoho CRM) through the estimate harness;
 pricing validated, READING (box count) is the gap. Baseline 3/9 within ±10%
-(see engineering-history 2026-06-29). WIP on branch `scribe/estimate-reading-accuracy`
-(commit b861b69, NOT deployed). Ordered next steps:
-1. **Port harness-proven fixes into `process.ts`** (real pipeline) — whole-page-once
-   for elevation sheets, non-estimate cross-page dedup, universal door/front
-   expansion. Right now prod ≠ what was tested; this is the gate before any PR.
-2. **Tame run-to-run variance** (5/21/24 boxes on same plan at temp 0) — median-of-N
-   in the pipeline, or stronger determinism. Tuning is noise until this is fixed.
-3. **Over-readers** (Q5/Q7): rein in per-view re-enumeration + model over-splitting
-   (SCR-003). 4. **Under-readers** (Q1/Q3/Q6): large multi-room/multi-page plans
-   read too few boxes (SCR-004) — likely per-room locate + read-more, carefully.
-5. **Image inputs** (Q2): a single render collapses (SCR-005) — needs a distinct path.
-6. Re-run median-of-3 backtest after each change; target most of the 9 within ±10%.
-7. Only then: consolidate into ONE PR with the before/after scorecard as evidence.
+(see engineering-history 2026-06-29 + (b)). WIP on branch
+`claude/elegant-hertz-3d705e` (merged in `scribe/estimate-reading-accuracy`, NOT
+deployed). Ordered next steps:
+1. ✅ **DONE (2026-06-29 b)** — ported harness fixes into `process.ts`
+   (whole-page-once, non-estimate cross-page dedup, universal face expansion);
+   cross-view collapse shared via `@scribe/shared`. Prod now == what was tested.
+2. ✅ **DONE (2026-06-29 b)** — **median-of-N consensus** in the pipeline (shared
+   `pickMedian`, env `ESTIMATE_CONSENSUS_N`, default 3). Q8 5/21/24 → 19/19/24;
+   variance tamed. Scorecard after 1+2: still 3/9 (parity + stability, not accuracy).
+3. ✅ **Research + count≠price (2026-06-29 c)** — consensus now selects by a
+   quote-total proxy (`boxFaceArea`), not box count (same count can price −6% vs
+   −28%). Tried prompt **v5** ("point-label-count"): net WORSE (over-reads complex
+   plans), **reverted to v4**. **Settled config: v4 + area-consensus = 25% mean abs
+   error, 3 solid (Q8/Q9/Q10) + 3 near-misses (Q3/Q5/Q6 ~13-14%).**
+4. **PLATEAU REACHED.** Prompt+consensus has topped out ~25% mean / 3-of-9 solid —
+   matches the zero-shot ceiling from research (`[[vlm-plan-counting-techniques]]`:
+   commercial tools use trained YOLO detectors; zero-shot floor-plan counting ~0.39
+   acc). Remaining gains need EITHER: (a) per-bucket mechanisms — over-read pruning
+   /verification pass for Q7 (SCR-003), an image path for Q2 (SCR-005); OR (b) the
+   durable answer: a **trained cabinet detector** (label the real quotes → YOLO;
+   hybrid detector-counts + VLM-sizes). **Strategic fork — decide before more spend:**
+   is "verify-before-quote + a stable, correctly-targeted estimate" good enough
+   (ship S1+2+area), or is unattended accuracy required (invest in the detector)?
+5. **Image inputs** (Q2 −90%): single render collapses (SCR-005) — distinct path +
+   confirm scribe-web JPEG-as-PNG upload bug. Not started.
+6. Compare configs by MEAN ABS ERROR over the 9, not "X/9 within ±10%" (boundary
+   noise makes the binary count bounce ±1-2 per pass).
+7. When the bar is met: ONE PR off main with the before/after scorecard.
+
+**Banked + prod-ready (NOT deployed, uncommitted):** Step 1 ports + cross-view
+collapse, median-of-N consensus, area-aware selection — all green, all sharing
+`@scribe/shared` so the harness can't drift from prod.
 Test assets: `~/Desktop/Scribe Testing/` (Quote 1..10 + run-*.sh + parse-median.sh
 + results sheet). See `[[scribe-crm-quote-backtest]]` memory.
 

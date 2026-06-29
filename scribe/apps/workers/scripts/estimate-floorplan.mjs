@@ -9,12 +9,15 @@
 
 import { readFileSync } from "node:fs";
 import {
+  boxFaceArea,
+  collapseCrossViewDuplicates,
   dedupeLines,
   expandToComponents,
   fitDpi,
   mapBoxToPagePoints,
   needsRegioning,
   padRectToPage,
+  pickMedian,
   planRenderJobs,
   RELEVANT_PAGE_CLASSES,
 } from "@scribe/shared";
@@ -31,7 +34,31 @@ const log = {
 
 const EXTRACTABLE = ["schedule", "elevation", "plan"];
 
+// Mirror the pipeline's SCR-006 consensus: read each estimate page N times and
+// keep the median-box-count read (default 3; ESTIMATE_CONSENSUS_N to tune). So
+// a single harness run is prod-equivalent. Schedule reads stay at one.
+function estimateConsensusN() {
+  const raw = process.env.ESTIMATE_CONSENSUS_N;
+  const n = raw == null ? 3 : Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 3;
+}
+
 async function readPage(pdf, page, estimate, pageClass) {
+  const n = estimate ? estimateConsensusN() : 1;
+  if (n <= 1) return readPageOnce(pdf, page, estimate, pageClass);
+  const candidates = [];
+  for (let i = 0; i < n; i++)
+    candidates.push(await readPageOnce(pdf, page, estimate, pageClass));
+  // Select by quote-total proxy (cabinet face area), not box count — see process.ts.
+  const chosen = pickMedian(candidates, (c) => boxFaceArea(c));
+  console.error(
+    `· estimate consensus p${page}: boxes [${candidates.map((c) => c.length).join("/")}]` +
+      ` area [${candidates.map((c) => Math.round(boxFaceArea(c))).join("/")}] -> ${chosen.length} boxes / ${Math.round(boxFaceArea(chosen))} in²`
+  );
+  return chosen;
+}
+
+async function readPageOnce(pdf, page, estimate, pageClass) {
   const idx = page - 1;
   const dims = pdf.pageDimsPt(idx);
   const widthIn = dims.widthPt / 72;
@@ -163,35 +190,9 @@ async function main() {
     }
 
     if (estimationMode) {
-      // Collapse cross-view duplication: a room shown in a floor plan AND its
-      // elevations gets enumerated once per view ("Kitchen" vs "Kitchen - North
-      // Wall Run"); the region loop sums them. Per NORMALIZED room (strip the
-      // "- <wall>" suffix), for each cabinet tag keep the MAX count seen in any
-      // single view, not the sum — removes duplicates, preserves real repeats.
-      const normRoom = (r) => (r ?? "").toLowerCase().split(/[-—–]/)[0].trim();
-      const tagKey = (l) => (l.tag ?? l.category ?? "").toLowerCase().trim();
-      const byRoom = new Map();
-      for (const l of lines) {
-        const k = normRoom(l.room);
-        byRoom.set(k, [...(byRoom.get(k) ?? []), l]);
-      }
-      const collapsed = [];
-      for (const roomLines of byRoom.values()) {
-        const byView = new Map();
-        for (const l of roomLines) {
-          const v = (l.room ?? "").toLowerCase().trim();
-          byView.set(v, [...(byView.get(v) ?? []), l]);
-        }
-        const bestPerTag = new Map();
-        for (const viewLines of byView.values()) {
-          const tagCount = new Map();
-          for (const l of viewLines)
-            tagCount.set(tagKey(l), [...(tagCount.get(tagKey(l)) ?? []), l]);
-          for (const [t, ls] of tagCount)
-            if ((bestPerTag.get(t)?.length ?? 0) < ls.length) bestPerTag.set(t, ls);
-        }
-        for (const ls of bestPerTag.values()) collapsed.push(...ls);
-      }
+      // Collapse cross-view duplication via the SHARED helper (same code the
+      // real pipeline runs, so this backtest tracks prod).
+      const collapsed = collapseCrossViewDuplicates(lines);
       console.error(`· collapsed cross-view: ${lines.length} -> ${collapsed.length} boxes`);
       lines.length = 0;
       lines.push(...collapsed);

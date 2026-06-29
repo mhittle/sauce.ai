@@ -70,6 +70,102 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-29 (c) — count≠price: area-aware consensus; v5 prompt tried + reverted
+
+**Context:** Continuation. Researched how others do plan-reading takeoff (saved to
+memory `[[vlm-plan-counting-techniques]]`): commercial tools (Togal/TakeoffBOT/
+Exayard) use TRAINED object-DETECTION models, not zero-shot VLM; zero-shot
+floor-plan counting tops ~0.39 acc / ~29.5% MAPE (AECV-Bench). Best zero-shot
+levers: "point-label-count" (localize before counting), grid overlay (VISER),
+self-consistency (= our median-of-N). Then tested the top lever.
+
+**v5 prompt ("point, label, count"):** added per-cabinet LOCATION (in notes) +
+systematic L→R scan + role-prime + a left→right verify pass, on top of v4's domain
+rules. Backtested all 9 (consensus-3). Result: MIXED and net WORSE — it helped
+borderline/under cases (Q3 −15%→−4%, Q5 +15%→+8%) but amplified the over-reader
+(Q7 +33%→+88%) and worsened complex plans (Q6, Q1). The "4/9" it scored was a
+±10%-boundary artifact; by mean-abs-error it was 35% vs v4's 27%. **Reverted to v4.**
+
+**Key discovery — box COUNT is a weak proxy for the quote total; SIZE dominates.**
+Q8 priced −6% vs −28% on two reads that BOTH had 20 boxes — the cabinets differed
+in width/door-config/ft². So:
+- **Consensus now selects by a quote-total proxy** (`boxFaceArea` = Σ width×height×qty
+  over box lines, in `@scribe/shared`), NOT by line count. Shared `pickMedian` +
+  `boxFaceArea`, used by both `process.ts` and the harness. Unit-tested (6 cases).
+- **Use mean-abs-error, not "X/9 within ±10%", to compare configs** — with ~4 quotes
+  parked near the ±10% line and real run-to-run noise, the binary count bounces ±1-2
+  per pass and is untrustworthy for A/B.
+
+**Four-config backtest (consensus-3, best tier vs real $):**
+| config | mean abs err | solid ≤±10% |
+|---|---|---|
+| **v4 + area (SETTLED)** | **25%** | Q8 −4%, Q9 +7%, Q10 −4% |
+| v4 + count | 27% | Q8/Q9/Q10 |
+| v5 + count | 35% | (boundary 4/9) |
+| v5 + area | 36% | Q8/Q9/Q10 |
+
+Settled on **v4 prompt + area-aware consensus**: 25% mean, 3 solid + 3 near-misses
+(Q3 −13%, Q5 +13%, Q6 −14%), 3 hard fails (Q7 +60% over-read, Q1 −26% multi-page
+under, Q2 −90% image). area-consensus recovered Q8 (the v5 −28% was a v5 artifact).
+
+**Conclusion — prompt+consensus has PLATEAUED (~25% mean / 3-of-9 solid), as the
+research predicts for zero-shot.** The 3 near-misses are noise-limited at the
+boundary; the 3 hard fails need per-bucket mechanisms (over-read pruning for Q7,
+an image path for Q2) or — for real accuracy — a trained cabinet detector (label
+the real quotes → YOLO; hybrid detector-counts + VLM-sizes). That's the strategic
+fork to decide before more spend. Build + tests green (shared 71, workers 13).
+NOT committed (owner asked to leave uncommitted); NOT deployed.
+
+---
+
+## 2026-06-29 (b) — port reading fixes to prod + median-of-N consensus (SCR-006)
+
+**Context:** Continuation of the 2026-06-29 backtest. Goal: get the harness-proven
+reading fixes into the REAL pipeline (`process.ts`) so prod == what was tested, then
+tame the run-to-run variance (SCR-006) that was making tuning fight noise. Branch
+`claude/elegant-hertz-3d705e` (merged in `scribe/estimate-reading-accuracy`; NOT
+merged to main / deployed).
+
+**Step 1 — ported the 3 harness-only fixes into `apps/workers/src/takeoff/process.ts`:**
+- (a) **whole-page-once** for non-`floor_plan` estimate sheets (elevation/millwork):
+  read the whole sheet once instead of per-region, so a kitchen drawn as plan +
+  several wall elevations isn't re-enumerated per view.
+- (b) **non-estimate cross-page dedup** (`dedupeLines` across all pages) for labeled
+  (schedule) designs that repeat the same tagged cabinet on plan + elevation pages.
+- (c) **universal face expansion** — `expandToComponents` now runs in BOTH modes
+  (was estimation-only), so every quote mirrors a real CabinetNow packet.
+- **De-duplicated the logic:** the cross-view collapse lived in BOTH the harness
+  `.mjs` and `process.ts`. Extracted it to `@scribe/shared` as
+  `collapseCrossViewDuplicates`; prod and the harness now import the SAME function,
+  so the backtest can't drift from prod. Unit-tested (5 cases).
+
+**Step 2 — SCR-006 variance (pipeline-side median-of-N):**
+- New shared `pickMedian(items, count)` (unit-tested, 6 cases). `process.ts` and the
+  harness each read every ESTIMATE page N times and keep the median-box-count read;
+  env `ESTIMATE_CONSENSUS_N` (default **3**, set 1 to disable). Schedule reads stay
+  single (already deterministic). Costs Nx vision tokens on the no-schedule path only.
+- **Result:** Q8 Piestewa went **5/21/24 → 19/19/24** across three runs — the
+  catastrophic 5-box under-read is gone; internal reads now cluster 19–26 so the
+  median can't collapse. Variance tamed; a single consensus pass now reproduces what
+  needed a manual median-of-3.
+
+**Scorecard after Steps 1+2 (single consensus-3 pass, best tier vs real $):**
+still **3/9 within ±10%** — Q8 (HIGH −6%), Q9 (LOW +4%), Q10 (MED +8%). Remaining
+failures map to the planned buckets: under Q1 (−44%, 15 box), Q3 (−15%, 22), Q6
+(−25%, 18); over Q5 (+15% LOW, 59), Q7 (+33% LOW, 39); image collapse Q2 (−91%, 2
+box). Steps 1+2 bought prod-parity + stability, NOT accuracy — accuracy is Steps 3–5.
+Q8 also exposed the residual is UNDER-READ bias (truth 24–29 types, model typically
+reads ~19), which median correctly stabilizes but does not fix → Step 4.
+
+**Build + tests:** green. `@scribe/shared` 65 tests (collapse + pickMedian added),
+`@scribe/workers` 13.
+
+**Next:** Step 3 over-readers (Q5/Q7), Step 4 under-readers (Q1/Q3/Q6 + Q8 bias),
+Step 5 image inputs (Q2 + confirm scribe-web JPEG-as-PNG bug). Then ONE PR off main
+with the before/after scorecard, deploy, spot-check live. See roadmap + SCR-003..006.
+
+---
+
 ## 2026-06-29 — estimate reading-accuracy backtest vs 10 real CRM quotes
 
 **Context:** Owner pulled 10 real CabinetNow deals from the Zoho CRM (Custom
