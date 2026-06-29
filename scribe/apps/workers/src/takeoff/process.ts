@@ -319,10 +319,55 @@ async function processPdf(
       );
     }
 
-    // No-schedule estimation: each cabinet box also has doors + drawer fronts
-    // (priced separately by ft²). Spawn those face line items so the schedule
-    // mirrors a real quote (cabinet boxes + a door/drawer list).
+    // No-schedule estimation: a room shown in BOTH a floor plan and its
+    // elevations gets enumerated once per view ("Kitchen" vs "Kitchen - North
+    // Wall Run"), and the estimate path sums every region with no dedup — so
+    // multi-view inputs balloon 2-4x. Collapse per NORMALIZED room (strip the
+    // "- <wall>" suffix): for each cabinet tag keep the MAX count seen in any
+    // single view (not the sum), which removes cross-view duplicates while
+    // preserving legitimate repeats. Single-view rooms pass through unchanged.
     if (estimationMode) {
+      const normRoom = (r: string | null) =>
+        (r ?? "").toLowerCase().split(/[-—–]/)[0].trim();
+      const tagKey = (l: CabinetLineItem) =>
+        (l.tag ?? l.category ?? "").toLowerCase().trim();
+      const byRoom = new Map<string, CabinetLineItem[]>();
+      for (const l of lines) {
+        const k = normRoom(l.room);
+        byRoom.set(k, [...(byRoom.get(k) ?? []), l]);
+      }
+      const deduped: CabinetLineItem[] = [];
+      for (const roomLines of byRoom.values()) {
+        // group this room's lines by source view (raw room label)
+        const byView = new Map<string, CabinetLineItem[]>();
+        for (const l of roomLines) {
+          const v = (l.room ?? "").toLowerCase().trim();
+          byView.set(v, [...(byView.get(v) ?? []), l]);
+        }
+        // per cabinet tag, keep the view that enumerated the most of it
+        const bestPerTag = new Map<string, CabinetLineItem[]>();
+        for (const viewLines of byView.values()) {
+          const tagCount = new Map<string, CabinetLineItem[]>();
+          for (const l of viewLines)
+            tagCount.set(tagKey(l), [...(tagCount.get(tagKey(l)) ?? []), l]);
+          for (const [t, ls] of tagCount) {
+            if ((bestPerTag.get(t)?.length ?? 0) < ls.length)
+              bestPerTag.set(t, ls);
+          }
+        }
+        for (const ls of bestPerTag.values()) deduped.push(...ls);
+      }
+      const removed = lines.length - deduped.length;
+      lines.length = 0;
+      lines.push(...deduped);
+      if (removed > 0)
+        log.info(
+          { takeoffId, removed, kept: deduped.length },
+          "collapsed cross-view duplicate cabinets (estimation)"
+        );
+
+      // each cabinet box also has doors + drawer fronts (priced separately by
+      // ft²). Spawn those face line items so the schedule mirrors a real quote.
       const faces = lines.flatMap((l) => expandToComponents(l));
       lines.push(...faces);
       log.info({ takeoffId, faces: faces.length }, "expanded cabinets into door/front faces");

@@ -19,7 +19,48 @@ Format:
 
 ## Open
 
-_None._
+### SCR-006 — Estimate reads vary wildly run-to-run (same plan, temp 0)
+- **Status:** open
+- **Reported:** 2026-06-29 by session (CRM backtest)
+- **Description:** The same floor plan gives very different box counts across
+  identical runs even at temperature 0 — e.g. Piestewa returned 5, 21, and 24
+  boxes on three runs. Makes any single-run estimate unreliable and makes prompt
+  tuning fight noise.
+- **Notes / fix:** worked around in testing with median-of-3 (`run-median.sh`).
+  Real fix TBD: pipeline-side median-of-N, or stronger determinism in
+  locate/extract. Top priority for the reading-accuracy work.
+
+### SCR-005 — Single-image inputs estimate almost nothing
+- **Status:** open
+- **Reported:** 2026-06-29 by session (CRM backtest, Q2/Q10)
+- **Description:** A single low-detail render/photo (e.g. `image_(2).png`) yields
+  ~2 boxes → −92% vs the real quote. The estimator needs a plan-like layout; one
+  marketing render isn't enough. (Q10's cleaner image did land +8%, so it's
+  image-quality dependent.)
+- **Notes / fix:** needs a distinct path for image/sketch inputs, or a prompt that
+  extracts more from a single elevation/render. Also: scribe-web rejects JPEG
+  uploaded as PNG (media-type mismatch) — separate intake bug to confirm.
+
+### SCR-004 — Estimator under-reads large multi-room / multi-page plans
+- **Status:** open
+- **Reported:** 2026-06-29 by session (CRM backtest, Q1/Q3/Q6)
+- **Description:** Whole-house / multi-page architectural sets return far too few
+  boxes (Q1 7-pg → ~18 boxes, −38%; Q6 6-pg → ~20, −33%; Q3 −25%). The estimate
+  prompt v4 "realism cap" may also over-suppress on these.
+- **Notes / fix:** likely per-room locate + read each room thoroughly; balance
+  against over-reading. Carefully — pushing "find more" risks hallucination.
+
+### SCR-003 — Estimator over-reads kitchens shown as plan + elevations
+- **Status:** attempted (partial)
+- **Reported:** 2026-06-29 by session (CRM backtest, Q5/Q7/Q9)
+- **Description:** A kitchen drawn as a plan AND several wall elevations gets
+  enumerated once per view and summed → 2–4× over-count (Q7 81 boxes for one
+  kitchen, +114%). Two sub-causes: (a) per-view re-enumeration with no cross-view
+  dedup, (b) model over-splitting one sheet into ~37 cabinet "types".
+- **Notes / fix:** partial fixes on branch `scribe/estimate-reading-accuracy`:
+  cross-view collapse + whole-page-once (Q7 81→55), non-estimate cross-page dedup
+  (Q9 +72%→+7%). Harness-only fixes must be ported to `process.ts`. The model
+  over-splitting (Q7) is prompt/model-quality — not fully solved.
 
 ## In progress
 

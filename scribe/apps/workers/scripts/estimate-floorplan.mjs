@@ -76,6 +76,16 @@ async function readPage(pdf, page, estimate, pageClass) {
   // Estimation: read each region as ONE coherent image — a room must not be
   // fragmented across tiles, or the model can't lay out the whole run.
   if (estimate) {
+    // Non-floor-plan sheets (kitchen elevation/millwork) often show the SAME
+    // room as a plan + several wall elevations. Splitting into drawings makes
+    // the model re-enumerate the room once per view -> 2-4x over-count. Read
+    // the whole sheet ONCE so each cabinet is counted a single time.
+    if (pageClass !== "floor_plan") {
+      const { extraction } = await extractPage(page, fullPng, budget, {
+        estimate: true,
+      });
+      return extraction.lines;
+    }
     for (const r of regions) {
       const wIn = (r.rect.x1 - r.rect.x0) / 72;
       const hIn = (r.rect.y1 - r.rect.y0) / 72;
@@ -141,7 +151,58 @@ async function main() {
     for (const p of relevant)
       lines.push(...(await readPage(pdf, p.page, estimationMode, p.class)));
 
-    if (estimationMode) lines.push(...lines.flatMap((l) => expandToComponents(l)));
+    if (!estimationMode) {
+      // Labeled designs (cabinet A, B, C...) repeat the SAME cabinet on a plan
+      // page AND its elevation pages; per-page extraction sums them. Dedup by tag
+      // across ALL pages so each labeled cabinet counts once.
+      const before = lines.length;
+      const dd = dedupeLines(lines);
+      lines.length = 0;
+      lines.push(...dd);
+      console.error(`· non-estimate cross-page dedup: ${before} -> ${lines.length} boxes`);
+    }
+
+    if (estimationMode) {
+      // Collapse cross-view duplication: a room shown in a floor plan AND its
+      // elevations gets enumerated once per view ("Kitchen" vs "Kitchen - North
+      // Wall Run"); the region loop sums them. Per NORMALIZED room (strip the
+      // "- <wall>" suffix), for each cabinet tag keep the MAX count seen in any
+      // single view, not the sum — removes duplicates, preserves real repeats.
+      const normRoom = (r) => (r ?? "").toLowerCase().split(/[-—–]/)[0].trim();
+      const tagKey = (l) => (l.tag ?? l.category ?? "").toLowerCase().trim();
+      const byRoom = new Map();
+      for (const l of lines) {
+        const k = normRoom(l.room);
+        byRoom.set(k, [...(byRoom.get(k) ?? []), l]);
+      }
+      const collapsed = [];
+      for (const roomLines of byRoom.values()) {
+        const byView = new Map();
+        for (const l of roomLines) {
+          const v = (l.room ?? "").toLowerCase().trim();
+          byView.set(v, [...(byView.get(v) ?? []), l]);
+        }
+        const bestPerTag = new Map();
+        for (const viewLines of byView.values()) {
+          const tagCount = new Map();
+          for (const l of viewLines)
+            tagCount.set(tagKey(l), [...(tagCount.get(tagKey(l)) ?? []), l]);
+          for (const [t, ls] of tagCount)
+            if ((bestPerTag.get(t)?.length ?? 0) < ls.length) bestPerTag.set(t, ls);
+        }
+        for (const ls of bestPerTag.values()) collapsed.push(...ls);
+      }
+      console.error(`· collapsed cross-view: ${lines.length} -> ${collapsed.length} boxes`);
+      lines.length = 0;
+      lines.push(...collapsed);
+    }
+
+    // Expand cabinets into door/front faces in BOTH modes so the total mirrors a
+    // real CabinetNow quote (boxes + doors/fronts + hardware), not boxes alone.
+    {
+      const faces = lines.flatMap((l) => expandToComponents(l));
+      lines.push(...faces);
+    }
 
     // Report
     console.log(`\n===== ${lines.length} LINE ITEMS (tokens used: ${budget.used}) =====`);
