@@ -70,6 +70,59 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-06-30 — backtest harness, expanded to 21 quotes, over-read root-caused
+
+**Context:** Continuation. Built a real backtest harness, owner added 14 more real
+quotes (Quote 11-24), ran the expanded set, and diagnosed the dominant failure
+(over-reading). No estimator fix shipped yet — this session is tooling + dataset +
+diagnosis. Branch `claude/elegant-hertz-3d705e` (PR #221), NOT merged/deployed.
+
+**What shipped (tooling, all on the branch):**
+- `apps/workers/scripts/estimate-floorplan.mjs` refactored: estimate core is an
+  importable `estimatePdf(input)` (PDF *or* image, converts images via `sips`) + a
+  `--json` mode; CLI only runs when invoked directly. Added diagnostics to the human
+  report: `boxes by source_page`, `boxes by room`, per-line `source_page`.
+- **`apps/workers/scripts/backtest.mjs`** (new): reads a quotes manifest, runs each
+  quote in its own process with bounded `--concurrency`, writes a CSV incrementally
+  (LOW/MED/HIGH diffs + best tier + within-±10%) + a summary line. NO 10-min cap when
+  run locally (that was only CC's background-shell sandbox). `backtest-quotes.example.json`
+  committed; real manifests live in `~/Desktop/Scribe Testing/` (not committed).
+- Bug fix: macOS screenshots name the space before AM/PM as **U+202F** (narrow
+  no-break space); a regular space in the manifest won't match the file → renamed the
+  Q17 file, and hardened `toPdfPath` to fail loudly (existsSync) instead of ENOENT.
+
+**Dataset + scorecard:** test set 9 → **21 usable quotes** (excl Q4 out-of-scope, Q12
+dup of Q3, Q18 empty). Manifest `~/Desktop/Scribe Testing/backtest-quotes.json`;
+scorecard `~/Desktop/Scribe Testing/scorecard-21quotes.csv`. **v4+area = 8/21 within
+±10% + 4 near-miss (~13-16%) = 12/21 within ~16%; mean abs err 44%.** within:
+Q8/9/10/13/16/20/22/23. The 9-quote set under-represented OVER-reads — the big set
+shows over-read is the dominant tail: Q19 +257%, Q21 +176% (277 boxes!), Q14 +169%,
+Q24 +132%, Q7 +60%. Under-read on sparse/image inputs: Q2 −90%, Q11 −52%, Q15 −40%,
+Q1 −26%. Clean mid-size designs reliably within.
+
+**ROOT CAUSE of over-reads (confirmed via per-page/per-room diagnostics on Q14/Q24/Q19):**
+an authoritative count source exists, then **elevation/millwork pages RE-ENUMERATE the
+same cabinets**, and the dedup (`collapseCrossViewDuplicates` / `dedupeLines`) can't
+merge them because the model's room/tag labels differ across views.
+- Q14: floor plan = 19 (correct) + 3 elevations added 27 dupes → 46.
+- Q24: one vanity run counted on 2 elevation pages (11+10) → 21 (+ fillers/molding
+  over-emitted as priced boxes).
+- Q19: schedule mode — schedule tables + 8 elevations dumped 52 boxes on "Kitchen 2".
+
+**PLANNED FIX — page-role router (count each room ONCE):** route by which page-roles
+the doc has; one authoritative count per room, priority `schedule > floor_plan > single
+best elevation`; elevations REFINE sizes, never ADD to an established count.
+A=plan present (Q14/21), B=elevations-only (Q24/7), C=schedule present (Q19),
+D=single image/sketch (the separate under-read problem, Q2/Q11). Plus: retry on
+transient API socket errors (`UND_ERR_SOCKET` failed whole quotes on big docs); don't
+price fillers/crown/returns as boxes.
+
+**PRs:** #221 (Steps 1+2 + area-consensus + this tooling). **Open:** build the
+page-role router + re-backtest the 21; resolve Q22 ground truth (used sum of 14
+sections = $92,276.58 — confirm vs Zoho); detector still the durable path.
+
+---
+
 ## 2026-06-29 (c) — count≠price: area-aware consensus; v5 prompt tried + reverted
 
 **Context:** Continuation. Researched how others do plan-reading takeoff (saved to

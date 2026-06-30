@@ -62,12 +62,16 @@ Format:
   enumerated once per view and summed → 2–4× over-count (Q7 81 boxes for one
   kitchen, +114%). Two sub-causes: (a) per-view re-enumeration with no cross-view
   dedup, (b) model over-splitting one sheet into ~37 cabinet "types".
-- **Notes / fix:** cross-view collapse + whole-page-once (Q7 81→55), non-estimate
-  cross-page dedup (Q9 +72%→+7%). 2026-06-29 (b): all three **ported into
-  `process.ts`** (prod now matches the harness; cross-view collapse shared via
-  `@scribe/shared` `collapseCrossViewDuplicates`). The model over-splitting (Q7
-  still +33% LOW / 39 box) is prompt/model-quality — not fully solved; that's the
-  open Step-3 work.
+- **Notes / fix:** cross-view collapse + whole-page-once + cross-page dedup ported to
+  `process.ts` (2026-06-29 b). 2026-06-30 — **ROOT-CAUSED on the 21-quote set** (over-read
+  is the dominant failure: Q19 +257%, Q21 +176%/277 box, Q14 +169%, Q24 +132%, Q7 +60%).
+  Per-page/per-room diagnostics show: an authoritative count source exists (plan /
+  schedule / one elevation), then **elevation pages RE-ENUMERATE the same cabinets** and
+  the dedup can't merge them because the model's room/tag labels differ across views
+  (Q14: plan 19 + 3 elevations +27; Q24: one vanity run on 2 pages 11+10; Q19: schedule
+  + 8 elevations +52). **Planned fix = page-role router: one authoritative count per room
+  (`schedule > floor_plan > single best elevation`), elevations refine sizes only.** The
+  label-based `collapseCrossViewDuplicates` is too fragile and is being superseded.
 
 ## In progress
 

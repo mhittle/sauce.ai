@@ -1,0 +1,5 @@
+[
+  { "quote": "1", "deal": "Stephens", "input": "Quote 1/plan.pdf", "real": 36158.31 },
+  { "quote": "2", "deal": "DancingRock", "input": "Quote 2/render.png", "real": 28916.76 },
+  { "quote": "8", "deal": "Piestewa", "input": "Quote 8/floor-plan.pdf", "real": 27733.68 }
+]

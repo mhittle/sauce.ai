@@ -171,24 +171,27 @@ deployed). Ordered next steps:
    −28%). Tried prompt **v5** ("point-label-count"): net WORSE (over-reads complex
    plans), **reverted to v4**. **Settled config: v4 + area-consensus = 25% mean abs
    error, 3 solid (Q8/Q9/Q10) + 3 near-misses (Q3/Q5/Q6 ~13-14%).**
-4. **PLATEAU REACHED.** Prompt+consensus has topped out ~25% mean / 3-of-9 solid —
-   matches the zero-shot ceiling from research (`[[vlm-plan-counting-techniques]]`:
-   commercial tools use trained YOLO detectors; zero-shot floor-plan counting ~0.39
-   acc). Remaining gains need EITHER: (a) per-bucket mechanisms — over-read pruning
-   /verification pass for Q7 (SCR-003), an image path for Q2 (SCR-005); OR (b) the
-   durable answer: a **trained cabinet detector** (label the real quotes → YOLO;
-   hybrid detector-counts + VLM-sizes). **Strategic fork — decide before more spend:**
-   is "verify-before-quote + a stable, correctly-targeted estimate" good enough
-   (ship S1+2+area), or is unattended accuracy required (invest in the detector)?
-5. **Image inputs** (Q2 −90%): single render collapses (SCR-005) — distinct path +
-   confirm scribe-web JPEG-as-PNG upload bug. Not started.
-6. Compare configs by MEAN ABS ERROR over the 9, not "X/9 within ±10%" (boundary
-   noise makes the binary count bounce ±1-2 per pass).
-7. When the bar is met: ONE PR off main with the before/after scorecard.
+4. ✅ **Backtest harness + 21-quote dataset (2026-06-30).** Built `scripts/backtest.mjs`
+   (+ importable `estimatePdf` / `--json`); test set 9 → **21 usable quotes**.
+   Scorecard `~/Desktop/Scribe Testing/scorecard-21quotes.csv`: **8/21 within ±10%,
+   12/21 within ~16%, mean abs err 44%.** Compare configs by MEAN ABS ERROR, not
+   "X/N within 10%" (boundary noise).
+5. ✅ **Over-read ROOT-CAUSED (2026-06-30).** Dominant failure (Q19 +257%, Q21 +176%
+   /277 box, Q14 +169%, Q24 +132%, Q7 +60%). Diagnostics (boxes-by-page/room) show:
+   an authoritative count exists, then **elevation pages RE-ENUMERATE the same
+   cabinets** and the label-based dedup can't merge them (labels vary across views).
+6. ⏭ **NEXT — page-role router (count each room ONCE).** Route by page-roles present;
+   one authoritative count per room, priority `schedule > floor_plan > single best
+   elevation`; elevations REFINE sizes, never ADD. A=plan present (Q14/21), B=elev-only
+   (Q24/7), C=schedule (Q19), D=single image (Q2/Q11 under-read, separate). Plus retry
+   on transient `UND_ERR_SOCKET`; stop pricing fillers/crown/returns as boxes.
+7. **Under-readers** (Q2/Q11/Q15/Q1) + **image path** (SCR-005): sparse/image inputs;
+   separate from the over-read fix. Detector remains the durable ceiling-raiser.
+8. When the bar is met: the work ships in PR #221 (already open).
 
-**Banked + prod-ready (NOT deployed, uncommitted):** Step 1 ports + cross-view
-collapse, median-of-N consensus, area-aware selection — all green, all sharing
-`@scribe/shared` so the harness can't drift from prod.
+**Banked in PR #221 (NOT merged/deployed):** Step 1 ports + cross-view collapse,
+median-of-N consensus, area-aware selection, and the backtest harness — all green,
+sharing `@scribe/shared` so the harness can't drift from prod.
 Test assets: `~/Desktop/Scribe Testing/` (Quote 1..10 + run-*.sh + parse-median.sh
 + results sheet). See `[[scribe-crm-quote-backtest]]` memory.
 
