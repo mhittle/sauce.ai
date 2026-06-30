@@ -12,12 +12,17 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..db import get_session
+from ..ingest.solicitations import run_solicitation_ingest
 from ..integrations import scribe
 from ..schemas import (SolicitationDetailOut, SolicitationDocOut,
                        SolicitationListOut, SolicitationOut, SourceCountOut)
 from .documents import _with_api_key
 
 router = APIRouter(prefix="/api/solicitations", tags=["solicitations"])
+
+# Sources safe to trigger on demand from the UI button. Scaffolds (cscr, etc.)
+# are excluded — they raise NotImplementedError by design.
+_INGESTABLE = {"bonfire", "samgov"}
 
 _SORT_COLUMNS = {
     "due_date": "s.due_date",
@@ -78,6 +83,22 @@ def list_solicitations(
         total=total or 0,
         items=[SolicitationOut(**{k: r[k] for k in SolicitationOut.model_fields
                                   if k in r}) for r in rows])
+
+
+@router.post("/ingest")
+def trigger_ingest(source: str = "bonfire", sess: Session = Depends(get_session)):
+    """On-demand scrape trigger (the UI 'fetch bids' button). Runs the source's
+    adapter synchronously and upserts — fine for the small Bonfire agency set;
+    larger sources should move to a background job. Errors are captured on the
+    IngestRun and returned (status='error'), not raised."""
+    if source not in _INGESTABLE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"source must be one of {sorted(_INGESTABLE)}")
+    try:
+        return run_solicitation_ingest(sess, source)
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="database not ready")
 
 
 # NOTE: declared before /{solicitation_id} so "sources" isn't parsed as an int.

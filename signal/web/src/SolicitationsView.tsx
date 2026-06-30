@@ -3,6 +3,7 @@ import {
   fetchSolicitation,
   fetchSolicitations,
   fetchSolicitationSources,
+  triggerSolicitationIngest,
   type Solicitation,
   type SolicitationDetail,
   type SourceCount,
@@ -30,9 +31,31 @@ export default function SolicitationsView() {
   const [detail, setDetail] = useState<SolicitationDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestMsg, setIngestMsg] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+
   useEffect(() => {
     fetchSolicitationSources().then(setSources).catch(() => setSources([]));
-  }, []);
+  }, [reloadTick]);
+
+  async function fetchCaBids() {
+    setIngesting(true);
+    setIngestMsg(null);
+    try {
+      const r = await triggerSolicitationIngest("bonfire");
+      setIngestMsg(
+        r.status === "ok"
+          ? `Fetched ${r.upserted} CA opportunities from Bonfire.`
+          : `Ingest ${r.status} (fetched ${r.fetched}).`);
+      setOffset(0);
+      setReloadTick((t) => t + 1);   // refresh the list + source counts
+    } catch (e) {
+      setIngestMsg(e instanceof Error ? e.message : "fetch failed");
+    } finally {
+      setIngesting(false);
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -53,7 +76,7 @@ export default function SolicitationsView() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [hasDocs, cabinetOnly, stateFilter, sourceFilter, sort, offset]);
+  }, [hasDocs, cabinetOnly, stateFilter, sourceFilter, sort, offset, reloadTick]);
 
   const onSort = (col: string) => {
     setOffset(0);
@@ -118,7 +141,15 @@ export default function SolicitationsView() {
           <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
         )}
         <div className="mb-2 flex items-center justify-between text-sm text-slate-500">
-          <span>{loading ? "Loading…" : `${from}–${to} of ${total} solicitations`}</span>
+          <span className="flex items-center gap-3">
+            <span>{loading ? "Loading…" : `${from}–${to} of ${total} solicitations`}</span>
+            <button onClick={fetchCaBids} disabled={ingesting}
+              title="Scrape current open California opportunities from Bonfire"
+              className="px-2 py-1 rounded bg-amber-700 text-white text-xs disabled:opacity-50">
+              {ingesting ? "Fetching…" : "↻ Fetch CA bids"}
+            </button>
+            {ingestMsg && <span className="text-xs text-slate-500">{ingestMsg}</span>}
+          </span>
           <span className="flex gap-2">
             <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}
               className="px-2 py-1 border rounded disabled:opacity-40">Prev</button>

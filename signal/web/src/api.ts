@@ -172,6 +172,27 @@ export async function fetchSolicitationSources(): Promise<SourceCount[]> {
   return res.json();
 }
 
+// On-demand scrape trigger (the "fetch bids" button). Runs the source's adapter
+// server-side and upserts; returns how many were fetched/upserted.
+export interface IngestResult {
+  status: string;
+  fetched: number;
+  upserted: number;
+  run_id?: number;
+}
+
+export async function triggerSolicitationIngest(
+  source = "bonfire"): Promise<IngestResult> {
+  const res = await fetch(
+    `${BASE}/api/solicitations/ingest?source=${encodeURIComponent(source)}`,
+    { method: "POST" });
+  if (!res.ok) {
+    const d = await res.json().catch(() => null);
+    throw new Error(d?.detail || `ingest ${res.status}`);
+  }
+  return res.json();
+}
+
 // Hand a bid PDF to scribe to start a quote takeoff. The bytes are fetched and
 // forwarded server-side; here we just trigger it and get a link back.
 export interface ScribeHandoff {
