@@ -29,6 +29,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Socrata catalog auto-discovery | 6 | 6 | ingest | backlog |
 | CRM push (pluggable connector + first adapter) | 7 | 5 | backend | backlog |
 | Coverage/freshness dashboard (UI) | 5 | 3 | ui | backlog |
+| Bonfire (Euna) CA opportunities adapter | 7 | 3 | ingest | done |
+| Cal eProcure CSCR adapter (Playwright) | 6 | 6 | ingest | backlog |
 | Portal scrapers (Accela/eTRAKiT/CityView) | 5 | 8 | ingest | backlog |
 | Concrete paid-API adapter (e.g. Shovels.ai) | 4 | 4 | ingest | blocked |
 | Enrichment signals (liens/litigation/news) | 4 | 8 | signals | backlog |
@@ -143,6 +145,46 @@ store `crm_id` back. Blocked on §13.1 CRM choice.
 PRD §10: surface `/api/jurisdictions` (live cities, last good pull, staleness)
 as a UI page.
 
+### Bonfire (Euna) CA opportunities adapter
+**Priority/LOE/Category/Status:** 7 / 3 / ingest / **done** (2026-06-30)
+The requests-friendly California path. Many CA agencies post on Bonfire, which
+exposes a public JSON list endpoint
+(`<agency>.bonfirehub.com/PublicPortal/getOpenPublicOpportunitiesSectionData`)
+— so one adapter (`adapters/solicitations/bonfire.py`, source_type `bonfire`)
+lists open opportunities across many agencies with no key, no Playwright.
+Ingest: `python jobs/ingest_solicitations.py --source bonfire`. Seeded agencies
+ventura/wrd/calmhsa (verified live); add more subdomains in `DEFAULT_AGENCIES`
+or via config `{"agencies": [...]}`. Limit: per-opportunity document pages are
+Cloudflare-walled, so bid PDFs aren't bot-downloadable (discovery + triage now;
+no scribe-connector docs from Bonfire). No NAICS → ingest all, let
+`classify_solicitations` score cabinetry. This is the pragmatic answer to "add
+CA like SAM.gov"; the statewide CSCR register below still needs Playwright.
+
+### Cal eProcure CSCR adapter (Playwright)
+**Priority/LOE/Category/Status:** 6 / 6 / ingest / backlog
+California State Contracts Register — high-value CA bid source (~330 open
+Posted events, construction included, each event carries downloadable bid
+documents that feed the scribe quote connector). Registered as scaffold
+`cscr` (`adapters/solicitations/scaffolds.py`), fails safe until built.
+
+**Why it's not a config/`requests` source** (reverse-engineered 2026-06-30):
+the public Event Search (`pages/Events-BS3/event-search.aspx`) is an **InFlight
+NLX** SPA over Oracle **PeopleSoft**. The event grid loads via a *stateful*
+POST to `…/psc/psfpd1/SUPPLIER/ERP/c/AUC_MANAGE_BIDS.AUC_RESP_INQ_AUC.GBL`
+carrying PeopleSoft state (`ICSID`/`ICStateNum`/`ICAction`) seeded by an
+InFlight guest-session bootstrap (`InFlightSessionID` cookie). Confirmed: the
+component GET 404s without the bootstrap, `?useAjax=1` returns only the SPA
+shell, the criteria-form POST 400s. So it needs **Playwright** (headless
+browser) — a new dependency + browser binaries in the Docker image.
+
+**Build sketch:** Playwright loads the search page, waits for the grid, reads
+rows (Event ID / Name / Department / End Date / Status), paginates, opens each
+event for its document links, normalizes to `NormalizedSolicitation`. No NAICS
+(CSCR uses UNSPSC/NIGP/CSI) → filter construction/cabinetry by keyword or lean
+on `classify_solicitations`. Wire into `ingest_solicitations.py` (already
+generic) and add a `validate_*`-style live check. Decision needed first:
+accept Playwright in the signal image (size/memory/deploy).
+
 ### Portal scrapers (Accela/eTRAKiT/CityView)
 **Priority/LOE/Category/Status:** 5 / 8 / ingest / backlog
 PRD §6.3: per-vendor scraper templates for gap jurisdictions (public records;
@@ -170,3 +212,6 @@ with just CI (`signal-ci.yml`) for now.
 ## Done
 
 - **Phase 0 — Skeleton framework** (PR: this PR, 2026-06-08).
+- **Bonfire (Euna) CA opportunities adapter** (2026-06-30) — requests-only
+  `bonfire` source listing open opportunities across CA agencies; the lighter
+  alternative to the PeopleSoft-bound Cal eProcure/CSCR register.

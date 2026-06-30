@@ -99,7 +99,8 @@ def test_fetch_raw_requires_api_key():
 def test_registry_routes_and_scaffolds_fail_safe():
     assert isinstance(build_solicitation_adapter("samgov", samgov_api_key="k"),
                       SamGovAdapter)
-    for st in ("samgov", "esbd-tx", "vbs-fl", "gpr-ga", "bidnet", "demandstar"):
+    for st in ("samgov", "esbd-tx", "vbs-fl", "gpr-ga", "cscr", "bidnet",
+               "demandstar"):
         assert st in supported_source_types()
     scaffold = build_solicitation_adapter("esbd-tx")
     assert isinstance(scaffold, TexasESBDAdapter)

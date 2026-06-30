@@ -4,11 +4,13 @@ from __future__ import annotations
 from typing import Optional
 
 from .base import SolicitationAdapter
+from .bonfire import BonfireAdapter
 from .samgov import SamGovAdapter
 from .scaffolds import SCAFFOLD_ADAPTERS
 
 _REGISTRY: dict[str, type[SolicitationAdapter]] = {
     SamGovAdapter.source_type: SamGovAdapter,
+    BonfireAdapter.source_type: BonfireAdapter,
     **{cls.source_type: cls for cls in SCAFFOLD_ADAPTERS},
 }
 
