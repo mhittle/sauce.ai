@@ -35,6 +35,14 @@ docker compose exec api python jobs/ingest_solicitations.py --source samgov --si
 curl 'http://localhost:8000/api/solicitations?has_docs=true'
 ```
 
+Ingest California agency opportunities from Bonfire (public JSON, no key — the
+requests-friendly CA path while Cal eProcure/CSCR awaits a Playwright adapter):
+
+```bash
+docker compose exec api python jobs/ingest_solicitations.py --source bonfire
+curl 'http://localhost:8000/api/solicitations?state=CA'
+```
+
 State/county/local procurement sources are config-driven
 (`seed/procurement_sources.json`; `json` or `html` platform + a field map).
 Tune selectors against the live page, then ingest:

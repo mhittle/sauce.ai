@@ -2,9 +2,12 @@
 
     python jobs/ingest_solicitations.py [--source samgov] [--since YYYY-MM-DD]
 
-SAM.gov needs SAMGOV_API_KEY. Other source types (esbd-tx, vbs-fl, gpr-ga,
-bidnet, demandstar) are registered but not yet implemented — they raise a
-clear NotImplementedError (see signal/roadmap.md).
+Implemented: `samgov` (needs SAMGOV_API_KEY) and `bonfire` (public Bonfire/Euna
+opportunities for a set of CA agencies — no key; requests-only). Other source
+types (esbd-tx, vbs-fl, gpr-ga, cscr, bidnet, demandstar) are registered but
+not yet implemented — they raise a clear NotImplementedError (see
+signal/roadmap.md). `cscr` (Cal eProcure) is an InFlight-NLX/PeopleSoft SPA
+that needs Playwright; `bonfire` is the lighter requests-friendly CA path.
 """
 from __future__ import annotations
 

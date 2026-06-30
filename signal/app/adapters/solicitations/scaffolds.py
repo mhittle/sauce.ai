@@ -50,6 +50,33 @@ class GeorgiaGPRAdapter(_ScaffoldAdapter):
                    ">= $100k are posted. Public. HTML. (Ties to Atlanta facility.)")
 
 
+class CalEProcureCSCRAdapter(_ScaffoldAdapter):
+    """California State Contracts Register (Cal eProcure). High-value CA source
+    (~330 open Posted events incl. construction, each event has downloadable
+    bid documents on its detail page → feeds the scribe quote connector).
+
+    Reverse-engineered 2026-06-30: the public Event Search
+    (pages/Events-BS3/event-search.aspx) is an **InFlight NLX** SPA wrapping an
+    Oracle **PeopleSoft** component. The event grid is loaded by client-side JS
+    via a STATEFUL POST to
+      /nlx3/psc/psfpd1/SUPPLIER/ERP/c/AUC_MANAGE_BIDS.AUC_RESP_INQ_AUC.GBL
+    carrying PeopleSoft state (ICSID / ICStateNum / ICAction) seeded by an
+    InFlight guest-session bootstrap (InFlightSessionID cookie). Verified with
+    requests that: the component GET 404s without that bootstrap, `?useAjax=1`
+    returns only the SPA shell, and the criteria form POST 400s. So plain
+    requests+bs4 can't reach the data — this needs **Playwright** (drive the
+    SPA, let InFlight run, read the rendered grid + paginate, click each event
+    for its documents). Columns: Event ID, Event Name, Department, End Date,
+    Status. No NAICS — CSCR classifies by UNSPSC/NIGP/CSI, so filter
+    construction/cabinetry by keyword (or the classify_solicitations pass).
+    See signal/roadmap.md (CSCR / Cal eProcure adapter)."""
+    source_type = "cscr"
+    entry_url = "https://caleprocure.ca.gov/pages/Events-BS3/event-search.aspx"
+    access_note = ("California State Contracts Register; public, no login. "
+                   "InFlight-NLX-wrapped PeopleSoft SPA — needs Playwright "
+                   "(stateful POST, not a clean API/HTML list).")
+
+
 # --- National non-gov aggregators ------------------------------------------
 class BidNetDirectAdapter(_ScaffoldAdapter):
     source_type = "bidnet"
@@ -68,5 +95,6 @@ class DemandStarAdapter(_ScaffoldAdapter):
 
 SCAFFOLD_ADAPTERS = (
     TexasESBDAdapter, FloridaVBSAdapter, GeorgiaGPRAdapter,
+    CalEProcureCSCRAdapter,
     BidNetDirectAdapter, DemandStarAdapter,
 )
