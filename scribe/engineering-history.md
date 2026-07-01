@@ -144,10 +144,33 @@ counting. This **invalidates the `ROUTER_MERGE_ROLES` direction** (merging adds 
 → worsens the now-dominant over-read); keep it gated/dormant. The earlier "under-read
 diagnosis" above was a label artifact — trust the clean numbers.
 
-**NEXT (data-driven on the clean ruler):** precision is the bigger gap. Levers to
-measure: over-read pruning on labeled/arch (Q7/Q3/Q14), size/identity accuracy for
-right-count-wrong-match (Q21/Q10), and the image path (Q2/Q11 still ~0.1-0.2, SCR-005).
-Firm the clean baseline at N=3 before committing a lever. Still prompt/vision-only.
+**Lever 3 — precision override prompt (gated `ESTIMATE_PROMPT=precision`): NET LOSS.**
+Targeted the observed over-read mechanisms (Q24 dump: reader over-SPLITS runs into
+many identical 15" vanities — 8 vs 2 real — and DUPLICATES one 24×96 tall as both
+tall+wall). Suffix appended to v4: fewest/widest cabinets, each physical unit once,
+nothing mandatory, don't pad. Full clean ruler N=1, paired micro-avg on the 15
+completed quotes: **baseline recall 35% / prec 30% / F1 0.324 → precision recall 30% /
+prec 31% / F1 0.304.** It pruned pred 217→178: 3 real wins on over-readers (Q8 +0.20,
+Q24 +0.14, Q6 +0.09) but 6 losses on under-readers (Q20 −0.20, Q5 −0.18, Q11/Q1/Q14/
+Q23). A global precision bias robs the under-readers to pay the over-readers — the
+corpus is split, so a blunt global nudge can't win. Kept gated/dormant (prod = v4;
+the suffix is useful for a future PER-DOC adaptive path since it clearly helps
+over-readers). Commit: (this session).
+
+**PLATEAU CONFIRMED (rigorously, on the fixed ruler).** THREE global levers tested +
+ruled out this session — stronger model (Opus 4.8), router merge-not-drop, precision
+prompt — all wash/negative around **F1 ~0.30-0.32**. This is the zero-shot VLM ceiling
+the research predicted ([[vlm-plan-counting-techniques]]), now PROVEN on real labeled
+data rather than asserted. The strategic tension is real: fully-autonomous high accuracy
+is fundamentally hard prompt-only, and the detector escape hatch is closed by the
+no-labeling constraint.
+
+**NEXT — only ADDITIVE levers remain** (gains without the recall↔precision tradeoff):
+(1) **image path** (Q2/Q11/Q13 ~0 F1 — a dedicated upscale/OCR path adds F1 where it's
+zero, hurting nothing else; SCR-005); (2) **size/identity matching** (Q21 48/49 & Q10
+13/14 nail COUNT but F1 ~0.47 — improving which cabinets match lifts both R and P).
+Firm any candidate at N=3. Global prompt/model tuning is done — do not re-litigate.
+Still prompt/vision-only.
 
 ---
 

@@ -5,6 +5,7 @@ import {
   repairLine,
 } from "@scribe/shared";
 import {
+  ESTIMATE_PRECISION_SUFFIX,
   ESTIMATE_SYSTEM,
   estimateUserText,
   EXTRACT_SYSTEM,
@@ -25,6 +26,14 @@ import {
 // overrides it (e.g. a stronger model) so reading-accuracy A/Bs can be run on
 // the ruler without changing the prod default.
 const READ_MODEL = process.env.VISION_MODEL || SONNET_MODEL;
+
+// Estimate system prompt: v4 by default; `ESTIMATE_PROMPT=precision` appends the
+// gated precision override (targets the over-read/low-precision failure) for A/B
+// on the ruler without changing the prod default.
+const ESTIMATE_SYSTEM_PROMPT =
+  process.env.ESTIMATE_PROMPT === "precision"
+    ? ESTIMATE_SYSTEM + ESTIMATE_PRECISION_SUFFIX
+    : ESTIMATE_SYSTEM;
 
 // Recover complete line objects from a response whose JSON is unparseable
 // (typically truncated at max_tokens). Walks the `"lines": [ ... ]` array with
@@ -105,7 +114,7 @@ export async function extractPage(
         // default is 1.0 → different cabinets each reprocess). Newer models (Opus
         // 4.8+) deprecate `temperature` and 400 if it's sent, so omit it there.
         ...(READ_MODEL.startsWith("claude-opus-4-8") ? {} : { temperature: 0 }),
-        system: opts.estimate ? ESTIMATE_SYSTEM : EXTRACT_SYSTEM,
+        system: opts.estimate ? ESTIMATE_SYSTEM_PROMPT : EXTRACT_SYSTEM,
         messages: [
           {
             role: "user",
