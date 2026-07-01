@@ -493,6 +493,22 @@ export function routeByPageRole<T extends CabinetLineItem>(
     };
   }
 
+  // Experimental (gated, off by default): instead of DROPPING every demoted
+  // role, keep all lines and merge cross-view duplicates. The default drop was
+  // tuned on the lossy $-total metric; the per-line reading ruler shows it
+  // discards real cabinets on plan-incomplete docs (e.g. Q14: keeps 16, drops
+  // 33, truth 40). Merging lets incremental elevation cabinets survive while
+  // true cross-view repeats still collapse. Measure on the ruler before shipping.
+  if (process.env.ROUTER_MERGE_ROLES === "1" && chosen !== "schedule") {
+    const merged = collapseCrossViewDuplicates(lines);
+    return {
+      regime: chosen,
+      lines: merged,
+      droppedFromOtherRoles: 0,
+      collapsedWithinRole: lines.length - merged.length,
+    };
+  }
+
   const kept = lines.filter((l) => roleOf(l) === chosen);
   const droppedFromOtherRoles = lines.length - kept.length;
   // Schedules are labeled (cabinet A/B/C…) so a tag dedup merges plan+elevation

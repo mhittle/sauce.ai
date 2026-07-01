@@ -21,6 +21,11 @@ import {
   withSocketRetry,
 } from "../lib/anthropic.js";
 
+// The cabinet-reading vision model. Defaults to prod's Sonnet; `VISION_MODEL`
+// overrides it (e.g. a stronger model) so reading-accuracy A/Bs can be run on
+// the ruler without changing the prod default.
+const READ_MODEL = process.env.VISION_MODEL || SONNET_MODEL;
+
 // Recover complete line objects from a response whose JSON is unparseable
 // (typically truncated at max_tokens). Walks the `"lines": [ ... ]` array with
 // a string-aware brace scanner and JSON.parses each balanced {...}; an
@@ -94,11 +99,12 @@ export async function extractPage(
   const message = await withSocketRetry(() =>
     client.messages
       .stream({
-        model: SONNET_MODEL,
+        model: READ_MODEL,
         max_tokens: 32000,
         // Pin temperature so the same plan reads consistently run-to-run (the API
-        // default is 1.0 → different cabinets each reprocess).
-        temperature: 0,
+        // default is 1.0 → different cabinets each reprocess). Newer models (Opus
+        // 4.8+) deprecate `temperature` and 400 if it's sent, so omit it there.
+        ...(READ_MODEL.startsWith("claude-opus-4-8") ? {} : { temperature: 0 }),
         system: opts.estimate ? ESTIMATE_SYSTEM : EXTRACT_SYSTEM,
         messages: [
           {

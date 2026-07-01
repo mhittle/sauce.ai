@@ -70,6 +70,63 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-07-01 (d) — H3 decided: prompt/vision-only (owner); two levers measured on the ruler
+
+**Context:** Session to "decide/execute the DETECTOR path." Two hard constraints
+emerged from the owner: (1) target is **fully autonomous auto-send** (no
+human-in-loop, so a send-gate that defers to a human is OFF the table); (2)
+**prompt/vision-API ONLY** — "I'm not a cabinet guy to label myself; it needs to
+be a prompt to Claude or a vision API." That **kills the trained-detector path**:
+a YOLO-style detector needs localized (bbox) training data, the 361 labels carry
+ZERO localization (fields: tag/category/w/h/d/qty/raw only — verified), and a
+spike proved the VLM can't self-generate usable bboxes (Q8 overlay
+`~/Desktop/Scribe Testing/q8-vlm-bbox-spike.png`: 18 loose run/zone boxes, several
+on title block/legend/empty rooms — too wrong to bootstrap labels). So there is no
+prompt-free path to a dataset, and the owner won't hand-label ⇒ **stay on
+prompt/vision, tune against the existing answer key (packets) via the ruler.**
+
+**Reading baseline reconfirmed (5-quote subset Q1/2/8/14/22, N=1):** OVERALL
+recall 23% / precision 42% / **F1 0.28** — matches the documented 0.27. **Key
+pattern: every quote UNDER-reads** (countErr −35/−68/0/−53/−59%) and preds
+**plateau ~13–19 boxes regardless of job size** (Q8 14→14 fine; Q14 40→19; Q22
+44→18). Post-router the dominant failure has flipped from over-read to
+**under-read on big/dense jobs.**
+
+**Lever 1 — stronger model (Opus 4.8 vs Sonnet-4-6 on the read): NO WIN.** Added a
+`VISION_MODEL` env knob (`extract.ts`, defaults to `SONNET_MODEL`; also had to omit
+`temperature` for Opus-4.8 which 400s on it). Head-to-head: Opus roughly
+equal-to-worse (Q8 29→36% recall but Q1 30→25, Q2 16→0; size-err dropped 1.7→0.9"
+but recall/precision flat). **Confirms detection ≠ model capability.** Prod default
+unchanged.
+
+**Lever 2 — router "merge-not-drop" (gated `ROUTER_MERGE_ROLES=1` in `routeByPageRole`):
+direction confirmed, naive impl insufficient.** DIAGNOSIS (smoking gun, Q14):
+`regime=plan kept=16 droppedOtherRoles=33`, truth 40 — the pipeline READ 49
+cabinets and the router **threw away 33** to keep the plan's 16. The router was
+tuned on the lossy $-metric (19 boxes priced close, so "drop elevations" looked
+right); the per-line ruler shows those "dupes" are largely REAL cabinets. Merge
+probe (keep all roles, `collapseCrossViewDuplicates` across them): Q8 recall
+29→**50%**, Q14 count 19→33 (toward truth 40) — BUT Q14 recall stayed 20%
+(recovered elevation cabinets don't match the packet sizes/labels within tolerance;
+diff-room-label dupes don't collapse) so precision fell 42→24. **Net: a wash on the
+subset — real win on Q8, precision hit on Q14.** The router role-drop is the single
+biggest recall leak, but the fix must be COMPLETENESS-AWARE (SCR-007 box-face-area
+yield-guard: only demote elevations when the plan is actually complete) + cross-view
+size-matching so recovered cabinets COUNT instead of adding noise.
+
+**Shipped (this checkpoint commit, branch `claude/reading-accuracy-prompt-levers`,
+NOT merged — no deploy):** `VISION_MODEL` knob + Opus temperature fix
+(`extract.ts`); gated dormant `ROUTER_MERGE_ROLES` experiment (`regions.ts`). Prod
+default behavior unchanged; tests green (shared 98). Reusable A/B infra:
+`labels-subset.json` (5 quotes spanning classes), `reading-{sonnet,opus,merge}-subset.csv`.
+
+**NEXT (owner: "keep improving"):** build the completeness-aware yield-guard so the
+router stops starving recall on plan-incomplete docs, + cross-view size matching;
+validate on the full ruler (target: recall up without wrecking precision on the
+router's over-read wins Q19/Q21). Still prompt/vision-only.
+
+---
+
 ## 2026-07-01 (c) — H2: per-line labels + reading-accuracy scorer (the real ruler)
 
 **Context:** Live testing exposed that the $-total backtest ("8/21 within ±10%")
