@@ -180,18 +180,24 @@ deployed). Ordered next steps:
    /277 box, Q14 +169%, Q24 +132%, Q7 +60%). Diagnostics (boxes-by-page/room) show:
    an authoritative count exists, then **elevation pages RE-ENUMERATE the same
    cabinets** and the label-based dedup can't merge them (labels vary across views).
-6. ⏭ **NEXT — page-role router (count each room ONCE).** Route by page-roles present;
-   one authoritative count per room, priority `schedule > floor_plan > single best
-   elevation`; elevations REFINE sizes, never ADD. A=plan present (Q14/21), B=elev-only
-   (Q24/7), C=schedule (Q19), D=single image (Q2/Q11 under-read, separate). Plus retry
-   on transient `UND_ERR_SOCKET`; stop pricing fillers/crown/returns as boxes.
-7. **Under-readers** (Q2/Q11/Q15/Q1) + **image path** (SCR-005): sparse/image inputs;
-   separate from the over-read fix. Detector remains the durable ceiling-raiser.
-8. When the bar is met: the work ships in PR #221 (already open).
+6. ✅ **Page-role router SHIPPED (PR #221, merged 2026-07-01).** `routeByPageRole`
+   counts one authoritative role (`schedule > floor_plan > elevation`), drops
+   demoted-role re-counts, drops fillers/crown from box pricing, retries socket
+   errors. Backtest **MAE 59→34** — over-read tail gone (Q19 +421→+16, Q14 +178→+7).
+7. ⏭ **NEXT — document-class routing (fix SCR-007 under-read tail).** The router's
+   fixed precedence over-demotes elevations on **elevation-authoritative** plans
+   (Q5/Q13/Q22/Q23 regressed to bad under-reads). Owner greenlit the data-driven
+   plan: classify docs by which view is authoritative — 1 itemized-list (Q19/21),
+   2 plan-auth (Q14/24), 3 elevation-auth (Q5/13/22/23), 4 single-view (Q7/16/20),
+   5 sparse image (Q2/11) — and resolve classes 2 vs 3 by a **box-face-area yield
+   comparison** (only demote elevations when the plan/schedule yield is comparable/
+   larger). Confirm the yield feature (1 read/page diagnostic), implement, re-backtest.
+8. **Image path** (SCR-005, class 5) + **input-type classifier** (itemized/list/
+   image sub-pipelines): sparse/image inputs. Detector remains the durable ceiling-raiser.
 
-**Banked in PR #221 (NOT merged/deployed):** Step 1 ports + cross-view collapse,
-median-of-N consensus, area-aware selection, and the backtest harness — all green,
-sharing `@scribe/shared` so the harness can't drift from prod.
+**Shipped in PR #221 (merged 2026-07-01):** cross-view collapse, median-of-N
+area-consensus, backtest harness, and the page-role router — all green, sharing
+`@scribe/shared` so the harness can't drift from prod.
 Test assets: `~/Desktop/Scribe Testing/` (Quote 1..10 + run-*.sh + parse-median.sh
 + results sheet). See `[[scribe-crm-quote-backtest]]` memory.
 

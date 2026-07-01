@@ -11,8 +11,8 @@ import {
 import {
   boxFaceArea,
   CabinetLineItem,
-  collapseCrossViewDuplicates,
   dedupeLines,
+  dropNonBoxCasework,
   fitDpi,
   pickMedian,
   mapBoxToPagePoints,
@@ -20,11 +20,14 @@ import {
   PageClass,
   PageClassification,
   PageExtraction,
+  PageRole,
+  pageClassToRole,
   padRectToPage,
   planRenderJobs,
   PricingSnapshot,
   RegionKind,
   RELEVANT_PAGE_CLASSES,
+  routeByPageRole,
   expandToComponents,
 } from "@scribe/shared";
 import { matchLine } from "@scribe/pricing";
@@ -322,36 +325,34 @@ async function processPdf(
       );
     }
 
-    // Estimation collapses cross-VIEW duplicates (one room enumerated per
-    // elevation); labeled (schedule) designs instead repeat the SAME tagged
-    // cabinet on a plan page AND its elevation pages, so they get a cross-PAGE
-    // dedup by tag. Both then expand each box into its door/drawer-front faces.
-    if (estimationMode) {
-      const before = lines.length;
-      const collapsed = collapseCrossViewDuplicates(lines);
-      lines.length = 0;
-      lines.push(...collapsed);
-      if (before > collapsed.length)
-        log.info(
-          { takeoffId, removed: before - collapsed.length, kept: collapsed.length },
-          "collapsed cross-view duplicate cabinets (estimation)"
-        );
-    } else {
-      // Labeled designs (cabinet A, B, C...) repeat the SAME cabinet on a plan
-      // page AND its elevation pages; per-page extraction sums them. Dedupe by
-      // tag across ALL pages so each labeled cabinet counts once. (Within-region
-      // dedup already ran per page; this catches the cross-page repeats.)
-      const before = lines.length;
-      const deduped = dedupeLines(lines);
-      if (deduped.length < before) {
-        lines.length = 0;
-        lines.push(...deduped);
-        log.info(
-          { takeoffId, removed: before - deduped.length, kept: lines.length },
-          "deduped cross-page duplicate cabinets (non-estimation)"
-        );
-      }
-    }
+    // Count each room ONCE (SCR-003). Per-page extraction SUMS cabinets across
+    // every relevant page, so an elevation/millwork sheet re-enumerates cabinets
+    // a plan or schedule already counted and the total balloons 2-4x. Instead of
+    // summing, route to the single authoritative page role (schedule > floor
+    // plan > elevation) and count from that role only; demoted roles refine
+    // sizes later but never ADD to the count. (Replaces the old per-mode
+    // collapse/dedupe — the router subsumes both.)
+    const roleByPage = new Map<number, PageRole>(
+      relevant.map((r) => [r.page, pageClassToRole(r.class)])
+    );
+    const routed = routeByPageRole(lines, roleByPage);
+    // Stop pricing fillers/crown/returns through the box formula (a 3" filler or
+    // a length of crown isn't a cabinet carcass — it over-prices the quote).
+    const counted = dropNonBoxCasework(routed.lines);
+    const nonBoxDropped = routed.lines.length - counted.length;
+    lines.length = 0;
+    lines.push(...counted);
+    log.info(
+      {
+        takeoffId,
+        regime: routed.regime,
+        kept: counted.length,
+        droppedFromOtherRoles: routed.droppedFromOtherRoles,
+        collapsedWithinRole: routed.collapsedWithinRole,
+        nonBoxCaseworkDropped: nonBoxDropped,
+      },
+      "page-role routed cabinet count"
+    );
 
     // Each cabinet box also has doors + drawer fronts (priced separately by
     // ft²). Spawn those face line items in BOTH modes so the schedule mirrors a

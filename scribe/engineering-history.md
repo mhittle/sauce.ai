@@ -70,6 +70,52 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-07-01 — page-role router shipped: over-read tail tamed (MAE 59→34), new under-read tail surfaced
+
+**Context:** FIX phase for SCR-003 over-reads. Built the page-role router in
+`process.ts` + shared, backtested the 21 quotes before/after, merged PR #221 to
+prod for live testing. Branch `claude/elegant-hertz-3d705e`.
+
+**Shipped (all on PR #221):**
+- **`routeByPageRole` in `@scribe/shared`** (regions.ts): stop SUMMING cabinets
+  across every relevant page. Pick ONE authoritative page role by precedence
+  `schedule > floor_plan > elevation` (highest role with ≥1 real box wins — a
+  ≥1-box fallback prevents a misclassified site plan zeroing the count), count
+  from that role only, dedup within it (schedule → `dedupeLines`, plan/elevation
+  → `collapseCrossViewDuplicates`). Demoted roles (elevations under a plan/
+  schedule) no longer ADD to the count. `pageClassToRole` maps classes → roles.
+- **`isNonBoxCasework` / `dropNonBoxCasework`**: fillers/crown/returns/toe-kick
+  were priced through the full box-carcass formula (a 3" filler charged as a
+  cabinet). Now dropped from box pricing + excluded from `boxFaceArea` consensus.
+- **`withSocketRetry` in `lib/anthropic.ts`**: wraps all four vision calls
+  (extract/classify/regions/spreadsheet) — retries `UND_ERR_SOCKET`/5xx with
+  backoff so a dropped socket no longer fails a whole takeoff/quote.
+- Router wired into BOTH `process.ts` and the harness via the shared helper (no
+  drift). Unit tests: shared 84 / workers 13 / pricing 44, build green.
+
+**Backtest (21 quotes, N=3, before→after):** **mean abs err 59.1% → 34.1%**
+(within ±10%: 9 → 7). The catastrophic over-read tail is gone — Q19 ikea
++421%→+16%, Q14 +178%→+7%, Q21 +168%→−41%, Q24 +121%→+57%, Q7 +65%→+50%.
+
+**NEW problem surfaced — under-detection (SCR-007):** the "drop ALL elevations in
+Regime A" rule is too blunt. On docs where the floor plan is schematic and the
+cabinet detail lives in the ELEVATIONS, dropping them throws away the count:
+Q5 +19%→−80%, Q13 +6%→−42%, Q22 −1%→−66%, Q23 +13%→−50%, Q6 −9%→−24%. Q14 (4pg,
+helped) and Q13 (4pg, hurt) are structurally identical — page count/type/size do
+NOT separate them; only WHICH view is authoritative does.
+
+**Decision + next (the data-driven plan, owner greenlit 2026-07-01):** treat plans
+as distinct **document classes** by which view is authoritative, not by file shape:
+1 itemized-list (IKEA/schedule — extract verbatim, Q19/21), 2 plan-authoritative
+(count plan — Q14/24), 3 elevation-authoritative (count elevations — Q5/13/22/23),
+4 single-view (Q7/16/20), 5 sparse image (Q2/11, SCR-005). Classes 2 vs 3 are
+indistinguishable upfront → resolve by **completeness**: replace the router's fixed
+precedence with a **box-face-area yield comparison** (only demote elevations when
+the plan/schedule yield is comparable/larger). Next pass: confirm the yield feature
+(1 read/page diagnostic), implement completeness-aware routing, re-backtest.
+
+---
+
 ## 2026-06-30 — backtest harness, expanded to 21 quotes, over-read root-caused
 
 **Context:** Continuation. Built a real backtest harness, owner added 14 more real

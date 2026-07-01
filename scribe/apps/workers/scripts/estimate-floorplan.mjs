@@ -13,16 +13,18 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import {
   boxFaceArea,
-  collapseCrossViewDuplicates,
   dedupeLines,
+  dropNonBoxCasework,
   expandToComponents,
   fitDpi,
   mapBoxToPagePoints,
   needsRegioning,
   padRectToPage,
+  pageClassToRole,
   pickMedian,
   planRenderJobs,
   RELEVANT_PAGE_CLASSES,
+  routeByPageRole,
 } from "@scribe/shared";
 import { openPdf, THUMBNAIL_DPI } from "../dist/takeoff/pdf.js";
 import { classifyPages } from "../dist/takeoff/classify.js";
@@ -218,16 +220,23 @@ export async function estimatePdf(input) {
     for (const p of relevant)
       lines.push(...(await readPage(pdf, p.page, estimationMode, p.class)));
 
-    if (!estimationMode) {
-      const dd = dedupeLines(lines); // cross-page tag dedup (labeled designs)
-      lines.length = 0;
-      lines.push(...dd);
-    }
-    if (estimationMode) {
-      const collapsed = collapseCrossViewDuplicates(lines); // shared w/ prod
-      lines.length = 0;
-      lines.push(...collapsed);
-    }
+    // Count each room ONCE via the SHARED page-role router (identical to prod's
+    // process.ts): route to the authoritative role (schedule > floor plan >
+    // elevation) instead of summing every page, then drop fillers/crown/returns
+    // from box pricing. Subsumes the old per-mode collapse/dedupe.
+    const roleByPage = new Map(
+      relevant.map((r) => [r.page, pageClassToRole(r.class)])
+    );
+    const routed = routeByPageRole(lines, roleByPage);
+    const counted = dropNonBoxCasework(routed.lines);
+    console.error(
+      `· page-role router: regime=${routed.regime} kept=${counted.length}` +
+        ` droppedOtherRoles=${routed.droppedFromOtherRoles}` +
+        ` collapsedWithinRole=${routed.collapsedWithinRole}` +
+        ` nonBoxDropped=${routed.lines.length - counted.length}`
+    );
+    lines.length = 0;
+    lines.push(...counted);
     // Expand into door/front faces in BOTH modes so the total mirrors a quote.
     lines.push(...lines.flatMap((l) => expandToComponents(l)));
 

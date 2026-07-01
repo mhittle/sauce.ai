@@ -55,8 +55,25 @@ Format:
 - **Notes / fix:** likely per-room locate + read each room thoroughly; balance
   against over-reading. Carefully — pushing "find more" risks hallucination.
 
+### SCR-007 — Router under-reads elevation-authoritative plans
+- **Status:** open
+- **Reported:** 2026-07-01 by session (page-role router backtest)
+- **Description:** The SCR-003 page-role router counts the floor plan and DROPS
+  elevations in Regime A. On docs where the plan is schematic and the cabinet
+  detail lives in the elevations, this throws away the real count → severe
+  under-read: Q5 +19%→−80%, Q13 +6%→−42%, Q22 −1%→−66%, Q23 +13%→−50%,
+  Q6 −9%→−24%. Q14 (helped) and Q13 (hurt) are structurally identical (both 4-pg
+  plan+elevation PDFs) — only WHICH view is authoritative differs.
+- **Notes / fix:** planned = **document-class routing** (owner greenlit 2026-07-01):
+  replace the router's fixed precedence with a **box-face-area yield comparison**
+  (only demote elevations when the plan/schedule yield is comparable/larger;
+  otherwise the doc is elevation-authoritative → count elevations). Classes:
+  1 itemized-list, 2 plan-auth, 3 elevation-auth, 4 single-view, 5 sparse image.
+- **PR:** #221 (router) — refinement next.
+
 ### SCR-003 — Estimator over-reads kitchens shown as plan + elevations
-- **Status:** attempted (partial)
+- **Status:** attempted (page-role router shipped in PR #221 2026-07-01 —
+  over-read tail fixed, MAE 59→34; introduced the SCR-007 under-read tail, refine next)
 - **Reported:** 2026-06-29 by session (CRM backtest, Q5/Q7/Q9)
 - **Description:** A kitchen drawn as a plan AND several wall elevations gets
   enumerated once per view and summed → 2–4× over-count (Q7 81 boxes for one

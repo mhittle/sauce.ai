@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CabinetLineItem } from "./schemas.js";
+import type { CabinetLineItem, PageClass } from "./schemas.js";
 
 // ---------------------------------------------------------------------------
 // Region detection + render planning (PRD §4 — legible large-format reads).
@@ -371,9 +371,141 @@ export function boxFaceArea(lines: CabinetLineItem[]): number {
   let area = 0;
   for (const l of lines) {
     if (!PRICED_BOX_CATEGORIES.has(l.category)) continue;
+    if (isNonBoxCasework(l)) continue; // fillers/crown/returns aren't real boxes
     const w = l.width_in ?? 0;
     const h = l.height_in ?? 0;
     if (w > 0 && h > 0) area += w * h * (l.qty ?? 1);
   }
   return area;
+}
+
+// ---------------------------------------------------------------------------
+// Non-box casework (fillers, end panels, crown/returns, toe-kick, scribe…)
+// ---------------------------------------------------------------------------
+// The estimator emits fillers and end panels as `casework_base` (so they price
+// SOMETHING and skip door-face expansion), and the model sometimes emits crown
+// molding / returns / light rail / toe-kick the same way. Priced through the box
+// formula, a 3" filler strip or a length of crown is charged as a full cabinet
+// carcass — a real over-read $ (e.g. Q24, a tiny vanity job, ballooned +132%
+// partly on filler/molding pricing). These aren't cabinet boxes; detect them so
+// the caller can stop box-pricing them.
+const NON_BOX_CASEWORK_RE =
+  /\b(filler|end[\s-]?panel|end[\s-]?cap|crown|valance|light[\s-]?rail|toe[\s-]?kick|toekick|scribe|mould?ing|return|riser|skin|spacer)\b/i;
+
+// True when a line is a box-category casework item that is really trim/filler,
+// not a cabinet box. Only box categories can be mislabeled this way; faces and
+// non-box categories return false.
+export function isNonBoxCasework(line: {
+  tag: string | null;
+  notes?: string | null;
+  category: string;
+}): boolean {
+  if (!PRICED_BOX_CATEGORIES.has(line.category)) return false;
+  return NON_BOX_CASEWORK_RE.test(`${line.tag ?? ""} ${line.notes ?? ""}`);
+}
+
+// Drop fillers/crown/returns so they don't price as cabinet boxes. They stay out
+// of the quote total rather than being box-priced; linear filler/trim pricing is
+// a later refinement (the directive here is "stop pricing them as boxes").
+export function dropNonBoxCasework<T extends CabinetLineItem>(lines: T[]): T[] {
+  return lines.filter((l) => !isNonBoxCasework(l));
+}
+
+// ---------------------------------------------------------------------------
+// Page-role router — count each room ONCE (SCR-003 over-read fix)
+// ---------------------------------------------------------------------------
+// The estimate pipeline SUMS cabinet lines across every relevant page, and the
+// only guard is a label-based collapse that can't fire when the model names the
+// same room differently per view ("Kitchen" / "Kitchen 2" / "Kitchen - North").
+// So elevation/millwork pages RE-ENUMERATE cabinets a plan or schedule already
+// counted, and the total balloons 2-4x (Q14 +169%, Q19 +257%, Q24 +132%).
+//
+// The fix is to stop treating every page as an additive source. Pick ONE
+// authoritative count source for the document by role precedence —
+// schedule > floor plan > elevation — and count from that role only. The other
+// roles (elevations under a plan/schedule) are demoted: they refine sizes in a
+// later pass, but never ADD to the count. Elevation-ONLY docs still count from
+// elevations (there's no higher source), collapsing cross-view duplicates as
+// before; that residual multi-wall case is handled separately.
+
+export type PageRole = "schedule" | "plan" | "elevation" | "other";
+
+export function pageClassToRole(c: PageClass): PageRole {
+  switch (c) {
+    case "cabinet_schedule_table":
+      return "schedule";
+    case "floor_plan":
+      return "plan";
+    case "kitchen_or_millwork_elevation":
+      return "elevation";
+    default:
+      // finish_schedule, cover_index, spec_text, other — not a cabinet count source
+      return "other";
+  }
+}
+
+export interface RoleRouteResult<T extends CabinetLineItem> {
+  // Which role supplied the authoritative count (or "passthrough" when no
+  // recognized role had any boxes — everything is kept, deduped).
+  regime: PageRole | "passthrough";
+  // The authoritative, deduped/collapsed count lines.
+  lines: T[];
+  // Lines dropped because they came from a demoted role (cross-view re-counts).
+  droppedFromOtherRoles: number;
+  // Lines removed by the per-regime dedup/collapse within the chosen role.
+  collapsedWithinRole: number;
+}
+
+// Pick the authoritative count from the highest-priority page role that actually
+// produced cabinet boxes, then dedup WITHIN that role. `roleByPage` maps a
+// source_page number to its role (built from the page classification). A line
+// with no/unknown source_page is treated as role "other".
+export function routeByPageRole<T extends CabinetLineItem>(
+  lines: T[],
+  roleByPage: Map<number, PageRole>
+): RoleRouteResult<T> {
+  const roleOf = (l: T): PageRole =>
+    (l.source_page != null ? roleByPage.get(l.source_page) : undefined) ??
+    "other";
+  const isBox = (l: T): boolean =>
+    PRICED_BOX_CATEGORIES.has(l.category) && !isNonBoxCasework(l);
+
+  // Highest-priority role that produced at least one real box wins. The
+  // ≥1-box guard means a misclassified site plan (a "plan" page with no
+  // cabinets) falls through to elevations instead of zeroing the count.
+  const priority: PageRole[] = ["schedule", "plan", "elevation"];
+  let chosen: PageRole | null = null;
+  for (const role of priority) {
+    if (lines.some((l) => roleOf(l) === role && isBox(l))) {
+      chosen = role;
+      break;
+    }
+  }
+
+  if (chosen == null) {
+    // No recognized authoritative role with boxes — keep everything, deduped.
+    const deduped = dedupeLines(lines);
+    return {
+      regime: "passthrough",
+      lines: deduped,
+      droppedFromOtherRoles: 0,
+      collapsedWithinRole: lines.length - deduped.length,
+    };
+  }
+
+  const kept = lines.filter((l) => roleOf(l) === chosen);
+  const droppedFromOtherRoles = lines.length - kept.length;
+  // Schedules are labeled (cabinet A/B/C…) so a tag dedup merges plan+elevation
+  // repeats of the same tag; plan/elevation estimates have varying labels, so
+  // collapse cross-view duplicates per normalized room instead.
+  const counted =
+    chosen === "schedule"
+      ? dedupeLines(kept)
+      : collapseCrossViewDuplicates(kept);
+  return {
+    regime: chosen,
+    lines: counted,
+    droppedFromOtherRoles,
+    collapsedWithinRole: kept.length - counted.length,
+  };
 }
