@@ -70,6 +70,40 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-07-01 (b) — text-layer schedule extractor (Class 1: input already lists the cabinets)
+
+**Context:** Owner live-tested Q24 (Dean vanity). The uploaded input was a
+CabinetNow **spec sheet whose text layer contains the actual cabinet schedule**
+(`R1C1 Vanity Sink Base 15 34½ 24 …`), but the pipeline estimated from the
+drawings — invented a trash pullout, wrong widths — and the $-total matched only
+by luck (the sharpest possible argument for H2 per-line labels). Built the Class-1
+extraction path: when the input already lists the cabinets, read them verbatim.
+
+**Shipped (PR #221):**
+- `pdf.ts` **`pageTextFragments`**: mupdf structured text → positioned {x,y,text}
+  fragments (a flat dump collapses table columns; positions let us rebuild rows).
+- `@scribe/shared` **`schedule.ts`**: `reconstructRows` (group fragments by y,
+  order by x, join columns) + `extractCabinetSchedule` (parse each row → cabinet
+  line; conservative gating: ≥3 rows with plausible cabinet dims + a casework
+  noun, so dimension-annotated *drawings* don't mis-fire). `parseDimCell` handles
+  `34 1/2`→34.5 etc. Lines are `estimated:false`, confidence 0.9 (schedule-grade).
+- `process.ts` + harness: **before any vision**, try the text schedule; if found
+  (≥3 rows) read it verbatim and **skip vision entirely** (0 tokens). Falls back
+  to the router/estimator otherwise. Wired via the shared parser (no drift).
+
+**Validated on the real Dean spec sheet:** 8 lines read exactly (5 vanity sink
+bases 15/24/30/24/15, tall 24×96, 2 fillers) vs the invented 5; **LOW $5,626 vs
+real $5,289 = +6.4%** (within ±10%), **0 vision tokens**. Reading is now *correct*,
+not lucky. **Zero-regression:** the detector fires on NONE of the 21 backtest docs
+(all drawings/images), so the benchmark is unchanged — no re-backtest needed.
+Tests: shared 92 / workers 13 / pricing 44 green.
+
+**Next:** this is the first slice of the input-type/document-class work. Still open:
+SCR-007 yield-guard (elevation-authoritative under-reads), image path (SCR-005),
+and H2 per-line labels (this extractor also produces clean label data).
+
+---
+
 ## 2026-07-01 — page-role router shipped: over-read tail tamed (MAE 59→34), new under-read tail surfaced
 
 **Context:** FIX phase for SCR-003 over-reads. Built the page-role router in
