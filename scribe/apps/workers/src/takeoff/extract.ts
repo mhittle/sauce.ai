@@ -71,14 +71,21 @@ export async function extractPage(
   pageNumber: number,
   png: Uint8Array,
   budget: TakeoffBudget,
-  opts: { region?: boolean; estimate?: boolean } = {}
+  opts: { region?: boolean; estimate?: boolean; grounding?: string } = {}
 ): Promise<{ extraction: PageExtraction; raw: unknown }> {
   const client = getAnthropic();
-  const userText = opts.estimate
+  const baseUserText = opts.estimate
     ? estimateUserText(pageNumber)
     : opts.region
       ? extractRegionUserText(pageNumber)
       : extractUserText(pageNumber);
+  // Optional grounding: the sheet's own printed dimensions + cabinet labels,
+  // extracted deterministically from the text layer (or OCR), appended so the
+  // model sizes/identifies cabinets from what's actually drawn instead of
+  // guessing — curbs both over-read hallucination and mis-sizing.
+  const userText = opts.grounding
+    ? `${baseUserText}\n\n${opts.grounding}`
+    : baseUserText;
   // Stream and collect the final message: at max_tokens this high the SDK
   // refuses a non-streaming request (it may exceed the 10-min non-streaming
   // limit). Streaming costs the same — billing is per token generated, and

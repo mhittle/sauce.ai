@@ -184,22 +184,32 @@ deployed). Ordered next steps:
    counts one authoritative role (`schedule > floor_plan > elevation`), drops
    demoted-role re-counts, drops fillers/crown from box pricing, retries socket
    errors. Backtest **MAE 59→34** — over-read tail gone (Q19 +421→+16, Q14 +178→+7).
-7. ⏭ **NEXT — document-class routing (fix SCR-007 under-read tail).** The router's
-   fixed precedence over-demotes elevations on **elevation-authoritative** plans
-   (Q5/Q13/Q22/Q23 regressed to bad under-reads). Owner greenlit the data-driven
-   plan: classify docs by which view is authoritative — 1 itemized-list (Q19/21),
-   2 plan-auth (Q14/24), 3 elevation-auth (Q5/13/22/23), 4 single-view (Q7/16/20),
-   5 sparse image (Q2/11) — and resolve classes 2 vs 3 by a **box-face-area yield
-   comparison** (only demote elevations when the plan/schedule yield is comparable/
-   larger). Confirm the yield feature (1 read/page diagnostic), implement, re-backtest.
-8. **Image path** (SCR-005, class 5) + **input-type classifier** (itemized/list/
-   image sub-pipelines): sparse/image inputs. Detector remains the durable ceiling-raiser.
+7. ✅ **Text-layer schedule extractor (PR #224, merged 2026-07-01).** When a PDF's
+   text layer holds a real cabinet TABLE, read it verbatim (0 vision). Nails
+   itemized/spec inputs; fires on none of the 21 backtest docs (all drawings) so
+   zero-regression. Also = the label-extraction technique for H2.
+8. ✅ **H2 — reading-accuracy measurement (PR: this session, 2026-07-01 c).** The
+   $-backtest was measuring LUCK. Built per-line ground truth (`extract-labels.mjs`
+   → `labels.json`, 17/21 quotes / 361 cabinets from the real quote packets) + a
+   reading scorer (`@scribe/shared scoreReading`, `score-reading.mjs`). **FIRST
+   REAL BASELINE: recall 29% / precision 30% / F1 0.27** (N=1). size-error only 1.7"
+   → the failure is COUNT/IDENTITY (detection), not sizing. Per class: labeled 0.35
+   (best) > arch/image 0.17 > image/sketch 0.09. Q8 Piestewa (the "$ −7% showcase")
+   = 36%/25% — $ hid a wrong read.
+9. ⏭ **NEXT — DETECTOR (H3) is the durable answer.** The reading baseline proves
+   drawings are a DETECTION problem near the zero-shot ceiling; the 361 labeled
+   {tag,W,H,category} rows ARE the training set. Target = autonomous auto-send, so a
+   trained cabinet detector + calibrated send-gate is the committed path. Incremental
+   levers to measure on the new ruler first: dimension-grounded reading (A/B showed
+   modest lift), duplicate-elevation collapse (fixes SCR-007 regressions + Cyncly
+   dupes), document-class routing (schedule > plan > elevation by box-face-area yield),
+   image path (SCR-005). Firm the baseline with an N=3 median pass.
 
-**Shipped in PR #221 (merged 2026-07-01):** cross-view collapse, median-of-N
-area-consensus, backtest harness, and the page-role router — all green, sharing
-`@scribe/shared` so the harness can't drift from prod.
-Test assets: `~/Desktop/Scribe Testing/` (Quote 1..10 + run-*.sh + parse-median.sh
-+ results sheet). See `[[scribe-crm-quote-backtest]]` memory.
+**Shipped merged 2026-07-01:** page-role router + non-box-casework + socket-retry
+(#221); text-layer schedule extractor (#224). H2 eval infra in this session's PR.
+All green, sharing `@scribe/shared` so the harness can't drift from prod.
+Test assets: `~/Desktop/Scribe Testing/` — `backtest-quotes.json` (21), `labels.json`
+(per-line truth), `reading-scorecard.csv`. See `[[scribe-crm-quote-backtest]]` memory.
 
 ### AI cross-validation toggle
 **Priority/LOE/Category/Status:** 6 / 4 / takeoff / done (PR: this PR, 2026-06-16)
