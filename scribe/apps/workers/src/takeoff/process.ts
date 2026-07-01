@@ -13,7 +13,9 @@ import {
   CabinetLineItem,
   dedupeLines,
   dropNonBoxCasework,
+  extractCabinetSchedule,
   fitDpi,
+  MIN_SCHEDULE_ROWS,
   pickMedian,
   mapBoxToPagePoints,
   needsRegioning,
@@ -259,6 +261,47 @@ async function processPdf(
   const pdf = openPdf(file);
   try {
     const pageCount = pdf.pageCount;
+
+    // Class 1 — the input already LISTS the cabinets in a text-layer schedule
+    // table (spec sheet / cut list / itemized quote). Read it verbatim: exact,
+    // free, and no zero-shot counting ceiling. When found, skip vision entirely.
+    const scheduleInput = [];
+    for (let i = 0; i < pageCount; i++) {
+      scheduleInput.push({ page: i + 1, fragments: pdf.pageTextFragments(i) });
+    }
+    const sched = extractCabinetSchedule(scheduleInput);
+    if (sched.lines.length >= MIN_SCHEDULE_ROWS) {
+      log.info(
+        { takeoffId, schedulePages: sched.schedulePages, lines: sched.lines.length },
+        "read cabinet schedule from text layer — skipping vision estimation"
+      );
+      const lines = [...sched.lines];
+      const faces = lines.flatMap((l) => expandToComponents(l));
+      lines.push(...faces);
+      const scheduleSet = new Set(sched.schedulePages);
+      const classified: PageClassification[] = Array.from(
+        { length: pageCount },
+        (_, i) => ({
+          page: i + 1,
+          class: scheduleSet.has(i + 1) ? "cabinet_schedule_table" : "other",
+          confidence: scheduleSet.has(i + 1) ? 0.95 : 0.5,
+        })
+      );
+      return {
+        lines,
+        raws: [{ schedule_pages: sched.schedulePages, source: "text_layer_schedule" }],
+        classified,
+        pageCount,
+        summary: {
+          uncertainties: [
+            `Cabinets read directly from the document's text-layer schedule table (pages ${sched.schedulePages.join(", ")}) — not estimated. Verify against the drawings.`,
+          ],
+          unreadable_pages: [],
+          warnings: [],
+        },
+      };
+    }
+
     log.info({ takeoffId, pageCount }, "rasterizing thumbnails");
 
     const thumbnails: { page: number; png: Uint8Array }[] = [];

@@ -14,7 +14,18 @@ export interface OpenPdf {
   // given DPI. Used to crop one drawing off a sheet at full resolution.
   renderRegion(pageIndex: number, rect: RectPt, dpi: number): Uint8Array;
   pageDimsPt(pageIndex: number): { widthPt: number; heightPt: number };
+  // Positioned text fragments of a page's text layer (empty for scanned/image-
+  // only pages). Each fragment carries its top-left (x,y) in PDF points so the
+  // caller can reconstruct column-aligned rows (schedule/BOM tables) that a flat
+  // text dump collapses. See @scribe/shared reconstructRows.
+  pageTextFragments(pageIndex: number): TextFragment[];
   close(): void;
+}
+
+export interface TextFragment {
+  x: number;
+  y: number;
+  text: string;
 }
 
 export function openPdf(data: Buffer): OpenPdf {
@@ -61,6 +72,32 @@ export function openPdf(data: Buffer): OpenPdf {
       const [x0, y0, x1, y1] = page.getBounds();
       page.destroy();
       return { widthPt: x1 - x0, heightPt: y1 - y0 };
+    },
+    pageTextFragments(pageIndex: number): TextFragment[] {
+      const page = doc.loadPage(pageIndex);
+      const stext = page.toStructuredText("preserve-whitespace");
+      const json = JSON.parse(stext.asJSON()) as {
+        blocks?: {
+          lines?: {
+            bbox?: { x?: number; y?: number };
+            text?: string;
+            spans?: { text?: string }[];
+          }[];
+        }[];
+      };
+      const out: TextFragment[] = [];
+      for (const block of json.blocks ?? []) {
+        for (const line of block.lines ?? []) {
+          const text =
+            line.text ?? (line.spans ?? []).map((s) => s.text ?? "").join("");
+          if (text && text.trim()) {
+            out.push({ x: line.bbox?.x ?? 0, y: line.bbox?.y ?? 0, text: text.trim() });
+          }
+        }
+      }
+      stext.destroy();
+      page.destroy();
+      return out;
     },
     close() {
       doc.destroy();

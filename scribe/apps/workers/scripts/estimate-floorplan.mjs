@@ -16,7 +16,9 @@ import {
   dedupeLines,
   dropNonBoxCasework,
   expandToComponents,
+  extractCabinetSchedule,
   fitDpi,
+  MIN_SCHEDULE_ROWS,
   mapBoxToPagePoints,
   needsRegioning,
   padRectToPage,
@@ -203,41 +205,65 @@ export async function estimatePdf(input) {
   const budget = new TakeoffBudget();
   readPage.budget = budget;
   try {
-    const thumbnails = [];
+    // Class 1 — text-layer schedule table: read the cabinet list verbatim and
+    // skip vision entirely (mirrors process.ts). Falls back to the vision path.
+    const scheduleInput = [];
     for (let i = 0; i < pdf.pageCount; i++)
-      thumbnails.push({ page: i + 1, png: pdf.renderPage(i, THUMBNAIL_DPI) });
-    const classified = await classifyPages(thumbnails, budget);
+      scheduleInput.push({ page: i + 1, fragments: pdf.pageTextFragments(i) });
+    const sched = extractCabinetSchedule(scheduleInput);
 
-    const estimationMode = !classified.some(
-      (c) => c.class === "cabinet_schedule_table"
-    );
-    const relevantClasses = estimationMode
-      ? [...RELEVANT_PAGE_CLASSES, "floor_plan"]
-      : RELEVANT_PAGE_CLASSES;
-    const relevant = classified.filter((c) => relevantClasses.includes(c.class));
+    let lines;
+    let classified;
+    let estimationMode;
+    if (sched.lines.length >= MIN_SCHEDULE_ROWS) {
+      estimationMode = false;
+      classified = scheduleInput.map((p) => ({
+        page: p.page,
+        class: sched.schedulePages.includes(p.page)
+          ? "cabinet_schedule_table"
+          : "other",
+      }));
+      lines = [...sched.lines];
+      console.error(
+        `· text-layer schedule: ${sched.lines.length} lines on pages [${sched.schedulePages.join("/")}] — skipping vision`
+      );
+    } else {
+      const thumbnails = [];
+      for (let i = 0; i < pdf.pageCount; i++)
+        thumbnails.push({ page: i + 1, png: pdf.renderPage(i, THUMBNAIL_DPI) });
+      classified = await classifyPages(thumbnails, budget);
 
-    const lines = [];
-    for (const p of relevant)
-      lines.push(...(await readPage(pdf, p.page, estimationMode, p.class)));
+      estimationMode = !classified.some(
+        (c) => c.class === "cabinet_schedule_table"
+      );
+      const relevantClasses = estimationMode
+        ? [...RELEVANT_PAGE_CLASSES, "floor_plan"]
+        : RELEVANT_PAGE_CLASSES;
+      const relevant = classified.filter((c) => relevantClasses.includes(c.class));
 
-    // Count each room ONCE via the SHARED page-role router (identical to prod's
-    // process.ts): route to the authoritative role (schedule > floor plan >
-    // elevation) instead of summing every page, then drop fillers/crown/returns
-    // from box pricing. Subsumes the old per-mode collapse/dedupe.
-    const roleByPage = new Map(
-      relevant.map((r) => [r.page, pageClassToRole(r.class)])
-    );
-    const routed = routeByPageRole(lines, roleByPage);
-    const counted = dropNonBoxCasework(routed.lines);
-    console.error(
-      `· page-role router: regime=${routed.regime} kept=${counted.length}` +
-        ` droppedOtherRoles=${routed.droppedFromOtherRoles}` +
-        ` collapsedWithinRole=${routed.collapsedWithinRole}` +
-        ` nonBoxDropped=${routed.lines.length - counted.length}`
-    );
-    lines.length = 0;
-    lines.push(...counted);
-    // Expand into door/front faces in BOTH modes so the total mirrors a quote.
+      lines = [];
+      for (const p of relevant)
+        lines.push(...(await readPage(pdf, p.page, estimationMode, p.class)));
+
+      // Count each room ONCE via the SHARED page-role router (identical to prod's
+      // process.ts): route to the authoritative role (schedule > floor plan >
+      // elevation) instead of summing every page, then drop fillers/crown/returns
+      // from box pricing. Subsumes the old per-mode collapse/dedupe.
+      const roleByPage = new Map(
+        relevant.map((r) => [r.page, pageClassToRole(r.class)])
+      );
+      const routed = routeByPageRole(lines, roleByPage);
+      const counted = dropNonBoxCasework(routed.lines);
+      console.error(
+        `· page-role router: regime=${routed.regime} kept=${counted.length}` +
+          ` droppedOtherRoles=${routed.droppedFromOtherRoles}` +
+          ` collapsedWithinRole=${routed.collapsedWithinRole}` +
+          ` nonBoxDropped=${routed.lines.length - counted.length}`
+      );
+      lines.length = 0;
+      lines.push(...counted);
+    }
+    // Expand into door/front faces so the total mirrors a quote.
     lines.push(...lines.flatMap((l) => expandToComponents(l)));
 
     const { priceQuoteTiers, isCabinetBox } = await import("@scribe/pricing");
