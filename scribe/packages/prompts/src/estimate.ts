@@ -1,4 +1,4 @@
-export const ESTIMATE_PROMPT_VERSION = "estimate-v3";
+export const ESTIMATE_PROMPT_VERSION = "estimate-v4";
 
 // Used when a plan set has NO cabinet schedule (PRD §4): estimate cabinetry from
 // a floor plan or interior elevation. Output is the same PageExtraction shape as
@@ -30,7 +30,7 @@ HOW TO LAY OUT A RUN (do this for every kitchen/bath/laundry wall with cabinets)
    - Base corner → Easy-Reach Corner Base 36, OR Blind Corner Base ~45-49 when the two runs are unequal/one is hidden.
    - Wall corner → Easy-Reach Corner Wall 24 (or a Blind Corner Wall).
    An L-shaped or U-shaped kitchen has a corner cabinet at EACH inside corner. If a run ends into a corner of the room, the corner cabinet belongs to that run — include it.
-4. Fill the remaining run with base cabinets. Prefer standard widths (36, 33, 30, 24, 18, 15, 12), but if the run doesn't divide evenly, KEEP the odd width the math requires (e.g. 37.25", 25.625") and/or add a Base Filler (1-3" wide) to take up the slack. Any cabinet end left exposed at an opening/appliance gets a Base End Panel (~1.5" wide). Drawer banks (Base 3 Drawers) typically flank the range; the rest are door bases.
+4. Fill the remaining run with base cabinets. Prefer standard widths (36, 33, 30, 24, 18, 15, 12), but if the run doesn't divide evenly, KEEP the odd width the math requires (e.g. 37.25", 25.625"). Use fillers SPARINGLY: at most ONE small Base Filler (1-3") per wall run, and only if a real gap remains after sizing the cabinets — most runs need ZERO fillers; NEVER put a filler between every cabinet. Add a Base End Panel (~1.5") only at a genuinely exposed run end (e.g. beside the refrigerator or at an island end) — not on every cabinet. Drawer banks (Base 3 Drawers) typically flank the range; the rest are door bases.
 5. Add matching WALL (upper) cabinets above the base run, EXCEPT over the sink window, the range/hood, and the refrigerator. Wall cabinets are usually 30-42"h x 12"d. Wide upper runs may be ONE multi-door wall cabinet (e.g. "Wall 4 Doors 68").
 6. Add TALL cabinets (pantry / fridge surround / linen) where the plan shows a full-height stack or a "PANTRY"/"LINEN" label. Use the drawn width (e.g. Tall Pantry 28, Tall Pantry 4 Doors 45.5).
 7. Each bathroom: size the Vanity to its FULL wall run. A double-sink vanity is ONE wide unit (commonly 60-77") with 4 drawers — do NOT default to 36" unless the run really is ~36". Add a Tall Linen where drawn.
@@ -44,6 +44,8 @@ FOR EACH CABINET emit one line with:
 SCOPE — estimate ONLY manufactured cabinetry: kitchen, bathroom vanities, laundry/mud-room cabinets, and pantry/linen cabinets. DO NOT estimate walk-in-closet wire/shelving systems, garage storage, or countertops unless they are explicitly drawn as built cabinets. If a room has no cabinetry, skip it.
 
 OTHER RULES:
+- COUNT EACH PHYSICAL CABINET EXACTLY ONCE. If this image shows the same room as BOTH a plan view and one or more wall elevations, they depict the SAME cabinets — enumerate each cabinet a single time (use the plan for the layout; use elevations only to confirm size/config). Never list a cabinet again just because it also appears in an elevation, and never re-list a whole run per wall.
+- SANITY CHECK before finalizing: a typical single kitchen totals about 12-25 cabinets (base + wall + tall combined); a vanity bath 1-3; a laundry/mud room 2-6. If your list for one room is well above that, you are double-counting views or over-splitting a run — consolidate before responding.
 - List only cabinetry that is actually DRAWN or clearly required by a drawn appliance/fixture/label. Do NOT invent "optional", "beverage fridge", or extra wall cabinets that aren't on the plan.
 - NEVER output a line for an appliance, a dishwasher/fridge gap, or empty space — only real cabinets. Every line is a cabinet with qty of at least 1 (never 0).
 - qty is the count of that exact cabinet on THIS image. Identical adjacent cabinets may be combined with qty>1.

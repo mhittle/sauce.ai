@@ -16,6 +16,45 @@ export function getAnthropic(): Anthropic {
 
 export class BudgetExceededError extends Error {}
 
+// Transient network faults that should be retried, not failed. Big multi-page
+// docs occasionally drop a vision call mid-flight (`UND_ERR_SOCKET` /
+// `ECONNRESET` / fetch "terminated"), which used to fail a whole takeoff (and a
+// whole backtest quote). Retry a few times with backoff; non-transient errors
+// (4xx, JSON, budget) propagate immediately.
+const TRANSIENT_RE =
+  /UND_ERR_SOCKET|ECONNRESET|ETIMEDOUT|EPIPE|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|terminated|network|fetch failed|aborted|529|overloaded/i;
+
+function isTransient(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 429 || (typeof status === "number" && status >= 500)) return true;
+  const code = (err as { code?: string })?.code;
+  if (code && TRANSIENT_RE.test(code)) return true;
+  const msg = err instanceof Error ? `${err.message} ${(err as { cause?: { code?: string } }).cause?.code ?? ""}` : String(err);
+  return TRANSIENT_RE.test(msg);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Run a model call, retrying transient socket/5xx faults with exponential
+// backoff (default 3 attempts: ~0.5s, 1s). The error is rethrown once attempts
+// are exhausted or when it isn't transient.
+export async function withSocketRetry<T>(
+  fn: () => Promise<T>,
+  attempts = 3
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i === attempts - 1 || !isTransient(err)) throw err;
+      await sleep(500 * 2 ** i);
+    }
+  }
+  throw lastErr;
+}
+
 // Per-takeoff hard cap (PRD §9 cost guardrails).
 export class TakeoffBudget {
   used = 0;

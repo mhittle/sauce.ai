@@ -15,6 +15,7 @@ import {
   getAnthropic,
   TakeoffBudget,
   textOf,
+  withSocketRetry,
 } from "../lib/anthropic.js";
 
 // Deterministic column-mapping flow with model-assisted header inference
@@ -104,18 +105,20 @@ async function modelAssistMapping(
     .slice(0, 8)
     .map((r, i) => `${i}: ${JSON.stringify(r.slice(0, 20))}`)
     .join("\n");
-  const message = await client.messages.create({
-    model: HAIKU_MODEL,
-    max_tokens: 1000,
-    temperature: 0,
-    system: HEADER_INFERENCE_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `First rows of the spreadsheet:\n${sample}\nRespond with the JSON object only.`,
-      },
-    ],
-  });
+  const message = await withSocketRetry(() =>
+    client.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: 1000,
+      temperature: 0,
+      system: HEADER_INFERENCE_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `First rows of the spreadsheet:\n${sample}\nRespond with the JSON object only.`,
+        },
+      ],
+    })
+  );
   budget.record(message.usage);
   const parsed = ModelMapping.parse(extractJson(textOf(message)));
   const mapping: Partial<Record<number, FieldName>> = {};

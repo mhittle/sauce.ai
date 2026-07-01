@@ -12,6 +12,7 @@ import {
   imageBlock,
   TakeoffBudget,
   textOf,
+  withSocketRetry,
 } from "../lib/anthropic.js";
 
 // Ask the model to segment a full-page sheet image into its distinct drawings
@@ -25,20 +26,22 @@ async function locate(
   budget: TakeoffBudget
 ): Promise<PageRegions> {
   const client = getAnthropic();
-  const message = await client.messages.create({
-    model: SONNET_MODEL,
-    max_tokens: 2000,
-    // Deterministic region splitting — varying crops change which cabinets are
-    // read, a major source of run-to-run quote drift.
-    temperature: 0,
-    system,
-    messages: [
-      {
-        role: "user",
-        content: [imageBlock(pageImage), { type: "text", text: userText }],
-      },
-    ],
-  });
+  const message = await withSocketRetry(() =>
+    client.messages.create({
+      model: SONNET_MODEL,
+      max_tokens: 2000,
+      // Deterministic region splitting — varying crops change which cabinets are
+      // read, a major source of run-to-run quote drift.
+      temperature: 0,
+      system,
+      messages: [
+        {
+          role: "user",
+          content: [imageBlock(pageImage), { type: "text", text: userText }],
+        },
+      ],
+    })
+  );
   budget.record(message.usage);
   return parsePageRegionsLenient(extractJson(textOf(message)));
 }

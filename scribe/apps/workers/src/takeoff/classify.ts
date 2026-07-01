@@ -11,6 +11,7 @@ import {
   imageBlock,
   TakeoffBudget,
   textOf,
+  withSocketRetry,
 } from "../lib/anthropic.js";
 
 const BATCH_SIZE = 8;
@@ -27,24 +28,26 @@ export async function classifyPages(
 
   for (let i = 0; i < thumbnails.length; i += BATCH_SIZE) {
     const batch = thumbnails.slice(i, i + BATCH_SIZE);
-    const message = await client.messages.create({
-      model: SONNET_MODEL,
-      max_tokens: 2000,
-      temperature: 0,
-      system: CLASSIFY_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: [
-            ...batch.map((t) => imageBlock(t.png)),
-            {
-              type: "text",
-              text: classifyUserText(batch.map((t) => t.page)),
-            },
-          ],
-        },
-      ],
-    });
+    const message = await withSocketRetry(() =>
+      client.messages.create({
+        model: SONNET_MODEL,
+        max_tokens: 2000,
+        temperature: 0,
+        system: CLASSIFY_SYSTEM,
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...batch.map((t) => imageBlock(t.png)),
+              {
+                type: "text",
+                text: classifyUserText(batch.map((t) => t.page)),
+              },
+            ],
+          },
+        ],
+      })
+    );
     budget.record(message.usage);
 
     const parsed = z

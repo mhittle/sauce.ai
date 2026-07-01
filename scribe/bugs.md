@@ -19,7 +19,76 @@ Format:
 
 ## Open
 
-_None._
+### SCR-006 — Estimate reads vary wildly run-to-run (same plan, temp 0)
+- **Status:** attempted (variance tamed; under-read bias remains → SCR-004)
+- **Reported:** 2026-06-29 by session (CRM backtest)
+- **Description:** The same floor plan gives very different box counts across
+  identical runs even at temperature 0 — e.g. Piestewa returned 5, 21, and 24
+  boxes on three runs. Makes any single-run estimate unreliable and makes prompt
+  tuning fight noise.
+- **Notes / fix:** 2026-06-29 (b) — pipeline-side **median-of-N consensus** added
+  to `process.ts` (estimate pages read N times) via shared `pickMedian`; env
+  `ESTIMATE_CONSENSUS_N` (default 3). Mirrored in the harness so a single run is
+  prod-equivalent. Q8 went 5/21/24 → 19/19/24 — the catastrophic outlier is gone.
+  2026-06-29 (c) — consensus now selects the median by `boxFaceArea` (a quote-total
+  proxy = Σ width×height), NOT box count: two reads with the same count can price
+  −6% vs −28% by size. NOT yet deployed. Residual spread is sizing/under-read bias
+  (SCR-004), not selectable noise.
+
+### SCR-005 — Single-image inputs estimate almost nothing
+- **Status:** open
+- **Reported:** 2026-06-29 by session (CRM backtest, Q2/Q10)
+- **Description:** A single low-detail render/photo (e.g. `image_(2).png`) yields
+  ~2 boxes → −92% vs the real quote. The estimator needs a plan-like layout; one
+  marketing render isn't enough. (Q10's cleaner image did land +8%, so it's
+  image-quality dependent.)
+- **Notes / fix:** needs a distinct path for image/sketch inputs, or a prompt that
+  extracts more from a single elevation/render. Also: scribe-web rejects JPEG
+  uploaded as PNG (media-type mismatch) — separate intake bug to confirm.
+
+### SCR-004 — Estimator under-reads large multi-room / multi-page plans
+- **Status:** open
+- **Reported:** 2026-06-29 by session (CRM backtest, Q1/Q3/Q6)
+- **Description:** Whole-house / multi-page architectural sets return far too few
+  boxes (Q1 7-pg → ~18 boxes, −38%; Q6 6-pg → ~20, −33%; Q3 −25%). The estimate
+  prompt v4 "realism cap" may also over-suppress on these.
+- **Notes / fix:** likely per-room locate + read each room thoroughly; balance
+  against over-reading. Carefully — pushing "find more" risks hallucination.
+
+### SCR-007 — Router under-reads elevation-authoritative plans
+- **Status:** open
+- **Reported:** 2026-07-01 by session (page-role router backtest)
+- **Description:** The SCR-003 page-role router counts the floor plan and DROPS
+  elevations in Regime A. On docs where the plan is schematic and the cabinet
+  detail lives in the elevations, this throws away the real count → severe
+  under-read: Q5 +19%→−80%, Q13 +6%→−42%, Q22 −1%→−66%, Q23 +13%→−50%,
+  Q6 −9%→−24%. Q14 (helped) and Q13 (hurt) are structurally identical (both 4-pg
+  plan+elevation PDFs) — only WHICH view is authoritative differs.
+- **Notes / fix:** planned = **document-class routing** (owner greenlit 2026-07-01):
+  replace the router's fixed precedence with a **box-face-area yield comparison**
+  (only demote elevations when the plan/schedule yield is comparable/larger;
+  otherwise the doc is elevation-authoritative → count elevations). Classes:
+  1 itemized-list, 2 plan-auth, 3 elevation-auth, 4 single-view, 5 sparse image.
+- **PR:** #221 (router) — refinement next.
+
+### SCR-003 — Estimator over-reads kitchens shown as plan + elevations
+- **Status:** attempted (page-role router shipped in PR #221 2026-07-01 —
+  over-read tail fixed, MAE 59→34; introduced the SCR-007 under-read tail, refine next)
+- **Reported:** 2026-06-29 by session (CRM backtest, Q5/Q7/Q9)
+- **Description:** A kitchen drawn as a plan AND several wall elevations gets
+  enumerated once per view and summed → 2–4× over-count (Q7 81 boxes for one
+  kitchen, +114%). Two sub-causes: (a) per-view re-enumeration with no cross-view
+  dedup, (b) model over-splitting one sheet into ~37 cabinet "types".
+- **Notes / fix:** cross-view collapse + whole-page-once + cross-page dedup ported to
+  `process.ts` (2026-06-29 b). 2026-06-30 — **ROOT-CAUSED on the 21-quote set** (over-read
+  is the dominant failure: Q19 +257%, Q21 +176%/277 box, Q14 +169%, Q24 +132%, Q7 +60%).
+  Per-page/per-room diagnostics show: an authoritative count source exists (plan /
+  schedule / one elevation), then **elevation pages RE-ENUMERATE the same cabinets** and
+  the dedup can't merge them because the model's room/tag labels differ across views
+  (Q14: plan 19 + 3 elevations +27; Q24: one vanity run on 2 pages 11+10; Q19: schedule
+  + 8 elevations +52). **Planned fix = page-role router: one authoritative count per room
+  (`schedule > floor_plan > single best elevation`), elevations refine sizes only.** The
+  label-based `collapseCrossViewDuplicates` is too fragile and is being superseded.
 
 ## In progress
 

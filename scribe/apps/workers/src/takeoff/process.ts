@@ -9,19 +9,25 @@ import {
   takeoffs,
 } from "@scribe/db";
 import {
+  boxFaceArea,
   CabinetLineItem,
   dedupeLines,
+  dropNonBoxCasework,
   fitDpi,
+  pickMedian,
   mapBoxToPagePoints,
   needsRegioning,
   PageClass,
   PageClassification,
   PageExtraction,
+  PageRole,
+  pageClassToRole,
   padRectToPage,
   planRenderJobs,
   PricingSnapshot,
   RegionKind,
   RELEVANT_PAGE_CLASSES,
+  routeByPageRole,
   expandToComponents,
 } from "@scribe/shared";
 import { matchLine } from "@scribe/pricing";
@@ -319,14 +325,44 @@ async function processPdf(
       );
     }
 
-    // No-schedule estimation: each cabinet box also has doors + drawer fronts
-    // (priced separately by ft²). Spawn those face line items so the schedule
-    // mirrors a real quote (cabinet boxes + a door/drawer list).
-    if (estimationMode) {
-      const faces = lines.flatMap((l) => expandToComponents(l));
-      lines.push(...faces);
-      log.info({ takeoffId, faces: faces.length }, "expanded cabinets into door/front faces");
-    }
+    // Count each room ONCE (SCR-003). Per-page extraction SUMS cabinets across
+    // every relevant page, so an elevation/millwork sheet re-enumerates cabinets
+    // a plan or schedule already counted and the total balloons 2-4x. Instead of
+    // summing, route to the single authoritative page role (schedule > floor
+    // plan > elevation) and count from that role only; demoted roles refine
+    // sizes later but never ADD to the count. (Replaces the old per-mode
+    // collapse/dedupe — the router subsumes both.)
+    const roleByPage = new Map<number, PageRole>(
+      relevant.map((r) => [r.page, pageClassToRole(r.class)])
+    );
+    const routed = routeByPageRole(lines, roleByPage);
+    // Stop pricing fillers/crown/returns through the box formula (a 3" filler or
+    // a length of crown isn't a cabinet carcass — it over-prices the quote).
+    const counted = dropNonBoxCasework(routed.lines);
+    const nonBoxDropped = routed.lines.length - counted.length;
+    lines.length = 0;
+    lines.push(...counted);
+    log.info(
+      {
+        takeoffId,
+        regime: routed.regime,
+        kept: counted.length,
+        droppedFromOtherRoles: routed.droppedFromOtherRoles,
+        collapsedWithinRole: routed.collapsedWithinRole,
+        nonBoxCaseworkDropped: nonBoxDropped,
+      },
+      "page-role routed cabinet count"
+    );
+
+    // Each cabinet box also has doors + drawer fronts (priced separately by
+    // ft²). Spawn those face line items in BOTH modes so the schedule mirrors a
+    // real CabinetNow quote (cabinet boxes + a door/drawer list).
+    const faces = lines.flatMap((l) => expandToComponents(l));
+    lines.push(...faces);
+    log.info(
+      { takeoffId, faces: faces.length },
+      "expanded cabinets into door/front faces"
+    );
 
     return { lines, raws, classified, pageCount, summary };
   } finally {
@@ -334,11 +370,27 @@ async function processPdf(
   }
 }
 
-// Read one relevant page. Large-format sheets are downscaled past legibility if
-// sent whole (PRD §4), so they're segmented into their distinct drawings (one
-// vision "locate" call) and each drawing is cropped + re-rendered at full
-// resolution; drawings too big for one image are tiled and de-duplicated.
-// Pages that already fit legibly are sent as a single image, as before.
+type PageAcc = {
+  lines: CabinetLineItem[];
+  raws: unknown[];
+  summary: { uncertainties: string[]; unreadable_pages: number[]; warnings: string[] };
+};
+
+// Vision reads of the SAME estimate page vary run-to-run even at temperature 0
+// (SCR-006: one plan returned 5 / 21 / 24 boxes on identical runs). For the
+// no-schedule estimate path, read each page N times and keep the MEDIAN-box-
+// count read, so a single noisy run can't swing a quote. Schedule-table reads
+// are deterministic enough and stay at one read. Tunable via
+// ESTIMATE_CONSENSUS_N (default 3; set 1 to disable); costs Nx the vision
+// tokens on the estimate path only.
+function estimateConsensusN(): number {
+  const raw = process.env.ESTIMATE_CONSENSUS_N;
+  const n = raw == null ? 3 : Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 3;
+}
+
+// Read one relevant page, taking a median-of-N consensus in estimation mode to
+// damp run-to-run vision variance (SCR-006). A single read otherwise.
 async function readRelevantPage(
   takeoffId: string,
   pdf: OpenPdf,
@@ -348,11 +400,65 @@ async function readRelevantPage(
   log: Logger,
   estimate: boolean,
   pageClass: PageClass,
-  acc: {
-    lines: CabinetLineItem[];
-    raws: unknown[];
-    summary: { uncertainties: string[]; unreadable_pages: number[]; warnings: string[] };
+  acc: PageAcc
+): Promise<void> {
+  const n = estimate ? estimateConsensusN() : 1;
+  if (n <= 1) {
+    await readPageOnce(takeoffId, pdf, page, budget, crossVal, log, estimate, pageClass, acc);
+    return;
   }
+
+  // Read the page n times into throwaway accumulators, then keep the read whose
+  // box count is the median (an outlier under- or over-read is discarded).
+  const candidates: PageAcc[] = [];
+  for (let i = 0; i < n; i++) {
+    const local: PageAcc = {
+      lines: [],
+      raws: [],
+      summary: { uncertainties: [], unreadable_pages: [], warnings: [] },
+    };
+    await readPageOnce(takeoffId, pdf, page, budget, crossVal, log, estimate, pageClass, local);
+    candidates.push(local);
+  }
+  // Select by quote-total proxy (cabinet face area), NOT box count: two reads
+  // with the same count can price very differently by size (Q8: 20 boxes, −6% vs
+  // −28%). The median-AREA read is the most representative for the total.
+  const chosen = pickMedian(candidates, (c) => boxFaceArea(c.lines));
+  log.info(
+    {
+      takeoffId,
+      page,
+      reads: n,
+      counts: candidates.map((c) => c.lines.length),
+      areas: candidates.map((c) => Math.round(boxFaceArea(c.lines))),
+      keptBoxes: chosen.lines.length,
+      keptArea: Math.round(boxFaceArea(chosen.lines)),
+    },
+    "estimate consensus: kept median-face-area read"
+  );
+  acc.lines.push(...chosen.lines);
+  acc.raws.push(...chosen.raws);
+  acc.summary.uncertainties.push(...chosen.summary.uncertainties);
+  for (const p of chosen.summary.unreadable_pages)
+    if (!acc.summary.unreadable_pages.includes(p)) acc.summary.unreadable_pages.push(p);
+  acc.summary.warnings.push(...chosen.summary.warnings);
+}
+
+// Read one relevant page ONCE. Large-format sheets are downscaled past
+// legibility if sent whole (PRD §4), so they're segmented into their distinct
+// drawings (one vision "locate" call) and each drawing is cropped + re-rendered
+// at full resolution; drawings too big for one image are tiled and
+// de-duplicated. Pages that already fit legibly are sent as a single image.
+async function readPageOnce(
+  takeoffId: string,
+  pdf: OpenPdf,
+  page: number,
+  budget: TakeoffBudget,
+  crossVal: CrossVal,
+  log: Logger,
+  estimate: boolean,
+  pageClass: PageClass,
+  acc: PageAcc
 ): Promise<void> {
   const idx = page - 1;
   const dims = pdf.pageDimsPt(idx);
@@ -443,6 +549,40 @@ async function readRelevantPage(
   // fragmented across tiles, or the model can't lay out its whole cabinet run.
   // (Schedule/elevation extraction still tiles for legibility — below.)
   if (estimate) {
+    // Non-floor-plan sheets (kitchen elevation / millwork) often show the SAME
+    // room as a plan PLUS several wall elevations. Segmenting into regions makes
+    // the model re-enumerate the room once per view -> 2-4x over-count. Read the
+    // whole sheet ONCE so each cabinet is counted a single time. Floor plans
+    // still segment by room — each room needs its own coherent, legible crop.
+    if (pageClass !== "floor_plan") {
+      let extraction: PageExtraction;
+      try {
+        const result = await extractPage(page, fullPng, budget, {
+          estimate: true,
+        });
+        extraction = result.extraction;
+        acc.raws.push({ page, raw: result.raw });
+      } catch (err) {
+        if (err instanceof BudgetExceededError) throw err;
+        acc.summary.warnings.push(
+          `page ${page}: estimate failed (${String(err)})`
+        );
+        return;
+      }
+      if (crossVal.enabled) {
+        extraction = await runCrossValidation(
+          page,
+          fullPng,
+          extraction,
+          crossVal,
+          acc.summary.warnings,
+          log
+        );
+      }
+      collect(extraction, acc.lines);
+      return;
+    }
+
     for (const region of regions) {
       const wIn = (region.rect.x1 - region.rect.x0) / 72;
       const hIn = (region.rect.y1 - region.rect.y0) / 72;

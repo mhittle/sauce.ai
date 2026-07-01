@@ -10,6 +10,14 @@ real secret *values* here — document var names only.
 
 ## Open
 
+### MA-011 — Rotate the ANTHROPIC_API_KEY (key was shared in chat 2026-06-18)
+During the 2026-06-18 pricing session an Anthropic API key was pasted directly
+into chat to enable local harness runs. Treat it as compromised:
+1. Go to https://console.anthropic.com/ → API Keys
+2. Revoke the key that starts with `sk-ant-api03-j5XeL…`
+3. Create a new key and update `ANTHROPIC_API_KEY` on `scribe-workers` in Railway
+   (Settings → Variables → update the value → redeploy workers).
+
 ### MA-006 — Enter real pricing rates before the first external quote
 Admin → Pricing Editor: replace every NEEDS REVIEW placeholder rate and save
 (creates pricing config v2). Quotes pricing against NEEDS REVIEW rates are

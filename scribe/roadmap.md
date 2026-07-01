@@ -23,8 +23,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Crawl drawings only — pause permit datasets, make SAM.gov the active source + fix attachment download | 6 | 2 | crawler | done |
 | AI cross-validation toggle (secondary OpenAI extraction → lower confidence on disagreement) | 6 | 4 | takeoff | done |
 | Real pricing rates entered (clear NEEDS REVIEW) | 10 | 1 | pricing | backlog |
-| Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition (match CabinetNow quotes ±10%) | 9 | 7 | pricing | backlog |
-| No-schedule reading: bath-vanity consistency + tighter kitchen recall | 6 | 3 | takeoff | backlog |
+| Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition (match CabinetNow quotes ±10%) | 9 | 7 | pricing | done |
+| No-schedule reading: consistency hardening + tighter kitchen recall | 6 | 3 | takeoff | in-progress |
+| Estimate reading accuracy — most real CRM quotes within ±10% | 9 | 8 | takeoff | in-progress |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
 | Quote email drafting w/ PDF attached (replace mailto) | 7 | 3 | backend | backlog |
 | OCR fallback for scan-only PDFs (tesseract) | 7 | 5 | takeoff | backlog |
@@ -133,22 +134,72 @@ never persisted). Feeds the new prospect detail view directly. SAM.gov key
 MA-006. Quotes are blocked from `sent` until NEEDS REVIEW rates are replaced.
 
 ### Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition
-**Priority/LOE/Category/Status:** 9 / 7 / pricing / backlog
-A CabinetNow quote = doors/fronts (ft²×style×material) + boxes (per unit) +
-drawer-boxes/hardware − flat 10%. Today `packages/pricing` prices one blended
-`framed-casework` line per cabinet, so it can't reproduce a quote. Build: an
-Airtable fetch → baked low/mid/high $/ft² tiers (done: percentiles in
-`scribe/scripts/`), a box→door/front/drawer-box expansion catalog, and a quote
-path that produces low/mid/high totals. Validate against the Piestewa quote
-($27,733.68 subtotal) within 10%. Box price source still TBD (doors ≈ half the
-order). See `[[scribe-cabinetnow-pricing-model]]` memory + spike.
+**Priority/LOE/Category/Status:** 9 / 7 / pricing / done (PR #216, 2026-06-23)
+CabinetNow quote = 3 priced lists (doors/fronts by ft²×style, boxes per unit,
+drawer-box hardware) − flat 10%. Shipped: Airtable-anchored $/ft² door tiers
+(low/mid/high), cabinet-box pricing ported from pricing.js (0.3% vs live item),
+drawer-box hardware formula (priceHardware → one rolled-up line), priceQuoteTiers
++ priceQuoteLineItems (single source of truth for the PDF). **Validated:**
+MEDIUM −7% / HIGH +7% vs $27,733.68 Piestewa subtotal — within 10%.
 
-### No-schedule reading: bath-vanity consistency + tighter kitchen recall
-**Priority/LOE/Category/Status:** 6 / 3 / takeoff / backlog
-Follow-on to the 2026-06-18 reading overhaul. Kitchen now enumerates well; the
-77" master double vanity flickers across runs (model variance) and a few kitchen
-specials (trash/blind-corner/2nd pantry) are inconsistent. Tighten the estimate
-prompt / room-locate for baths; measure recall against the quote's box list.
+### No-schedule reading: consistency hardening + tighter kitchen recall
+**Priority/LOE/Category/Status:** 6 / 3 / takeoff / in-progress
+Partial fix landed in `scribe/fix-truncated-region-drop` (branch, not yet merged):
+temperature 0 on all four vision calls (classify/locate/extract/spreadsheet) stops
+API-default 1.0 resampling; salvage parser + 32k max_tokens stops silent kitchen
+drop. Remaining variance: vision is not bit-identical at temp 0, bath-vanity
+sizing still flickers (77" master double), ~6-box gap vs the real 29-box quote
+(Trash Base, Blind Corner, multi Base-Full-Height undetected). **Next session:**
+audit prompt/locate prompt for remaining gaps; consider multi-pass verify or
+deterministic rule-based corner injection.
+
+### Estimate reading accuracy — most real CRM quotes within ±10%
+**Priority/LOE/Category/Status:** 9 / 8 / takeoff / in-progress (2026-06-29)
+Backtested 10 real CabinetNow quotes (Zoho CRM) through the estimate harness;
+pricing validated, READING (box count) is the gap. Baseline 3/9 within ±10%
+(see engineering-history 2026-06-29 + (b)). WIP on branch
+`claude/elegant-hertz-3d705e` (merged in `scribe/estimate-reading-accuracy`, NOT
+deployed). Ordered next steps:
+1. ✅ **DONE (2026-06-29 b)** — ported harness fixes into `process.ts`
+   (whole-page-once, non-estimate cross-page dedup, universal face expansion);
+   cross-view collapse shared via `@scribe/shared`. Prod now == what was tested.
+2. ✅ **DONE (2026-06-29 b)** — **median-of-N consensus** in the pipeline (shared
+   `pickMedian`, env `ESTIMATE_CONSENSUS_N`, default 3). Q8 5/21/24 → 19/19/24;
+   variance tamed. Scorecard after 1+2: still 3/9 (parity + stability, not accuracy).
+3. ✅ **Research + count≠price (2026-06-29 c)** — consensus now selects by a
+   quote-total proxy (`boxFaceArea`), not box count (same count can price −6% vs
+   −28%). Tried prompt **v5** ("point-label-count"): net WORSE (over-reads complex
+   plans), **reverted to v4**. **Settled config: v4 + area-consensus = 25% mean abs
+   error, 3 solid (Q8/Q9/Q10) + 3 near-misses (Q3/Q5/Q6 ~13-14%).**
+4. ✅ **Backtest harness + 21-quote dataset (2026-06-30).** Built `scripts/backtest.mjs`
+   (+ importable `estimatePdf` / `--json`); test set 9 → **21 usable quotes**.
+   Scorecard `~/Desktop/Scribe Testing/scorecard-21quotes.csv`: **8/21 within ±10%,
+   12/21 within ~16%, mean abs err 44%.** Compare configs by MEAN ABS ERROR, not
+   "X/N within 10%" (boundary noise).
+5. ✅ **Over-read ROOT-CAUSED (2026-06-30).** Dominant failure (Q19 +257%, Q21 +176%
+   /277 box, Q14 +169%, Q24 +132%, Q7 +60%). Diagnostics (boxes-by-page/room) show:
+   an authoritative count exists, then **elevation pages RE-ENUMERATE the same
+   cabinets** and the label-based dedup can't merge them (labels vary across views).
+6. ✅ **Page-role router SHIPPED (PR #221, merged 2026-07-01).** `routeByPageRole`
+   counts one authoritative role (`schedule > floor_plan > elevation`), drops
+   demoted-role re-counts, drops fillers/crown from box pricing, retries socket
+   errors. Backtest **MAE 59→34** — over-read tail gone (Q19 +421→+16, Q14 +178→+7).
+7. ⏭ **NEXT — document-class routing (fix SCR-007 under-read tail).** The router's
+   fixed precedence over-demotes elevations on **elevation-authoritative** plans
+   (Q5/Q13/Q22/Q23 regressed to bad under-reads). Owner greenlit the data-driven
+   plan: classify docs by which view is authoritative — 1 itemized-list (Q19/21),
+   2 plan-auth (Q14/24), 3 elevation-auth (Q5/13/22/23), 4 single-view (Q7/16/20),
+   5 sparse image (Q2/11) — and resolve classes 2 vs 3 by a **box-face-area yield
+   comparison** (only demote elevations when the plan/schedule yield is comparable/
+   larger). Confirm the yield feature (1 read/page diagnostic), implement, re-backtest.
+8. **Image path** (SCR-005, class 5) + **input-type classifier** (itemized/list/
+   image sub-pipelines): sparse/image inputs. Detector remains the durable ceiling-raiser.
+
+**Shipped in PR #221 (merged 2026-07-01):** cross-view collapse, median-of-N
+area-consensus, backtest harness, and the page-role router — all green, sharing
+`@scribe/shared` so the harness can't drift from prod.
+Test assets: `~/Desktop/Scribe Testing/` (Quote 1..10 + run-*.sh + parse-median.sh
++ results sheet). See `[[scribe-crm-quote-backtest]]` memory.
 
 ### AI cross-validation toggle
 **Priority/LOE/Category/Status:** 6 / 4 / takeoff / done (PR: this PR, 2026-06-16)
