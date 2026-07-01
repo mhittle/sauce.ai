@@ -14,7 +14,25 @@
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { openPdf } from "../dist/takeoff/pdf.js";
-import { extractCabinetSchedule } from "@scribe/shared";
+import { extractCabinetSchedule, isNonBoxCasework } from "@scribe/shared";
+
+// Ground truth must count the SAME thing the reader emits: a priced cabinet BOX.
+// The prediction pipeline drops non-box casework (fillers/crown/end-panels via
+// `dropNonBoxCasework`) before scoring, so the labels must drop them too — else
+// truth carries lines the reader is designed never to produce, deflating recall.
+// Also exclude the packet's separate "DOOR & DRAWER LIST" component rows
+// ("<style> Cabinet Door", "Drawer Front"): those are door/front line items in
+// the pricing section, not carcasses, and the schedule parser slurps them as
+// cabinets (they inflated Q14 to 40 incl. 34 doors, Q21 to 55 incl. 32). Real
+// cabinets with door configs ("Wall Pair Door", "Base 2 Door", "Tall Single
+// Doors") do NOT contain the exact phrase "cabinet door"/"drawer front", so this
+// stays precise.
+const DOOR_COMPONENT_RE = /cabinet\s+door|drawer\s+front/i;
+function isCabinetBox(line) {
+  if (isNonBoxCasework(line)) return false;
+  if (DOOR_COMPONENT_RE.test(line.tag ?? "")) return false;
+  return true;
+}
 
 const HOME = process.env.HOME;
 const manifestPath =
@@ -84,7 +102,7 @@ for (const q of manifest) {
     }
     const sched = extractCabinetSchedule(pages);
     pdf.close();
-    const cabinets = sched.lines.map((l) => ({
+    const cabinets = sched.lines.filter(isCabinetBox).map((l) => ({
       tag: l.tag,
       category: l.category,
       w: l.width_in,

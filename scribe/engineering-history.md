@@ -120,10 +120,34 @@ NOT merged — no deploy):** `VISION_MODEL` knob + Opus temperature fix
 default behavior unchanged; tests green (shared 98). Reusable A/B infra:
 `labels-subset.json` (5 quotes spanning classes), `reading-{sonnet,opus,merge}-subset.csv`.
 
-**NEXT (owner: "keep improving"):** build the completeness-aware yield-guard so the
-router stops starving recall on plan-incomplete docs, + cross-view size matching;
-validate on the full ruler (target: recall up without wrecking precision on the
-router's over-read wins Q19/Q21). Still prompt/vision-only.
+**CORRECTION — the RULER was polluted; re-baselined (same session, keep-improving):**
+Chasing the "under-read" lever exposed that the ground-truth LABELS themselves
+counted non-boxes. The packets carry a separate priced **"DOOR & DRAWER LIST"**;
+`extractCabinetSchedule` slurped those `"<style> Cabinet Door"`/`"Drawer Front"`
+rows as cabinets (Q14 40 incl. 34 doors; the real job is ~6 carcasses, doubled
+across 2 style options). Labels also kept **fillers/end-panels** that the reader
+deliberately drops (`dropNonBoxCasework` runs on preds before scoring) — truth had
+lines the reader can't emit, deflating recall. **Fix (`extract-labels.mjs`):** count
+the SAME priced box the reader does — `isCabinetBox` = `!isNonBoxCasework` AND not
+`/cabinet door|drawer front/i`. Verified precise: real door-config cabinets ("Wall
+Pair Door", "Base 2 Door", Q21's 49 pair-door boxes) survive. Labels 361→**269**.
+Old labels saved to `labels.pre-boxfix.json`.
+
+**TRUE baseline (clean ruler, all 17, N=1) → `reading-scorecard-clean.csv`:**
+**recall 41% / precision 31% / F1 0.32** (the reader was UNDER-graded before). Class:
+sparse 0.56 > labeled 0.41 > scan 0.35 > image 0.19 ≈ arch 0.17 > image/sketch 0.11.
+**The failure FLIPPED: dominant problem is now OVER-read / low precision**, not
+under-read — Q7 +329% (30 vs 7), Q14 +183% (17 vs 6), Q24 +150%, Q3 +100%; a few
+under (Q2 −87% image, Q23 −65%, Q13 −55%). Notably Q21 (48 vs 49) & Q10 (13 vs 14)
+have near-perfect COUNT but F1 ~0.47 → the residual is SIZE/IDENTITY matching, not
+counting. This **invalidates the `ROUTER_MERGE_ROLES` direction** (merging adds boxes
+→ worsens the now-dominant over-read); keep it gated/dormant. The earlier "under-read
+diagnosis" above was a label artifact — trust the clean numbers.
+
+**NEXT (data-driven on the clean ruler):** precision is the bigger gap. Levers to
+measure: over-read pruning on labeled/arch (Q7/Q3/Q14), size/identity accuracy for
+right-count-wrong-match (Q21/Q10), and the image path (Q2/Q11 still ~0.1-0.2, SCR-005).
+Firm the clean baseline at N=3 before committing a lever. Still prompt/vision-only.
 
 ---
 
