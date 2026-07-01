@@ -196,14 +196,26 @@ deployed). Ordered next steps:
    → the failure is COUNT/IDENTITY (detection), not sizing. Per class: labeled 0.35
    (best) > arch/image 0.17 > image/sketch 0.09. Q8 Piestewa (the "$ −7% showcase")
    = 36%/25% — $ hid a wrong read.
-9. ⏭ **NEXT — DETECTOR (H3) is the durable answer.** The reading baseline proves
-   drawings are a DETECTION problem near the zero-shot ceiling; the 361 labeled
-   {tag,W,H,category} rows ARE the training set. Target = autonomous auto-send, so a
-   trained cabinet detector + calibrated send-gate is the committed path. Incremental
-   levers to measure on the new ruler first: dimension-grounded reading (A/B showed
-   modest lift), duplicate-elevation collapse (fixes SCR-007 regressions + Cyncly
-   dupes), document-class routing (schedule > plan > elevation by box-face-area yield),
-   image path (SCR-005). Firm the baseline with an N=3 median pass.
+9. ✅ **H3 DECIDED = prompt/vision-only (owner, 2026-07-01 d).** Target is fully
+   autonomous auto-send, BUT owner can't hand-label ("not a cabinet guy… needs to be
+   a prompt to Claude or a vision API"). A trained detector needs localized (bbox)
+   training data; the 361 labels have ZERO localization and a spike proved the VLM
+   can't self-generate usable bboxes (`~/Desktop/Scribe Testing/q8-vlm-bbox-spike.png`)
+   → **detector path off the table.** Stay on prompt/vision, tuned against the packet
+   answer key via the ruler (no labeling needed). Send-gate also off (autonomous = no
+   human-in-loop). Levers measured + ruled out: stronger model (Opus 4.8) = no win;
+   router merge-not-drop = wrong direction on clean data.
+10. ✅ **RULER FIXED + re-baselined (2026-07-01 d, commit 06c8abf).** The labels were
+   polluted — packet "DOOR & DRAWER LIST" rows + fillers counted as cabinets. Now
+   count the SAME priced box the reader does (`isCabinetBox`); labels 361→269. **TRUE
+   baseline (clean, N=1): recall 41% / precision 31% / F1 0.32.** Failure FLIPPED to
+   OVER-read / low-precision (Q7 +329%, Q14 +183%, Q24 +150%); some right-count-wrong-
+   match (Q21 48/49, Q10 13/14) → size/identity gap. sparse 0.56 > labeled 0.41 >
+   scan 0.35 > image 0.19 ≈ arch 0.17.
+11. ⏭ **NEXT — precision/over-read levers on the clean ruler.** Over-read pruning on
+   labeled/arch (Q7/Q3/Q14), size/identity accuracy (Q21/Q10), image path (SCR-005).
+   Firm the clean baseline at N=3 first. Still prompt/vision-only. Infra ready:
+   `VISION_MODEL` knob, gated `ROUTER_MERGE_ROLES` (dormant), 5-quote A/B subset.
 
 **Shipped merged 2026-07-01:** page-role router + non-box-casework + socket-retry
 (#221); text-layer schedule extractor (#224). H2 eval infra in this session's PR.
