@@ -6,3 +6,4 @@ export * from "./regions.js";
 export * from "./estimate.js";
 export * from "./expand.js";
 export * from "./schedule.js";
+export * from "./reading-score.js";

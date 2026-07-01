@@ -45,6 +45,9 @@ Format:
 - **Notes / fix:** needs a distinct path for image/sketch inputs, or a prompt that
   extracts more from a single elevation/render. Also: scribe-web rejects JPEG
   uploaded as PNG (media-type mismatch) — separate intake bug to confirm.
+  2026-07-01 (c) — **quantified by the reading scorer:** image class F1 0.17
+  (Q2 recall 0%), image/sketch 0.09 (Q11) — the worst classes. Fix likely rides
+  the detector (H3) + an OCR/upscale front-end, not prompt tuning.
 
 ### SCR-004 — Estimator under-reads large multi-room / multi-page plans
 - **Status:** open

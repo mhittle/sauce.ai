@@ -65,6 +65,35 @@ async function readPage(pdf, page, estimate, pageClass) {
   return chosen;
 }
 
+// EXPERIMENT (GROUND_READING=1): build a grounding block from the sheet's own
+// printed dimensions + cabinet labels/SKUs (text layer), to append to the vision
+// prompt so the model reads from what's drawn instead of guessing.
+function buildGrounding(pdf, idx) {
+  if (!process.env.GROUND_READING) return undefined;
+  const fr = pdf.pageTextFragments(idx);
+  const uniq = (a) => [...new Set(a)];
+  const dims = uniq(
+    fr.map((f) => f.text.trim()).filter((t) => /^\d{1,3}\s?\d?\/?\d?["”']?$/.test(t))
+  );
+  const labels = uniq(
+    fr
+      .map((f) => f.text.trim())
+      .filter(
+        (t) =>
+          t.length >= 2 &&
+          t.length <= 24 &&
+          /(vanity|base|wall|tall|sink|drawer|pantry|linen|corner|oven|island|fridge)|[A-Za-z]{2,}\d{2,}/i.test(t)
+      )
+  );
+  if (dims.length === 0 && labels.length === 0) return undefined;
+  return (
+    `PRINTED ON THIS SHEET (authoritative — size cabinets ONLY from these printed ` +
+    `dimensions and identify them from these labels/codes; do NOT invent cabinets or ` +
+    `dimensions not supported here; a run's cabinet widths should sum to its overall ` +
+    `dimension):\nDIMENSIONS: ${dims.join(", ")}\nLABELS/CODES: ${labels.join(", ")}`
+  );
+}
+
 async function readPageOnce(pdf, page, estimate, pageClass) {
   const idx = page - 1;
   const dims = pdf.pageDimsPt(idx);
@@ -73,10 +102,11 @@ async function readPageOnce(pdf, page, estimate, pageClass) {
   const budget = readPage.budget;
   const locateDpi = fitDpi(widthIn, heightIn);
   const fullPng = pdf.renderPage(idx, locateDpi);
+  const grounding = buildGrounding(pdf, idx);
   const lines = [];
 
   if (!needsRegioning(dims)) {
-    const { extraction } = await extractPage(page, fullPng, budget, { estimate });
+    const { extraction } = await extractPage(page, fullPng, budget, { estimate, grounding });
     return extraction.lines;
   }
 
@@ -317,6 +347,7 @@ async function main() {
   const r = await estimatePdf(path);
 
   if (asJson) {
+    const BOX = ["casework_base", "casework_wall", "casework_tall", "vanity"];
     process.stdout.write(
       JSON.stringify({
         input: path,
@@ -325,6 +356,10 @@ async function main() {
         boxTypes: r.boxTypes,
         tokens: r.tokens,
         tiers: r.tiers,
+        // Predicted cabinet boxes, for the reading-accuracy scorer (H2).
+        boxes: r.lines
+          .filter((l) => BOX.includes(l.category))
+          .map((l) => ({ category: l.category, w: l.width_in, h: l.height_in, qty: l.qty })),
       }) + "\n"
     );
     return;

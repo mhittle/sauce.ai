@@ -6,6 +6,157 @@ not read during onboarding.
 
 ---
 
+## 2026-06-18 (k) — pin temperature 0 on takeoff vision calls (reproducible reads)
+
+**Context:** Reprocessing the same plan gave a DIFFERENT cabinet list each run.
+None of the worker vision calls set `temperature`, so they ran at the API
+default 1.0 — both extraction AND the `locateRooms` region split resample every
+time, compounding the drift.
+
+**Shipped:** `temperature: 0` on the four takeoff calls — extract.ts (extract/
+estimate), regions.ts (locate rooms/regions), classify.ts (page class),
+spreadsheet.ts (header inference). Reads are now near-deterministic for a given
+plan. (Vision isn't bit-identical even at temp 0, but variance drops sharply.)
+Crawler `score.ts` left as-is (not in the takeoff path).
+
+**PRs:** branch `scribe/fix-truncated-region-drop` (with (j)).
+
+---
+
+## 2026-06-18 (j) — fix silent whole-region drop on truncated extraction
+
+**Context:** A deployed (v3) takeoff returned ONLY the bathroom + laundry
+cabinets — the entire New Kitchen was missing. Cause: `extractPage` sends the
+cabinet-dense kitchen crop, the model's JSON response exceeds `max_tokens`
+(16000) and is truncated; `extractJson` does a hard `JSON.parse` → throws;
+`readRelevantPage` catches it and `continue`s, dropping the whole region (only a
+warning, easily missed). Kitchen is always the biggest region → always the one
+that truncates → reproduces on every reprocess. Smaller rooms parse fine.
+
+**Shipped (apps/workers extract.ts):**
+- `salvageLineObjects(text)` — string-aware brace scanner that recovers every
+  complete `{...}` from the `"lines"` array when the top-level parse fails
+  (truncation only loses the last, incomplete cabinet). Used as a fallback when
+  parse throws or yields zero lines, so a region is never silently emptied.
+- Raised `max_tokens` 16000 → **32000** (billed only for tokens used) to avoid
+  truncation in the first place. At that ceiling the SDK refuses a non-streaming
+  request ("Streaming is required for operations that may take longer than 10
+  minutes"), so the extract call now uses `messages.stream(...).finalMessage()`
+  — same Message shape, same per-token cost. Re-validated live after the switch:
+  no error, kitchen present, 23 boxes, MEDIUM −7% / HIGH +7% (within 10%).
+- Surface a visible "response truncated (max_tokens) — verify" uncertainty when
+  `stop_reason === max_tokens`, so a partial read is never silent again.
+
+Tests: workers 13 pass incl. 3 new salvage cases (truncated mid-array; braces
+inside strings; no-array). The earlier verbose `[ESTIMATED] …` notes inflate
+output length and were the practical trigger.
+
+**PRs:** branch `scribe/fix-truncated-region-drop`.
+
+---
+
+## 2026-06-18 (i) — estimate prompt v3: corners, specialty bases, fillers, vanity sizing
+
+**Context:** Comparing our reprocessed takeoff to the real Piestewa quote
+(pages 27-28) showed the reading under-detects: ~17 boxes vs the quote's 29. It
+missed corners (Easy-Reach / Blind), specialty bases (Oven/Trash/Microwave),
+fillers + end panels, Base Full-Height fridge surrounds, deep/wide wall runs;
+rounded odd widths to standard; undersized the double-sink vanity (read 36" vs
+77"); and invented Island/Bev-Fridge/Optional-Wall units not on the plan.
+
+**Shipped:** `@scribe/prompts` estimate prompt → **v3** (`estimate-v3`):
+- CORNERS MANDATORY — one corner cabinet at every inside corner where runs meet
+  (Easy-Reach Corner Base/Wall, or Blind Corner when runs are unequal).
+- Explicit specialty bases listed individually: Oven Base, Trash Pullout Base,
+  Microwave Over Drawer Base.
+- Fillers (1-3") + End Panels (~1.5") to make runs sum — emitted as
+  casework_base with "Filler"/"End Panel" in the tag so expand.ts skips
+  faces (no phantom doors) but they still box-price.
+- Fridge surround modelled as Base Full-Height end panels + deep wall/bridge.
+- Vanity sized to the FULL run; double-sink = one wide 4-drawer unit, not 36".
+- Keep the odd width a run requires (37.25", 49.375"); don't force round numbers.
+- Don't INVENT cabinets that aren't drawn (no "optional"/"beverage fridge").
+
+Tests: shared 54 pass incl. new filler/end-panel & "cubbies" → no-faces coverage.
+
+**Validated live** (estimate-floorplan.mjs on the 2440 E Piestewa plan):
+box count **25 units / 24 types** (was ~17; quote = 29/24), and full tier
+pricing **MEDIUM $27,721 = −0%** vs the $27,733.68 subtotal (LOW −11%, HIGH
++14%). v3 now emits the corners (Easy-Reach Corner Base/Wall), Oven Base, fridge
+full-height surround panels, and run-sized vanities (38.5/30/27) it used to
+miss. Follow-on fix: expand.ts no-faces regex now also catches "cubbies"
+(plural) + appliance/range slots (was spawning ~$360 of phantom doors on the
+open CUBBIES unit). Residual: still a few boxes short of 29 (no Trash Base /
+Blind Corner / multi Base-Full-Height — partly plan-specific), and a "Range
+Base" appliance-slot is still emitted as a box.
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
+## 2026-06-18 (h) — branded quote PDF + tier-priced itemized list
+
+**Context:** The "Generate PDF" output was barebones — rows OVERLAPPED (a
+long Tag wrapped but the row only advanced one line, so the next row crashed
+into it), no branding, and it showed the OLD product-line subtotal ($10,962)
+instead of the tier estimate the web UI shows.
+
+**Shipped:**
+- Rewrote `apps/api/src/lib/quote-pdf.ts`: per-row height = max cell height
+  (`heightOfString`) so nothing overlaps; CabinetNow maroon header/title band +
+  quote meta; room-grouped rows (subheaders) with zebra striping; right-aligned
+  money; totals box; tier label. Verified with a render preview.
+- New `priceQuoteLineItems(lines, tier)` in `@scribe/pricing` (single source of
+  truth): prices each read line for the tier (boxes per unit, doors/fronts by
+  ft²) + ONE rolled-up hardware row; items sum to subtotal. Exported
+  `TIER_BOX_SPECIES`.
+- `POST /quotes/:id/pdf?tier=` now prices via the tier model (was product-line
+  `run`); web passes the selected tier. PDF + web now show the same number.
+
+**Confirmed against the real quote (pages 27-28):** CabinetNow's quote IS three
+lists — Doors/Fronts, CABINET BOXES (incl. a Toe Kick Skin line), DRAWER BOXES &
+HARDWARE (Dovetail boxes + Blum 563H glide kits ×9 + Bulk Shelf Pins ×3) —
+SUBTOTAL $27,733.68 − 10% = $24,960.31. Exactly the reverse-engineered model.
+
+**Open (reading, next):** extraction under-detects/mis-sizes vs the real 29-box
+list — misses corners (Easy Reach / Blind Corner), specialty bases (Oven/Trash/
+Microwave), fillers/end-panels/toe-kick, Base Full Height, Deep Wall, big wall
+runs; rounds widths (37.25→36, 49.375→40, 77→36) and undersizes the double-sink
+vanity; invents Island/Bev-Fridge/Optional-Wall. Glides/pins/toe-kick still
+unpriced. Persist tier server-side (currently query param, default medium).
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
+## 2026-06-18 (g) — drawer-box hardware: CabinetNow's 3rd list (one rolled-up line)
+
+**Context:** The tier estimate priced only CabinetNow's first two lists (doors/
+fronts by ft², cabinet boxes per unit). The third list — drawer boxes + hardware
+— was missing, so the estimate ran ~9% light.
+
+**Shipped:** ported the live store's `pricing.js` `drawerBoxes()` formula into
+`@scribe/pricing` `hardware.ts` (per box: perimeter = 2·W+2·D; a tier line
+`slope·perimeter+intercept` picked by drawer-front HEIGHT; then
+`((tier×materialMult)+$10.06)×1.5`). `priceHardware(lines)` makes **one dovetail
+drawer box per `drawer_front` face** (the expand step already emits those) and
+sums to a **single rolled-up "Hardware" subtotal** (not a line per piece, per
+owner). Wired into `priceQuoteTiers` as a constant across tiers (drawer-box
+species isn't the rep's door-style choice — matches how CabinetNow's lists #2/#3
+stay flat). QuoteBuilder shows boxes + doors/fronts + hardware in the breakdown
+and Totals. Back-test on the Piestewa quote: 18 boxes add ~$2,387, LOW now
+**+3%** vs $27,733.68 (was −5% without hardware).
+
+**Open:** glides, shelf pins & toe-kick skin are option SKUs (not formulas in
+pricing.js) — still not modelled, but they're the small remainder. The live
+under-count (~20 vs ~29 boxes, reading completeness) still applies.
+
+**PRs:** branch `scribe/drawer-box-hardware`.
+
+---
+
+---
+
 ## 2026-06-18 (f) — unify quote Totals with the tier estimate (web)
 
 **Context:** The Quote Builder showed two disagreeing numbers — the new
