@@ -62,3 +62,18 @@ Respond with JSON only, same shape as the extractor:
 export function estimateUserText(pageNumber: number): string {
   return `This is page ${pageNumber} of a plan set with no cabinet schedule. Lay out and list EVERY individual cabinet visible here (set source_page to ${pageNumber}), with a descriptive tag and door/drawer config per cabinet. If this drawing has no built cabinetry, return an empty lines list. Respond with the JSON object only.`;
 }
+
+// Experimental precision override (gated: extract.ts reads ESTIMATE_PROMPT=precision;
+// prod default stays v4). Appended AFTER the base system prompt so it takes
+// precedence. Targets the measured over-read mechanisms on the clean reading ruler
+// (precision 31%): the estimator (a) OVER-SPLITS runs into many identical narrow
+// cabinets (Q24: 8× 15" vanity vs 2 real) and (b) DUPLICATES one unit across
+// categories (Q24: a 24×96 tall emitted as both tall AND wall). Over-read is the
+// dominant failure post-ruler-fix (Q7 +329%, Q14 +183%, Q24 +150%).
+export const ESTIMATE_PRECISION_SUFFIX = `
+
+PRECISION OVERRIDE — obey these over any earlier guidance they conflict with. This is an ESTIMATE; an omitted cabinet is preferable to an invented one.
+- FEWEST, WIDEST cabinets. Fill each run with the fewest standard cabinets using the widest sizes that fit — a long run is one wide cabinet or a 2-cabinet split, NOT a stack of identical 12"/15" units. Do NOT split a run into repeated narrow cabinets unless the drawing clearly delineates separate small units.
+- EACH PHYSICAL CABINET EXACTLY ONCE. Never emit the same unit under two categories (e.g. a tall pantry also listed as a wall cabinet) and never re-list it once per view (plan vs elevation).
+- NOTHING MANDATORY. Place corner cabinets, refrigerator-surround panels, and wall/upper cabinets ONLY where the drawing actually shows them. Do not add cabinets to make a room look complete.
+- If a cabinet is not clearly drawn or clearly required by a drawn appliance/fixture, LEAVE IT OUT.`;

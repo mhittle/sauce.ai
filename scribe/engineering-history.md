@@ -70,6 +70,110 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-07-01 (d) — H3 decided: prompt/vision-only (owner); two levers measured on the ruler
+
+**Context:** Session to "decide/execute the DETECTOR path." Two hard constraints
+emerged from the owner: (1) target is **fully autonomous auto-send** (no
+human-in-loop, so a send-gate that defers to a human is OFF the table); (2)
+**prompt/vision-API ONLY** — "I'm not a cabinet guy to label myself; it needs to
+be a prompt to Claude or a vision API." That **kills the trained-detector path**:
+a YOLO-style detector needs localized (bbox) training data, the 361 labels carry
+ZERO localization (fields: tag/category/w/h/d/qty/raw only — verified), and a
+spike proved the VLM can't self-generate usable bboxes (Q8 overlay
+`~/Desktop/Scribe Testing/q8-vlm-bbox-spike.png`: 18 loose run/zone boxes, several
+on title block/legend/empty rooms — too wrong to bootstrap labels). So there is no
+prompt-free path to a dataset, and the owner won't hand-label ⇒ **stay on
+prompt/vision, tune against the existing answer key (packets) via the ruler.**
+
+**Reading baseline reconfirmed (5-quote subset Q1/2/8/14/22, N=1):** OVERALL
+recall 23% / precision 42% / **F1 0.28** — matches the documented 0.27. **Key
+pattern: every quote UNDER-reads** (countErr −35/−68/0/−53/−59%) and preds
+**plateau ~13–19 boxes regardless of job size** (Q8 14→14 fine; Q14 40→19; Q22
+44→18). Post-router the dominant failure has flipped from over-read to
+**under-read on big/dense jobs.**
+
+**Lever 1 — stronger model (Opus 4.8 vs Sonnet-4-6 on the read): NO WIN.** Added a
+`VISION_MODEL` env knob (`extract.ts`, defaults to `SONNET_MODEL`; also had to omit
+`temperature` for Opus-4.8 which 400s on it). Head-to-head: Opus roughly
+equal-to-worse (Q8 29→36% recall but Q1 30→25, Q2 16→0; size-err dropped 1.7→0.9"
+but recall/precision flat). **Confirms detection ≠ model capability.** Prod default
+unchanged.
+
+**Lever 2 — router "merge-not-drop" (gated `ROUTER_MERGE_ROLES=1` in `routeByPageRole`):
+direction confirmed, naive impl insufficient.** DIAGNOSIS (smoking gun, Q14):
+`regime=plan kept=16 droppedOtherRoles=33`, truth 40 — the pipeline READ 49
+cabinets and the router **threw away 33** to keep the plan's 16. The router was
+tuned on the lossy $-metric (19 boxes priced close, so "drop elevations" looked
+right); the per-line ruler shows those "dupes" are largely REAL cabinets. Merge
+probe (keep all roles, `collapseCrossViewDuplicates` across them): Q8 recall
+29→**50%**, Q14 count 19→33 (toward truth 40) — BUT Q14 recall stayed 20%
+(recovered elevation cabinets don't match the packet sizes/labels within tolerance;
+diff-room-label dupes don't collapse) so precision fell 42→24. **Net: a wash on the
+subset — real win on Q8, precision hit on Q14.** The router role-drop is the single
+biggest recall leak, but the fix must be COMPLETENESS-AWARE (SCR-007 box-face-area
+yield-guard: only demote elevations when the plan is actually complete) + cross-view
+size-matching so recovered cabinets COUNT instead of adding noise.
+
+**Shipped (this checkpoint commit, branch `claude/reading-accuracy-prompt-levers`,
+NOT merged — no deploy):** `VISION_MODEL` knob + Opus temperature fix
+(`extract.ts`); gated dormant `ROUTER_MERGE_ROLES` experiment (`regions.ts`). Prod
+default behavior unchanged; tests green (shared 98). Reusable A/B infra:
+`labels-subset.json` (5 quotes spanning classes), `reading-{sonnet,opus,merge}-subset.csv`.
+
+**CORRECTION — the RULER was polluted; re-baselined (same session, keep-improving):**
+Chasing the "under-read" lever exposed that the ground-truth LABELS themselves
+counted non-boxes. The packets carry a separate priced **"DOOR & DRAWER LIST"**;
+`extractCabinetSchedule` slurped those `"<style> Cabinet Door"`/`"Drawer Front"`
+rows as cabinets (Q14 40 incl. 34 doors; the real job is ~6 carcasses, doubled
+across 2 style options). Labels also kept **fillers/end-panels** that the reader
+deliberately drops (`dropNonBoxCasework` runs on preds before scoring) — truth had
+lines the reader can't emit, deflating recall. **Fix (`extract-labels.mjs`):** count
+the SAME priced box the reader does — `isCabinetBox` = `!isNonBoxCasework` AND not
+`/cabinet door|drawer front/i`. Verified precise: real door-config cabinets ("Wall
+Pair Door", "Base 2 Door", Q21's 49 pair-door boxes) survive. Labels 361→**269**.
+Old labels saved to `labels.pre-boxfix.json`.
+
+**TRUE baseline (clean ruler, all 17, N=1) → `reading-scorecard-clean.csv`:**
+**recall 41% / precision 31% / F1 0.32** (the reader was UNDER-graded before). Class:
+sparse 0.56 > labeled 0.41 > scan 0.35 > image 0.19 ≈ arch 0.17 > image/sketch 0.11.
+**The failure FLIPPED: dominant problem is now OVER-read / low precision**, not
+under-read — Q7 +329% (30 vs 7), Q14 +183% (17 vs 6), Q24 +150%, Q3 +100%; a few
+under (Q2 −87% image, Q23 −65%, Q13 −55%). Notably Q21 (48 vs 49) & Q10 (13 vs 14)
+have near-perfect COUNT but F1 ~0.47 → the residual is SIZE/IDENTITY matching, not
+counting. This **invalidates the `ROUTER_MERGE_ROLES` direction** (merging adds boxes
+→ worsens the now-dominant over-read); keep it gated/dormant. The earlier "under-read
+diagnosis" above was a label artifact — trust the clean numbers.
+
+**Lever 3 — precision override prompt (gated `ESTIMATE_PROMPT=precision`): NET LOSS.**
+Targeted the observed over-read mechanisms (Q24 dump: reader over-SPLITS runs into
+many identical 15" vanities — 8 vs 2 real — and DUPLICATES one 24×96 tall as both
+tall+wall). Suffix appended to v4: fewest/widest cabinets, each physical unit once,
+nothing mandatory, don't pad. Full clean ruler N=1, paired micro-avg on the 15
+completed quotes: **baseline recall 35% / prec 30% / F1 0.324 → precision recall 30% /
+prec 31% / F1 0.304.** It pruned pred 217→178: 3 real wins on over-readers (Q8 +0.20,
+Q24 +0.14, Q6 +0.09) but 6 losses on under-readers (Q20 −0.20, Q5 −0.18, Q11/Q1/Q14/
+Q23). A global precision bias robs the under-readers to pay the over-readers — the
+corpus is split, so a blunt global nudge can't win. Kept gated/dormant (prod = v4;
+the suffix is useful for a future PER-DOC adaptive path since it clearly helps
+over-readers). Commit: (this session).
+
+**PLATEAU CONFIRMED (rigorously, on the fixed ruler).** THREE global levers tested +
+ruled out this session — stronger model (Opus 4.8), router merge-not-drop, precision
+prompt — all wash/negative around **F1 ~0.30-0.32**. This is the zero-shot VLM ceiling
+the research predicted ([[vlm-plan-counting-techniques]]), now PROVEN on real labeled
+data rather than asserted. The strategic tension is real: fully-autonomous high accuracy
+is fundamentally hard prompt-only, and the detector escape hatch is closed by the
+no-labeling constraint.
+
+**NEXT — only ADDITIVE levers remain** (gains without the recall↔precision tradeoff):
+(1) **image path** (Q2/Q11/Q13 ~0 F1 — a dedicated upscale/OCR path adds F1 where it's
+zero, hurting nothing else; SCR-005); (2) **size/identity matching** (Q21 48/49 & Q10
+13/14 nail COUNT but F1 ~0.47 — improving which cabinets match lifts both R and P).
+Firm any candidate at N=3. Global prompt/model tuning is done — do not re-litigate.
+Still prompt/vision-only.
+
+---
+
 ## 2026-07-01 (c) — H2: per-line labels + reading-accuracy scorer (the real ruler)
 
 **Context:** Live testing exposed that the $-total backtest ("8/21 within ±10%")
