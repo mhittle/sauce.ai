@@ -390,7 +390,7 @@ export function boxFaceArea(lines: CabinetLineItem[]): number {
 // partly on filler/molding pricing). These aren't cabinet boxes; detect them so
 // the caller can stop box-pricing them.
 const NON_BOX_CASEWORK_RE =
-  /\b(filler|end[\s-]?panel|end[\s-]?cap|crown|valance|light[\s-]?rail|toe[\s-]?kick|toekick|scribe|mould?ing|return|riser|skin|spacer)\b/i;
+  /\b(filler|end[\s-]?panel|end[\s-]?cap|crown|valance|light[\s-]?rail|toe[\s-]?kick|toekick|scribe|mould?ing|return|riser|skin|spacer|drawer[\s-]?box(?:es)?|glide[\s-]?kits?|bulk[\s-]?bag|psa[\s-]?sheet)\b/i;
 
 // True when a line is a box-category casework item that is really trim/filler,
 // not a cabinet box. Only box categories can be mislabeled this way; faces and

@@ -22,15 +22,21 @@ import { extractCabinetSchedule, isNonBoxCasework } from "@scribe/shared";
 // truth carries lines the reader is designed never to produce, deflating recall.
 // Also exclude the packet's separate "DOOR & DRAWER LIST" component rows
 // ("<style> Cabinet Door", "Drawer Front"): those are door/front line items in
-// the pricing section, not carcasses, and the schedule parser slurps them as
-// cabinets (they inflated Q14 to 40 incl. 34 doors, Q21 to 55 incl. 32). Real
-// cabinets with door configs ("Wall Pair Door", "Base 2 Door", "Tall Single
-// Doors") do NOT contain the exact phrase "cabinet door"/"drawer front", so this
-// stays precise.
-const DOOR_COMPONENT_RE = /cabinet\s+door|drawer\s+front/i;
+// the pricing section, not carcasses, and the legacy row heuristic can slurp
+// them as cabinets (they inflated Q14 to 40 incl. 34 doors, Q21 to 55 incl. 32).
+// END-ANCHORED (allowing only the appended width digits after the phrase): a
+// door-list row's description ENDS with "Cabinet Door"/"Drawer Front" ("Malibu
+// Cabinet Door 19"), while a real carcass continues ("Wall Cabinet Door Over
+// Door 3 Adjustable Shelves 18") — the old substring match deleted those real
+// wall cabinets from the ground truth.
+const DOOR_COMPONENT_RE = /(?:cabinet\s+doors?|drawer\s+fronts?)\s*[\d\s/.x×"-]*$/i;
+// The packet's third priced list is drawer-box HARDWARE ("Dovetail Drawer Box",
+// glide kits) — per-drawer accessories, not carcasses.
+const DRAWER_BOX_RE = /\bdrawer\s+box\b|\bglide\s+kits?\b|\bbulk\s+bag\b/i;
 function isCabinetBox(line) {
   if (isNonBoxCasework(line)) return false;
   if (DOOR_COMPONENT_RE.test(line.tag ?? "")) return false;
+  if (DRAWER_BOX_RE.test(line.tag ?? "")) return false;
   return true;
 }
 

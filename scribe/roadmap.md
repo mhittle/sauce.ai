@@ -212,10 +212,34 @@ deployed). Ordered next steps:
    OVER-read / low-precision (Q7 +329%, Q14 +183%, Q24 +150%); some right-count-wrong-
    match (Q21 48/49, Q10 13/14) → size/identity gap. sparse 0.56 > labeled 0.41 >
    scan 0.35 > image 0.19 ≈ arch 0.17.
-11. ⏭ **NEXT — precision/over-read levers on the clean ruler.** Over-read pruning on
-   labeled/arch (Q7/Q3/Q14), size/identity accuracy (Q21/Q10), image path (SCR-005).
-   Firm the clean baseline at N=3 first. Still prompt/vision-only. Infra ready:
-   `VISION_MODEL` knob, gated `ROUTER_MERGE_ROLES` (dormant), 5-quote A/B subset.
+11. ✅ **LABELS v3 — header-driven packet parsing (2026-07-06).** A from-zero manual
+   study (Claude-in-session reads; API key was out of credits) exposed THREE more
+   ruler bugs: (a) packets with a leading `Cab#` column parsed **Cab# as the width**
+   (Q11 gold was garbage); (b) packets print the schedule once per door-style option
+   → carcasses double-counted (Q14); (c) the boxfix regex deleted real **"Wall
+   Cabinet Door Over Door"** carcasses (Q14's 7 walls gone). Rebuilt
+   `extractCabinetSchedule`: header-row column mapping (boundary ranges), width-
+   anchored record assembly (wrapped names), money-header table skip (priced door
+   lists), cross-page header carry (recovered HALF of Q8's truth: pantry talls +
+   the 77" double vanity), reprint dedupe, qty column. Labels **269 → 299 units,
+   18/21 quotes** (Q16 gap closed). Drawer-box hardware now excluded via
+   `isNonBoxCasework` (also stops prod box-pricing it). **All pre-v3 baselines are
+   invalid — re-run the scorer vs labels v3 when API credits return.**
+12. ✅ **DIM-SKELETON grounding shipped GATED (2026-07-06, `DIM_SKELETON=1`).** The
+   from-zero study's core insight: 17/21 inputs carry machine-readable printed
+   dimensions WITH positions (text layer) — localization for free, the thing the
+   VLM bbox spike proved it can't self-generate. Shared `dim-skeleton.ts` clusters
+   dim strings into collinear chains (Q7's island prints its own cabinet split
+   `6|27|24|24|27|6` under `124"`), suppresses sheet grid rulers, and renders a
+   structured grounding block (assign-segments prompt + count-repeated-views-once
+   rule) into `extractPage opts.grounding` via process.ts + the harness. Manual
+   dimension-grounded reads scored vs labels v3: Q11 0.61 / Q7 0.47 / Q14 0.44.
+13. ⏭ **NEXT — A/B the DIM_SKELETON gate on the full ruler at N=2** (blocked on API
+   credits), image preprocessing (upscale/contrast/rotations — Q11's handwritten
+   labels are upside-down; SCR-005), and the **SCOPE-SUBSET decision** (Q7's packet
+   = 15 of ~27 drawn cabinets; nothing in the drawing marks the purchased wall —
+   needs intake scope input, CRM context, or a quote-whole-drawing policy; owner
+   call).
 
 **Shipped merged 2026-07-01:** page-role router + non-box-casework + socket-retry
 (#221); text-layer schedule extractor (#224). H2 eval infra in this session's PR.
