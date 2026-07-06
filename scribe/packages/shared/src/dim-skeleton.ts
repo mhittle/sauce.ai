@@ -151,15 +151,26 @@ export function formatDimGrounding(skel: DimSkeleton): string | undefined {
           .join(", ")}\n`
       : "";
   return (
-    "PRINTED DIMENSION CHAINS ON THIS SHEET (authoritative). Each chain is a run of " +
-    "printed dimensions along one line of the drawing; a chain of cabinet-sized values " +
-    "subdividing a larger overall dimension IS that run's cabinet layout. Rules:\n" +
-    "- Size cabinets ONLY from these printed values; never invent sizes or cabinets " +
-    "without printed evidence.\n" +
+    "PRINTED DIMENSION CHAINS ON THIS SHEET (extracted from the drawing's own text). " +
+    "Each chain is a run of printed dimensions along one line of the drawing; a chain of " +
+    "cabinet-sized values subdividing a larger overall dimension IS that run's cabinet " +
+    "layout. Rules:\n" +
+    "- When a drawn cabinet clearly aligns with a printed value, use that EXACT value " +
+    "for its size. If you cannot confidently match a drawn cabinet to a chain, still " +
+    "emit it with your best visual estimate — NEVER drop or re-size a clearly drawn " +
+    "cabinet just because its dimension isn't identifiable in the chains.\n" +
     "- Assign each segment to a cabinet OR an opening (sink/range/cooktop/DW/fridge " +
     "gaps are NOT cabinets; 1-3\" segments are fillers, not cabinets).\n" +
     "- The SAME value sequence appearing more than once (plan + elevation, or repeated " +
     "views) is the SAME cabinets — count them ONCE.\n" +
+    "- Equal ADJACENT segments are often the DOORS of one wider cabinet (two 18\" doors " +
+    "= one 36\" pair-door cabinet; two 23\" doors = one 46\" pantry). Count CARCASSES " +
+    "from the drawn cabinet outlines/dividers, not from door divisions — emit one line " +
+    "per carcass at the full carcass width.\n" +
+    "- HEIGHTS are printed too (vertical chains, stacked section dims): a door-over-door " +
+    "stack drawn as one outline (e.g. 19.5 over 34.5) is ONE cabinet at the FULL stacked " +
+    "height (~54\"). Use the printed height for every wall/tall unit; never default a " +
+    "height when the chains provide one.\n" +
     chainLines.join("\n") +
     "\n" +
     labelLine

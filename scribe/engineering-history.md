@@ -143,9 +143,29 @@ policy — not a reading fix.
 (pipeline baselines vs v3 unknown until credits return; the manual reads bound
 what dimension-grounding can deliver).
 
-**Tests:** shared 112 (14 new) / workers 13 / pricing 44, builds green. **Blocked
-on owner:** top up Anthropic API credits → then (1) re-baseline vs labels v3 at
-N=2, (2) A/B `DIM_SKELETON=1`, (3) scope-subset policy decision.
+**Tests:** shared 112 (14 new) / workers 13 / pricing 44, builds green.
+
+**SAME-DAY ADDENDUM — the A/B ran (owner bought credits on a new BACKTEST-ONLY
+key; key lives only in gitignored `.env`s, never deploy/commit it).** Three arms,
+N=1, 18 quotes, labels v3, ~$25 spend:
+- **TRUE pipeline baseline: F1 0.396** (R 35% / P 46%, size-err 1.4") — the
+  "0.32 plateau" was substantially ruler artifact. Per class: labeled 0.49 >
+  sparse 0.39 > arch 0.32 > image 0.20 ≈ scan 0.18.
+- **DIM_SKELETON strict 0.378 / additive 0.382 → net wash; gate stays OFF.**
+  Consistent structure: +0.04..+0.09 on mid/large structured docs (Q3/Q5/Q6/Q8/
+  Q11/Q20/Q22) and size-err 1.4→0.8", but small sparse-chain docs get POISONED
+  (Q16 0.50→0.00, Q24 0.53→0.22, Q13 0.29→0.00 — same pred count, zero matches:
+  the model re-sizes real cabinets to wrong chain values). An ideal
+  chain-richness gate nets only ~+0.01 — within N=1 noise.
+- **Conclusion:** one-shot Sonnet cannot bind flat-text (x,y) dim chains to
+  pixels; the identical information read agentically (manual multi-crop Claude
+  reads) scored micro-F1 ~0.44 over 7 quotes with class wins arch 0.17→0.50 and
+  sketch 0.11→0.61. The bottleneck is the ONE-SHOT ARCHITECTURE, not the
+  information or the model. Next: gated agentic read path (crop/zoom tool loop),
+  and a deterministic post-hoc width-snap to salvage the sizing gain risk-free.
+- Ops note: a mid-run laptop sleep killed 3 in-flight quotes (rows written as
+  ERROR) and silently degraded others — spliced clean reruns before comparing;
+  `caffeinate -w <pid>` now wraps long runs.
 
 ---
 
