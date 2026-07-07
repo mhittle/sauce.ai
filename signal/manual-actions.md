@@ -103,6 +103,18 @@ public domains (NOT signal's). With the token unset on either side the button
 returns 503 (connector disabled), which is the safe default. The token maps to
 a single `signal-connector@scribe.local` estimator user created on first use.
 
+### MA-008 — Purge natickma archive rows (data hygiene)
+The `natickma` CivicPlus source ignored the Status=open filter and dumped the
+town's full bid archive (689 rows, ~0 open) — a third of all solicitation
+rows. The source is deactivated in `seed/procurement_sources.json`; purge the
+already-ingested rows once on prod:
+```sql
+DELETE FROM solicitation_documents
+ WHERE solicitation_id IN
+   (SELECT id FROM solicitations WHERE source_type = 'natickma');
+DELETE FROM solicitations WHERE source_type = 'natickma';
+```
+
 ---
 
 ## Completed
