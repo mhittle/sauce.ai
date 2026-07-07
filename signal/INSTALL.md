@@ -43,6 +43,16 @@ docker compose exec api python jobs/ingest_solicitations.py --source bonfire
 curl 'http://localhost:8000/api/solicitations?state=CA'
 ```
 
+The **daily bid pipeline** runs automatically as part of `jobs/daily_ingest.py`
+(so the existing daily cron covers permits *and* bids): samgov (7-day
+lookback, needs `SAMGOV_API_KEY`) → bonfire → every active source in
+`seed/procurement_sources.json` → cabinetry classification over new bid PDFs
+(needs `ANTHROPIC_API_KEY`; bounded per run). Standalone:
+
+```bash
+docker compose exec api python jobs/daily_solicitations.py [--skip-classify]
+```
+
 State/county/local procurement sources are config-driven
 (`seed/procurement_sources.json`; `json` or `html` platform + a field map).
 Tune selectors against the live page, then ingest:

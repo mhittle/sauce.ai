@@ -40,6 +40,7 @@ def list_solicitations(
     q: str | None = None,
     has_docs: bool = False,
     cabinet: bool = False,
+    open_only: bool = False,
     sort: str = "cabinet_score",
     dir: str = "desc",
     limit: int = Query(50, le=500),
@@ -60,6 +61,10 @@ def list_solicitations(
             WHERE d.solicitation_id = s.id)""")
     if cabinet:
         where.append("s.cabinet_flag = TRUE")
+    if open_only:
+        # Hide past-due bids; keep undated rows (many small towns omit the
+        # close date) so open_only doesn't blank out whole sources.
+        where.append("(s.due_date IS NULL OR s.due_date >= CURRENT_DATE)")
     clause = " AND ".join(where)
 
     try:

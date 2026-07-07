@@ -133,6 +133,7 @@ export interface SolicitationQuery {
   q?: string;
   has_docs: boolean;
   cabinet: boolean;
+  open_only?: boolean;
   sort: string;
   dir: "asc" | "desc";
   limit: number;
@@ -146,6 +147,7 @@ export async function fetchSolicitations(p: SolicitationQuery): Promise<Solicita
   if (p.q) qs.set("q", p.q);
   if (p.has_docs) qs.set("has_docs", "true");
   if (p.cabinet) qs.set("cabinet", "true");
+  if (p.open_only) qs.set("open_only", "true");
   qs.set("sort", p.sort);
   qs.set("dir", p.dir);
   qs.set("limit", String(p.limit));

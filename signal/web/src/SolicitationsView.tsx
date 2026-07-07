@@ -21,6 +21,7 @@ export default function SolicitationsView() {
   const [offset, setOffset] = useState(0);
   const [hasDocs, setHasDocs] = useState(false);
   const [cabinetOnly, setCabinetOnly] = useState(false);
+  const [openOnly, setOpenOnly] = useState(true);
   const [stateFilter, setStateFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [sources, setSources] = useState<SourceCount[]>([]);
@@ -62,6 +63,7 @@ export default function SolicitationsView() {
     fetchSolicitations({
       has_docs: hasDocs,
       cabinet: cabinetOnly,
+      open_only: openOnly,
       state: stateFilter.trim().toUpperCase() || undefined,
       source_type: sourceFilter || undefined,
       sort: sort.col,
@@ -76,7 +78,7 @@ export default function SolicitationsView() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [hasDocs, cabinetOnly, stateFilter, sourceFilter, sort, offset, reloadTick]);
+  }, [hasDocs, cabinetOnly, openOnly, stateFilter, sourceFilter, sort, offset, reloadTick]);
 
   const onSort = (col: string) => {
     setOffset(0);
@@ -112,6 +114,11 @@ export default function SolicitationsView() {
             <input type="checkbox" checked={hasDocs}
               onChange={() => { setOffset(0); setHasDocs((v) => !v); }} />
             Has plans / documents
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer mb-2">
+            <input type="checkbox" checked={openOnly}
+              onChange={() => { setOffset(0); setOpenOnly((v) => !v); }} />
+            Hide past-due
           </label>
           <label className="block text-sm">
             <span className="text-slate-500">State</span>
