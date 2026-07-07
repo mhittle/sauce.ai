@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
+  fetchIngestableSources,
   fetchSolicitation,
   fetchSolicitations,
   fetchSolicitationSources,
   triggerSolicitationIngest,
+  type IngestableSource,
   type Solicitation,
   type SolicitationDetail,
   type SourceCount,
@@ -35,19 +37,25 @@ export default function SolicitationsView() {
   const [ingesting, setIngesting] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [ingestables, setIngestables] = useState<IngestableSource[]>([]);
+  const [ingestSource, setIngestSource] = useState("bonfire");
 
   useEffect(() => {
     fetchSolicitationSources().then(setSources).catch(() => setSources([]));
   }, [reloadTick]);
 
-  async function fetchCaBids() {
+  useEffect(() => {
+    fetchIngestableSources().then(setIngestables).catch(() => setIngestables([]));
+  }, []);
+
+  async function fetchBids() {
     setIngesting(true);
     setIngestMsg(null);
     try {
-      const r = await triggerSolicitationIngest("bonfire");
+      const r = await triggerSolicitationIngest(ingestSource);
       setIngestMsg(
         r.status === "ok"
-          ? `Fetched ${r.upserted} CA opportunities from Bonfire.`
+          ? `Fetched ${r.upserted} from ${ingestSource}.`
           : `Ingest ${r.status} (fetched ${r.fetched}).`);
       setOffset(0);
       setReloadTick((t) => t + 1);   // refresh the list + source counts
@@ -148,12 +156,24 @@ export default function SolicitationsView() {
           <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
         )}
         <div className="mb-2 flex items-center justify-between text-sm text-slate-500">
-          <span className="flex items-center gap-3">
+          <span className="flex items-center gap-2">
             <span>{loading ? "Loading…" : `${from}–${to} of ${total} solicitations`}</span>
-            <button onClick={fetchCaBids} disabled={ingesting}
-              title="Scrape current open California opportunities from Bonfire"
+            <select value={ingestSource}
+              onChange={(e) => setIngestSource(e.target.value)}
+              title="Pick a source to scrape on demand"
+              className="border rounded px-1 py-1 text-xs max-w-[16rem]">
+              {ingestables.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.platform === "api"
+                    ? s.name
+                    : `${s.name ?? s.slug}${s.state ? ` [${s.state}]` : ""}`}
+                </option>
+              ))}
+            </select>
+            <button onClick={fetchBids} disabled={ingesting}
+              title="Scrape this source's current open bids now"
               className="px-2 py-1 rounded bg-amber-700 text-white text-xs disabled:opacity-50">
-              {ingesting ? "Fetching…" : "↻ Fetch CA bids"}
+              {ingesting ? "Fetching…" : "↻ Fetch"}
             </button>
             {ingestMsg && <span className="text-xs text-slate-500">{ingestMsg}</span>}
           </span>
