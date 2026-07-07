@@ -11,8 +11,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ..adapters.solicitations.config_source import (build_config_adapter,
+                                                    get_source, load_sources)
 from ..db import get_session
-from ..ingest.solicitations import run_solicitation_ingest
+from ..ingest.solicitations import (run_ingest_adapter,
+                                    run_solicitation_ingest)
 from ..integrations import scribe
 from ..schemas import (SolicitationDetailOut, SolicitationDocOut,
                        SolicitationListOut, SolicitationOut, SourceCountOut)
@@ -20,9 +23,13 @@ from .documents import _with_api_key
 
 router = APIRouter(prefix="/api/solicitations", tags=["solicitations"])
 
-# Sources safe to trigger on demand from the UI button. Scaffolds (cscr, etc.)
-# are excluded — they raise NotImplementedError by design.
-_INGESTABLE = {"bonfire", "samgov"}
+# Built-in adapters safe to trigger on demand. Scaffolds (cscr, etc.) are
+# excluded — they raise NotImplementedError by design. Config-driven seed
+# sources (CivicPlus et al) are resolved per-slug in trigger_ingest.
+_BUILTIN_INGESTABLE = {
+    "bonfire": "Bonfire — CA agencies (API)",
+    "samgov": "SAM.gov — federal (API)",
+}
 
 _SORT_COLUMNS = {
     "due_date": "s.due_date",
@@ -90,18 +97,41 @@ def list_solicitations(
                                   if k in r}) for r in rows])
 
 
+# NOTE: /ingest* routes are declared before /{solicitation_id} so the literal
+# segments aren't parsed as an int.
+@router.get("/ingest/sources")
+def list_ingestable_sources():
+    """Every source the on-demand trigger accepts: the built-in API adapters
+    plus all active config-driven procurement sources (CivicPlus et al)."""
+    out = [{"slug": s, "name": label, "state": None, "platform": "api"}
+           for s, label in _BUILTIN_INGESTABLE.items()]
+    for src in load_sources():
+        if src.get("active", True):
+            out.append({"slug": src["slug"], "name": src.get("name"),
+                        "state": src.get("state"),
+                        "platform": src.get("platform")})
+    return out
+
+
 @router.post("/ingest")
 def trigger_ingest(source: str = "bonfire", sess: Session = Depends(get_session)):
-    """On-demand scrape trigger (the UI 'fetch bids' button). Runs the source's
-    adapter synchronously and upserts — fine for the small Bonfire agency set;
-    larger sources should move to a background job. Errors are captured on the
-    IngestRun and returned (status='error'), not raised."""
-    if source not in _INGESTABLE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"source must be one of {sorted(_INGESTABLE)}")
+    """On-demand scrape trigger (the UI 'fetch bids' button). Accepts a
+    built-in adapter (bonfire, samgov) or any *active* seed procurement source
+    slug. Runs synchronously and upserts — fine for one source at a time (a
+    town page + its detail pages); the full sweep stays on the daily job.
+    Adapter errors are captured on the IngestRun and returned, not raised."""
     try:
-        return run_solicitation_ingest(sess, source)
+        if source in _BUILTIN_INGESTABLE:
+            return run_solicitation_ingest(sess, source)
+        src = get_source(source)
+        if src is None or not src.get("active", True):
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown or inactive source {source!r} — see "
+                       f"GET /api/solicitations/ingest/sources")
+        return run_ingest_adapter(sess, src["slug"], build_config_adapter(src))
+    except HTTPException:
+        raise
     except SQLAlchemyError:
         raise HTTPException(status_code=503, detail="database not ready")
 

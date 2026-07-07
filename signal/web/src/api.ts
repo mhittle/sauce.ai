@@ -183,6 +183,20 @@ export interface IngestResult {
   run_id?: number;
 }
 
+// Sources the trigger accepts (built-in APIs + active seed sources).
+export interface IngestableSource {
+  slug: string;
+  name: string | null;
+  state: string | null;
+  platform: string;
+}
+
+export async function fetchIngestableSources(): Promise<IngestableSource[]> {
+  const res = await fetch(`${BASE}/api/solicitations/ingest/sources`);
+  if (!res.ok) throw new Error(`ingest sources ${res.status}`);
+  return res.json();
+}
+
 export async function triggerSolicitationIngest(
   source = "bonfire"): Promise<IngestResult> {
   const res = await fetch(
