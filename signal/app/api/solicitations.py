@@ -104,13 +104,13 @@ def list_ingestable_sources():
     """Every source the on-demand trigger accepts: the built-in API adapters
     plus all active config-driven procurement sources (CivicPlus et al)."""
     out = [{"slug": s, "name": label, "state": None, "platform": "api"}
-           for s, label in _BUILTIN_INGESTABLE.items()]
-    for src in load_sources():
-        if src.get("active", True):
-            out.append({"slug": src["slug"], "name": src.get("name"),
-                        "state": src.get("state"),
-                        "platform": src.get("platform")})
-    return out
+           for s, label in sorted(_BUILTIN_INGESTABLE.items())]
+    seed = [{"slug": src["slug"], "name": src.get("name"),
+             "state": src.get("state"), "platform": src.get("platform")}
+            for src in load_sources() if src.get("active", True)]
+    # API sources pinned on top, then towns alphabetically.
+    seed.sort(key=lambda s: ((s["name"] or s["slug"]).lower(), s["slug"]))
+    return out + seed
 
 
 @router.post("/ingest")
