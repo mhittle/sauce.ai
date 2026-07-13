@@ -58,6 +58,7 @@ export default function SolicitationsView() {
           ? `Fetched ${r.upserted} from ${ingestSource}.`
           : `Ingest ${r.status} (fetched ${r.fetched}).`);
       setOffset(0);
+      setSourceFilter(ingestSource);  // focus the table on what was fetched
       setReloadTick((t) => t + 1);   // refresh the list + source counts
     } catch (e) {
       setIngestMsg(e instanceof Error ? e.message : "fetch failed");
@@ -67,6 +68,10 @@ export default function SolicitationsView() {
   }
 
   useEffect(() => {
+    // Stale-response guard: filters can change faster than requests resolve;
+    // without this an older, slower response lands last and overwrites the
+    // table with the wrong source's rows.
+    let stale = false;
     setLoading(true);
     fetchSolicitations({
       has_docs: hasDocs,
@@ -80,12 +85,14 @@ export default function SolicitationsView() {
       offset,
     })
       .then((r) => {
+        if (stale) return;
         setItems(r.items);
         setTotal(r.total);
         setError(null);
       })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => { if (!stale) setError(String(e)); })
+      .finally(() => { if (!stale) setLoading(false); });
+    return () => { stale = true; };
   }, [hasDocs, cabinetOnly, openOnly, stateFilter, sourceFilter, sort, offset, reloadTick]);
 
   const onSort = (col: string) => {
@@ -141,11 +148,13 @@ export default function SolicitationsView() {
               onChange={(e) => { setOffset(0); setSourceFilter(e.target.value); }}
               className="mt-1 w-full border rounded px-2 py-1">
               <option value="">All sources</option>
-              {sources.map((s) => (
-                <option key={s.source_type} value={s.source_type}>
-                  {s.source_type} ({s.count})
-                </option>
-              ))}
+              {[...sources]
+                .sort((a, b) => a.source_type.localeCompare(b.source_type))
+                .map((s) => (
+                  <option key={s.source_type} value={s.source_type}>
+                    {s.source_type} ({s.count})
+                  </option>
+                ))}
             </select>
           </label>
         </div>
