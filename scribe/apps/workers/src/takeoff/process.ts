@@ -31,6 +31,7 @@ import {
   RELEVANT_PAGE_CLASSES,
   routeByPageRole,
   expandToComponents,
+  buildDimGrounding,
 } from "@scribe/shared";
 import { matchLine } from "@scribe/pricing";
 import { EXTRACT_PROMPT_VERSION } from "@scribe/prompts";
@@ -508,6 +509,15 @@ async function readPageOnce(
   const widthIn = dims.widthPt / 72;
   const heightIn = dims.heightPt / 72;
 
+  // GATED (DIM_SKELETON=1): dimension-skeleton grounding — hand the estimate
+  // prompt the sheet's own printed dimension chains (text layer, exact
+  // positions) so vision assigns dimensioned segments instead of freestyle
+  // counting. No-op when unset or when the page has no usable printed dims.
+  const grounding =
+    estimate && process.env.DIM_SKELETON
+      ? buildDimGrounding(pdf.pageTextFragments(idx))
+      : undefined;
+
   // Full page rendered at (at most) the model's native resolution: used both as
   // the review-screen provenance image and as the region-locate input.
   const locateDpi = fitDpi(widthIn, heightIn);
@@ -528,7 +538,7 @@ async function readPageOnce(
   if (!needsRegioning(dims)) {
     let extraction: PageExtraction;
     try {
-      const result = await extractPage(page, fullPng, budget, { estimate });
+      const result = await extractPage(page, fullPng, budget, { estimate, grounding });
       extraction = result.extraction;
       acc.raws.push({ page, raw: result.raw });
     } catch (err) {
@@ -602,6 +612,7 @@ async function readPageOnce(
       try {
         const result = await extractPage(page, fullPng, budget, {
           estimate: true,
+          grounding,
         });
         extraction = result.extraction;
         acc.raws.push({ page, raw: result.raw });
@@ -635,6 +646,7 @@ async function readPageOnce(
         const result = await extractPage(page, crop, budget, {
           region: true,
           estimate: true,
+          grounding,
         });
         extraction = result.extraction;
         acc.raws.push({ page, region: region.kind, raw: result.raw });
@@ -678,6 +690,7 @@ async function readPageOnce(
       const result = await extractPage(page, crop, budget, {
         region: true,
         estimate,
+        grounding: estimate ? grounding : undefined,
       });
       extraction = result.extraction;
       acc.raws.push({ page, region: job.regionId, raw: result.raw });

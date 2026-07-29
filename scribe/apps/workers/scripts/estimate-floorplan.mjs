@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import {
   boxFaceArea,
+  buildDimGrounding,
   dedupeLines,
   dropNonBoxCasework,
   expandToComponents,
@@ -69,6 +70,12 @@ async function readPage(pdf, page, estimate, pageClass) {
 // printed dimensions + cabinet labels/SKUs (text layer), to append to the vision
 // prompt so the model reads from what's drawn instead of guessing.
 function buildGrounding(pdf, idx) {
+  // DIM_SKELETON=1: structured dimension-CHAIN grounding (shared builder) —
+  // positions kept, chains clustered, view-dedup rule included. Supersedes the
+  // flat GROUND_READING dump below (kept for A/B comparison).
+  if (process.env.DIM_SKELETON) {
+    return buildDimGrounding(pdf.pageTextFragments(idx));
+  }
   if (!process.env.GROUND_READING) return undefined;
   const fr = pdf.pageTextFragments(idx);
   const uniq = (a) => [...new Set(a)];

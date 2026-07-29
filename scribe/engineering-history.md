@@ -70,6 +70,105 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-07-06 — from-zero study: labels v3 (header-driven packet parsing) + gated DIM_SKELETON grounding
+
+**Context:** Owner directive: "work from 0 — upload an image, preprocess it to be
+most suitable, prompt Claude; look at the files, THEN plan." The Anthropic API key
+was **out of credits** all session (also why CI is red — owner ack'd), so all
+validation ran on the owner's Claude plan: Claude-in-session did the vision reads,
+and the scorer (`scoreReading`, pure) ran offline. Merged PR #226 first (prior
+session's ruler fix + plateau evidence + report), then branch
+`scribe/labels-v3-dim-skeleton`.
+
+**From-zero findings (looking at the actual 21 inputs):**
+- **17/21 inputs carry machine-readable printed dimensions WITH positions** (PDF
+  text layer via `pageTextFragments`; images have legible handwritten dims). The
+  drawings print the answer: Q7's island elevation carries its own cabinet split
+  (`6|27|24|24|27|6` under `124"`). This is localization for FREE — the thing the
+  VLM bbox spike proved it can't self-generate.
+- **Manual dimension-grounded reads** (me as the vision model, dim chains as
+  ground) on Q7/Q14/Q8/Q11/Q2, scored vs the then-current labels: Q2 0.00→0.30,
+  Q8 0.36→0.40, others ~flat — and the flat ones exposed that **the ruler was
+  still lying**, which became the session's main work.
+
+**THREE MORE RULER BUGS (all fixed, labels v3):**
+1. **Cab#-as-width:** packets with a leading `Cab# (QTY)` column (Q11 "Steady
+   Ground") were parsed positionally — first numeric = width — so Q11's gold was
+   garbage ("Sink Base, 4 inches wide"; real: 36/18/15/33/45/31⅞).
+2. **Reprinted schedules:** CabinetNow packets print the CABINET BOXES table once
+   per door-style option (Q14: pages 13 AND 15, identical) → carcasses doubled.
+3. **Boxfix over-kill:** the (d)-session regex `/cabinet door|drawer front/`
+   deleted real **"Wall Cabinet Door Over Door …"** carcasses — all 7 of Q14's
+   wall cabinets were missing from truth.
+
+**Shipped — `extractCabinetSchedule` v2 (shared `schedule.ts`, prod Class-1 path
+AND labels):** header-row detection with boundary-range column mapping (numeric
+cells are right-aligned; leftmost column captures its outdented names);
+**width-anchored record assembly** (every record has exactly one width; names wrap
+above AND below it — nearest-anchor attachment handles both); **money-header
+tables skipped** (priced DOOR & DRAWER LIST) and barred from the legacy fallback;
+**cross-page header carry** (a table's continuation rows on the next page parse —
+recovered HALF of Q8's truth: pantry talls, the 68" wall, the 77" double vanity);
+**reprint dedupe** (identical page row-multisets); **Qty column** honored (Q6
+condo = qty-2 rows); filler-only pages don't qualify as schedules. Drawer-box
+hardware ("Dovetail Drawer Box", glide kits) added to `isNonBoxCasework` — also
+stops prod box-pricing them. End-anchored door-component filter in
+`extract-labels.mjs`.
+
+**Labels v3 result:** 269 → **299 units across 18/21 quotes** (Q16 format gap
+closed; Q15/Q19 no packet; Q17 still a format variant). Q14 now exactly matches
+its packet (13 units incl. the 7 walls); Q11/Q8/Q6 verified against packet text.
+**Every pre-v3 baseline is invalid** — the F1 0.27→0.32 story was measured on a
+broken ruler both times. Re-baseline vs labels v3 needs API credits.
+Zero-regression verified: the Class-1 path fires on NONE of the 21 input drawings.
+Old labels kept: `labels.pre-v3.json`, `labels.pre-boxfix.json`.
+
+**Shipped — DIM_SKELETON grounding (gated, `DIM_SKELETON=1`, default OFF):**
+shared `dim-skeleton.ts` — `parseDimInches` (feet-inches/fractions/decimals),
+collinear chain clustering with sheet-grid-ruler suppression, room/fixture labels,
+`buildDimGrounding` → structured prompt block (chains + "assign each segment to a
+cabinet OR an opening" + "the same value sequence in multiple views is the same
+cabinets — count once"). Wired through the existing `extractPage opts.grounding`
+hook in `process.ts` (estimate paths) and the harness (supersedes the flat
+`GROUND_READING` dump when set). Verified on real Q7/Q14 text layers.
+
+**SCOPE-SUBSET finding (owner decision needed):** Q7's packet = **15 of ~27 drawn
+cabinets** (sink wall + island customs + glass towers; butler pantry + part of the
+built-in wall NOT purchased). Nothing in the drawing marks the purchased subset,
+so a perfect full-drawing read caps well below F1 1.0 on such quotes. Autonomous
+quoting needs intake scope input, CRM context, or a quote-the-whole-drawing
+policy — not a reading fix.
+
+**Manual reads vs labels v3:** Q11 0.61 / Q7 0.47 / Q14 0.44 / Q8 0.36 / Q2 0.23
+(pipeline baselines vs v3 unknown until credits return; the manual reads bound
+what dimension-grounding can deliver).
+
+**Tests:** shared 112 (14 new) / workers 13 / pricing 44, builds green.
+
+**SAME-DAY ADDENDUM — the A/B ran (owner bought credits on a new BACKTEST-ONLY
+key; key lives only in gitignored `.env`s, never deploy/commit it).** Three arms,
+N=1, 18 quotes, labels v3, ~$25 spend:
+- **TRUE pipeline baseline: F1 0.396** (R 35% / P 46%, size-err 1.4") — the
+  "0.32 plateau" was substantially ruler artifact. Per class: labeled 0.49 >
+  sparse 0.39 > arch 0.32 > image 0.20 ≈ scan 0.18.
+- **DIM_SKELETON strict 0.378 / additive 0.382 → net wash; gate stays OFF.**
+  Consistent structure: +0.04..+0.09 on mid/large structured docs (Q3/Q5/Q6/Q8/
+  Q11/Q20/Q22) and size-err 1.4→0.8", but small sparse-chain docs get POISONED
+  (Q16 0.50→0.00, Q24 0.53→0.22, Q13 0.29→0.00 — same pred count, zero matches:
+  the model re-sizes real cabinets to wrong chain values). An ideal
+  chain-richness gate nets only ~+0.01 — within N=1 noise.
+- **Conclusion:** one-shot Sonnet cannot bind flat-text (x,y) dim chains to
+  pixels; the identical information read agentically (manual multi-crop Claude
+  reads) scored micro-F1 ~0.44 over 7 quotes with class wins arch 0.17→0.50 and
+  sketch 0.11→0.61. The bottleneck is the ONE-SHOT ARCHITECTURE, not the
+  information or the model. Next: gated agentic read path (crop/zoom tool loop),
+  and a deterministic post-hoc width-snap to salvage the sizing gain risk-free.
+- Ops note: a mid-run laptop sleep killed 3 in-flight quotes (rows written as
+  ERROR) and silently degraded others — spliced clean reruns before comparing;
+  `caffeinate -w <pid>` now wraps long runs.
+
+---
+
 ## 2026-07-01 (d) — H3 decided: prompt/vision-only (owner); two levers measured on the ruler
 
 **Context:** Session to "decide/execute the DETECTOR path." Two hard constraints

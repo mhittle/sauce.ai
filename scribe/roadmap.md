@@ -212,10 +212,48 @@ deployed). Ordered next steps:
    OVER-read / low-precision (Q7 +329%, Q14 +183%, Q24 +150%); some right-count-wrong-
    match (Q21 48/49, Q10 13/14) → size/identity gap. sparse 0.56 > labeled 0.41 >
    scan 0.35 > image 0.19 ≈ arch 0.17.
-11. ⏭ **NEXT — precision/over-read levers on the clean ruler.** Over-read pruning on
-   labeled/arch (Q7/Q3/Q14), size/identity accuracy (Q21/Q10), image path (SCR-005).
-   Firm the clean baseline at N=3 first. Still prompt/vision-only. Infra ready:
-   `VISION_MODEL` knob, gated `ROUTER_MERGE_ROLES` (dormant), 5-quote A/B subset.
+11. ✅ **LABELS v3 — header-driven packet parsing (2026-07-06).** A from-zero manual
+   study (Claude-in-session reads; API key was out of credits) exposed THREE more
+   ruler bugs: (a) packets with a leading `Cab#` column parsed **Cab# as the width**
+   (Q11 gold was garbage); (b) packets print the schedule once per door-style option
+   → carcasses double-counted (Q14); (c) the boxfix regex deleted real **"Wall
+   Cabinet Door Over Door"** carcasses (Q14's 7 walls gone). Rebuilt
+   `extractCabinetSchedule`: header-row column mapping (boundary ranges), width-
+   anchored record assembly (wrapped names), money-header table skip (priced door
+   lists), cross-page header carry (recovered HALF of Q8's truth: pantry talls +
+   the 77" double vanity), reprint dedupe, qty column. Labels **269 → 299 units,
+   18/21 quotes** (Q16 gap closed). Drawer-box hardware now excluded via
+   `isNonBoxCasework` (also stops prod box-pricing it). **All pre-v3 baselines are
+   invalid — re-run the scorer vs labels v3 when API credits return.**
+12. ✅ **DIM-SKELETON grounding shipped GATED (2026-07-06, `DIM_SKELETON=1`).** The
+   from-zero study's core insight: 17/21 inputs carry machine-readable printed
+   dimensions WITH positions (text layer) — localization for free, the thing the
+   VLM bbox spike proved it can't self-generate. Shared `dim-skeleton.ts` clusters
+   dim strings into collinear chains (Q7's island prints its own cabinet split
+   `6|27|24|24|27|6` under `124"`), suppresses sheet grid rulers, and renders a
+   structured grounding block (assign-segments prompt + count-repeated-views-once
+   rule) into `extractPage opts.grounding` via process.ts + the harness. Manual
+   dimension-grounded reads scored vs labels v3: Q11 0.61 / Q7 0.47 / Q14 0.44.
+13. ✅ **DIM_SKELETON A/B RUN (2026-07-06, owner's backtest-only API key, N=1,
+   labels v3).** **TRUE pipeline baseline on the fixed ruler: F1 0.396** (R 35% /
+   P 46%) — the old "0.32" was ruler artifact. Grounding arms: strict 0.378,
+   additive 0.382 → **net wash, gate stays OFF**. Structure: helps mid/large
+   structured docs (Q3/Q5/Q6/Q8/Q11/Q20/Q22 +0.04..+0.09; size-err 1.4→0.8"),
+   POISONS small sparse-chain docs (Q16 0.50→0, Q24 0.53→0.22, Q13 0.29→0 — model
+   re-sizes real cabinets to wrong chain values); even an ideal chain-richness
+   gate only nets ~+0.01 (within N=1 noise). Sonnet one-shot cannot bind flat-text
+   chains to pixels the way a multi-crop reader can — the same info scored F1
+   ~0.44+ when read agentically (manual Claude reads, 7 quotes).
+14. ⏭ **NEXT — the evidence now points at AGENTIC READING, not prompt tuning.**
+   One-shot extraction is plateaued (global levers, model upgrade, and now
+   grounding all refuted). The manual multi-crop dimension-grounded reads beat the
+   pipeline on every class tested (arch 0.17→0.50, sketch 0.11→0.61). Build a
+   gated agentic read path (tool loop: crop/zoom + emit-cabinets; ~5-10× vision
+   cost, fine for $10k+ quotes). Cheaper salvage first: deterministic post-hoc
+   width-snapping of predicted boxes to nearest chain value (captures the sizing
+   win, zero recall risk). Still open: SCOPE-SUBSET decision (Q7 packet = 15 of
+   ~27 drawn cabinets — intake scope input / CRM context / quote-whole-drawing
+   policy; owner call), image path (SCR-005).
 
 **Shipped merged 2026-07-01:** page-role router + non-box-casework + socket-retry
 (#221); text-layer schedule extractor (#224). H2 eval infra in this session's PR.
