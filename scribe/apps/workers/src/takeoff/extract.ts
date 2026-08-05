@@ -5,6 +5,7 @@ import {
   repairLine,
 } from "@scribe/shared";
 import {
+  ESTIMATE_DECOMPOSE_SUFFIX,
   ESTIMATE_PRECISION_SUFFIX,
   ESTIMATE_SYSTEM,
   estimateUserText,
@@ -33,7 +34,9 @@ const READ_MODEL = process.env.VISION_MODEL || SONNET_MODEL;
 const ESTIMATE_SYSTEM_PROMPT =
   process.env.ESTIMATE_PROMPT === "precision"
     ? ESTIMATE_SYSTEM + ESTIMATE_PRECISION_SUFFIX
-    : ESTIMATE_SYSTEM;
+    : process.env.ESTIMATE_PROMPT === "decompose"
+      ? ESTIMATE_SYSTEM + ESTIMATE_DECOMPOSE_SUFFIX
+      : ESTIMATE_SYSTEM;
 
 // Recover complete line objects from a response whose JSON is unparseable
 // (typically truncated at max_tokens). Walks the `"lines": [ ... ]` array with
@@ -169,6 +172,15 @@ export function processExtractionResponse(
   });
   const raw = Object.keys(rawObj).length > 0 ? rawObj : { salvaged_from_text: text };
   const extraction = PageExtraction.parse({ ...rawObj, lines: validLines });
+  // Lenient parsing must not be SILENT: a page that loses lines to schema
+  // mismatches previously vanished with zero telemetry (the attribution pass
+  // saw a whole page's cabinets disappear this way). Surface the count.
+  const invalidDropped = rawLines.length - validLines.length;
+  if (invalidDropped > 0) {
+    extraction.uncertainties.push(
+      `${invalidDropped} line(s) on page ${pageNumber} failed schema validation and were dropped — verify against the drawing`
+    );
+  }
   if (truncated) {
     extraction.uncertainties.push(
       `model response was truncated (max_tokens) — recovered ${validLines.length} item(s) on this page/region; some cabinets may be missing, verify`

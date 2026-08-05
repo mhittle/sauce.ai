@@ -70,6 +70,54 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-08-05 — step attribution via zero-API read kits; router merge + 3 fixes measured
+
+**Context:** Owner pivoted to the agentic-reading path with a diagnose-first
+directive and ZERO API spend (all vision reads on the owner's plan — in-session
++ subagents — via the new read-kit tooling). Detector PoC (H3) closed first:
+YOLOv8n on ~240 hand-labeled boxes = recall 37%/precision 5%, and halving the
+training data barely moved it ⇒ data-starved by orders of magnitude, not
+incrementally; report in `~/Desktop/Scribe Testing/detector-poc/PoC-summary.md`.
+
+**Shipped — offline instrumentation (branch `scribe/agentic-reading-diagnosis`):**
+`scoreReadingDetailed` (per-unit gold→MISS / pred→PHANTOM alignment + silent-drop
+counts); `prepare-reads.mjs`/`replay-reads.mjs` (pipeline split at every vision
+boundary into exact image+prompt request files; replay runs the REAL
+`processExtractionResponse` → router → scoring); harness grounding drift fixed
+(large-format estimate paths now pass grounding like prod).
+
+**Attribution (10 quotes, manual Sonnet-grade reads, `reading-step-attribution.md`):**
+regime decides the score — elevation/passthrough quotes 0.42-0.80, EVERY
+plan-regime quote 0.19-0.31. Ranked losses: (1) router role-drop + plan-first
+precedence (Q22 dropped 36/49 read lines incl. the whole kitchen elevation; Q5
+9 directly recoverable); (2) decomposition-convention clash vs packet pricing
+(vanity-as-one-unit etc., ~25-30 misses + ~20 phantoms); (3) input ceiling —
+~60-80/260 gold units NOT depicted in the inputs at all (Q1 missing interior
+elevation sheets, Q2 sketch, Q8 plan-only); (4) near-duplicate page re-renders
+(Q24 6/8 phantoms); (5) bugs: `isNonBoxCasework` regexed over NOTES (deleted a
+real tall whose notes said "crown", Q13), lenient parse dropped lines with zero
+telemetry. Sub-100-DPI illegibility (7b) was NOT dominant in this pass (caveat:
+manual readers could re-inspect; one-shot API cannot).
+
+**Fixes + re-measure on the SAME saved reads (zero API):**
+- `isNonBoxCasework` now judges by TAG (notes only as fallback) — ungated bug fix.
+- Schema-dropped-line count now surfaces in uncertainties — ungated.
+- `ROUTER_TOLERANT_MERGE=1` (gated): keep authoritative role, collapse
+  near-duplicate page re-renders (≥80% unit-multiset overlap), then re-admit
+  demoted-role units no kept unit matches within ruler tolerance (cat, ±3"w/±6"h).
+- `ESTIMATE_PROMPT=decompose` (gated, unmeasured — needs new reads): packet-style
+  component decomposition rules.
+Result on the 10-kit worst-heavy subset: **macro F1 0.336 → 0.379 (+0.043)** —
+Q5 0.21→0.42, Q24 0.42→0.57 (countErr +71%→0), Q22 0.22→0.33, Q8 0.23→0.31;
+Q13 0.80→0.69 (regex fix un-hid open-shelving lines the bug had been
+suppressing — prompt-side fix, not a regex revert). Tests: shared 125 / workers
+13 / pricing 44. NOT yet API-confirmed; kits are N=1 manual. Next: API
+confirmation run of ROUTER_TOLERANT_MERGE vs the 0.396 baseline when credits
+allowed; decompose-prompt arm needs fresh reads; local Qwen3-VL detector test
+runbook staged at `detector-poc/QWEN-TEST-README.md` (separate session).
+
+---
+
 ## 2026-07-06 — from-zero study: labels v3 (header-driven packet parsing) + gated DIM_SKELETON grounding
 
 **Context:** Owner directive: "work from 0 — upload an image, preprocess it to be

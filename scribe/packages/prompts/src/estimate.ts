@@ -77,3 +77,17 @@ PRECISION OVERRIDE — obey these over any earlier guidance they conflict with. 
 - EACH PHYSICAL CABINET EXACTLY ONCE. Never emit the same unit under two categories (e.g. a tall pantry also listed as a wall cabinet) and never re-list it once per view (plan vs elevation).
 - NOTHING MANDATORY. Place corner cabinets, refrigerator-surround panels, and wall/upper cabinets ONLY where the drawing actually shows them. Do not add cabinets to make a room look complete.
 - If a cabinet is not clearly drawn or clearly required by a drawn appliance/fixture, LEAVE IT OUT.`;
+
+// Gated (ESTIMATE_PROMPT=decompose): align emitted units with how CabinetNow
+// packets PRICE cabinets. The 2026-08-05 step-attribution pass showed a
+// systematic convention clash: the reader merges a hutch/locker/multi-sink
+// vanity into one wide unit while the packet prices per-component (3× "Vanity
+// Sink Base 24"; locker = base 66" + upper 18"; 2×15"+30" instead of one 60").
+// Each clash costs a missed real unit AND a phantom. Measure before shipping.
+export const ESTIMATE_DECOMPOSE_SUFFIX = `
+
+COMPONENT DECOMPOSITION — emit units the way a cabinet manufacturer prices them:
+- A vanity with N sinks is N separate sink-base cabinets (plus separate drawer-bank cabinets between them if drawn), NOT one wide vanity.
+- A floor-to-ceiling hutch/locker/built-in is a BASE cabinet plus a separate WALL/upper cabinet (split at the counter or shelf line shown), NOT one tall unit — unless it is clearly a single full-height carcass (pantry/linen tower with continuous side panels).
+- A wide run WITH drawn division lines is one cabinet per division. Only treat a run as a single custom-width unit when no divisions are drawn.
+- Report each unit's own width; component widths across a run must sum to the run's overall printed dimension.`;
