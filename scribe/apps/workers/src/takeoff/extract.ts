@@ -126,7 +126,21 @@ export async function extractPage(
   );
   budget.record(message.usage);
 
-  const text = textOf(message);
+  return processExtractionResponse(textOf(message), pageNumber, opts, {
+    truncated: message.stop_reason === "max_tokens",
+  });
+}
+
+// Pure response-processing tail of extractPage: lenient parse → salvage →
+// repair → unit multipliers → estimate marking. Split out so offline replay
+// (manual reads on the owner's plan, scripts/replay-reads.mjs) runs the
+// IDENTICAL post-processing as a live API read.
+export function processExtractionResponse(
+  text: string,
+  pageNumber: number,
+  opts: { region?: boolean; estimate?: boolean } = {},
+  meta: { truncated?: boolean } = {}
+): { extraction: PageExtraction; raw: unknown } {
   // A whole region (e.g. a cabinet-dense kitchen) used to be silently dropped
   // when its response was truncated at max_tokens — JSON.parse throws on the
   // partial array, and the caller catches+continues. Parse defensively: if the
@@ -139,7 +153,7 @@ export async function extractPage(
     rawObj = {};
   }
   let rawLines = Array.isArray(rawObj.lines) ? rawObj.lines : [];
-  const truncated = message.stop_reason === "max_tokens";
+  const truncated = meta.truncated === true;
   if (rawLines.length === 0) {
     const salvaged = salvageLineObjects(text);
     if (salvaged.length > 0) rawLines = salvaged;
