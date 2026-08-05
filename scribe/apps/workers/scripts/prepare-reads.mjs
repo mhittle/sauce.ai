@@ -44,6 +44,7 @@ import {
 import {
   CLASSIFY_SYSTEM,
   classifyUserText,
+  ESTIMATE_DECOMPOSE_SUFFIX,
   ESTIMATE_PRECISION_SUFFIX,
   ESTIMATE_SYSTEM,
   estimateUserText,
@@ -93,7 +94,9 @@ const responseOf = (id) => {
 const ESTIMATE_SYSTEM_PROMPT =
   process.env.ESTIMATE_PROMPT === "precision"
     ? ESTIMATE_SYSTEM + ESTIMATE_PRECISION_SUFFIX
-    : ESTIMATE_SYSTEM;
+    : process.env.ESTIMATE_PROMPT === "decompose"
+      ? ESTIMATE_SYSTEM + ESTIMATE_DECOMPOSE_SUFFIX
+      : ESTIMATE_SYSTEM;
 
 // Grounding policy — identical to the harness/prod gates.
 function buildGrounding(pdf, idx) {
