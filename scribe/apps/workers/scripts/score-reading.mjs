@@ -5,13 +5,17 @@
 //
 // Usage (from apps/workers, env loaded):
 //   node scripts/score-reading.mjs [labels.json] [--concurrency N] [--out csv]
+//     [--dump-dir dir]   write per-quote alignment JSON (gold→match/MISS,
+//                        pred→PHANTOM, silently-dropped row counts) to
+//                        <dir>/match-Q<n>.json — the per-unit evidence the
+//                        aggregate CSV can't carry.
 //   ESTIMATE_CONSENSUS_N=1 for a fast/cheap first pass; 3 (default) for stable.
 
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, isAbsolute } from "node:path";
-import { scoreReading } from "@scribe/shared";
+import { scoreReadingDetailed } from "@scribe/shared";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HARNESS = join(HERE, "estimate-floorplan.mjs");
@@ -29,6 +33,8 @@ const manifest = JSON.parse(readFileSync(join(baseDir, "backtest-quotes.json"), 
 const inputOf = Object.fromEntries(manifest.map((q) => [String(q.quote), q.input]));
 const concurrency = Math.max(1, Number(flag("--concurrency", "4")));
 const outPath = flag("--out", join(baseDir, "reading-scorecard.csv"));
+const dumpDir = flag("--dump-dir", null);
+if (dumpDir) mkdirSync(dumpDir, { recursive: true });
 
 // Coarse document class per quote (from the input-format survey).
 const CLASS = {
@@ -84,7 +90,13 @@ const rows = await mapLimit(labels, concurrency, async (r) => {
     console.error(`  Q${r.quote} ${r.deal}: ERROR ${res.error}`);
     return { quote: r.quote, deal: r.deal, cls: CLASS[r.quote] ?? "?", error: res.error };
   }
-  const s = scoreReading(res.boxes ?? [], r.cabinets);
+  const { alignment, ...s } = scoreReadingDetailed(res.boxes ?? [], r.cabinets);
+  if (dumpDir) {
+    writeFileSync(
+      join(dumpDir, `match-Q${r.quote}.json`),
+      JSON.stringify({ quote: r.quote, deal: r.deal, score: s, alignment }, null, 2)
+    );
+  }
   console.error(
     `  Q${r.quote} ${r.deal}: recall ${pct(s.recall)}% precision ${pct(s.precision)}% ` +
       `(${s.predictedBoxes} pred vs ${s.labelBoxes} real)`

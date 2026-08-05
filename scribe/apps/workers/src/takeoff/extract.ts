@@ -5,6 +5,7 @@ import {
   repairLine,
 } from "@scribe/shared";
 import {
+  ESTIMATE_DECOMPOSE_SUFFIX,
   ESTIMATE_PRECISION_SUFFIX,
   ESTIMATE_SYSTEM,
   estimateUserText,
@@ -33,7 +34,9 @@ const READ_MODEL = process.env.VISION_MODEL || SONNET_MODEL;
 const ESTIMATE_SYSTEM_PROMPT =
   process.env.ESTIMATE_PROMPT === "precision"
     ? ESTIMATE_SYSTEM + ESTIMATE_PRECISION_SUFFIX
-    : ESTIMATE_SYSTEM;
+    : process.env.ESTIMATE_PROMPT === "decompose"
+      ? ESTIMATE_SYSTEM + ESTIMATE_DECOMPOSE_SUFFIX
+      : ESTIMATE_SYSTEM;
 
 // Recover complete line objects from a response whose JSON is unparseable
 // (typically truncated at max_tokens). Walks the `"lines": [ ... ]` array with
@@ -126,7 +129,21 @@ export async function extractPage(
   );
   budget.record(message.usage);
 
-  const text = textOf(message);
+  return processExtractionResponse(textOf(message), pageNumber, opts, {
+    truncated: message.stop_reason === "max_tokens",
+  });
+}
+
+// Pure response-processing tail of extractPage: lenient parse → salvage →
+// repair → unit multipliers → estimate marking. Split out so offline replay
+// (manual reads on the owner's plan, scripts/replay-reads.mjs) runs the
+// IDENTICAL post-processing as a live API read.
+export function processExtractionResponse(
+  text: string,
+  pageNumber: number,
+  opts: { region?: boolean; estimate?: boolean } = {},
+  meta: { truncated?: boolean } = {}
+): { extraction: PageExtraction; raw: unknown } {
   // A whole region (e.g. a cabinet-dense kitchen) used to be silently dropped
   // when its response was truncated at max_tokens — JSON.parse throws on the
   // partial array, and the caller catches+continues. Parse defensively: if the
@@ -139,7 +156,7 @@ export async function extractPage(
     rawObj = {};
   }
   let rawLines = Array.isArray(rawObj.lines) ? rawObj.lines : [];
-  const truncated = message.stop_reason === "max_tokens";
+  const truncated = meta.truncated === true;
   if (rawLines.length === 0) {
     const salvaged = salvageLineObjects(text);
     if (salvaged.length > 0) rawLines = salvaged;
@@ -155,6 +172,15 @@ export async function extractPage(
   });
   const raw = Object.keys(rawObj).length > 0 ? rawObj : { salvaged_from_text: text };
   const extraction = PageExtraction.parse({ ...rawObj, lines: validLines });
+  // Lenient parsing must not be SILENT: a page that loses lines to schema
+  // mismatches previously vanished with zero telemetry (the attribution pass
+  // saw a whole page's cabinets disappear this way). Surface the count.
+  const invalidDropped = rawLines.length - validLines.length;
+  if (invalidDropped > 0) {
+    extraction.uncertainties.push(
+      `${invalidDropped} line(s) on page ${pageNumber} failed schema validation and were dropped — verify against the drawing`
+    );
+  }
   if (truncated) {
     extraction.uncertainties.push(
       `model response was truncated (max_tokens) — recovered ${validLines.length} item(s) on this page/region; some cabinets may be missing, verify`

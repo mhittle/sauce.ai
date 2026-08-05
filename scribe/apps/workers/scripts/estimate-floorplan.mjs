@@ -152,8 +152,11 @@ async function readPageOnce(pdf, page, estimate, pageClass) {
     // the model re-enumerate the room once per view -> 2-4x over-count. Read
     // the whole sheet ONCE so each cabinet is counted a single time.
     if (pageClass !== "floor_plan") {
+      // Pass grounding here too — prod (process.ts) does; the harness omitting
+      // it made DIM_SKELETON a near-no-op on large-format sheets in A/Bs.
       const { extraction } = await extractPage(page, fullPng, budget, {
         estimate: true,
+        grounding,
       });
       return extraction.lines;
     }
@@ -165,6 +168,7 @@ async function readPageOnce(pdf, page, estimate, pageClass) {
         const { extraction } = await extractPage(page, crop, budget, {
           region: true,
           estimate: true,
+          grounding,
         });
         lines.push(...extraction.lines);
       } catch (e) {
@@ -363,10 +367,18 @@ async function main() {
         boxTypes: r.boxTypes,
         tokens: r.tokens,
         tiers: r.tiers,
-        // Predicted cabinet boxes, for the reading-accuracy scorer (H2).
+        // Predicted cabinet boxes, for the reading-accuracy scorer (H2). The
+        // tag folds in page+room so the scorer's --dump-dir alignment can
+        // identify each unit (extra fields are ignored by scoreReading).
         boxes: r.lines
           .filter((l) => BOX.includes(l.category))
-          .map((l) => ({ category: l.category, w: l.width_in, h: l.height_in, qty: l.qty })),
+          .map((l) => ({
+            category: l.category,
+            w: l.width_in,
+            h: l.height_in,
+            qty: l.qty,
+            tag: `${l.tag ?? "—"} [p${l.source_page ?? "?"}${l.room ? " " + l.room : ""}]`,
+          })),
       }) + "\n"
     );
     return;

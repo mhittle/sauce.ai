@@ -53,8 +53,21 @@ describe("isNonBoxCasework", () => {
     expect(isNonBoxCasework(line({ tag: "Filler", category: "door" }))).toBe(false);
   });
 
-  it("matches on notes too", () => {
-    expect(isNonBoxCasework(line({ tag: "Base 3", notes: "end panel at island end" }))).toBe(true);
+  it("judges by TAG when one exists — descriptive notes must not condemn a real cabinet", () => {
+    // Q13 regression: a real tall cabinet whose notes said "…4\" toe to 5\" crown…"
+    // was silently deleted as trim. Tagged lines are judged by the tag alone.
+    expect(
+      isNonBoxCasework(
+        line({ tag: "Tall Single Doors 17.5", notes: 'full height from 4" toe kick to 5" crown' })
+      )
+    ).toBe(false);
+    expect(isNonBoxCasework(line({ tag: "Base 3", notes: "end panel at island end" }))).toBe(false);
+  });
+
+  it("falls back to notes only when there is no tag", () => {
+    expect(isNonBoxCasework(line({ tag: null, notes: "end panel at island end" }))).toBe(true);
+    expect(isNonBoxCasework(line({ tag: "", notes: "crown moulding run" }))).toBe(true);
+    expect(isNonBoxCasework(line({ tag: null, notes: "double-door pantry" }))).toBe(false);
   });
 });
 

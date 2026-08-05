@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { scoreReading, type ScoredCabinet } from "../src/index.js";
+import {
+  scoreReading,
+  scoreReadingDetailed,
+  type ScoredCabinet,
+} from "../src/index.js";
 
 const cab = (category: string, w: number, h: number, qty = 1): ScoredCabinet => ({
   category,
@@ -57,5 +61,61 @@ describe("scoreReading", () => {
     expect(s.labelBoxes).toBe(1);
     expect(s.predictedBoxes).toBe(1);
     expect(s.recall).toBe(1);
+  });
+});
+
+describe("scoreReadingDetailed", () => {
+  it("alignment accounts for every gold and pred unit exactly once", () => {
+    const gold = [
+      { ...cab("casework_base", 24, 34.5), tag: "Sink Base 24" },
+      { ...cab("casework_base", 18, 34.5), tag: "Base 18" },
+      cab("casework_wall", 30, 42),
+    ];
+    const pred = [
+      { ...cab("casework_base", 25, 34.5), tag: "base near sink" }, // matches 24 (Δw=1)
+      cab("casework_tall", 24, 96), // phantom
+    ];
+    const s = scoreReadingDetailed(pred, gold);
+    expect(s.alignment.gold).toHaveLength(3);
+    expect(s.alignment.pred).toHaveLength(2);
+    // matched count must equal both the matched gold rows and matched pred rows
+    const goldMatched = s.alignment.gold.filter((g) => g.matchedPred).length;
+    const predMatched = s.alignment.pred.filter((p) => p.matched).length;
+    expect(goldMatched).toBe(s.matched);
+    expect(predMatched).toBe(s.matched);
+    expect(s.matched).toBe(1);
+    // the matched pair carries tags + size error through
+    const hit = s.alignment.gold.find((g) => g.matchedPred);
+    expect(hit?.unit.tag).toBe("Sink Base 24");
+    expect(hit?.matchedPred?.tag).toBe("base near sink");
+    expect(hit?.sizeErrIn).toBe(1);
+    // misses and phantoms are explicit
+    expect(s.alignment.gold.filter((g) => !g.matchedPred)).toHaveLength(2);
+    expect(s.alignment.pred.filter((p) => !p.matched)).toHaveLength(1);
+  });
+
+  it("reports silently-dropped rows (non-box + null dims) per side", () => {
+    const gold = [cab("casework_base", 24, 34.5)];
+    const pred = [
+      cab("casework_base", 24, 34.5),
+      cab("door", 24, 24), // non-box
+      { category: "casework_base", w: null, h: 34.5 }, // null dim
+      { category: "casework_wall", w: 0, h: 30 }, // zero dim
+    ];
+    const s = scoreReadingDetailed(pred, gold);
+    expect(s.predictedBoxes).toBe(1);
+    expect(s.alignment.droppedPred.nonBoxCategory).toBe(1);
+    expect(s.alignment.droppedPred.nullOrZeroDims).toBe(2);
+    expect(s.alignment.droppedGold.nonBoxCategory).toBe(0);
+    expect(s.alignment.droppedGold.nullOrZeroDims).toBe(0);
+  });
+
+  it("aggregate fields exactly match scoreReading", () => {
+    const gold = [cab("casework_base", 24, 34.5, 2), cab("vanity", 30, 34.5)];
+    const pred = [cab("casework_base", 23, 34.5), cab("vanity", 36, 34.5)];
+    const detailed = scoreReadingDetailed(pred, gold);
+    const plain = scoreReading(pred, gold);
+    const { alignment: _a, ...aggregates } = detailed;
+    expect(aggregates).toEqual(plain);
   });
 });

@@ -401,7 +401,13 @@ export function isNonBoxCasework(line: {
   category: string;
 }): boolean {
   if (!PRICED_BOX_CATEGORIES.has(line.category)) return false;
-  return NON_BOX_CASEWORK_RE.test(`${line.tag ?? ""} ${line.notes ?? ""}`);
+  // Match on the TAG only. Notes are descriptive prose — a real tall cabinet
+  // whose notes say "full height from 4\" toe kick to 5\" crown" is NOT crown
+  // molding, and matching notes silently deleted such cabinets (Q13 lost 3 real
+  // boxes this way). Fall back to notes only when there is no tag to judge by.
+  const tag = (line.tag ?? "").trim();
+  if (tag) return NON_BOX_CASEWORK_RE.test(tag);
+  return NON_BOX_CASEWORK_RE.test(line.notes ?? "");
 }
 
 // Drop fillers/crown/returns so they don't price as cabinet boxes. They stay out
@@ -456,6 +462,116 @@ export interface RoleRouteResult<T extends CabinetLineItem> {
   collapsedWithinRole: number;
 }
 
+// Reading-ruler size tolerance, reused for cross-view unit matching: two units
+// of the same category within these bounds are treated as the same physical
+// cabinet seen in two views.
+const MERGE_W_TOL = 3;
+const MERGE_H_TOL = 6;
+
+interface MergeUnit {
+  category: string;
+  w: number | null;
+  h: number | null;
+  used: boolean;
+}
+
+function toMergeUnits<T extends CabinetLineItem>(lines: T[]): MergeUnit[] {
+  const units: MergeUnit[] = [];
+  for (const l of lines) {
+    const qty = Math.max(1, Math.round(l.qty));
+    for (let i = 0; i < qty; i++)
+      units.push({ category: l.category, w: l.width_in, h: l.height_in, used: false });
+  }
+  return units;
+}
+
+function unitMatches(a: MergeUnit, b: MergeUnit): boolean {
+  if (a.category !== b.category) return false;
+  if (a.w == null || b.w == null || a.h == null || b.h == null)
+    // Dimension-less units only match dimension-less units of the category —
+    // being generous here would let a null-dim plan line suppress real sized
+    // elevation cabinets.
+    return a.w == null && b.w == null && a.h == null && b.h == null;
+  return Math.abs(a.w - b.w) <= MERGE_W_TOL && Math.abs(a.h - b.h) <= MERGE_H_TOL;
+}
+
+// From `demoted`, return the lines (qty-adjusted) NOT already accounted for by
+// a kept unit. Unit-level greedy: each kept unit can absorb one demoted unit.
+export function admitUnmatchedLines<T extends CabinetLineItem>(
+  kept: T[],
+  demoted: T[]
+): T[] {
+  const keptUnits = toMergeUnits(kept);
+  const out: T[] = [];
+  for (const line of demoted) {
+    const qty = Math.max(1, Math.round(line.qty));
+    const unit: MergeUnit = {
+      category: line.category,
+      w: line.width_in,
+      h: line.height_in,
+      used: false,
+    };
+    let unmatched = 0;
+    for (let i = 0; i < qty; i++) {
+      const hit = keptUnits.find((k) => !k.used && unitMatches(k, unit));
+      if (hit) hit.used = true;
+      else unmatched++;
+    }
+    if (unmatched > 0) out.push({ ...line, qty: unmatched });
+  }
+  return out;
+}
+
+// Collapse near-duplicate PAGE re-renders: some inputs export the identical
+// wall/view on multiple pages (Q24: the same 141" vanity wall twice, differing
+// only in viewport). Reading each page independently double-counts every
+// cabinet. Two pages are duplicates when the smaller page's unit multiset is
+// (tolerance-)covered ≥80% by the other page's; the page with MORE units wins
+// (richer render). Pages with fewer than 2 units are never treated as
+// duplicates of each other — too little signal.
+export function collapseDuplicatePages<T extends CabinetLineItem>(
+  lines: T[]
+): T[] {
+  const byPage = new Map<number | null, T[]>();
+  for (const l of lines) {
+    const p = l.source_page ?? null;
+    byPage.set(p, [...(byPage.get(p) ?? []), l]);
+  }
+  const pages = [...byPage.entries()];
+  if (pages.length < 2) return lines;
+
+  const dropped = new Set<number | null>();
+  for (let i = 0; i < pages.length; i++) {
+    for (let j = 0; j < pages.length; j++) {
+      if (i === j) continue;
+      const [pa, la] = pages[i];
+      const [pb, lb] = pages[j];
+      if (pa === null || pb === null) continue;
+      if (dropped.has(pa) || dropped.has(pb)) continue;
+      const ua = toMergeUnits(la);
+      const ub = toMergeUnits(lb);
+      // candidate to drop = the smaller (or later) page
+      const [small, big, dropPage] =
+        ua.length < ub.length || (ua.length === ub.length && pa > pb)
+          ? [ua, ub, pa]
+          : [ub, ua, pb];
+      if (small.length < 2) continue;
+      for (const u of big) u.used = false;
+      let covered = 0;
+      for (const u of small) {
+        const hit = big.find((k) => !k.used && unitMatches(k, u));
+        if (hit) {
+          hit.used = true;
+          covered++;
+        }
+      }
+      if (covered / small.length >= 0.8) dropped.add(dropPage);
+    }
+  }
+  if (dropped.size === 0) return lines;
+  return lines.filter((l) => !dropped.has(l.source_page ?? null));
+}
+
 // Pick the authoritative count from the highest-priority page role that actually
 // produced cabinet boxes, then dedup WITHIN that role. `roleByPage` maps a
 // source_page number to its role (built from the page classification). A line
@@ -506,6 +622,31 @@ export function routeByPageRole<T extends CabinetLineItem>(
       lines: merged,
       droppedFromOtherRoles: 0,
       collapsedWithinRole: lines.length - merged.length,
+    };
+  }
+
+  // Gated (ROUTER_TOLERANT_MERGE=1): completeness-aware merge. Keep the
+  // authoritative role's lines, then RE-ADMIT demoted-role lines that no kept
+  // line already accounts for (unit-level match: same category, |Δw|≤3",
+  // |Δh|≤6" — the same tolerance the reading ruler uses). The 2026-08-05
+  // step-attribution pass showed the blind drop deletes real cabinets that
+  // only elevations depict (Q5: 9 of 34 misses; Q22: kitchen elevation + 5
+  // vanities), while a blind keep-all re-counts true duplicates (Q23). The
+  // tolerance dedup keeps both failure modes in check. Near-duplicate PAGE
+  // re-renders (the same wall exported twice, Q24) are collapsed first within
+  // each role so they can't double-count either.
+  if (process.env.ROUTER_TOLERANT_MERGE === "1" && chosen !== "schedule") {
+    const collapsePages = (ls: T[]): T[] => collapseDuplicatePages(ls);
+    const keptRaw = collapsePages(lines.filter((l) => roleOf(l) === chosen));
+    const kept = collapseCrossViewDuplicates(keptRaw);
+    const demoted = collapsePages(lines.filter((l) => roleOf(l) !== chosen));
+    const admitted = admitUnmatchedLines(kept, demoted);
+    const merged = [...kept, ...admitted];
+    return {
+      regime: chosen,
+      lines: merged,
+      droppedFromOtherRoles: demoted.length - admitted.length,
+      collapsedWithinRole: lines.length - demoted.length - kept.length,
     };
   }
 
