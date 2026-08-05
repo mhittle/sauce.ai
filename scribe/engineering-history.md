@@ -99,6 +99,15 @@ real tall whose notes said "crown", Q13), lenient parse dropped lines with zero
 telemetry. Sub-100-DPI illegibility (7b) was NOT dominant in this pass (caveat:
 manual readers could re-inspect; one-shot API cannot).
 
+**SAME-DAY ADDENDUM — decompose arm measured (fresh zero-API reads, Q24/Q7/Q23,
+kits in `read-kits-decompose/`):** with ROUTER_TOLERANT_MERGE=1: Q23 0.31→**0.64**
+(all 3 per-sink vanity bases flipped miss+phantom→match; recall 24→63%), Q24
+0.57→**0.71**, Q7 0.50→**0.40** (regression — its packet prices CUSTOM merged
+units, 80"/72" bases, so split-at-divisions fights that truth; Q7 is also the
+scope-subset oddball). 3-quote macro 0.46→0.58. Verdict: decompose+merge is the
+strongest combined arm yet but not uniform — API confirmation should A/B
+decompose on/off, both with merge on.
+
 **Fixes + re-measure on the SAME saved reads (zero API):**
 - `isNonBoxCasework` now judges by TAG (notes only as fallback) — ungated bug fix.
 - Schema-dropped-line count now surfaces in uncertainties — ungated.
