@@ -197,6 +197,8 @@ function rowToLine(
     // Deterministic intake: high confidence; tag/dim conflicts lower it below.
     confidence: 0.95,
     estimated: false,
+    // Spreadsheet rows have no drawing to anchor to.
+    bbox_2d: null,
   };
   return repairLine(line);
 }

@@ -7,4 +7,5 @@ export * from "./estimate.js";
 export * from "./expand.js";
 export * from "./schedule.js";
 export * from "./dim-skeleton.js";
+export * from "./select-pages.js";
 export * from "./reading-score.js";
