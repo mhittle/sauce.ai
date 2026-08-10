@@ -81,6 +81,8 @@ export function statusTone(status: string): "zinc" | "green" | "amber" | "red" |
     case "extracted":
     case "quoting":
     case "draft":
+    case "awaiting_pages":
+    case "awaiting_boxes":
       return "amber";
     case "failed":
     case "lost":
