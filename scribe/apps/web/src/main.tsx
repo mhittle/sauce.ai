@@ -17,6 +17,7 @@ import { ProspectQueuePage } from "./pages/ProspectQueue";
 import { ProspectDetailPage } from "./pages/ProspectDetail";
 import { TakeoffsPage } from "./pages/Takeoffs";
 import { TakeoffReviewPage } from "./pages/TakeoffReview";
+import { PagePickerPage } from "./pages/PagePicker";
 import { QuotesPage } from "./pages/Quotes";
 import { QuoteBuilderPage } from "./pages/QuoteBuilder";
 import { AdminPage } from "./pages/Admin";
@@ -53,6 +54,13 @@ export const takeoffReviewRoute = createRoute({
   component: TakeoffReviewPage,
 });
 
+// Gate 1: page selection after upload (status awaiting_pages).
+export const pagePickerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/takeoffs/$takeoffId/pages",
+  component: PagePickerPage,
+});
+
 export const quotesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/quotes",
@@ -77,6 +85,7 @@ const routeTree = rootRoute.addChildren([
   prospectDetailRoute,
   takeoffsRoute,
   takeoffReviewRoute,
+  pagePickerRoute,
   quotesRoute,
   quoteBuilderRoute,
   adminRoute,
