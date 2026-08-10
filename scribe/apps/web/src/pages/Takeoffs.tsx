@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { apiUpload, apiGet } from "../api";
 import { Badge, Button, Card, PageTitle, statusTone } from "../ui";
 
@@ -17,6 +17,7 @@ export interface Takeoff {
 
 export function TakeoffsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const q = useQuery({
     queryKey: ["takeoffs"],
@@ -26,7 +27,16 @@ export function TakeoffsPage() {
 
   const upload = useMutation({
     mutationFn: (file: File) => apiUpload<Takeoff>("/takeoffs", file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoffs"] }),
+    onSuccess: (t) => {
+      qc.invalidateQueries({ queryKey: ["takeoffs"] });
+      // PDFs stop at the page-picker gate first; everything else lands on the
+      // takeoff page, which forwards to whichever gate the status demands.
+      if (t.sourceKind === "pdf") {
+        navigate({ to: "/takeoffs/$takeoffId/pages", params: { takeoffId: t.id } });
+      } else {
+        navigate({ to: "/takeoffs/$takeoffId", params: { takeoffId: t.id } });
+      }
+    },
   });
 
   return (

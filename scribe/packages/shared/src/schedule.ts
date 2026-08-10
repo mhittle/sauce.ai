@@ -119,6 +119,7 @@ function parseRow(row: string): CabinetLineItem | null {
     notes: `schedule: ${row}`,
     confidence: 0.9,
     estimated: false,
+    bbox_2d: null,
   };
 }
 
@@ -282,6 +283,7 @@ function finishRecord(r: PendingRecord, page: number): CabinetLineItem | null {
     notes: `schedule: ${r.raw.join(" ")}${r.unit ? ` [unit ${r.unit}]` : ""}`,
     confidence: 0.9,
     estimated: false,
+    bbox_2d: null,
   };
 }
 

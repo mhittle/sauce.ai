@@ -1,6 +1,11 @@
 import { Worker, Queue } from "bullmq";
 import pino from "pino";
-import { processTakeoff } from "./takeoff/process.js";
+import {
+  extractTakeoff,
+  finalizeTakeoff,
+  prepareTakeoff,
+  processTakeoff,
+} from "./takeoff/process.js";
 import { runSource, runAllSources } from "./crawler/run.js";
 import { redisConnection } from "./lib/redis.js";
 
@@ -11,11 +16,20 @@ const connection = redisConnection();
 const TAKEOFF_QUEUE = "takeoff.process";
 const CRAWLER_QUEUE = "crawler.run";
 
+// Two-gate takeoff flow: `prepare` (thumbnails + classification →
+// awaiting_pages), `extract` (read selected pages → awaiting_boxes),
+// `finalize` (faces + pricing → review). The legacy `process` name still
+// works — spreadsheets use it end-to-end, and in-flight jobs from before the
+// split are routed into the gated flow by processTakeoff.
 const takeoffWorker = new Worker(
   TAKEOFF_QUEUE,
   async (job) => {
     log.info({ job: job.name, takeoff: job.data.takeoff_id }, "takeoff job start");
-    await processTakeoff(job.data.takeoff_id, log);
+    const id = job.data.takeoff_id;
+    if (job.name === "prepare") await prepareTakeoff(id, log);
+    else if (job.name === "extract") await extractTakeoff(id, log);
+    else if (job.name === "finalize") await finalizeTakeoff(id, log);
+    else await processTakeoff(id, log);
   },
   { connection, concurrency: 2 }
 );

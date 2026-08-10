@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   evalFixtures,
   getDb,
@@ -13,6 +13,7 @@ import {
   CabinetLineItem,
   dedupeLines,
   dropNonBoxCasework,
+  ESTIMATED_NOTE_PREFIX,
   extractCabinetSchedule,
   fitDpi,
   MIN_SCHEDULE_ROWS,
@@ -27,9 +28,11 @@ import {
   padRectToPage,
   planRenderJobs,
   PricingSnapshot,
+  RectPt,
   RegionKind,
-  RELEVANT_PAGE_CLASSES,
   routeByPageRole,
+  SelectedPage,
+  selectRelevantPages,
   expandToComponents,
   buildDimGrounding,
 } from "@scribe/shared";
@@ -41,20 +44,158 @@ import { openaiConfigured } from "../lib/openai.js";
 import { classifyPages } from "./classify.js";
 import { crossValidatePage } from "./cross-validate.js";
 import { extractPage } from "./extract.js";
-import { OpenPdf, openPdf, THUMBNAIL_DPI } from "./pdf.js";
+import { OpenPdf, openPdf, PICKER_THUMBNAIL_DPI } from "./pdf.js";
 import { locateRegions, locateRooms } from "./regions.js";
 import { parseSpreadsheet } from "./spreadsheet.js";
+
+// ---------------------------------------------------------------------------
+// Two-stage human review (2026-08): the one-shot pipeline is split into three
+// jobs around two BLOCKING gates —
+//   prepare  (pdf)   thumbnails + classification        → awaiting_pages
+//   extract  (all)   vision read of the SELECTED pages  → awaiting_boxes
+//   finalize (all)   face expansion + pricing match     → review
+// Spreadsheets keep the single-stage path (no pages to pick, no boxes to
+// draw). Text-layer schedule PDFs skip the page gate (no vision) but still
+// stop at the box gate as a list-only review — gates are always blocking.
+// ---------------------------------------------------------------------------
 
 // Region kinds worth cropping + extracting (PRD §4 legible-reads path).
 const EXTRACTABLE_REGION_KINDS: RegionKind[] = ["schedule", "elevation", "plan"];
 // Ignore detected boxes smaller than this — too small to be a real drawing.
 const MIN_REGION_IN = { width: 1.5, height: 1 };
 
+// The exact render a set of lines was read from: storage key of the PNG sent
+// to the model, plus the page rectangle (PDF points) + DPI it was rendered at
+// so a box can later be mapped into page space.
+interface ReadRect extends RectPt {
+  dpi: number;
+}
+interface ReadMeta {
+  key: string;
+  rect: ReadRect | null;
+}
+type ReadLine = CabinetLineItem & {
+  read_image_key?: string | null;
+  read_rect?: ReadRect | null;
+};
+
 // Optional secondary-model validation state, accumulated across pages.
 interface CrossVal {
   enabled: boolean;
   tokens: number;
   secondaryRaws: unknown[];
+}
+
+type TakeoffRow = typeof takeoffs.$inferSelect;
+
+async function loadTakeoff(takeoffId: string): Promise<TakeoffRow> {
+  const db = getDb();
+  const rows = await db.select().from(takeoffs).where(eq(takeoffs.id, takeoffId));
+  if (rows.length === 0) throw new Error(`takeoff ${takeoffId} not found`);
+  return rows[0];
+}
+
+async function loadCrossVal(): Promise<CrossVal> {
+  const db = getDb();
+  const settingsRows = await db
+    .select()
+    .from(orgSettings)
+    .where(eq(orgSettings.id, 1));
+  return {
+    enabled: Boolean(settingsRows[0]?.crossValidationEnabled) && openaiConfigured(),
+    tokens: 0,
+    secondaryRaws: [],
+  };
+}
+
+async function loadPricingSnapshot(): Promise<PricingSnapshot> {
+  const db = getDb();
+  const cfgRows = await db
+    .select()
+    .from(pricingConfigs)
+    .orderBy(desc(pricingConfigs.version))
+    .limit(1);
+  if (cfgRows.length === 0) throw new Error("no pricing config — seed the DB");
+  return PricingSnapshot.parse(cfgRows[0].snapshot);
+}
+
+// Token spend accumulates ACROSS stages (each stage runs its own budget cap).
+async function failTakeoff(
+  takeoffId: string,
+  priorTokens: number,
+  budget: TakeoffBudget | null,
+  err: unknown
+): Promise<void> {
+  const db = getDb();
+  const message =
+    err instanceof BudgetExceededError
+      ? `cost guardrail: ${err.message}`
+      : String(err instanceof Error ? err.message : err);
+  await db
+    .update(takeoffs)
+    .set({
+      status: "failed",
+      error: message,
+      tokensUsed: priorTokens + (budget?.used ?? 0),
+      updatedAt: new Date(),
+    })
+    .where(eq(takeoffs.id, takeoffId));
+}
+
+function avgConfidence(lines: { confidence: number }[]): number | null {
+  return lines.length > 0
+    ? lines.reduce((s, l) => s + l.confidence, 0) / lines.length
+    : null;
+}
+
+// Insert extraction-stage lines at BOX level — no pricing match, no face
+// expansion (both happen at finalize, after the human approves the boxes).
+// Deletes existing lines first so a worker retry can't double-insert.
+async function replaceLines(
+  takeoffId: string,
+  lines: ReadLine[],
+  hasRaws: boolean
+): Promise<void> {
+  const db = getDb();
+  await db.delete(takeoffLines).where(eq(takeoffLines.takeoffId, takeoffId));
+  for (const [i, line] of lines.entries()) {
+    await db.insert(takeoffLines).values({
+      takeoffId,
+      sourcePage: line.source_page,
+      tag: line.tag,
+      room: line.room,
+      qty: line.qty,
+      category: line.category,
+      widthIn: line.width_in,
+      heightIn: line.height_in,
+      depthIn: line.depth_in,
+      doorStyle: line.door_style,
+      material: line.material,
+      finish: line.finish,
+      assembled: line.assembled,
+      notes: line.notes,
+      confidence: line.confidence,
+      rawModelOutput: hasRaws ? { page_raw_index: i } : null,
+      bbox: line.bbox_2d ?? null,
+      readImageKey: line.read_image_key ?? null,
+      readRect: line.read_rect ?? null,
+    });
+  }
+}
+
+// Pre-correction snapshot → self-building eval corpus (PRD §10). Delete-then-
+// insert so a stage re-run can't stack duplicate fixtures.
+async function replaceEvalFixture(
+  takeoffId: string,
+  lines: CabinetLineItem[]
+): Promise<void> {
+  const db = getDb();
+  await db.delete(evalFixtures).where(eq(evalFixtures.takeoffId, takeoffId));
+  await db.insert(evalFixtures).values({
+    takeoffId,
+    extractedLines: lines,
+    promptVersion: EXTRACT_PROMPT_VERSION,
+  });
 }
 
 // Best-effort: a cross-validation failure never fails the takeoff. On success
@@ -86,78 +227,34 @@ async function runCrossValidation(
   }
 }
 
-// Orchestrates one takeoff end-to-end: input → classified pages → extracted
-// lines → product-line matching → review queue (PRD §6).
+// ---------------------------------------------------------------------------
+// Legacy entry ("process" jobs). Spreadsheets run their whole single-stage
+// flow here; PDFs/images enqueued under the old job name (in-flight across a
+// deploy) are routed into the gated flow.
+// ---------------------------------------------------------------------------
 
 export async function processTakeoff(
   takeoffId: string,
   log: Logger
 ): Promise<void> {
+  const takeoff = await loadTakeoff(takeoffId);
+  if (takeoff.sourceKind === "pdf") return prepareTakeoff(takeoffId, log);
+  if (takeoff.sourceKind === "image") return extractTakeoff(takeoffId, log);
+
+  // Spreadsheets skip both gates: the parsed schedule goes straight to the
+  // pricing review screen (processing → review), exactly as before.
   const db = getDb();
-  const rows = await db.select().from(takeoffs).where(eq(takeoffs.id, takeoffId));
-  if (rows.length === 0) throw new Error(`takeoff ${takeoffId} not found`);
-  const takeoff = rows[0];
   const budget = new TakeoffBudget();
-
-  const settingsRows = await db
-    .select()
-    .from(orgSettings)
-    .where(eq(orgSettings.id, 1));
-  const crossVal: CrossVal = {
-    enabled: Boolean(settingsRows[0]?.crossValidationEnabled) && openaiConfigured(),
-    tokens: 0,
-    secondaryRaws: [],
-  };
-
   try {
     const file = await getObject(takeoff.sourceFileS3Key);
+    const parsed = await parseSpreadsheet(file, budget, {
+      modelAssist: Boolean(process.env.ANTHROPIC_API_KEY),
+    });
+    const lines = parsed.lines;
+    const snapshot = await loadPricingSnapshot();
 
-    let lines: CabinetLineItem[];
-    let raws: unknown[] = [];
-    let classified: PageClassification[] | null = null;
-    let pageCount: number | null = null;
-    let summary: {
-      uncertainties: string[];
-      unreadable_pages: number[];
-      warnings: string[];
-    } = { uncertainties: [], unreadable_pages: [], warnings: [] };
-
-    if (takeoff.sourceKind === "pdf") {
-      const result = await processPdf(takeoffId, file, budget, crossVal, log);
-      lines = result.lines;
-      raws = result.raws;
-      classified = result.classified;
-      pageCount = result.pageCount;
-      summary = result.summary;
-    } else if (takeoff.sourceKind === "xlsx" || takeoff.sourceKind === "csv") {
-      const parsed = await parseSpreadsheet(file, budget, {
-        modelAssist: Boolean(process.env.ANTHROPIC_API_KEY),
-      });
-      lines = parsed.lines;
-      summary.warnings = parsed.warnings;
-    } else {
-      // image: single-page vision extraction; store the image for provenance.
-      await putObject(`takeoffs/${takeoffId}/pages/1.png`, file, "image/png");
-      const { extraction, raw } = await extractPage(1, file, budget);
-      raws = [raw];
-      const validated = crossVal.enabled
-        ? await runCrossValidation(1, file, extraction, crossVal, summary.warnings, log)
-        : extraction;
-      lines = validated.lines;
-      summary.uncertainties = validated.uncertainties;
-      if (validated.unreadable) summary.unreadable_pages = [1];
-    }
-
-    // Match lines to product lines against the latest pricing snapshot.
-    const cfgRows = await db
-      .select()
-      .from(pricingConfigs)
-      .orderBy(desc(pricingConfigs.version))
-      .limit(1);
-    if (cfgRows.length === 0) throw new Error("no pricing config — seed the DB");
-    const snapshot = PricingSnapshot.parse(cfgRows[0].snapshot);
-
-    for (const [i, line] of lines.entries()) {
+    await db.delete(takeoffLines).where(eq(takeoffLines.takeoffId, takeoffId));
+    for (const line of lines) {
       const match = matchLine(line, snapshot);
       await db.insert(takeoffLines).values({
         takeoffId,
@@ -177,32 +274,234 @@ export async function processTakeoff(
         confidence: line.confidence,
         productLineId: match.product_line_id,
         resolvedParams: "resolved" in match ? match.resolved : null,
-        matchConfidence: "match_confidence" in match ? match.match_confidence : null,
+        matchConfidence:
+          "match_confidence" in match ? match.match_confidence : null,
         alternates: "alternates" in match ? match.alternates : null,
         unmatchedReason: "reason" in match ? match.reason : null,
-        rawModelOutput: raws.length > 0 ? { page_raw_index: i } : null,
+        rawModelOutput: null,
       });
     }
 
-    const docConfidence =
-      lines.length > 0
-        ? lines.reduce((s, l) => s + l.confidence, 0) / lines.length
-        : null;
-
-    // Pre-correction snapshot → self-building eval corpus (PRD §10).
-    await db.insert(evalFixtures).values({
-      takeoffId,
-      extractedLines: lines,
-      promptVersion: EXTRACT_PROMPT_VERSION,
-    });
+    await replaceEvalFixture(takeoffId, lines);
 
     await db
       .update(takeoffs)
       .set({
         status: "review",
-        pageCount,
-        classifiedPages: classified,
-        docConfidence,
+        docConfidence: avgConfidence(lines),
+        docSummary: {
+          uncertainties: [],
+          unreadable_pages: [],
+          warnings: parsed.warnings,
+          raw_outputs: [],
+          cross_validation: null,
+        },
+        promptVersion: EXTRACT_PROMPT_VERSION,
+        tokensUsed: (takeoff.tokensUsed ?? 0) + budget.used,
+        updatedAt: new Date(),
+      })
+      .where(eq(takeoffs.id, takeoffId));
+
+    log.info(
+      { takeoffId, lines: lines.length, tokens: budget.used },
+      "spreadsheet takeoff processed"
+    );
+  } catch (err) {
+    await failTakeoff(takeoffId, takeoff.tokensUsed ?? 0, budget, err);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stage 1 — prepare (PDF only): thumbnails of EVERY page + classification,
+// then stop at the page-picker gate. Text-layer schedule PDFs (Class 1) skip
+// the picker (nothing visual to pick) and land directly on the box gate.
+// ---------------------------------------------------------------------------
+
+export async function prepareTakeoff(
+  takeoffId: string,
+  log: Logger
+): Promise<void> {
+  const takeoff = await loadTakeoff(takeoffId);
+  const db = getDb();
+  const budget = new TakeoffBudget();
+  try {
+    if (takeoff.sourceKind !== "pdf") {
+      throw new Error(`prepare stage only handles PDFs (got ${takeoff.sourceKind})`);
+    }
+    const file = await getObject(takeoff.sourceFileS3Key);
+    const pdf = openPdf(file);
+    try {
+      const pageCount = pdf.pageCount;
+
+      // Class 1 — the input already LISTS the cabinets in a text-layer schedule
+      // table. Read it verbatim: exact, free, no vision — no pages to pick.
+      // Stops at the box gate as a list-only review (no bboxes).
+      const scheduleInput = [];
+      for (let i = 0; i < pageCount; i++) {
+        scheduleInput.push({ page: i + 1, fragments: pdf.pageTextFragments(i) });
+      }
+      const sched = extractCabinetSchedule(scheduleInput);
+      if (sched.lines.length >= MIN_SCHEDULE_ROWS) {
+        log.info(
+          { takeoffId, schedulePages: sched.schedulePages, lines: sched.lines.length },
+          "read cabinet schedule from text layer — skipping page selection"
+        );
+        const scheduleSet = new Set(sched.schedulePages);
+        const classified: PageClassification[] = Array.from(
+          { length: pageCount },
+          (_, i) => ({
+            page: i + 1,
+            class: scheduleSet.has(i + 1) ? "cabinet_schedule_table" : "other",
+            confidence: scheduleSet.has(i + 1) ? 0.95 : 0.5,
+          })
+        );
+        const lines: ReadLine[] = sched.lines.map((l) => ({
+          ...l,
+          read_image_key: null,
+          read_rect: null,
+        }));
+        await replaceLines(takeoffId, lines, true);
+        await replaceEvalFixture(takeoffId, sched.lines);
+        await db
+          .update(takeoffs)
+          .set({
+            status: "awaiting_boxes",
+            pageCount,
+            classifiedPages: classified,
+            docConfidence: avgConfidence(sched.lines),
+            docSummary: {
+              uncertainties: [
+                `Cabinets read directly from the document's text-layer schedule table (pages ${sched.schedulePages.join(", ")}) — not estimated. Verify against the drawings.`,
+              ],
+              unreadable_pages: [],
+              warnings: [],
+              raw_outputs: [
+                { schedule_pages: sched.schedulePages, source: "text_layer_schedule" },
+              ],
+              cross_validation: null,
+            },
+            promptVersion: EXTRACT_PROMPT_VERSION,
+            tokensUsed: (takeoff.tokensUsed ?? 0) + budget.used,
+            updatedAt: new Date(),
+          })
+          .where(eq(takeoffs.id, takeoffId));
+        return;
+      }
+
+      // Picker thumbnails: EVERY page (the autonomous flow only wrote read
+      // pages), stored for the picker UI and reused as classification input.
+      log.info({ takeoffId, pageCount }, "rendering picker thumbnails");
+      const thumbnails: { page: number; png: Uint8Array }[] = [];
+      for (let i = 0; i < pageCount; i++) {
+        const png = pdf.renderPage(i, PICKER_THUMBNAIL_DPI);
+        await putObject(
+          `takeoffs/${takeoffId}/thumbs/${i + 1}.png`,
+          png,
+          "image/png"
+        );
+        thumbnails.push({ page: i + 1, png });
+      }
+
+      const classified = await classifyPages(thumbnails, budget);
+
+      await db
+        .update(takeoffs)
+        .set({
+          status: "awaiting_pages",
+          pageCount,
+          classifiedPages: classified,
+          tokensUsed: (takeoff.tokensUsed ?? 0) + budget.used,
+          updatedAt: new Date(),
+        })
+        .where(eq(takeoffs.id, takeoffId));
+
+      log.info({ takeoffId, pageCount }, "awaiting page selection");
+    } finally {
+      pdf.close();
+    }
+  } catch (err) {
+    await failTakeoff(takeoffId, takeoff.tokensUsed ?? 0, budget, err);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2 — extract: vision-read the user-selected pages (or the single image)
+// and stop at the box-review gate with BOX-level lines carrying bbox + read-
+// image provenance. No pricing, no face expansion yet.
+// ---------------------------------------------------------------------------
+
+export async function extractTakeoff(
+  takeoffId: string,
+  log: Logger
+): Promise<void> {
+  const takeoff = await loadTakeoff(takeoffId);
+  const db = getDb();
+  const budget = new TakeoffBudget();
+  const crossVal = await loadCrossVal();
+  try {
+    const file = await getObject(takeoff.sourceFileS3Key);
+
+    let lines: ReadLine[];
+    let raws: unknown[] = [];
+    let summary: {
+      uncertainties: string[];
+      unreadable_pages: number[];
+      warnings: string[];
+    } = { uncertainties: [], unreadable_pages: [], warnings: [] };
+
+    if (takeoff.sourceKind === "image") {
+      // Single-page vision extraction; store the image for provenance and as
+      // the read image the box overlay draws on.
+      await putObject(`takeoffs/${takeoffId}/pages/1.png`, file, "image/png");
+      const readKey = `takeoffs/${takeoffId}/reads/p1-c0-full.png`;
+      await putObject(readKey, file, "image/png");
+      const { extraction, raw } = await extractPage(1, file, budget);
+      raws = [raw];
+      const validated = crossVal.enabled
+        ? await runCrossValidation(1, file, extraction, crossVal, summary.warnings, log)
+        : extraction;
+      lines = validated.lines.map((l) => ({
+        ...l,
+        read_image_key: readKey,
+        read_rect: null,
+      }));
+      summary.uncertainties = validated.uncertainties;
+      if (validated.unreadable) summary.unreadable_pages = [1];
+    } else if (takeoff.sourceKind === "pdf") {
+      const classified = Array.isArray(takeoff.classifiedPages)
+        ? (takeoff.classifiedPages as PageClassification[])
+        : [];
+      const selected = Array.isArray(takeoff.selectedPages)
+        ? (takeoff.selectedPages as SelectedPage[])
+        : null;
+      const result = await extractPdf(
+        takeoffId,
+        file,
+        classified,
+        selected,
+        budget,
+        crossVal,
+        log
+      );
+      lines = result.lines;
+      raws = result.raws;
+      summary = result.summary;
+    } else {
+      throw new Error(
+        `extract stage does not handle sourceKind ${takeoff.sourceKind}`
+      );
+    }
+
+    await replaceLines(takeoffId, lines, raws.length > 0);
+    await replaceEvalFixture(takeoffId, lines);
+
+    await db
+      .update(takeoffs)
+      .set({
+        status: "awaiting_boxes",
+        docConfidence: avgConfidence(lines),
         docSummary: {
           ...summary,
           raw_outputs: raws,
@@ -215,44 +514,161 @@ export async function processTakeoff(
             : null,
         },
         promptVersion: EXTRACT_PROMPT_VERSION,
-        tokensUsed: budget.used,
+        tokensUsed: (takeoff.tokensUsed ?? 0) + budget.used,
         updatedAt: new Date(),
       })
       .where(eq(takeoffs.id, takeoffId));
 
     log.info(
       { takeoffId, lines: lines.length, tokens: budget.used },
-      "takeoff processed"
+      "extraction complete — awaiting box review"
     );
   } catch (err) {
-    const message =
-      err instanceof BudgetExceededError
-        ? `cost guardrail: ${err.message}`
-        : String(err instanceof Error ? err.message : err);
-    await db
-      .update(takeoffs)
-      .set({
-        status: "failed",
-        error: message,
-        tokensUsed: budget.used,
-        updatedAt: new Date(),
-      })
-      .where(eq(takeoffs.id, takeoffId));
+    await failTakeoff(takeoffId, takeoff.tokensUsed ?? 0, budget, err);
     throw err;
   }
 }
 
-async function processPdf(
+// ---------------------------------------------------------------------------
+// Stage 3 — finalize: the human approved the boxes. Re-price every surviving
+// line, expand cabinets into their door/drawer-front faces (moved here from
+// extraction so edits price correctly), and hand off to the review screen.
+// ---------------------------------------------------------------------------
+
+export async function finalizeTakeoff(
+  takeoffId: string,
+  log: Logger
+): Promise<void> {
+  const takeoff = await loadTakeoff(takeoffId);
+  const db = getDb();
+  try {
+    // Re-run safety: drop faces from a previous (crashed) finalize before
+    // re-deriving them.
+    await db
+      .delete(takeoffLines)
+      .where(
+        and(
+          eq(takeoffLines.takeoffId, takeoffId),
+          sql`${takeoffLines.rawModelOutput}->>'expanded' = 'true'`
+        )
+      );
+
+    const rows = await db
+      .select()
+      .from(takeoffLines)
+      .where(eq(takeoffLines.takeoffId, takeoffId))
+      .orderBy(takeoffLines.sourcePage, takeoffLines.createdAt);
+    const snapshot = await loadPricingSnapshot();
+
+    const confidences: { confidence: number }[] = [];
+    let faceCount = 0;
+    for (const row of rows) {
+      const line = rowToLine(row);
+      confidences.push(line);
+      const match = matchLine(line, snapshot);
+      await db
+        .update(takeoffLines)
+        .set({
+          productLineId: match.product_line_id,
+          resolvedParams: "resolved" in match ? match.resolved : null,
+          matchConfidence:
+            "match_confidence" in match ? match.match_confidence : null,
+          alternates: "alternates" in match ? match.alternates : null,
+          unmatchedReason: "reason" in match ? match.reason : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(takeoffLines.id, row.id));
+
+      // Each cabinet box also has doors + drawer fronts (priced separately by
+      // ft²). Spawn those face line items so the schedule mirrors a real
+      // CabinetNow quote (cabinet boxes + a door/drawer list).
+      for (const face of expandToComponents(line)) {
+        const faceMatch = matchLine(face, snapshot);
+        await db.insert(takeoffLines).values({
+          takeoffId,
+          sourcePage: face.source_page,
+          tag: face.tag,
+          room: face.room,
+          qty: face.qty,
+          category: face.category,
+          widthIn: face.width_in,
+          heightIn: face.height_in,
+          depthIn: face.depth_in,
+          doorStyle: face.door_style,
+          material: face.material,
+          finish: face.finish,
+          assembled: face.assembled,
+          notes: face.notes,
+          confidence: face.confidence,
+          productLineId: faceMatch.product_line_id,
+          resolvedParams: "resolved" in faceMatch ? faceMatch.resolved : null,
+          matchConfidence:
+            "match_confidence" in faceMatch ? faceMatch.match_confidence : null,
+          alternates: "alternates" in faceMatch ? faceMatch.alternates : null,
+          unmatchedReason: "reason" in faceMatch ? faceMatch.reason : null,
+          rawModelOutput: { expanded: true },
+        });
+        faceCount++;
+        confidences.push(face);
+      }
+    }
+
+    await db
+      .update(takeoffs)
+      .set({
+        status: "review",
+        docConfidence: avgConfidence(confidences),
+        updatedAt: new Date(),
+      })
+      .where(eq(takeoffs.id, takeoffId));
+
+    log.info(
+      { takeoffId, boxes: rows.length, faces: faceCount },
+      "takeoff finalized — in review"
+    );
+  } catch (err) {
+    await failTakeoff(takeoffId, takeoff.tokensUsed ?? 0, null, err);
+    throw err;
+  }
+}
+
+// Reviewer-edited DB row → the pure line shape pricing + expansion work on.
+function rowToLine(row: typeof takeoffLines.$inferSelect): CabinetLineItem {
+  return {
+    source_page: row.sourcePage,
+    tag: row.tag,
+    room: row.room,
+    qty: row.qty,
+    category: row.category as CabinetLineItem["category"],
+    width_in: row.widthIn,
+    height_in: row.heightIn,
+    depth_in: row.depthIn,
+    door_style: row.doorStyle,
+    material: row.material,
+    finish: row.finish,
+    assembled: row.assembled,
+    notes: row.notes,
+    confidence: row.confidence,
+    estimated: row.notes?.startsWith(ESTIMATED_NOTE_PREFIX) ?? false,
+    bbox_2d: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PDF vision extraction over the user-selected pages.
+// ---------------------------------------------------------------------------
+
+async function extractPdf(
   takeoffId: string,
   file: Buffer,
+  classified: PageClassification[],
+  selected: SelectedPage[] | null,
   budget: TakeoffBudget,
   crossVal: CrossVal,
   log: Logger
 ): Promise<{
-  lines: CabinetLineItem[];
+  lines: ReadLine[];
   raws: unknown[];
-  classified: PageClassification[];
-  pageCount: number;
   summary: {
     uncertainties: string[];
     unreadable_pages: number[];
@@ -261,88 +677,16 @@ async function processPdf(
 }> {
   const pdf = openPdf(file);
   try {
-    const pageCount = pdf.pageCount;
-
-    // Class 1 — the input already LISTS the cabinets in a text-layer schedule
-    // table (spec sheet / cut list / itemized quote). Read it verbatim: exact,
-    // free, and no zero-shot counting ceiling. When found, skip vision entirely.
-    const scheduleInput = [];
-    for (let i = 0; i < pageCount; i++) {
-      scheduleInput.push({ page: i + 1, fragments: pdf.pageTextFragments(i) });
-    }
-    const sched = extractCabinetSchedule(scheduleInput);
-    if (sched.lines.length >= MIN_SCHEDULE_ROWS) {
-      log.info(
-        { takeoffId, schedulePages: sched.schedulePages, lines: sched.lines.length },
-        "read cabinet schedule from text layer — skipping vision estimation"
-      );
-      const lines = [...sched.lines];
-      const faces = lines.flatMap((l) => expandToComponents(l));
-      lines.push(...faces);
-      const scheduleSet = new Set(sched.schedulePages);
-      const classified: PageClassification[] = Array.from(
-        { length: pageCount },
-        (_, i) => ({
-          page: i + 1,
-          class: scheduleSet.has(i + 1) ? "cabinet_schedule_table" : "other",
-          confidence: scheduleSet.has(i + 1) ? 0.95 : 0.5,
-        })
-      );
-      return {
-        lines,
-        raws: [{ schedule_pages: sched.schedulePages, source: "text_layer_schedule" }],
-        classified,
-        pageCount,
-        summary: {
-          uncertainties: [
-            `Cabinets read directly from the document's text-layer schedule table (pages ${sched.schedulePages.join(", ")}) — not estimated. Verify against the drawings.`,
-          ],
-          unreadable_pages: [],
-          warnings: [],
-        },
-      };
-    }
-
-    log.info({ takeoffId, pageCount }, "rasterizing thumbnails");
-
-    const thumbnails: { page: number; png: Uint8Array }[] = [];
-    for (let i = 0; i < pageCount; i++) {
-      thumbnails.push({ page: i + 1, png: pdf.renderPage(i, THUMBNAIL_DPI) });
-    }
-
-    const classified = await classifyPages(thumbnails, budget);
-
-    // No cabinet schedule → estimation mode (PRD §4): also read floor plans, and
-    // flag everything extracted as an estimate (handled per-line in extractPage).
-    const estimationMode = !classified.some(
-      (c) => c.class === "cabinet_schedule_table"
-    );
-    const relevantClasses: PageClass[] = estimationMode
-      ? [...RELEVANT_PAGE_CLASSES, "floor_plan"]
-      : RELEVANT_PAGE_CLASSES;
-
-    const relevant = classified
-      .filter((c) => relevantClasses.includes(c.class))
-      // Schedules first, then finish schedules, elevations, floor plans last
-      // (least precise source — PRD §6.3).
-      .sort((a, b) => {
-        const rank = (c: PageClassification) =>
-          c.class === "cabinet_schedule_table"
-            ? 0
-            : c.class === "finish_schedule"
-              ? 1
-              : c.class === "floor_plan"
-                ? 3
-                : 2;
-        return rank(a) - rank(b);
-      });
+    // Honor the human page selection (+ per-page tag overrides). A null
+    // selection reproduces the autonomous flow (legacy jobs only).
+    const { estimationMode, relevant } = selectRelevantPages(classified, selected);
 
     log.info(
       { takeoffId, estimationMode, relevant: relevant.map((r) => r.page) },
-      "classified pages"
+      "reading selected pages"
     );
 
-    const lines: CabinetLineItem[] = [];
+    const lines: ReadLine[] = [];
     const raws: unknown[] = [];
     const summary = {
       uncertainties: [] as string[],
@@ -352,6 +696,11 @@ async function processPdf(
     if (estimationMode) {
       summary.uncertainties.push(
         "No cabinet schedule detected — quantities below are ESTIMATED from the floor plan/elevations and must be verified before quoting."
+      );
+    }
+    if (relevant.length === 0) {
+      summary.warnings.push(
+        "None of the selected pages has a readable type (schedule / elevation / floor plan) — nothing was extracted. Re-tag pages if this is wrong."
       );
     }
 
@@ -374,8 +723,8 @@ async function processPdf(
     // a plan or schedule already counted and the total balloons 2-4x. Instead of
     // summing, route to the single authoritative page role (schedule > floor
     // plan > elevation) and count from that role only; demoted roles refine
-    // sizes later but never ADD to the count. (Replaces the old per-mode
-    // collapse/dedupe — the router subsumes both.)
+    // sizes later but never ADD to the count. Surviving lines keep their bbox +
+    // read-image provenance (the router drops lines, not boxes).
     const roleByPage = new Map<number, PageRole>(
       relevant.map((r) => [r.page, pageClassToRole(r.class)])
     );
@@ -384,8 +733,7 @@ async function processPdf(
     // a length of crown isn't a cabinet carcass — it over-prices the quote).
     const counted = dropNonBoxCasework(routed.lines);
     const nonBoxDropped = routed.lines.length - counted.length;
-    lines.length = 0;
-    lines.push(...counted);
+    const result = counted;
     log.info(
       {
         takeoffId,
@@ -398,24 +746,17 @@ async function processPdf(
       "page-role routed cabinet count"
     );
 
-    // Each cabinet box also has doors + drawer fronts (priced separately by
-    // ft²). Spawn those face line items in BOTH modes so the schedule mirrors a
-    // real CabinetNow quote (cabinet boxes + a door/drawer list).
-    const faces = lines.flatMap((l) => expandToComponents(l));
-    lines.push(...faces);
-    log.info(
-      { takeoffId, faces: faces.length },
-      "expanded cabinets into door/front faces"
-    );
+    // NOTE: expandToComponents moved to the finalize stage — the box gate
+    // reviews CABINETS, and faces must derive from the human-corrected boxes.
 
-    return { lines, raws, classified, pageCount, summary };
+    return { lines: result, raws, summary };
   } finally {
     pdf.close();
   }
 }
 
 type PageAcc = {
-  lines: CabinetLineItem[];
+  lines: ReadLine[];
   raws: unknown[];
   summary: { uncertainties: string[]; unreadable_pages: number[]; warnings: string[] };
 };
@@ -448,12 +789,14 @@ async function readRelevantPage(
 ): Promise<void> {
   const n = estimate ? estimateConsensusN() : 1;
   if (n <= 1) {
-    await readPageOnce(takeoffId, pdf, page, budget, crossVal, log, estimate, pageClass, acc);
+    await readPageOnce(takeoffId, pdf, page, budget, crossVal, log, estimate, pageClass, 0, acc);
     return;
   }
 
   // Read the page n times into throwaway accumulators, then keep the read whose
   // box count is the median (an outlier under- or over-read is discarded).
+  // Each candidate persists its own read images (region locate can differ per
+  // read), so the chosen read's boxes always match the image they were read on.
   const candidates: PageAcc[] = [];
   for (let i = 0; i < n; i++) {
     const local: PageAcc = {
@@ -461,7 +804,7 @@ async function readRelevantPage(
       raws: [],
       summary: { uncertainties: [], unreadable_pages: [], warnings: [] },
     };
-    await readPageOnce(takeoffId, pdf, page, budget, crossVal, log, estimate, pageClass, local);
+    await readPageOnce(takeoffId, pdf, page, budget, crossVal, log, estimate, pageClass, i, local);
     candidates.push(local);
   }
   // Select by quote-total proxy (cabinet face area), NOT box count: two reads
@@ -493,6 +836,10 @@ async function readRelevantPage(
 // drawings (one vision "locate" call) and each drawing is cropped + re-rendered
 // at full resolution; drawings too big for one image are tiled and
 // de-duplicated. Pages that already fit legibly are sent as a single image.
+// Every image actually sent to the model is persisted under
+// takeoffs/{id}/reads/ (keyed by page + consensus-candidate + region/tile) so
+// the box-review overlay can draw each line's bbox on the EXACT pixels the
+// model saw; `cand` disambiguates consensus candidates.
 async function readPageOnce(
   takeoffId: string,
   pdf: OpenPdf,
@@ -502,12 +849,15 @@ async function readPageOnce(
   log: Logger,
   estimate: boolean,
   pageClass: PageClass,
+  cand: number,
   acc: PageAcc
 ): Promise<void> {
   const idx = page - 1;
   const dims = pdf.pageDimsPt(idx);
   const widthIn = dims.widthPt / 72;
   const heightIn = dims.heightPt / 72;
+  const readKey = (suffix: string): string =>
+    `takeoffs/${takeoffId}/reads/p${page}-c${cand}-${suffix}.png`;
 
   // GATED (DIM_SKELETON=1): dimension-skeleton grounding — hand the estimate
   // prompt the sheet's own printed dimension chains (text layer, exact
@@ -523,9 +873,26 @@ async function readPageOnce(
   const locateDpi = fitDpi(widthIn, heightIn);
   const fullPng = pdf.renderPage(idx, locateDpi);
   await putObject(`takeoffs/${takeoffId}/pages/${page}.png`, fullPng, "image/png");
+  const fullRect: ReadRect = {
+    x0: 0,
+    y0: 0,
+    x1: dims.widthPt,
+    y1: dims.heightPt,
+    dpi: locateDpi,
+  };
 
-  const collect = (extraction: PageExtraction, into: CabinetLineItem[]): void => {
-    into.push(...extraction.lines);
+  const collect = (
+    extraction: PageExtraction,
+    into: ReadLine[],
+    read: ReadMeta | null
+  ): void => {
+    into.push(
+      ...extraction.lines.map((l) => ({
+        ...l,
+        read_image_key: read?.key ?? null,
+        read_rect: read?.rect ?? null,
+      }))
+    );
     acc.summary.uncertainties.push(
       ...extraction.uncertainties.map((u) => `p${page}: ${u}`)
     );
@@ -556,7 +923,9 @@ async function readPageOnce(
         log
       );
     }
-    collect(extraction, acc.lines);
+    const key = readKey("full");
+    await putObject(key, fullPng, "image/png");
+    collect(extraction, acc.lines, { key, rect: fullRect });
     return;
   }
 
@@ -633,14 +1002,17 @@ async function readPageOnce(
           log
         );
       }
-      collect(extraction, acc.lines);
+      const key = readKey("full");
+      await putObject(key, fullPng, "image/png");
+      collect(extraction, acc.lines, { key, rect: fullRect });
       return;
     }
 
-    for (const region of regions) {
+    for (const [ri, region] of regions.entries()) {
       const wIn = (region.rect.x1 - region.rect.x0) / 72;
       const hIn = (region.rect.y1 - region.rect.y0) / 72;
-      const crop = pdf.renderRegion(idx, region.rect, fitDpi(wIn, hIn));
+      const cropDpi = fitDpi(wIn, hIn);
+      const crop = pdf.renderRegion(idx, region.rect, cropDpi);
       let extraction: PageExtraction;
       try {
         const result = await extractPage(page, crop, budget, {
@@ -667,7 +1039,12 @@ async function readPageOnce(
           log
         );
       }
-      collect(extraction, acc.lines);
+      const key = readKey(`r${ri}`);
+      await putObject(key, crop, "image/png");
+      collect(extraction, acc.lines, {
+        key,
+        rect: { ...region.rect, dpi: cropDpi },
+      });
     }
     return;
   }
@@ -682,8 +1059,8 @@ async function readPageOnce(
 
   // Extract each crop; de-duplicate within a region (overlapping tiles), but
   // not across regions (distinct drawings legitimately repeat tags/sizes).
-  const linesByRegion = new Map<number, CabinetLineItem[]>();
-  for (const job of jobs) {
+  const linesByRegion = new Map<number, ReadLine[]>();
+  for (const [ti, job] of jobs.entries()) {
     const crop = pdf.renderRegion(idx, job.rect, job.dpi);
     let extraction: PageExtraction;
     try {
@@ -711,8 +1088,13 @@ async function readPageOnce(
         log
       );
     }
+    const key = readKey(`r${job.regionId}-t${ti}`);
+    await putObject(key, crop, "image/png");
     const bucket = linesByRegion.get(job.regionId) ?? [];
-    collect(extraction, bucket);
+    collect(extraction, bucket, {
+      key,
+      rect: { ...job.rect, dpi: job.dpi },
+    });
     linesByRegion.set(job.regionId, bucket);
   }
   for (const regionLines of linesByRegion.values()) {

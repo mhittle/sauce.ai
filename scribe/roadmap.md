@@ -31,7 +31,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | OCR fallback for scan-only PDFs (tesseract) | 7 | 5 | takeoff | backlog |
 | Sheet-index classification shortcut | 6 | 4 | takeoff | backlog |
 | Prospect detail view — open project details + preview/send any discovered plan to takeoff | 6 | 2 | ui | done |
-| Review screen: click line → source region highlight | 6 | 5 | ui | backlog |
+| Two-stage human review — page-picker + bounding-box gates (always blocking) | 8 | 7 | ui | done |
+| Review screen: click line → source region highlight | 6 | 5 | ui | done |
 | Eval fixture export job (eval_fixtures → evals/plansets) | 6 | 2 | algo | backlog |
 | Remaining Wave-1 permit adapters (San Diego, San Jose, Sacramento, Miami-Dade, Orlando, Tampa, Jacksonville) | 6 | 3 | crawler | backlog |
 | Agenda-packet / state procurement adapter (≥5 adapters target) | 5 | 6 | crawler | backlog |
@@ -309,11 +310,31 @@ and a `Send to Takeoff` button, plus the prospect's source link(s)
 {project_document_id}`); any document is sendable, not just `plan_set`, since
 filename classification is rough.
 
+### Two-stage human review — page-picker + bounding-box gates
+**Priority/LOE/Category/Status:** 8 / 7 / ui / done (PR: this PR, 2026-08-10)
+Owner decision (2026-08-05): both gates are ALWAYS BLOCKING, superseding the
+autonomous-only flow. Gate 1: after a PDF upload, every page renders as a
+thumbnail (`/takeoffs/$id/pages`); the estimator picks the pages to read and
+can override each page's classifier-suggested type (the plan-vs-elevation call
+decides reading accuracy). Gate 2: extraction stops at `awaiting_boxes` with
+per-line bounding boxes drawn over the EXACT images the model read
+(`/takeoffs/$id/boxes`); boxes are linked to editable lines
+(add/move/resize/delete; box edits are visual anchors, the inch fields drive
+price); "Finalize boxes" runs face expansion + pricing and lands on the
+existing review screen. Worker split: `prepare`/`extract`/`finalize` jobs;
+status flow `processing → awaiting_pages → processing → awaiting_boxes →
+review → approved`. Spreadsheets skip both gates; text-layer schedule PDFs
+skip only the page gate (list-only box review). BBoxes are advisory-quality
+(loose) by design.
+
 ### Review screen: click line → source region highlight
-**Priority/LOE/Category/Status:** 6 / 5 / ui / backlog
-PRD §7.1 calls for region-level provenance; v1 shows the full source page.
-Needs extraction to return per-line bounding boxes (model supports it) and
-an overlay renderer.
+**Priority/LOE/Category/Status:** 6 / 5 / ui / done (absorbed by the two-stage
+review gates, this PR, 2026-08-10)
+Superseded/absorbed: the box-review gate delivers region-level provenance and
+more — per-line `bbox_2d` from extraction, drawn over the exact read image,
+with click box ↔ line linking and editable boxes. The only delta left is a
+passive highlight on the post-finalize review screen; if ever wanted it rides
+the same `takeoff_lines.bbox`/`read_image_key` columns.
 
 ### Eval fixture export job
 **Priority/LOE/Category/Status:** 6 / 2 / algo / backlog

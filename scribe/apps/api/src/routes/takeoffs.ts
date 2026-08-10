@@ -11,7 +11,15 @@ import {
   takeoffLines,
   evalFixtures,
 } from "@scribe/db";
-import { ESTIMATED_NOTE_PREFIX, ExportTemplate, SourceKind } from "@scribe/shared";
+import {
+  canTransitionTakeoff,
+  ESTIMATED_NOTE_PREFIX,
+  ExportTemplate,
+  LineCategory,
+  SelectedPage,
+  SourceKind,
+  type TakeoffStatus,
+} from "@scribe/shared";
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
@@ -26,6 +34,8 @@ const EXT_TO_KIND: Record<string, SourceKind> = {
   jpeg: "image",
   webp: "image",
 };
+
+const BBox = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 
 const LinePatch = z.object({
   tag: z.string().nullable().optional(),
@@ -43,6 +53,25 @@ const LinePatch = z.object({
   product_line_id: z.string().nullable().optional(),
   resolved_params: z.record(z.unknown()).nullable().optional(),
   confidence: z.number().min(0).max(1).optional(),
+  // Box-review gate: moving/resizing a box is a visual-anchor edit only —
+  // the inches fields drive pricing.
+  bbox: BBox.nullable().optional(),
+});
+
+// A reviewer-drawn box becomes a new line (box gate "add box" flow).
+const LineCreate = z.object({
+  takeoff_id: z.string().uuid(),
+  category: LineCategory,
+  qty: z.number().positive().default(1),
+  tag: z.string().nullable().optional(),
+  room: z.string().nullable().optional(),
+  width_in: z.number().positive().nullable().optional(),
+  height_in: z.number().positive().nullable().optional(),
+  depth_in: z.number().positive().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  source_page: z.number().int().positive().nullable().optional(),
+  bbox: BBox.nullable().optional(),
+  read_image_key: z.string().nullable().optional(),
 });
 
 export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
@@ -107,7 +136,12 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       })
       .returning();
 
-    await getTakeoffQueue().add("process", { takeoff_id: takeoff.id });
+    // Two-gate flow: PDFs stop at the page picker first; single images have
+    // nothing to pick and go straight to extraction (then the box gate);
+    // spreadsheets keep the ungated single-stage job.
+    const jobName =
+      kind === "pdf" ? "prepare" : kind === "image" ? "extract" : "process";
+    await getTakeoffQueue().add(jobName, { takeoff_id: takeoff.id });
     return reply.code(201).send(takeoff);
   });
 
@@ -140,6 +174,164 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  // Signed URL for a page-picker thumbnail (written by the prepare stage).
+  app.get<{ Params: { id: string; page: string } }>(
+    "/takeoffs/:id/thumbs/:page/image",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const page = Number(req.params.page);
+      const pageCount = rows[0].pageCount;
+      if (
+        !Number.isInteger(page) ||
+        page < 1 ||
+        (pageCount != null && page > pageCount)
+      ) {
+        return reply.code(404).send({ error: "page out of range" });
+      }
+      const key = `takeoffs/${req.params.id}/thumbs/${page}.png`;
+      return { url: await signedGetUrl(key) };
+    }
+  );
+
+  // Signed URL for the EXACT image a set of lines was read from (box-review
+  // overlay). readId is a worker-generated slug (e.g. "p3-c1-r0"); reject
+  // anything that could traverse the key space.
+  app.get<{ Params: { id: string; readId: string } }>(
+    "/takeoffs/:id/reads/:readId/image",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      if (!/^[A-Za-z0-9._-]+$/.test(req.params.readId)) {
+        return reply.code(400).send({ error: "invalid read id" });
+      }
+      const key = `takeoffs/${req.params.id}/reads/${req.params.readId}.png`;
+      return { url: await signedGetUrl(key) };
+    }
+  );
+
+  // Page-picker gate: record which pages the human wants read (+ optional
+  // per-page type overrides) and kick off extraction.
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/pages",
+    async (req, reply) => {
+      const body = z
+        .object({ pages: z.array(SelectedPage).min(1) })
+        .parse(req.body);
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const takeoff = rows[0];
+      if (
+        takeoff.status !== "awaiting_pages" ||
+        !canTransitionTakeoff(takeoff.status as TakeoffStatus, "processing")
+      ) {
+        return reply.code(409).send({
+          error: `cannot select pages for takeoff in status ${takeoff.status}`,
+        });
+      }
+      const pageCount = takeoff.pageCount;
+      if (pageCount != null && body.pages.some((p) => p.page > pageCount)) {
+        return reply
+          .code(400)
+          .send({ error: `page out of range (document has ${pageCount} pages)` });
+      }
+
+      const [updated] = await db
+        .update(takeoffs)
+        .set({
+          selectedPages: body.pages,
+          status: "processing",
+          error: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(takeoffs.id, req.params.id))
+        .returning();
+      await getTakeoffQueue().add("extract", { takeoff_id: req.params.id });
+      return updated;
+    }
+  );
+
+  // Box-review gate: the human approved the boxes — expand faces + price.
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/finalize-boxes",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const takeoff = rows[0];
+      if (
+        takeoff.status !== "awaiting_boxes" ||
+        !canTransitionTakeoff(takeoff.status as TakeoffStatus, "processing")
+      ) {
+        return reply.code(409).send({
+          error: `cannot finalize boxes for takeoff in status ${takeoff.status}`,
+        });
+      }
+
+      const [updated] = await db
+        .update(takeoffs)
+        .set({ status: "processing", error: null, updatedAt: new Date() })
+        .where(eq(takeoffs.id, req.params.id))
+        .returning();
+      await getTakeoffQueue().add("finalize", { takeoff_id: req.params.id });
+      return updated;
+    }
+  );
+
+  // Create a line for a reviewer-drawn box (box gate "add box" flow).
+  app.post("/takeoff-lines", async (req, reply) => {
+    const body = LineCreate.parse(req.body);
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(takeoffs)
+      .where(eq(takeoffs.id, body.takeoff_id));
+    if (rows.length === 0) {
+      return reply.code(404).send({ error: "takeoff not found" });
+    }
+    if (rows[0].status !== "awaiting_boxes") {
+      return reply.code(409).send({
+        error: `cannot add lines to takeoff in status ${rows[0].status}`,
+      });
+    }
+    const [line] = await db
+      .insert(takeoffLines)
+      .values({
+        takeoffId: body.takeoff_id,
+        sourcePage: body.source_page ?? null,
+        tag: body.tag ?? null,
+        room: body.room ?? null,
+        qty: body.qty,
+        category: body.category,
+        widthIn: body.width_in ?? null,
+        heightIn: body.height_in ?? null,
+        depthIn: body.depth_in ?? null,
+        notes: body.notes ?? null,
+        // A human drew this box — it is not a model guess.
+        confidence: 1,
+        reviewerEdited: true,
+        bbox: body.bbox ?? null,
+        readImageKey: body.read_image_key ?? null,
+      })
+      .returning();
+    return reply.code(201).send(line);
+  });
+
   app.patch<{ Params: { id: string } }>(
     "/takeoff-lines/:id",
     async (req, reply) => {
@@ -162,6 +354,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         product_line_id: "productLineId",
         resolved_params: "resolvedParams",
         confidence: "confidence",
+        bbox: "bbox",
       };
       for (const [k, v] of Object.entries(patch)) {
         if (v !== undefined) set[map[k]] = v;
@@ -279,6 +472,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         // No estimated column on takeoff_lines; the [ESTIMATED] note prefix
         // (set in the worker) carries the flag.
         estimated: l.notes?.startsWith(ESTIMATED_NOTE_PREFIX) ?? false,
+        bbox_2d: null,
       }));
 
       reply

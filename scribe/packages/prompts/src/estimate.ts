@@ -1,4 +1,4 @@
-export const ESTIMATE_PROMPT_VERSION = "estimate-v4";
+export const ESTIMATE_PROMPT_VERSION = "estimate-v5";
 
 // Used when a plan set has NO cabinet schedule (PRD §4): estimate cabinetry from
 // a floor plan or interior elevation. Output is the same PageExtraction shape as
@@ -40,6 +40,7 @@ FOR EACH CABINET emit one line with:
 - category: casework_base, casework_wall, casework_tall, or vanity. Use casework_base for fillers and end panels too (put "Filler"/"End Panel" in the tag — they have no doors).
 - width_in/height_in/depth_in in decimal inches (defaults: base 34.5h x 24d, wall x 12d, tall 84-96h x 24d, vanity 28-34.5h x 21d).
 - notes: the door/drawer configuration, e.g. "2 doors", "3 drawers", "1 door 1 drawer", "drawer over door", "4 drawers", and your basis (which run/segment). Fillers/end panels: note "filler"/"end panel".
+- bbox_2d: [x0, y0, x1, y1] — this cabinet's bounding box in PIXELS of THIS image, drawn tightly around the cabinet's face in the view you counted it from (origin top-left). If unsure, a loose box is acceptable; use null ONLY when the cabinet cannot be visually located at all (e.g. inferred from a label).
 
 SCOPE — estimate ONLY manufactured cabinetry: kitchen, bathroom vanities, laundry/mud-room cabinets, and pantry/linen cabinets. DO NOT estimate walk-in-closet wire/shelving systems, garage storage, or countertops unless they are explicitly drawn as built cabinets. If a room has no cabinetry, skip it.
 
@@ -54,7 +55,7 @@ OTHER RULES:
 - List layout assumptions in uncertainties.
 
 Respond with JSON only, same shape as the extractor:
-{"lines": [{"source_page": <n>, "tag": "...", "room": ..., "qty": ..., "category": ..., "width_in": ..., "height_in": ..., "depth_in": ..., "door_style": null, "material": null, "finish": null, "assembled": null, "notes": "...config + basis...", "confidence": ...}],
+{"lines": [{"source_page": <n>, "tag": "...", "room": ..., "qty": ..., "category": ..., "width_in": ..., "height_in": ..., "depth_in": ..., "door_style": null, "material": null, "finish": null, "assembled": null, "notes": "...config + basis...", "confidence": ..., "bbox_2d": [x0, y0, x1, y1]}],
  "unit_multipliers": [{"unit_type": ..., "count": <n|null>, "ambiguous": <bool>}],
  "uncertainties": ["..."],
  "unreadable": <bool>}`;

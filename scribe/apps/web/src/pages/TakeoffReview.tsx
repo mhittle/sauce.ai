@@ -60,6 +60,17 @@ export function TakeoffReviewPage() {
     refetchInterval: (query) =>
       query.state.data?.status === "processing" ? 3000 : false,
   });
+  const status = q.data?.status;
+
+  // Two-gate flow: this screen owns review/approved; forward the gate
+  // statuses to their own pages.
+  useEffect(() => {
+    if (status === "awaiting_pages") {
+      navigate({ to: "/takeoffs/$takeoffId/pages", params: { takeoffId } });
+    } else if (status === "awaiting_boxes") {
+      navigate({ to: "/takeoffs/$takeoffId/boxes", params: { takeoffId } });
+    }
+  }, [status, navigate, takeoffId]);
 
   const productLines = useQuery({
     queryKey: ["product-lines"],

@@ -1,4 +1,4 @@
-export const EXTRACT_PROMPT_VERSION = "extract-v1";
+export const EXTRACT_PROMPT_VERSION = "extract-v2";
 
 // The nomenclature reference table is encoded BOTH here and in the
 // deterministic post-parser (@scribe/shared parseTag) per PRD §6.3.
@@ -20,9 +20,10 @@ Rules:
 - assembled: true/false only when the document says so (e.g. "RTA", "assembled"); otherwise null.
 - confidence: your per-line confidence 0-1 that tag, qty, and dimensions are all correct. Be honest — lines under 0.8 get human review.
 - List anything unreadable or uncertain in uncertainties. If the page is illegible, set unreadable to true.
+- bbox_2d: [x0, y0, x1, y1] — the line item's bounding box in PIXELS of THIS image (origin top-left): tightly around the item's drawn cabinet face on an elevation, or around its row in a schedule table. A loose box is acceptable when unsure; use null only when the item is not visually locatable.
 
 Respond with JSON only:
-{"lines": [{"source_page": <n>, "tag": ..., "room": ..., "qty": ..., "category": ..., "width_in": ..., "height_in": ..., "depth_in": ..., "door_style": ..., "material": ..., "finish": ..., "assembled": ..., "notes": ..., "confidence": ...}],
+{"lines": [{"source_page": <n>, "tag": ..., "room": ..., "qty": ..., "category": ..., "width_in": ..., "height_in": ..., "depth_in": ..., "door_style": ..., "material": ..., "finish": ..., "assembled": ..., "notes": ..., "confidence": ..., "bbox_2d": [x0, y0, x1, y1]}],
  "unit_multipliers": [{"unit_type": ..., "count": <n|null>, "ambiguous": <bool>}],
  "uncertainties": ["..."],
  "unreadable": <bool>}`;

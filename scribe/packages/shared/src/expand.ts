@@ -60,6 +60,8 @@ function faceLine(
     notes: `${ESTIMATED_NOTE_PREFIX} ${label.toLowerCase()} of ${parent.tag ?? parent.category}${base ? ` (${base})` : ""}`,
     confidence: parent.confidence,
     estimated: parent.estimated,
+    // Faces are derived, not read — they have no visual anchor of their own.
+    bbox_2d: null,
   };
 }
 

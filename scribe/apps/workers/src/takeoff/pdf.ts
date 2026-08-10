@@ -107,3 +107,7 @@ export function openPdf(data: Buffer): OpenPdf {
 
 export const THUMBNAIL_DPI = 50;
 export const EXTRACTION_DPI = 200;
+// Picker-gate thumbnails (stored to takeoffs/{id}/thumbs/): light enough to
+// render every page of a big set, sharp enough for a human to tell a floor
+// plan from an elevation. Also reused as the classification input.
+export const PICKER_THUMBNAIL_DPI = 72;
