@@ -42,6 +42,15 @@ export const CabinetLineItem = z.object({
   // Estimated lines are forced to low confidence and noted so they surface for
   // review and never pass as schedule-grade quantities. Defaults false.
   estimated: z.boolean().default(false),
+  // [x0,y0,x1,y1] in pixels of the exact image the model read — the visual
+  // anchor for the box-review gate. Advisory-quality (self-reported boxes are
+  // loose); the reviewer corrects them. Lenient: a missing or malformed box
+  // becomes null rather than dropping the whole line.
+  bbox_2d: z
+    .tuple([z.number(), z.number(), z.number(), z.number()])
+    .nullable()
+    .catch(null)
+    .default(null),
 });
 export type CabinetLineItem = z.infer<typeof CabinetLineItem>;
 
@@ -91,6 +100,15 @@ export const PageClassification = z.object({
   confidence: z.number().min(0).max(1),
 });
 export type PageClassification = z.infer<typeof PageClassification>;
+
+// One user-picked page from the page-selection gate. `class` is set only when
+// the user overrode (or confirmed) the classifier's suggested type; absent
+// means "use the classifier's call".
+export const SelectedPage = z.object({
+  page: z.number().int().positive(),
+  class: PageClass.optional(),
+});
+export type SelectedPage = z.infer<typeof SelectedPage>;
 
 // ---------------------------------------------------------------------------
 // Pricing (PRD §6.4)
@@ -283,14 +301,41 @@ export type QuoteStatus = z.infer<typeof QuoteStatus>;
 
 export const QUOTE_VALIDITY_DAYS = 10;
 
+// Two-gate flow (2026-08): processing → awaiting_pages → processing →
+// awaiting_boxes → review → approved. `extracted` is dead (old rows may still
+// carry it — don't repurpose); spreadsheets skip both gates (no pages/boxes to
+// review) and go straight to review.
 export const TakeoffStatus = z.enum([
   "processing",
+  "awaiting_pages",
+  "awaiting_boxes",
   "extracted",
   "review",
   "approved",
   "failed",
 ]);
 export type TakeoffStatus = z.infer<typeof TakeoffStatus>;
+
+// Legal status transitions. Workers own the transitions OUT of processing;
+// the API owns the human-gate transitions back INTO processing and the final
+// approve. `extracted` is a dead legacy status that can still be approved.
+export const TAKEOFF_STATUS_TRANSITIONS: Record<TakeoffStatus, TakeoffStatus[]> =
+  {
+    processing: ["awaiting_pages", "awaiting_boxes", "review", "failed"],
+    awaiting_pages: ["processing", "failed"],
+    awaiting_boxes: ["processing", "failed"],
+    extracted: ["approved"],
+    review: ["approved"],
+    approved: [],
+    failed: [],
+  };
+
+export function canTransitionTakeoff(
+  from: TakeoffStatus,
+  to: TakeoffStatus
+): boolean {
+  return TAKEOFF_STATUS_TRANSITIONS[from]?.includes(to) ?? false;
+}
 
 export const SourceKind = z.enum(["pdf", "xlsx", "csv", "image"]);
 export type SourceKind = z.infer<typeof SourceKind>;

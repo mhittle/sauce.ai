@@ -100,6 +100,7 @@ export const takeoffs = pgTable("takeoffs", {
   status: text("status").notNull().default("processing"),
   pageCount: integer("page_count"),
   classifiedPages: jsonb("classified_pages"),
+  selectedPages: jsonb("selected_pages"),
   docConfidence: numeric("doc_confidence", { mode: "number" }),
   docSummary: jsonb("doc_summary"),
   promptVersion: text("prompt_version"),
@@ -133,6 +134,9 @@ export const takeoffLines = pgTable("takeoff_lines", {
   unmatchedReason: text("unmatched_reason"),
   reviewerEdited: boolean("reviewer_edited").notNull().default(false),
   rawModelOutput: jsonb("raw_model_output"),
+  bbox: jsonb("bbox"),
+  readImageKey: text("read_image_key"),
+  readRect: jsonb("read_rect"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
