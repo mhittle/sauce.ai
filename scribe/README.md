@@ -36,10 +36,12 @@ scribe/
 │   ├── api/        # Fastify API: auth (Google OAuth), takeoffs, quotes,
 │   │               # projects, admin (pricing editor, org settings,
 │   │               # export templates, sources), quote PDF
-│   ├── workers/    # BullMQ: takeoff pipeline (rasterize → classify →
-│   │               # extract → match) + crawler (fetch → normalize →
-│   │               # score → plan-discovery → dedupe)
-│   └── web/        # React SPA: Prospect Queue, Takeoff Review (keyboard-
+│   ├── workers/    # BullMQ: takeoff pipeline in three gated stages
+│   │               # (prepare/classify → extract → finalize/match) +
+│   │               # crawler (fetch → normalize → score → plan-discovery
+│   │               # → dedupe)
+│   └── web/        # React SPA: Prospect Queue, Page Picker + Box Review
+│                   # (the two takeoff gates), Takeoff Review (keyboard-
 │                   # optimized), Quote Builder, Dashboard, Admin
 ├── packages/
 │   ├── shared/     # zod schemas (CabinetLineItem etc.) + nomenclature
@@ -76,6 +78,14 @@ local admin) — never set that combination in production.
 
 ## Load-bearing product rules
 
+- **Two blocking human gates on every visual takeoff** (2026-08): after a PDF
+  upload the estimator picks which pages to read (and can correct each page's
+  type), and after extraction they review the model's bounding boxes over the
+  exact images it read — add/move/resize/delete boxes, edit the linked lines —
+  before anything is priced. Status flow: `processing → awaiting_pages →
+  processing → awaiting_boxes → review → approved`. Spreadsheets skip both
+  gates (nothing to pick or draw); text-layer schedule PDFs skip only the page
+  gate.
 - **Money is integer cents** everywhere internally.
 - **Quotes pin a pricing_config version** — same lines + same version → same
   total, always. Admin saves create a new immutable version.

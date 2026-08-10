@@ -70,6 +70,71 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-08-10 — two-stage human review shipped: page-picker + bounding-box gates
+
+**Owner decision (2026-08-05): both gates are ALWAYS BLOCKING** — no auto-pass,
+superseding the autonomous-only flow. New status flow:
+`processing → awaiting_pages → processing → awaiting_boxes → review → approved`
+(+ `failed`; `extracted` stays a dead legacy value — old rows may exist, don't
+repurpose it).
+
+**Shipped (branch `claude/scribe-two-stage-review-24ca21`):**
+- **Migration `0004_review_gates.sql`** — the `takeoffs` status CHECK is
+  DROPPED and re-added with `awaiting_pages`/`awaiting_boxes` (boot-migrate
+  applies it on deploy). New columns: `takeoffs.selected_pages` jsonb;
+  `takeoff_lines.bbox` (px of the read image), `read_image_key`,
+  `read_rect` ({x0,y0,x1,y1} PDF points + dpi).
+- **Worker split** (`process.ts`): one job → three — `prepare` (every-page
+  72-DPI picker thumbs to `takeoffs/{id}/thumbs/`, doubles as classify input →
+  `awaiting_pages`), `extract` (reads ONLY `selected_pages`, user tag override
+  replaces the classifier's class via shared `selectRelevantPages` →
+  `awaiting_boxes`), `finalize` (re-match every human-approved line +
+  `expandToComponents` → `review`). Legacy `process` jobs still route
+  (in-flight across the deploy); **spreadsheets stay ungated** (straight to
+  `review`); **text-layer schedule PDFs skip only the page gate** and stop at
+  `awaiting_boxes` as a list-only review (no bboxes).
+- **Expansion + pricing MOVED to finalize.** Extraction inserts BOX-level
+  lines only — no `matchLine`, no faces — so faces always derive from the
+  human-corrected boxes. Finalize marks derived faces
+  `raw_model_output.expanded=true` and deletes them first on re-run
+  (idempotent). Eval fixtures now snapshot box-level lines at extract time.
+- **Read-image provenance:** every image actually sent to the model persists
+  at `takeoffs/{id}/reads/p{page}-c{cand}-{full|rN|rN-tK}.png` — per
+  CONSENSUS CANDIDATE, because room/region locate differs per read; the chosen
+  read's boxes always match their own pixels. Router/dedup drop lines, not
+  boxes — surviving lines keep their provenance.
+- **Prompts** demand `bbox_2d` per line → versions bumped to `estimate-v5` /
+  `extract-v2` (reading-ruler comparisons cross a version boundary here).
+  `CabinetLineItem.bbox_2d` parses with `.catch(null)` — a malformed box can
+  never drop a line. **BBoxes are advisory-quality** (July spike showed loose
+  boxes): visual anchors the reviewer corrects; box edits are visual-only, the
+  inch fields drive price.
+- **API:** `POST /takeoffs/:id/pages` (awaiting_pages→processing, enqueues
+  extract), `POST /takeoffs/:id/finalize-boxes`, `POST /takeoff-lines`
+  (reviewer-drawn box → new line, confidence 1, reviewerEdited), `PATCH
+  /takeoff-lines/:id` accepts `bbox`, signed thumb/read-image URL routes with
+  existence/slug guards. Transitions guarded by shared `canTransitionTakeoff`.
+- **Web:** `/takeoffs/$id/pages` (PagePicker — thumbnail grid, click-select,
+  per-page type select prefilled from the classifier; the class is only SENT
+  when the user changes it) and `/takeoffs/$id/boxes` (BoxReview — pure SVG
+  `BoxOverlay` in image-natural coords over the exact read image, box↔line
+  linking, drag/resize/draw/Delete-key, always-editable line rows, "Finalize
+  boxes →"). `TakeoffReview` forwards gate statuses to the gate pages.
+
+**Gotchas for future sessions:**
+- `tokensUsed` now ACCUMULATES across stages; the `TakeoffBudget` cap is
+  per-STAGE, not per-takeoff.
+- A selected page whose effective class isn't readable (`other`/cover) is NOT
+  read — the picker UI says so; tags decide HOW a page is read.
+- The offline harness (`estimate-floorplan.mjs`) stays single-stage by design
+  but imports the same prompts/extractor from dist, so it measures the bbox
+  prompt automatically after `pnpm build`.
+- Tests: shared 142 / workers 13 / pricing 44 all green. NOT yet e2e-verified
+  against the live API (needs the backtest key + ~$0.50; run upload → pick →
+  boxes → finalize → approve on a 1-page real PDF when approved).
+
+---
+
 ## 2026-08-05 — step attribution via zero-API read kits; router merge + 3 fixes measured
 
 **Context:** Owner pivoted to the agentic-reading path with a diagnose-first
