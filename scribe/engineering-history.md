@@ -102,6 +102,20 @@ gate" below.
   edited). (b) The face refresh is gated on sourceKind pdf/image — spreadsheet
   takeoffs never expand.
 
+**Same day — router A/B on the read kits (zero API), owner prompt:** on the
+Braun doc the plan-first router kept 5 coarse plan guesses and dropped 3 fully
+LABELED elevations ("28\" SINK BASE"…). Owner proposed elevation-primary
+(frontal view = unit identity, plan = layout/widths). Implemented gated
+`ROUTER_ELEVATION_PRIMARY=1` (schedule > elevation > plan; implies the
+tolerant merge so plan-only units like islands are re-admitted) and replayed
+all 10 kits: baseline 0.328 / `ROUTER_TOLERANT_MERGE=1` **0.379** /
+`ROUTER_ELEVATION_PRIMARY=1` 0.376 macro F1. Verdict: recovering dropped
+elevations is the whole win (Q5 0.21→0.42, Q22 0.22→0.33, Q24 0.38→0.57);
+WHICH view is primary is a wash (only Q22 differs, slightly favoring
+plan-primary). Recommendation: turn on `ROUTER_TOLERANT_MERGE=1` in prod
+(scribe-workers env — still an owner action, still "API confirm pending");
+keep elevation-primary gated for future A/B.
+
 ---
 
 ## 2026-08-10 — two-stage human review shipped: page-picker + bounding-box gates (box gate since removed — see 2026-08-11 above)
