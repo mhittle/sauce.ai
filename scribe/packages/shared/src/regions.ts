@@ -589,7 +589,19 @@ export function routeByPageRole<T extends CabinetLineItem>(
   // Highest-priority role that produced at least one real box wins. The
   // ≥1-box guard means a misclassified site plan (a "plan" page with no
   // cabinets) falls through to elevations instead of zeroing the count.
-  const priority: PageRole[] = ["schedule", "plan", "elevation"];
+  //
+  // Gated (ROUTER_ELEVATION_PRIMARY=1): count from ELEVATIONS before the plan.
+  // The frontal view is where unit identity actually lives — tall vs wall vs
+  // base, per-unit labels ("28\" SINK BASE"), drawn divisions — while a plan
+  // view mostly shows hatched rectangles. The 2026-08-05 attribution measured
+  // the asymmetry: plan-regime quotes scored 0.19–0.31 on the reading ruler,
+  // elevation-regime 0.42–0.80. Under this flag elevations supply the unit
+  // list and the tolerant merge admits plan-only units (an island no elevation
+  // shows). Measure on the read kits before making it the default.
+  const elevationPrimary = process.env.ROUTER_ELEVATION_PRIMARY === "1";
+  const priority: PageRole[] = elevationPrimary
+    ? ["schedule", "elevation", "plan"]
+    : ["schedule", "plan", "elevation"];
   let chosen: PageRole | null = null;
   for (const role of priority) {
     if (lines.some((l) => roleOf(l) === role && isBox(l))) {
@@ -635,7 +647,12 @@ export function routeByPageRole<T extends CabinetLineItem>(
   // tolerance dedup keeps both failure modes in check. Near-duplicate PAGE
   // re-renders (the same wall exported twice, Q24) are collapsed first within
   // each role so they can't double-count either.
-  if (process.env.ROUTER_TOLERANT_MERGE === "1" && chosen !== "schedule") {
+  // Elevation-primary implies the tolerant merge — dropping the plan outright
+  // would lose units only the plan depicts.
+  if (
+    (process.env.ROUTER_TOLERANT_MERGE === "1" || elevationPrimary) &&
+    chosen !== "schedule"
+  ) {
     const collapsePages = (ls: T[]): T[] => collapseDuplicatePages(ls);
     const keptRaw = collapsePages(lines.filter((l) => roleOf(l) === chosen));
     const kept = collapseCrossViewDuplicates(keptRaw);
