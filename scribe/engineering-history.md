@@ -119,11 +119,12 @@ repurpose it).
   when the user changes it). The box gate is NOT a route: `TakeoffReview`
   renders `BoxReviewSection` inside `/takeoffs/$id` while status is
   `awaiting_boxes` (owner feedback 2026-08-11 — the views are similar, keep
-  review one page), with ALL read images stacked (one SVG `BoxOverlay` per
-  image, image-natural coords), box↔line linking that scrolls both ways,
-  drag/resize/draw-on-any-image/Delete-key, always-editable line rows,
-  "Finalize boxes →". `TakeoffReview` still forwards `awaiting_pages` to the
-  picker.
+  review one page). Read images are TABBED with human labels ("Page 1",
+  "Page 2"; a/b suffix when a page has several crops — also owner feedback,
+  after trying a stacked layout); clicking a line switches to its image, one
+  SVG `BoxOverlay` in image-natural coords, drag/resize/draw/Delete-key,
+  always-editable line rows, "Finalize boxes →". `TakeoffReview` still
+  forwards `awaiting_pages` to the picker.
 
 **Gotchas for future sessions:**
 - `tokensUsed` now ACCUMULATES across stages; the `TakeoffBudget` cap is

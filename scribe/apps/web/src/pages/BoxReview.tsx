@@ -12,8 +12,8 @@ import {
 // Box-review gate (status awaiting_boxes). Not a route of its own: the
 // takeoff screen (/takeoffs/$takeoffId) renders this section while the
 // takeoff waits at the gate, so review is one page whose content follows the
-// status. ALL read images are stacked with their boxes — nothing is hidden
-// behind tabs.
+// status. Read images are tabbed by PAGE ("Page 1", "Page 2", …); clicking a
+// line in the list switches to its image.
 
 export interface BoxReviewLine {
   id: string;
@@ -66,13 +66,6 @@ function pageFromSlug(key: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-// Human label for a read-image group: "Page 3" (+ crop index when a page was
-// read in several crops).
-function groupLabel(key: string): string {
-  const page = pageFromSlug(key);
-  return page != null ? `Page ${page} — ${readSlug(key)}` : readSlug(key);
-}
-
 interface Group {
   key: string | null;
   lines: BoxReviewLine[];
@@ -81,14 +74,12 @@ interface Group {
 export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
   const takeoffId = takeoff.id;
   const qc = useQueryClient();
+  const [currentKey, setCurrentKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
   // The box the reviewer just drew, waiting for its line details.
-  const [pendingBox, setPendingBox] = useState<{ key: string; bbox: BBox } | null>(
-    null
-  );
+  const [pendingBox, setPendingBox] = useState<BBox | null>(null);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
-  const groupRefs = useRef(new Map<string, HTMLDivElement>());
 
   const lines = takeoff.lines;
 
@@ -108,7 +99,55 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
     return keys.map((k) => ({ key: k, lines: byKey.get(k)! }));
   }, [lines]);
 
-  const imageGroups = groups.filter((g): g is Group & { key: string } => g.key != null);
+  const imageGroups = groups.filter(
+    (g): g is Group & { key: string } => g.key != null
+  );
+
+  // Human tab labels: "Page 1", "Page 2", … — with an a/b suffix only when a
+  // page was read as several crops (rare). Falls back to the raw slug when the
+  // key doesn't carry a page number.
+  const labelByKey = useMemo(() => {
+    const byPage = new Map<number, string[]>();
+    for (const g of imageGroups) {
+      const p = pageFromSlug(g.key);
+      if (p != null) byPage.set(p, [...(byPage.get(p) ?? []), g.key]);
+    }
+    const labels = new Map<string, string>();
+    for (const g of imageGroups) {
+      const p = pageFromSlug(g.key);
+      if (p == null) {
+        labels.set(g.key, readSlug(g.key));
+        continue;
+      }
+      const siblings = byPage.get(p)!;
+      labels.set(
+        g.key,
+        siblings.length > 1
+          ? `Page ${p}${String.fromCharCode(97 + siblings.indexOf(g.key))}`
+          : `Page ${p}`
+      );
+    }
+    return labels;
+  }, [imageGroups]);
+
+  const groupLabel = (key: string | null): string =>
+    key == null ? "No drawing (text schedule)" : (labelByKey.get(key) ?? readSlug(key));
+
+  const effectiveKey =
+    currentKey != null && imageGroups.some((g) => g.key === currentKey)
+      ? currentKey
+      : (imageGroups[0]?.key ?? null);
+  const currentGroup = groups.find((g) => g.key === effectiveKey);
+
+  const imageUrl = useQuery({
+    queryKey: ["read-image", takeoffId, effectiveKey],
+    queryFn: () =>
+      apiGet<{ url: string }>(
+        `/takeoffs/${takeoffId}/reads/${readSlug(effectiveKey!)}/image`
+      ),
+    enabled: effectiveKey != null,
+    staleTime: 10 * 60 * 1000,
+  });
 
   const patchLine = useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Record<string, unknown> }) =>
@@ -166,17 +205,19 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
 
   const selectFromList = (line: BoxReviewLine) => {
     setSelectedId(line.id);
-    if (line.readImageKey != null) {
-      groupRefs.current
-        .get(line.readImageKey)
-        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
+    if (line.readImageKey != null) setCurrentKey(line.readImageKey);
   };
 
   const boxCount = lines.reduce((s, l) => s + l.qty, 0);
-  const pendingGroup = pendingBox
-    ? imageGroups.find((g) => g.key === pendingBox.key)
-    : null;
+
+  const overlayBoxes: OverlayBox[] = (currentGroup?.lines ?? [])
+    .filter((l): l is BoxReviewLine & { bbox: BBox } => l.bbox != null)
+    .map((l) => ({
+      id: l.id,
+      bbox: l.bbox,
+      category: l.category,
+      label: l.tag ?? l.category,
+    }));
 
   return (
     <div>
@@ -186,17 +227,6 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
             <span className="text-sm text-zinc-500">
               {boxCount} cabinet{boxCount === 1 ? "" : "s"}
             </span>
-            {imageGroups.length > 0 && (
-              <Button
-                variant={drawMode ? "primary" : "default"}
-                onClick={() => {
-                  setDrawMode((d) => !d);
-                  setPendingBox(null);
-                }}
-              >
-                {drawMode ? "Drawing… (drag on an image)" : "+ Draw new box"}
-              </Button>
-            )}
             <Button
               variant="primary"
               disabled={finalize.isPending || takeoff.status !== "awaiting_boxes"}
@@ -225,45 +255,60 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
       </p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="max-h-[80vh] space-y-4 overflow-auto pr-1">
-          {imageGroups.map((g) => (
-            <div
-              key={g.key}
-              ref={(el) => {
-                if (el) groupRefs.current.set(g.key, el);
-                else groupRefs.current.delete(g.key);
-              }}
-            >
-              <Card>
+        <div>
+          {imageGroups.length > 1 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {imageGroups.map((g) => (
+                <button
+                  key={g.key}
+                  className={`rounded-md border px-2 py-1 text-xs ${
+                    g.key === effectiveKey
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50"
+                  }`}
+                  onClick={() => setCurrentKey(g.key)}
+                >
+                  {groupLabel(g.key)} ({g.lines.length})
+                </button>
+              ))}
+            </div>
+          )}
+          <Card className="max-h-[75vh] overflow-auto">
+            {effectiveKey == null ? (
+              <p className="text-sm text-zinc-400">
+                No drawing for these lines (read from the document's text
+                schedule) — review the list on the right.
+              </p>
+            ) : imageUrl.data?.url ? (
+              <>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm font-semibold text-zinc-500">
-                    {groupLabel(g.key)}
+                    {groupLabel(effectiveKey)}
                   </span>
-                  <span className="text-xs text-zinc-400">
-                    {g.lines.length} line{g.lines.length === 1 ? "" : "s"}
-                  </span>
+                  <Button
+                    variant={drawMode ? "primary" : "default"}
+                    onClick={() => {
+                      setDrawMode((d) => !d);
+                      setPendingBox(null);
+                    }}
+                  >
+                    {drawMode ? "Drawing… (drag on image)" : "+ Draw new box"}
+                  </Button>
                 </div>
-                <ReadImageOverlay
-                  takeoffId={takeoffId}
-                  groupKey={g.key}
-                  lines={g.lines}
+                <BoxOverlay
+                  src={imageUrl.data.url}
+                  boxes={overlayBoxes}
                   selectedId={selectedId}
                   drawMode={drawMode && pendingBox == null}
                   onSelect={selectFromOverlay}
                   onChange={(id, bbox) => patchLine.mutate({ id, patch: { bbox } })}
-                  onCreate={(bbox) => setPendingBox({ key: g.key, bbox })}
+                  onCreate={(bbox) => setPendingBox(bbox)}
                 />
-              </Card>
-            </div>
-          ))}
-          {imageGroups.length === 0 && (
-            <Card>
-              <p className="text-sm text-zinc-400">
-                No drawings for these lines (read from the document's text
-                schedule) — review the list on the right.
-              </p>
-            </Card>
-          )}
+              </>
+            ) : (
+              <p className="text-sm text-zinc-400">Loading read image…</p>
+            )}
+          </Card>
         </div>
 
         <div>
@@ -275,16 +320,16 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
                 createLine.mutate({
                   takeoff_id: takeoffId,
                   ...fields,
-                  bbox: pendingBox.bbox,
-                  read_image_key: pendingBox.key,
+                  bbox: pendingBox,
+                  read_image_key: effectiveKey,
                   source_page:
-                    pendingGroup?.lines[0]?.sourcePage ??
-                    pageFromSlug(pendingBox.key),
+                    currentGroup?.lines[0]?.sourcePage ??
+                    (effectiveKey != null ? pageFromSlug(effectiveKey) : null),
                 })
               }
             />
           )}
-          <Card className="max-h-[80vh] overflow-auto p-0">
+          <Card className="max-h-[75vh] overflow-auto p-0">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white">
                 <tr className="border-b border-zinc-200 text-left text-zinc-500">
@@ -300,6 +345,8 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
                   <LineGroup
                     key={g.key ?? "none"}
                     group={g}
+                    label={groupLabel(g.key)}
+                    current={g.key === effectiveKey}
                     selectedId={selectedId}
                     rowRefs={rowRefs.current}
                     onSelect={selectFromList}
@@ -324,62 +371,10 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
   );
 }
 
-// One read image with its interactive overlay; fetches its own signed URL.
-function ReadImageOverlay({
-  takeoffId,
-  groupKey,
-  lines,
-  selectedId,
-  drawMode,
-  onSelect,
-  onChange,
-  onCreate,
-}: {
-  takeoffId: string;
-  groupKey: string;
-  lines: BoxReviewLine[];
-  selectedId: string | null;
-  drawMode: boolean;
-  onSelect: (id: string | null) => void;
-  onChange: (id: string, bbox: BBox) => void;
-  onCreate: (bbox: BBox) => void;
-}) {
-  const imageUrl = useQuery({
-    queryKey: ["read-image", takeoffId, groupKey],
-    queryFn: () =>
-      apiGet<{ url: string }>(
-        `/takeoffs/${takeoffId}/reads/${readSlug(groupKey)}/image`
-      ),
-    staleTime: 10 * 60 * 1000,
-  });
-
-  const boxes: OverlayBox[] = lines
-    .filter((l): l is BoxReviewLine & { bbox: BBox } => l.bbox != null)
-    .map((l) => ({
-      id: l.id,
-      bbox: l.bbox,
-      category: l.category,
-      label: l.tag ?? l.category,
-    }));
-
-  if (!imageUrl.data?.url) {
-    return <p className="text-sm text-zinc-400">Loading read image…</p>;
-  }
-  return (
-    <BoxOverlay
-      src={imageUrl.data.url}
-      boxes={boxes}
-      selectedId={selectedId}
-      drawMode={drawMode}
-      onSelect={onSelect}
-      onChange={onChange}
-      onCreate={onCreate}
-    />
-  );
-}
-
 function LineGroup({
   group,
+  label,
+  current,
   selectedId,
   rowRefs,
   onSelect,
@@ -387,6 +382,8 @@ function LineGroup({
   onDelete,
 }: {
   group: Group;
+  label: string;
+  current: boolean;
   selectedId: string | null;
   rowRefs: Map<string, HTMLTableRowElement>;
   onSelect: (line: BoxReviewLine) => void;
@@ -395,10 +392,9 @@ function LineGroup({
 }) {
   return (
     <>
-      <tr className="bg-zinc-50">
+      <tr className={current ? "bg-blue-50/50" : "bg-zinc-50"}>
         <td colSpan={5} className="px-2 py-1 text-xs font-semibold text-zinc-500">
-          {group.key ? groupLabel(group.key) : "No drawing (text schedule)"} —{" "}
-          {group.lines.length} line{group.lines.length === 1 ? "" : "s"}
+          {label} — {group.lines.length} line{group.lines.length === 1 ? "" : "s"}
         </td>
       </tr>
       {group.lines.map((l) => (
