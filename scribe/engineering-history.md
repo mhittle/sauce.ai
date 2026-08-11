@@ -116,10 +116,15 @@ repurpose it).
   existence/slug guards. Transitions guarded by shared `canTransitionTakeoff`.
 - **Web:** `/takeoffs/$id/pages` (PagePicker — thumbnail grid, click-select,
   per-page type select prefilled from the classifier; the class is only SENT
-  when the user changes it) and `/takeoffs/$id/boxes` (BoxReview — pure SVG
-  `BoxOverlay` in image-natural coords over the exact read image, box↔line
-  linking, drag/resize/draw/Delete-key, always-editable line rows, "Finalize
-  boxes →"). `TakeoffReview` forwards gate statuses to the gate pages.
+  when the user changes it). The box gate is NOT a route: `TakeoffReview`
+  renders `BoxReviewSection` inside `/takeoffs/$id` while status is
+  `awaiting_boxes` (owner feedback 2026-08-11 — the views are similar, keep
+  review one page). Read images are TABBED with human labels ("Page 1",
+  "Page 2"; a/b suffix when a page has several crops — also owner feedback,
+  after trying a stacked layout); clicking a line switches to its image, one
+  SVG `BoxOverlay` in image-natural coords, drag/resize/draw/Delete-key,
+  always-editable line rows, "Finalize boxes →". `TakeoffReview` still
+  forwards `awaiting_pages` to the picker.
 
 **Gotchas for future sessions:**
 - `tokensUsed` now ACCUMULATES across stages; the `TakeoffBudget` cap is

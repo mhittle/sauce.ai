@@ -18,7 +18,6 @@ import { ProspectDetailPage } from "./pages/ProspectDetail";
 import { TakeoffsPage } from "./pages/Takeoffs";
 import { TakeoffReviewPage } from "./pages/TakeoffReview";
 import { PagePickerPage } from "./pages/PagePicker";
-import { BoxReviewPage } from "./pages/BoxReview";
 import { QuotesPage } from "./pages/Quotes";
 import { QuoteBuilderPage } from "./pages/QuoteBuilder";
 import { AdminPage } from "./pages/Admin";
@@ -55,18 +54,12 @@ export const takeoffReviewRoute = createRoute({
   component: TakeoffReviewPage,
 });
 
-// Gate 1: page selection after upload (status awaiting_pages).
+// Gate 1: page selection after upload (status awaiting_pages). Gate 2 (box
+// review) is not a route — the takeoff page renders it while awaiting_boxes.
 export const pagePickerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/takeoffs/$takeoffId/pages",
   component: PagePickerPage,
-});
-
-// Gate 2: bounding-box review after extraction (status awaiting_boxes).
-export const boxReviewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/takeoffs/$takeoffId/boxes",
-  component: BoxReviewPage,
 });
 
 export const quotesRoute = createRoute({
@@ -94,7 +87,6 @@ const routeTree = rootRoute.addChildren([
   takeoffsRoute,
   takeoffReviewRoute,
   pagePickerRoute,
-  boxReviewRoute,
   quotesRoute,
   quoteBuilderRoute,
   adminRoute,
