@@ -78,14 +78,15 @@ local admin) — never set that combination in production.
 
 ## Load-bearing product rules
 
-- **Two blocking human gates on every visual takeoff** (2026-08): after a PDF
+- **2-step human review on every visual takeoff** (2026-08): after a PDF
   upload the estimator picks which pages to read (and can correct each page's
-  type), and after extraction they review the model's bounding boxes over the
-  exact images it read — add/move/resize/delete boxes, edit the linked lines —
-  before anything is priced. Status flow: `processing → awaiting_pages →
-  processing → awaiting_boxes → review → approved`. Spreadsheets skip both
-  gates (nothing to pick or draw); text-layer schedule PDFs skip only the page
-  gate.
+  type); extraction then prices immediately and lands on an INTERACTIVE review
+  screen — each detected cabinet is drawn as a bounding box on the exact image
+  the model read (tabbed by page), boxes/lines are linked and editable
+  (add/move/resize/delete; edits re-price and re-derive door/drawer faces) —
+  then approve. Status flow: `processing → awaiting_pages → processing →
+  review → approved`. Spreadsheets skip the page gate (nothing to pick);
+  text-layer schedule PDFs skip it too (no vision).
 - **Money is integer cents** everywhere internally.
 - **Quotes pin a pricing_config version** — same lines + same version → same
   total, always. Admin saves create a new immutable version.

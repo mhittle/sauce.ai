@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   getDb,
   exportTemplates,
+  pricingConfigs,
   productLines,
   projectDocuments,
   takeoffs,
@@ -12,14 +13,18 @@ import {
   evalFixtures,
 } from "@scribe/db";
 import {
+  CabinetLineItem,
   canTransitionTakeoff,
   ESTIMATED_NOTE_PREFIX,
+  expandToComponents,
   ExportTemplate,
   LineCategory,
+  PricingSnapshot,
   SelectedPage,
   SourceKind,
   type TakeoffStatus,
 } from "@scribe/shared";
+import { matchLine } from "@scribe/pricing";
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
@@ -73,6 +78,94 @@ const LineCreate = z.object({
   bbox: BBox.nullable().optional(),
   read_image_key: z.string().nullable().optional(),
 });
+
+// DB row → the pure line shape pricing + expansion work on.
+function lineFromRow(
+  row: typeof takeoffLines.$inferSelect
+): CabinetLineItem {
+  return {
+    source_page: row.sourcePage,
+    tag: row.tag,
+    room: row.room,
+    qty: row.qty,
+    category: row.category as CabinetLineItem["category"],
+    width_in: row.widthIn,
+    height_in: row.heightIn,
+    depth_in: row.depthIn,
+    door_style: row.doorStyle,
+    material: row.material,
+    finish: row.finish,
+    assembled: row.assembled,
+    notes: row.notes,
+    confidence: row.confidence,
+    estimated: row.notes?.startsWith(ESTIMATED_NOTE_PREFIX) ?? false,
+    bbox_2d: null,
+  };
+}
+
+async function latestSnapshot(): Promise<PricingSnapshot> {
+  const db = getDb();
+  const cfgRows = await db
+    .select()
+    .from(pricingConfigs)
+    .orderBy(desc(pricingConfigs.version))
+    .limit(1);
+  if (cfgRows.length === 0) throw new Error("no pricing config — seed the DB");
+  return PricingSnapshot.parse(cfgRows[0].snapshot);
+}
+
+function matchCols(m: ReturnType<typeof matchLine>) {
+  return {
+    productLineId: m.product_line_id,
+    resolvedParams: "resolved" in m ? m.resolved : null,
+    matchConfidence: "match_confidence" in m ? m.match_confidence : null,
+    alternates: "alternates" in m ? m.alternates : null,
+    unmatchedReason: "reason" in m ? m.reason : null,
+  };
+}
+
+// Interactive review: a cabinet's door/drawer-front faces derive from its box
+// line. When the box changes (or is created) at review, drop and re-derive
+// its faces so the priced list follows the edit. Faces link to their cabinet
+// via raw_model_output {expanded: true, parent: <lineId>}.
+async function refreshDerivedFaces(
+  takeoffId: string,
+  parentId: string,
+  line: CabinetLineItem,
+  snapshot: PricingSnapshot
+): Promise<void> {
+  const db = getDb();
+  await db
+    .delete(takeoffLines)
+    .where(
+      and(
+        eq(takeoffLines.takeoffId, takeoffId),
+        sql`${takeoffLines.rawModelOutput}->>'parent' = ${parentId}`
+      )
+    );
+  for (const face of expandToComponents(line)) {
+    const m = matchLine(face, snapshot);
+    await db.insert(takeoffLines).values({
+      takeoffId,
+      sourcePage: face.source_page,
+      tag: face.tag,
+      room: face.room,
+      qty: face.qty,
+      category: face.category,
+      widthIn: face.width_in,
+      heightIn: face.height_in,
+      depthIn: face.depth_in,
+      doorStyle: face.door_style,
+      material: face.material,
+      finish: face.finish,
+      assembled: face.assembled,
+      notes: face.notes,
+      confidence: face.confidence,
+      ...matchCols(m),
+      rawModelOutput: { expanded: true, parent: parentId },
+    });
+  }
+}
 
 export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.requireUser);
@@ -293,7 +386,9 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // Create a line for a reviewer-drawn box (box gate "add box" flow).
+  // Create a line for a reviewer-drawn box. At review (the interactive priced
+  // list) the new cabinet is matched and its door/drawer faces derived
+  // immediately; at the legacy awaiting_boxes gate the finalize job does it.
   app.post("/takeoff-lines", async (req, reply) => {
     const body = LineCreate.parse(req.body);
     const db = getDb();
@@ -304,7 +399,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     if (rows.length === 0) {
       return reply.code(404).send({ error: "takeoff not found" });
     }
-    if (rows[0].status !== "awaiting_boxes") {
+    if (!["awaiting_boxes", "review"].includes(rows[0].status)) {
       return reply.code(409).send({
         error: `cannot add lines to takeoff in status ${rows[0].status}`,
       });
@@ -329,7 +424,19 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         readImageKey: body.read_image_key ?? null,
       })
       .returning();
-    return reply.code(201).send(line);
+    if (rows[0].status !== "review") return reply.code(201).send(line);
+
+    const snapshot = await latestSnapshot();
+    const cab = lineFromRow(line);
+    const [priced] = await db
+      .update(takeoffLines)
+      .set(matchCols(matchLine(cab, snapshot)))
+      .where(eq(takeoffLines.id, line.id))
+      .returning();
+    if (["pdf", "image"].includes(rows[0].sourceKind)) {
+      await refreshDerivedFaces(body.takeoff_id, line.id, cab, snapshot);
+    }
+    return reply.code(201).send(priced);
   });
 
   app.patch<{ Params: { id: string } }>(
@@ -365,7 +472,54 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(takeoffLines.id, req.params.id))
         .returning();
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
-      return rows[0];
+      const row = rows[0];
+
+      // Interactive review: a pricing-relevant edit re-matches the line and
+      // re-derives its door/drawer faces, so the priced list follows the
+      // edit. Manual product-line assignment (the unmatched bucket) is left
+      // untouched, and derived faces stand alone.
+      const manualAssign =
+        patch.product_line_id !== undefined || patch.resolved_params !== undefined;
+      const PRICING_FIELDS = [
+        "tag",
+        "qty",
+        "category",
+        "width_in",
+        "height_in",
+        "depth_in",
+        "material",
+        "finish",
+        "assembled",
+        "notes",
+      ] as const;
+      const pricingTouched = PRICING_FIELDS.some(
+        (f) => patch[f] !== undefined
+      );
+      const isDerivedFace =
+        (row.rawModelOutput as { expanded?: boolean } | null)?.expanded === true;
+      if (manualAssign || !pricingTouched || isDerivedFace) return row;
+
+      const tk = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, row.takeoffId));
+      // Only priced flows: extraction-stage rows (legacy awaiting_boxes) get
+      // matched by the finalize job instead.
+      if (tk.length === 0 || !["review", "extracted"].includes(tk[0].status)) {
+        return row;
+      }
+      const snapshot = await latestSnapshot();
+      const line = lineFromRow(row);
+      const [repriced] = await db
+        .update(takeoffLines)
+        .set(matchCols(matchLine(line, snapshot)))
+        .where(eq(takeoffLines.id, row.id))
+        .returning();
+      // Faces exist only on visual flows (spreadsheets never expand).
+      if (["pdf", "image"].includes(tk[0].sourceKind)) {
+        await refreshDerivedFaces(row.takeoffId, row.id, line, snapshot);
+      }
+      return repriced;
     }
   );
 
@@ -378,6 +532,15 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(takeoffLines.id, req.params.id))
         .returning();
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      // Deleting a cabinet also removes the door/drawer faces derived from it.
+      await db
+        .delete(takeoffLines)
+        .where(
+          and(
+            eq(takeoffLines.takeoffId, rows[0].takeoffId),
+            sql`${takeoffLines.rawModelOutput}->>'parent' = ${req.params.id}`
+          )
+        );
       return { ok: true };
     }
   );

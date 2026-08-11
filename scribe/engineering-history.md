@@ -70,7 +70,41 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
-## 2026-08-10 — two-stage human review shipped: page-picker + bounding-box gates
+## 2026-08-11 — box gate removed: 2-step flow (pick pages → interactive review)
+
+**Owner feedback while testing live:** the separate box-review stop duplicated
+the review screen. The flow is now TWO steps — choose pages → approve takeoff —
+and the review screen itself is the interactive editor showing each detected
+cabinet with its box on the source image. Supersedes the "always blocking box
+gate" below.
+
+- **`awaiting_boxes` is dead as a flow state** (stays in the DB CHECK and in
+  legacy code paths for rows parked there: the `finalize` job, the
+  `finalize-boxes` endpoint, and `BoxReviewSection` all remain but nothing new
+  enters that state). The extract stage — and the text-schedule prepare path —
+  now run `priceAndExpand` immediately. Status flow:
+  `processing → awaiting_pages → processing → review → approved`.
+- **Review screen = interactive editor:** `SourceBoxPanel` (tabs "Page 1",
+  "Page 2"…) replaces the static source image whenever read images exist —
+  box↔line selection sync both ways, drag/resize (PATCH bbox), draw-new-box →
+  priced line with faces, ✕ button / Delete key removes a line (+ its faces).
+  Spreadsheet takeoffs keep the static panel (no read images).
+- **The API keeps the priced list consistent per edit:** faces link to their
+  cabinet via `raw_model_output {expanded: true, parent: <lineId>}`. A PATCH
+  touching pricing-relevant fields re-runs `matchLine` and re-derives that
+  cabinet's faces; DELETE cascades them; POST /takeoff-lines now also works at
+  `review` (matches + expands immediately). A patch carrying
+  `product_line_id`/`resolved_params` (the unmatched-bucket manual assignment)
+  is NEVER re-matched over.
+- **Gotchas:** (a) faces created by finalize BEFORE this change lack `parent` —
+  editing a cabinet on those takeoffs re-adds faces without removing the old
+  parentless ones (the ~3 takeoffs in `review` as of today; re-run them if
+  edited). (b) The face refresh is gated on sourceKind pdf/image — spreadsheet
+  takeoffs never expand.
+
+---
+
+## 2026-08-10 — two-stage human review shipped: page-picker + bounding-box gates (box gate since removed — see 2026-08-11 above)
 
 **Owner decision (2026-08-05): both gates are ALWAYS BLOCKING** — no auto-pass,
 superseding the autonomous-only flow. New status flow:
