@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { takeoffReviewRoute } from "../main";
 import { API_URL, apiGet, apiSend } from "../api";
 import { Badge, Button, Card, Input, PageTitle, statusTone } from "../ui";
+import { BoxReviewSection } from "./BoxReview";
 
 interface Line {
   id: string;
@@ -24,6 +25,9 @@ interface Line {
   matchConfidence: number | null;
   unmatchedReason: string | null;
   reviewerEdited: boolean;
+  bbox: [number, number, number, number] | null;
+  readImageKey: string | null;
+  updatedAt: string;
 }
 
 interface TakeoffDetail {
@@ -62,13 +66,11 @@ export function TakeoffReviewPage() {
   });
   const status = q.data?.status;
 
-  // Two-gate flow: this screen owns review/approved; forward the gate
-  // statuses to their own pages.
+  // Two-gate flow: the page-picker gate has its own screen (a different
+  // interaction entirely); the box gate renders INSIDE this page below.
   useEffect(() => {
     if (status === "awaiting_pages") {
       navigate({ to: "/takeoffs/$takeoffId/pages", params: { takeoffId } });
-    } else if (status === "awaiting_boxes") {
-      navigate({ to: "/takeoffs/$takeoffId/boxes", params: { takeoffId } });
     }
   }, [status, navigate, takeoffId]);
 
@@ -146,6 +148,12 @@ export function TakeoffReviewPage() {
   if (q.isError) return <div className="text-red-600">{String(q.error)}</div>;
   const takeoff = q.data!;
 
+  // Box-review gate: same page, different content — the priced review table
+  // takes over once "Finalize boxes" has run.
+  if (takeoff.status === "awaiting_boxes") {
+    return <BoxReviewSection takeoff={takeoff} />;
+  }
+
   return (
     <div>
       <PageTitle
@@ -206,7 +214,8 @@ export function TakeoffReviewPage() {
       {takeoff.status === "processing" && (
         <Card>
           <p className="text-sm text-zinc-500">
-            Extracting… this page refreshes automatically.
+            Processing (extraction or pricing)… this page refreshes
+            automatically.
           </p>
         </Card>
       )}

@@ -317,8 +317,9 @@ autonomous-only flow. Gate 1: after a PDF upload, every page renders as a
 thumbnail (`/takeoffs/$id/pages`); the estimator picks the pages to read and
 can override each page's classifier-suggested type (the plan-vs-elevation call
 decides reading accuracy). Gate 2: extraction stops at `awaiting_boxes` with
-per-line bounding boxes drawn over the EXACT images the model read
-(`/takeoffs/$id/boxes`); boxes are linked to editable lines
+per-line bounding boxes drawn over the EXACT images the model read — rendered
+INSIDE the takeoff screen (`/takeoffs/$id`), all read images stacked, no
+separate route; boxes are linked to editable lines
 (add/move/resize/delete; box edits are visual anchors, the inch fields drive
 price); "Finalize boxes" runs face expansion + pricing and lands on the
 existing review screen. Worker split: `prepare`/`extract`/`finalize` jobs;
