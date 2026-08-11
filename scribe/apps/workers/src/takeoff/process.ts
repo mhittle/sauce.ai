@@ -49,14 +49,15 @@ import { locateRegions, locateRooms } from "./regions.js";
 import { parseSpreadsheet } from "./spreadsheet.js";
 
 // ---------------------------------------------------------------------------
-// Two-stage human review (2026-08): the one-shot pipeline is split into three
-// jobs around two BLOCKING gates —
+// 2-step human review (2026-08-11): ONE blocking gate (page selection), then
+// an interactive priced review —
 //   prepare  (pdf)   thumbnails + classification        → awaiting_pages
-//   extract  (all)   vision read of the SELECTED pages  → awaiting_boxes
-//   finalize (all)   face expansion + pricing match     → review
-// Spreadsheets keep the single-stage path (no pages to pick, no boxes to
-// draw). Text-layer schedule PDFs skip the page gate (no vision) but still
-// stop at the box gate as a list-only review — gates are always blocking.
+//   extract  (all)   vision read of the SELECTED pages,
+//                    then price + face expansion         → review
+// The review screen edits cabinets in place (the API re-prices/re-expands per
+// edit); approve locks it. Spreadsheets keep the single-stage path; text-layer
+// schedule PDFs skip the page gate too (no vision). `finalize` jobs remain
+// only for takeoffs parked at the removed awaiting_boxes gate.
 // ---------------------------------------------------------------------------
 
 // Region kinds worth cropping + extracting (PRD §4 legible-reads path).
@@ -315,7 +316,7 @@ export async function processTakeoff(
 // ---------------------------------------------------------------------------
 // Stage 1 — prepare (PDF only): thumbnails of EVERY page + classification,
 // then stop at the page-picker gate. Text-layer schedule PDFs (Class 1) skip
-// the picker (nothing visual to pick) and land directly on the box gate.
+// the picker (nothing visual to pick) and go straight to the priced review.
 // ---------------------------------------------------------------------------
 
 export async function prepareTakeoff(
@@ -366,7 +367,6 @@ export async function prepareTakeoff(
         await db
           .update(takeoffs)
           .set({
-            status: "awaiting_boxes",
             pageCount,
             classifiedPages: classified,
             docConfidence: avgConfidence(sched.lines),
@@ -386,6 +386,7 @@ export async function prepareTakeoff(
             updatedAt: new Date(),
           })
           .where(eq(takeoffs.id, takeoffId));
+        await priceAndExpand(takeoffId, log);
         return;
       }
 
@@ -427,9 +428,9 @@ export async function prepareTakeoff(
 }
 
 // ---------------------------------------------------------------------------
-// Stage 2 — extract: vision-read the user-selected pages (or the single image)
-// and stop at the box-review gate with BOX-level lines carrying bbox + read-
-// image provenance. No pricing, no face expansion yet.
+// Stage 2 — extract: vision-read the user-selected pages (or the single
+// image), insert BOX-level lines carrying bbox + read-image provenance, then
+// price + expand immediately (priceAndExpand) → review.
 // ---------------------------------------------------------------------------
 
 export async function extractTakeoff(
@@ -500,7 +501,6 @@ export async function extractTakeoff(
     await db
       .update(takeoffs)
       .set({
-        status: "awaiting_boxes",
         docConfidence: avgConfidence(lines),
         docSummary: {
           ...summary,
@@ -519,9 +519,13 @@ export async function extractTakeoff(
       })
       .where(eq(takeoffs.id, takeoffId));
 
+    // 2-step flow (owner decision 2026-08-11): no box gate — price + expand
+    // immediately, landing on the interactive review screen.
+    await priceAndExpand(takeoffId, log);
+
     log.info(
       { takeoffId, lines: lines.length, tokens: budget.used },
-      "extraction complete — awaiting box review"
+      "extraction complete — in review"
     );
   } catch (err) {
     await failTakeoff(takeoffId, takeoff.tokensUsed ?? 0, budget, err);
@@ -530,102 +534,110 @@ export async function extractTakeoff(
 }
 
 // ---------------------------------------------------------------------------
-// Stage 3 — finalize: the human approved the boxes. Re-price every surviving
-// line, expand cabinets into their door/drawer-front faces (moved here from
-// extraction so edits price correctly), and hand off to the review screen.
+// Pricing pass: re-match every line, expand cabinets into their door/drawer-
+// front faces, land on the review screen. Runs at the end of extraction (the
+// 2-step flow) and for legacy `finalize` jobs (takeoffs parked at the removed
+// awaiting_boxes gate). The API re-runs the same expansion per line when the
+// reviewer edits a cabinet at review.
 // ---------------------------------------------------------------------------
 
+async function priceAndExpand(takeoffId: string, log: Logger): Promise<void> {
+  const db = getDb();
+  // Re-run safety: drop previously derived faces before re-deriving them.
+  await db
+    .delete(takeoffLines)
+    .where(
+      and(
+        eq(takeoffLines.takeoffId, takeoffId),
+        sql`${takeoffLines.rawModelOutput}->>'expanded' = 'true'`
+      )
+    );
+
+  const rows = await db
+    .select()
+    .from(takeoffLines)
+    .where(eq(takeoffLines.takeoffId, takeoffId))
+    .orderBy(takeoffLines.sourcePage, takeoffLines.createdAt);
+  const snapshot = await loadPricingSnapshot();
+
+  const confidences: { confidence: number }[] = [];
+  let faceCount = 0;
+  for (const row of rows) {
+    const line = rowToLine(row);
+    confidences.push(line);
+    const match = matchLine(line, snapshot);
+    await db
+      .update(takeoffLines)
+      .set({
+        productLineId: match.product_line_id,
+        resolvedParams: "resolved" in match ? match.resolved : null,
+        matchConfidence:
+          "match_confidence" in match ? match.match_confidence : null,
+        alternates: "alternates" in match ? match.alternates : null,
+        unmatchedReason: "reason" in match ? match.reason : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(takeoffLines.id, row.id));
+
+    // Each cabinet box also has doors + drawer fronts (priced separately by
+    // ft²). Spawn those face line items so the schedule mirrors a real
+    // CabinetNow quote (cabinet boxes + a door/drawer list). `parent` links a
+    // face to its cabinet so an edit/delete of the cabinet refreshes them.
+    for (const face of expandToComponents(line)) {
+      const faceMatch = matchLine(face, snapshot);
+      await db.insert(takeoffLines).values({
+        takeoffId,
+        sourcePage: face.source_page,
+        tag: face.tag,
+        room: face.room,
+        qty: face.qty,
+        category: face.category,
+        widthIn: face.width_in,
+        heightIn: face.height_in,
+        depthIn: face.depth_in,
+        doorStyle: face.door_style,
+        material: face.material,
+        finish: face.finish,
+        assembled: face.assembled,
+        notes: face.notes,
+        confidence: face.confidence,
+        productLineId: faceMatch.product_line_id,
+        resolvedParams: "resolved" in faceMatch ? faceMatch.resolved : null,
+        matchConfidence:
+          "match_confidence" in faceMatch ? faceMatch.match_confidence : null,
+        alternates: "alternates" in faceMatch ? faceMatch.alternates : null,
+        unmatchedReason: "reason" in faceMatch ? faceMatch.reason : null,
+        rawModelOutput: { expanded: true, parent: row.id },
+      });
+      faceCount++;
+      confidences.push(face);
+    }
+  }
+
+  await db
+    .update(takeoffs)
+    .set({
+      status: "review",
+      docConfidence: avgConfidence(confidences),
+      updatedAt: new Date(),
+    })
+    .where(eq(takeoffs.id, takeoffId));
+
+  log.info(
+    { takeoffId, boxes: rows.length, faces: faceCount },
+    "takeoff priced — in review"
+  );
+}
+
+// Legacy job: takeoffs parked at the removed awaiting_boxes gate (or queued
+// finalize jobs from before the 2-step flow) still price out through here.
 export async function finalizeTakeoff(
   takeoffId: string,
   log: Logger
 ): Promise<void> {
   const takeoff = await loadTakeoff(takeoffId);
-  const db = getDb();
   try {
-    // Re-run safety: drop faces from a previous (crashed) finalize before
-    // re-deriving them.
-    await db
-      .delete(takeoffLines)
-      .where(
-        and(
-          eq(takeoffLines.takeoffId, takeoffId),
-          sql`${takeoffLines.rawModelOutput}->>'expanded' = 'true'`
-        )
-      );
-
-    const rows = await db
-      .select()
-      .from(takeoffLines)
-      .where(eq(takeoffLines.takeoffId, takeoffId))
-      .orderBy(takeoffLines.sourcePage, takeoffLines.createdAt);
-    const snapshot = await loadPricingSnapshot();
-
-    const confidences: { confidence: number }[] = [];
-    let faceCount = 0;
-    for (const row of rows) {
-      const line = rowToLine(row);
-      confidences.push(line);
-      const match = matchLine(line, snapshot);
-      await db
-        .update(takeoffLines)
-        .set({
-          productLineId: match.product_line_id,
-          resolvedParams: "resolved" in match ? match.resolved : null,
-          matchConfidence:
-            "match_confidence" in match ? match.match_confidence : null,
-          alternates: "alternates" in match ? match.alternates : null,
-          unmatchedReason: "reason" in match ? match.reason : null,
-          updatedAt: new Date(),
-        })
-        .where(eq(takeoffLines.id, row.id));
-
-      // Each cabinet box also has doors + drawer fronts (priced separately by
-      // ft²). Spawn those face line items so the schedule mirrors a real
-      // CabinetNow quote (cabinet boxes + a door/drawer list).
-      for (const face of expandToComponents(line)) {
-        const faceMatch = matchLine(face, snapshot);
-        await db.insert(takeoffLines).values({
-          takeoffId,
-          sourcePage: face.source_page,
-          tag: face.tag,
-          room: face.room,
-          qty: face.qty,
-          category: face.category,
-          widthIn: face.width_in,
-          heightIn: face.height_in,
-          depthIn: face.depth_in,
-          doorStyle: face.door_style,
-          material: face.material,
-          finish: face.finish,
-          assembled: face.assembled,
-          notes: face.notes,
-          confidence: face.confidence,
-          productLineId: faceMatch.product_line_id,
-          resolvedParams: "resolved" in faceMatch ? faceMatch.resolved : null,
-          matchConfidence:
-            "match_confidence" in faceMatch ? faceMatch.match_confidence : null,
-          alternates: "alternates" in faceMatch ? faceMatch.alternates : null,
-          unmatchedReason: "reason" in faceMatch ? faceMatch.reason : null,
-          rawModelOutput: { expanded: true },
-        });
-        faceCount++;
-        confidences.push(face);
-      }
-    }
-
-    await db
-      .update(takeoffs)
-      .set({
-        status: "review",
-        docConfidence: avgConfidence(confidences),
-        updatedAt: new Date(),
-      })
-      .where(eq(takeoffs.id, takeoffId));
-
-    log.info(
-      { takeoffId, boxes: rows.length, faces: faceCount },
-      "takeoff finalized — in review"
-    );
+    await priceAndExpand(takeoffId, log);
   } catch (err) {
     await failTakeoff(takeoffId, takeoff.tokensUsed ?? 0, null, err);
     throw err;

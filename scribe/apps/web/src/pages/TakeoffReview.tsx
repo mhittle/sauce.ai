@@ -5,6 +5,7 @@ import { takeoffReviewRoute } from "../main";
 import { API_URL, apiGet, apiSend } from "../api";
 import { Badge, Button, Card, Input, PageTitle, statusTone } from "../ui";
 import { BoxReviewSection } from "./BoxReview";
+import { SourceBoxPanel } from "../components/SourceBoxPanel";
 
 interface Line {
   id: string;
@@ -85,6 +86,17 @@ export function TakeoffReviewPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
   });
 
+  const deleteLine = useMutation({
+    mutationFn: (id: string) => apiSend("DELETE", `/takeoff-lines/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
+  });
+
+  const createLine = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      apiSend("POST", "/takeoff-lines", { takeoff_id: takeoffId, ...body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
+  });
+
   const approve = useMutation({
     mutationFn: () => apiSend("POST", `/takeoffs/${takeoffId}/approve`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
@@ -133,11 +145,19 @@ export function TakeoffReviewPage() {
         });
         setSelected((s) => Math.min(s + 1, lines.length - 1));
         ev.preventDefault();
+      } else if (
+        (ev.key === "Delete" || ev.key === "Backspace") &&
+        lines[selected] &&
+        !deleteLine.isPending
+      ) {
+        deleteLine.mutate(lines[selected].id);
+        setSelected((s) => Math.max(0, Math.min(s, lines.length - 2)));
+        ev.preventDefault();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, lines, selected, patchLine]);
+  }, [editing, lines, selected, patchLine, deleteLine]);
 
   const unmatched = useMemo(
     () => lines.filter((l) => !l.productLineId),
@@ -208,7 +228,9 @@ export function TakeoffReviewPage() {
       </PageTitle>
 
       <p className="mb-3 text-xs text-zinc-400">
-        Keyboard: ↑/↓ navigate · e edit · enter accept line
+        Keyboard: ↑/↓ navigate · e edit · enter accept line · del delete line.
+        Click a box on the drawing to jump to its line; box edits are visual
+        anchors — the inch fields drive pricing.
       </p>
 
       {takeoff.status === "processing" && (
@@ -238,21 +260,42 @@ export function TakeoffReviewPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="max-h-[75vh] overflow-auto">
-          <h2 className="mb-2 text-sm font-semibold text-zinc-500">
-            Source{selectedLine?.sourcePage ? ` — page ${selectedLine.sourcePage}` : ""}
-          </h2>
-          {pageImage.data?.url ? (
-            <img
-              src={pageImage.data.url}
-              alt="source page"
-              className="w-full border border-zinc-200"
+          {lines.some((l) => l.readImageKey != null) ? (
+            <SourceBoxPanel
+              takeoffId={takeoffId}
+              lines={lines}
+              selectedId={selectedLine?.id ?? null}
+              editable={takeoff.status !== "approved"}
+              onSelect={(id) => {
+                if (id == null) return;
+                const idx = lines.findIndex((l) => l.id === id);
+                if (idx !== -1) setSelected(idx);
+              }}
+              onPatchBbox={(id, bbox) => patchLine.mutate({ id, patch: { bbox } })}
+              onCreate={(body) => createLine.mutate(body)}
             />
           ) : (
-            <p className="text-sm text-zinc-400">
-              {selectedLine?.sourcePage
-                ? "Loading page image…"
-                : "No page image for this line (spreadsheet/manual source)."}
-            </p>
+            <>
+              <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+                Source
+                {selectedLine?.sourcePage
+                  ? ` — page ${selectedLine.sourcePage}`
+                  : ""}
+              </h2>
+              {pageImage.data?.url ? (
+                <img
+                  src={pageImage.data.url}
+                  alt="source page"
+                  className="w-full border border-zinc-200"
+                />
+              ) : (
+                <p className="text-sm text-zinc-400">
+                  {selectedLine?.sourcePage
+                    ? "Loading page image…"
+                    : "No page image for this line (spreadsheet/manual source)."}
+                </p>
+              )}
+            </>
           )}
         </Card>
 
@@ -266,6 +309,7 @@ export function TakeoffReviewPage() {
                 <th className="px-2 py-2">Material / Finish</th>
                 <th className="px-2 py-2">Conf</th>
                 <th className="px-2 py-2">Match</th>
+                <th className="px-2 py-2"></th>
               </tr>
             </thead>
             <tbody>
@@ -285,11 +329,12 @@ export function TakeoffReviewPage() {
                     setEditing(false);
                   }}
                   onCancel={() => setEditing(false)}
+                  onDelete={() => deleteLine.mutate(l.id)}
                 />
               ))}
               {lines.length === 0 && takeoff.status !== "processing" && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-zinc-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-zinc-400">
                     No lines extracted.
                   </td>
                 </tr>
@@ -357,6 +402,7 @@ function LineRow({
   onEdit,
   onSave,
   onCancel,
+  onDelete,
 }: {
   line: Line;
   selected: boolean;
@@ -365,6 +411,7 @@ function LineRow({
   onEdit: () => void;
   onSave: (patch: Record<string, unknown>) => void;
   onCancel: () => void;
+  onDelete: () => void;
 }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
 
@@ -425,7 +472,7 @@ function LineRow({
             onChange={(e) => setDraft({ ...draft, finish: e.target.value })}
           />
         </td>
-        <td colSpan={2} className="space-x-1 whitespace-nowrap px-2 py-1">
+        <td colSpan={3} className="space-x-1 whitespace-nowrap px-2 py-1">
           <Button
             variant="primary"
             onClick={() =>
@@ -484,6 +531,19 @@ function LineRow({
         ) : (
           <Badge tone="red">unmatched</Badge>
         )}
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        <Button
+          variant="ghost"
+          className="px-1.5 py-0.5 text-red-600"
+          title="Delete line (and its box)"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          ✕
+        </Button>
       </td>
     </tr>
   );

@@ -31,7 +31,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | OCR fallback for scan-only PDFs (tesseract) | 7 | 5 | takeoff | backlog |
 | Sheet-index classification shortcut | 6 | 4 | takeoff | backlog |
 | Prospect detail view — open project details + preview/send any discovered plan to takeoff | 6 | 2 | ui | done |
-| Two-stage human review — page-picker + bounding-box gates (always blocking) | 8 | 7 | ui | done |
+| 2-step human review — page-picker gate + interactive box review on the approve screen | 8 | 7 | ui | done |
 | Review screen: click line → source region highlight | 6 | 5 | ui | done |
 | Eval fixture export job (eval_fixtures → evals/plansets) | 6 | 2 | algo | backlog |
 | Remaining Wave-1 permit adapters (San Diego, San Jose, Sacramento, Miami-Dade, Orlando, Tampa, Jacksonville) | 6 | 3 | crawler | backlog |
@@ -310,22 +310,23 @@ and a `Send to Takeoff` button, plus the prospect's source link(s)
 {project_document_id}`); any document is sendable, not just `plan_set`, since
 filename classification is rough.
 
-### Two-stage human review — page-picker + bounding-box gates
-**Priority/LOE/Category/Status:** 8 / 7 / ui / done (PR: this PR, 2026-08-10)
-Owner decision (2026-08-05): both gates are ALWAYS BLOCKING, superseding the
-autonomous-only flow. Gate 1: after a PDF upload, every page renders as a
-thumbnail (`/takeoffs/$id/pages`); the estimator picks the pages to read and
-can override each page's classifier-suggested type (the plan-vs-elevation call
-decides reading accuracy). Gate 2: extraction stops at `awaiting_boxes` with
-per-line bounding boxes drawn over the EXACT images the model read — rendered
-INSIDE the takeoff screen (`/takeoffs/$id`), no separate route, read images
-tabbed by page ("Page 1", "Page 2", …); boxes are linked to editable lines
-(add/move/resize/delete; box edits are visual anchors, the inch fields drive
-price); "Finalize boxes" runs face expansion + pricing and lands on the
-existing review screen. Worker split: `prepare`/`extract`/`finalize` jobs;
-status flow `processing → awaiting_pages → processing → awaiting_boxes →
-review → approved`. Spreadsheets skip both gates; text-layer schedule PDFs
-skip only the page gate (list-only box review). BBoxes are advisory-quality
+### 2-step human review — page-picker gate + interactive box review on the approve screen
+**Priority/LOE/Category/Status:** 8 / 7 / ui / done (PRs #233/#234 + follow-up,
+2026-08-10/11)
+Step 1: after a PDF upload, every page renders as a thumbnail
+(`/takeoffs/$id/pages`); the estimator picks the pages to read and can
+override each page's classifier-suggested type (the plan-vs-elevation call
+decides reading accuracy). Step 2: extraction prices + expands immediately and
+lands on the interactive review screen (`/takeoffs/$id`) — each detected
+cabinet's bounding box is drawn over the EXACT image the model read (tabbed by
+page: "Page 1", "Page 2", …), box↔line selection is linked both ways, boxes
+and lines are editable (add by drawing / move / resize / delete; box edits are
+visual anchors, the inch fields drive price), and pricing-relevant edits
+re-match the line and re-derive its door/drawer faces server-side. Approve
+locks it. Status flow `processing → awaiting_pages → processing → review →
+approved`; the interim `awaiting_boxes` gate was removed 2026-08-11 (owner
+feedback — legacy rows still finalize through the old endpoint). Spreadsheets
+and text-layer schedule PDFs skip the page gate. BBoxes are advisory-quality
 (loose) by design.
 
 ### Review screen: click line → source region highlight
