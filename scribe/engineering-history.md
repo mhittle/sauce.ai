@@ -102,6 +102,21 @@ gate" below.
   edited). (b) The face refresh is gated on sourceKind pdf/image — spreadsheet
   takeoffs never expand.
 
+**Same day — sideways-content normalization (pdf.ts):** the Braun webdownload
+set draws landscape sheets ROTATED on portrait pages with NO /Rotate flag
+(mupdf honors /Rotate — verified; these pages are simply drawn sideways), so
+elevations rendered sideways and label reads garbled ("Oven Fridge Tall 18"
+for "36\" OVER FRIDGE"). `openPdf` now detects each page's dominant text
+orientation from the text layer (vertical-vs-horizontal bbox aspect, weighted
+by text length; the baseline anchor's position picks CW vs CCW) and serves
+EVERYTHING — dims, full renders, region crops, text fragments — in normalized
+upright space; callers unchanged. Conventions (probed empirically, see
+pdf-rotation.test.ts): `mupdf.Matrix.rotate(90)` turns the raster CLOCKWISE;
+bottom-to-top text (anchor at bbox bottom) needs 90, top-to-bottom needs 270;
+region pixmap bboxes shift by −rawH (rot 90) / −rawW (rot 270) because the
+device box lives in post-transform space. Harness scripts import openPdf from
+dist → parity automatic. Workers tests 13 → 21.
+
 **Same day — router A/B on the read kits (zero API), owner prompt:** on the
 Braun doc the plan-first router kept 5 coarse plan guesses and dropped 3 fully
 LABELED elevations ("28\" SINK BASE"…). Owner proposed elevation-primary
