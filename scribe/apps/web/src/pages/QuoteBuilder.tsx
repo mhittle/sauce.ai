@@ -11,6 +11,7 @@ interface Me {
 interface QuoteDetail {
   id: string;
   status: string;
+  pricingTier: "low" | "medium" | "high";
   markupPct: number;
   handlingCents: number;
   freightCents: number;
@@ -61,13 +62,18 @@ export function QuoteBuilderPage() {
   const { quoteId } = quoteBuilderRoute.useParams();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [tier, setTier] = useState<"low" | "medium" | "high">("medium");
+  // Local override for instant feedback; the persisted quote.pricingTier is
+  // the source of truth (stored totals follow it, so the quotes list agrees).
+  const [tierChoice, setTierChoice] = useState<"low" | "medium" | "high" | null>(
+    null
+  );
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => apiGet<Me>("/auth/me") });
   const q = useQuery({
     queryKey: ["quote", quoteId],
     queryFn: () => apiGet<QuoteDetail>(`/quotes/${quoteId}`),
   });
+  const tier = tierChoice ?? q.data?.pricingTier ?? "medium";
 
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
@@ -304,7 +310,10 @@ export function QuoteBuilderPage() {
                   <button
                     key={t}
                     type="button"
-                    onClick={() => setTier(t)}
+                    onClick={() => {
+                      setTierChoice(t);
+                      patch.mutate({ pricing_tier: t });
+                    }}
                     className={`flex w-full items-center justify-between rounded border px-2 py-1 text-sm ${
                       tier === t
                         ? "border-emerald-500 bg-emerald-50 font-medium"

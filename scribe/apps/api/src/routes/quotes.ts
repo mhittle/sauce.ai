@@ -26,6 +26,9 @@ const QuotePatch = z.object({
   customer_id: z.string().uuid().nullable().optional(),
   status: z.enum(["draft", "sent", "won", "lost", "expired"]).optional(),
   actual_freight_cents: z.number().int().nonnegative().nullable().optional(),
+  // Persisted tier choice — the STORED subtotal/total follow it, so the
+  // quotes list, the builder, and the PDF all agree.
+  pricing_tier: z.enum(["low", "medium", "high"]).optional(),
 });
 
 async function loadQuoteLines(takeoffId: string): Promise<DbLine[]> {
@@ -34,6 +37,36 @@ async function loadQuoteLines(takeoffId: string): Promise<DbLine[]> {
     .select()
     .from(takeoffLines)
     .where(eq(takeoffLines.takeoffId, takeoffId));
+}
+
+// The customer-facing money is the TIER estimate (validated CabinetNow-style
+// boxes + doors/fronts + drawer-box hardware), not the legacy per-line run —
+// the per-line run still supplies freight, itemized audit detail, and the
+// send gates. Stored subtotal/total derive from the quote's persisted tier so
+// every surface shows the same number.
+function tierTotals(
+  lines: DbLine[],
+  tier: TierName,
+  markupPct: number,
+  handlingCents: number,
+  freightCents: number
+) {
+  const tiers = priceQuoteTiers(
+    lines.map((l) => ({
+      category: l.category,
+      width_in: l.widthIn,
+      height_in: l.heightIn,
+      depth_in: l.depthIn,
+      qty: l.qty,
+    }))
+  );
+  const subtotalCents = tiers[tier].total_cents;
+  const markupCents = Math.round((subtotalCents * markupPct) / 100);
+  return {
+    tiers,
+    subtotalCents,
+    totalCents: subtotalCents + markupCents + handlingCents + freightCents,
+  };
 }
 
 export async function quoteRoutes(app: FastifyInstance): Promise<void> {
@@ -74,18 +107,28 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     const validUntil = new Date();
     validUntil.setDate(validUntil.getDate() + QUOTE_VALIDITY_DAYS);
 
+    // Stored totals follow the tier estimate from day one (default: medium).
+    const tiered = tierTotals(
+      lines,
+      "medium",
+      0,
+      settings.defaultHandlingCents,
+      run.totals.freight_cents
+    );
+
     const [quote] = await db
       .insert(quotes)
       .values({
         takeoffId: body.takeoff_id,
         customerId: body.customer_id ?? null,
         pricingConfigId: config.id,
-        subtotalCents: run.totals.subtotal_cents,
+        pricingTier: "medium",
+        subtotalCents: tiered.subtotalCents,
         markupPct: 0,
         handlingCents: settings.defaultHandlingCents,
         freightCents: run.totals.freight_cents,
         freightPallets: run.freight_pallets,
-        totalCents: run.totals.total_cents,
+        totalCents: tiered.totalCents,
         validUntil: validUntil.toISOString().slice(0, 10),
         maxLeadTimeDays: run.totals.max_lead_time_days,
         linePrices: { priced: run.priced, unpriced: run.unpriced },
@@ -96,6 +139,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({
       ...quote,
       pricing: run,
+      quote_tiers: tiered.tiers,
     });
   });
 
@@ -152,12 +196,20 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     const markupPct = patch.markup_pct ?? quote.markupPct;
     const handlingCents = patch.handling_cents ?? quote.handlingCents;
     const freightOverride = patch.freight_cents ?? quote.freightCents;
+    const pricingTier = (patch.pricing_tier ?? quote.pricingTier) as TierName;
 
     const run = await runPricing(lines, config.snapshot, settings, {
       markup_pct: markupPct,
       handling_cents: handlingCents,
       freight_override_cents: freightOverride,
     });
+    const tiered = tierTotals(
+      lines,
+      pricingTier,
+      markupPct,
+      handlingCents,
+      run.totals.freight_cents
+    );
 
     // Send gates (PRD §6.5, §12): freight must be verified; no NEEDS REVIEW
     // rates may reach a customer.
@@ -193,8 +245,9 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
           patch.actual_freight_cents !== undefined
             ? patch.actual_freight_cents
             : quote.actualFreightCents,
-        subtotalCents: run.totals.subtotal_cents,
-        totalCents: run.totals.total_cents,
+        pricingTier,
+        subtotalCents: tiered.subtotalCents,
+        totalCents: tiered.totalCents,
         maxLeadTimeDays: run.totals.max_lead_time_days,
         linePrices: { priced: run.priced, unpriced: run.unpriced },
         sentAt: patch.status === "sent" ? new Date() : quote.sentAt,
@@ -203,7 +256,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       .where(eq(quotes.id, req.params.id))
       .returning();
 
-    return { ...updated, pricing: run };
+    return { ...updated, pricing: run, quote_tiers: tiered.tiers };
   });
 
   app.post<{ Params: { id: string } }>(
@@ -259,12 +312,14 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // Price the customer-facing list with the same tier model the web Quote
-      // Builder shows (boxes + doors/fronts + one rolled-up hardware line). The
-      // selected tier is passed from the UI; default to medium.
+      // Builder shows (boxes + doors/fronts + one rolled-up hardware line).
+      // Defaults to the quote's persisted tier; ?tier= still overrides.
       const tier: TierName =
-        req.query.tier === "low" || req.query.tier === "high"
+        req.query.tier === "low" ||
+        req.query.tier === "medium" ||
+        req.query.tier === "high"
           ? req.query.tier
-          : "medium";
+          : (quote.pricingTier as TierName);
       const itemized = priceQuoteLineItems(
         lines.map((l) => ({
           category: l.category,

@@ -70,6 +70,28 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-08-13 — quote tier persisted: one number everywhere (migration 0005)
+
+Owner found the quotes LIST showing $34k while the Quote Builder offered
+$49.8k–$65k tiers for the same quote (Wantoch). Cause: two pricing engines —
+the stored `subtotal/total` came from the legacy per-line `runPricing` at
+create/patch time, while the builder displayed the live `priceQuoteTiers`
+estimate (CabinetNow-style boxes + doors-ft² + drawer-box hardware) with the
+tier picker held in CLIENT STATE only, never persisted. The tier engine is the
+validated one — on the Wantoch read it landed within 6.3% of the real $53,232
+quote; the per-line number was −53%.
+
+Now: `quotes.pricing_tier` ('low'|'medium'|'high', default medium, migration
+`0005_quote_tier.sql`); stored subtotal/total derive from the persisted tier
+(+ markup/handling/freight) at create AND patch; clicking a tier in the
+builder PATCHes `pricing_tier`; the PDF defaults to the persisted tier
+(`?tier=` still overrides). The per-line run remains for freight, the
+itemized `line_prices` audit detail, and the send gates. **Gotcha:** quotes
+created BEFORE this change keep their stale per-line totals until any PATCH
+(tier click or field edit) re-prices them.
+
+---
+
 ## 2026-08-11 — box gate removed: 2-step flow (pick pages → interactive review)
 
 **Owner feedback while testing live:** the separate box-review stop duplicated
