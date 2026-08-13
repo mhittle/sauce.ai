@@ -164,6 +164,7 @@ export const quotes = pgTable("quotes", {
   customerId: uuid("customer_id"),
   status: text("status").notNull().default("draft"),
   pricingConfigId: uuid("pricing_config_id").notNull(),
+  pricingTier: text("pricing_tier").notNull().default("medium"),
   subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
   markupPct: numeric("markup_pct", { mode: "number" }).notNull().default(0),
   handlingCents: bigint("handling_cents", { mode: "number" }).notNull().default(0),
