@@ -26,6 +26,11 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition (match CabinetNow quotes ±10%) | 9 | 7 | pricing | done |
 | No-schedule reading: consistency hardening + tighter kitchen recall | 6 | 3 | takeoff | in-progress |
 | Estimate reading accuracy — most real CRM quotes within ±10% | 9 | 8 | takeoff | in-progress |
+| Decompose + DIM_SKELETON prompt A/B on fresh reads (~$5 API, owner go-ahead) | 8 | 3 | takeoff | backlog |
+| Deterministic read checks — width-sum vs printed run, bbox overlap/aspect/coverage | 7 | 4 | takeoff | backlog |
+| Room-keyed cross-view reconciliation (island/tower double-count class) | 7 | 6 | takeoff | backlog |
+| End-panel handling — stop pricing 1.5" panels as full cabinets | 7 | 3 | pricing | backlog |
+| Collect numbered-unit ground-truth packets (Wantoch-style) for the test set | 8 | 2 | algo | backlog |
 | Validate seed Socrata field maps on first pull | 8 | 2 | crawler | backlog |
 | Quote email drafting w/ PDF attached (replace mailto) | 7 | 3 | backend | backlog |
 | OCR fallback for scan-only PDFs (tesseract) | 7 | 5 | takeoff | backlog |
@@ -328,6 +333,50 @@ approved`; the interim `awaiting_boxes` gate was removed 2026-08-11 (owner
 feedback — legacy rows still finalize through the old endpoint). Spreadsheets
 and text-layer schedule PDFs skip the page gate. BBoxes are advisory-quality
 (loose) by design.
+
+### Decompose + DIM_SKELETON prompt A/B on fresh reads
+**Priority/LOE/Category/Status:** 8 / 3 / takeoff / backlog
+Both levers are built and gated (`ESTIMATE_PROMPT=decompose`,
+`DIM_SKELETON=1`) but unmeasured — a prompt change invalidates the saved read
+kits, so this needs fresh API reads of the 10 test quotes (~$5, ask owner
+first). Targets the two biggest residual error classes from the 2026-08-13
+Wantoch audit: decomposition-convention clash (custom 57"/66" bases read as
+smaller pieces) and height misreads (deep walls 33" vs printed 52.5").
+Measure on the per-unit ruler; flip flags only on a win, like
+ROUTER_TOLERANT_MERGE.
+
+### Deterministic read checks (flag, never auto-fix)
+**Priority/LOE/Category/Status:** 7 / 4 / takeoff / backlog
+Zero-API sanity layer feeding the review screen's "Flagged for review" panel:
+(a) sum of cabinet widths per run vs the sheet's printed run dimension (dim
+chains already extracted); (b) bbox geometry now that every line carries one —
+heavy overlap on the same image = suspected duplicate, box aspect wildly off
+stated W×H = size misread, large drawn regions with no box = missed cabinets;
+(c) plausibility ranges per category. Flag + highlight lines; the human
+decides.
+
+### Room-keyed cross-view reconciliation
+**Priority/LOE/Category/Status:** 7 / 6 / takeoff / backlog
+The tolerant merge dedups by size tolerance, so the same island read as 3×36"
+(plan) and 21"/15" (elevation) survives twice, and the Wantoch dining towers
+re-counted as "Living Room" talls (+$4.1k phantom). Make room identity the
+reconciliation key: per room, pick the best view or merge within it, instead
+of one global role precedence. Requires hardening room labels (today a string
+normalization hack — "Kitchen" vs "Kitchen - North Wall").
+
+### End-panel handling
+**Priority/LOE/Category/Status:** 7 / 3 / pricing / backlog
+Wantoch: 1.5"-wide tall END PANELS beside the fridge were read/priced as two
+full 24×84×24 cabinets (+$3.2k). Reader should emit `panel` category for
+end/filler panels (prompt nudge + tag regex exists in `isNonBoxCasework`), and
+the tier engine should price panels as panels, not boxes.
+
+### Collect numbered-unit ground-truth packets
+**Priority/LOE/Category/Status:** 8 / 2 / algo / backlog (owner)
+The Wantoch packet numbers every unit on the drawings (1–50) and keys the box
+list to those numbers — gold-standard labels. Owner is collecting more real
+quote examples with both the full plan set and the final itemized quote;
+each becomes a labels.json row + read kit for the ruler.
 
 ### Review screen: click line → source region highlight
 **Priority/LOE/Category/Status:** 6 / 5 / ui / done (absorbed by the two-stage

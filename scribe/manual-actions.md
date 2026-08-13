@@ -55,6 +55,13 @@ unaffected — they are not meant to expire).
 
 ## Completed
 
+### 2026-08-12 — ROUTER_TOLERANT_MERGE enabled (MA-012)
+- **MA-012** `ROUTER_TOLERANT_MERGE=1` set on `scribe-workers` by the owner
+  (Railway → Variables) and confirmed live on a Braun re-run (5 → 23
+  cabinets). This flag is now load-bearing prod behavior — see
+  engineering-history "Load-bearing state". `ROUTER_ELEVATION_PRIMARY`
+  deliberately NOT set (measured ≈ equal on the kits).
+
 ### 2026-06-16 — OpenAI key for AI cross-validation (MA-010)
 - **MA-010** `OPENAI_API_KEY` set on `scribe-workers`; "AI Cross Validation"
   toggle (Admin → Branding & Freight) enabled and confirmed working on a live

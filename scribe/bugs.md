@@ -58,22 +58,6 @@ Format:
 - **Notes / fix:** likely per-room locate + read each room thoroughly; balance
   against over-reading. Carefully — pushing "find more" risks hallucination.
 
-### SCR-007 — Router under-reads elevation-authoritative plans
-- **Status:** open
-- **Reported:** 2026-07-01 by session (page-role router backtest)
-- **Description:** The SCR-003 page-role router counts the floor plan and DROPS
-  elevations in Regime A. On docs where the plan is schematic and the cabinet
-  detail lives in the elevations, this throws away the real count → severe
-  under-read: Q5 +19%→−80%, Q13 +6%→−42%, Q22 −1%→−66%, Q23 +13%→−50%,
-  Q6 −9%→−24%. Q14 (helped) and Q13 (hurt) are structurally identical (both 4-pg
-  plan+elevation PDFs) — only WHICH view is authoritative differs.
-- **Notes / fix:** planned = **document-class routing** (owner greenlit 2026-07-01):
-  replace the router's fixed precedence with a **box-face-area yield comparison**
-  (only demote elevations when the plan/schedule yield is comparable/larger;
-  otherwise the doc is elevation-authoritative → count elevations). Classes:
-  1 itemized-list, 2 plan-auth, 3 elevation-auth, 4 single-view, 5 sparse image.
-- **PR:** #221 (router) — refinement next.
-
 ### SCR-003 — Estimator over-reads kitchens shown as plan + elevations
 - **Status:** attempted (page-role router shipped in PR #221 2026-07-01 —
   over-read tail fixed, MAE 59→34; introduced the SCR-007 under-read tail, refine next)
@@ -102,6 +86,49 @@ _None._
 _None._
 
 ## Resolved
+
+### SCR-007 — Router under-reads elevation-authoritative plans
+- **Status:** resolved (via `ROUTER_TOLERANT_MERGE=1`, LIVE on scribe-workers
+  since 2026-08-12; kit macro F1 0.328 → 0.379; live Braun read went 5 → 23
+  cabinets)
+- **Reported:** 2026-07-01 by session (page-role router backtest)
+- **Description:** The SCR-003 page-role router counts the floor plan and DROPS
+  elevations. On docs where the cabinet detail lives in the elevations this
+  throws away the real count (Q5, Q13, Q22, Q23, Q6 severe under-reads).
+- **Notes / fix:** tolerant merge (PR #232, gated) keeps the authoritative
+  role and RE-ADMITS demoted-role units no kept unit matches (cat, ±3"w/±6"h).
+  Elevation-primary ordering also built + measured (PR #236) — ≈ equal on the
+  kits (0.376), left gated. The planned document-class routing was superseded.
+  Residual: cross-view SIZE-disagreement duplicates survive the merge (Wantoch
+  island: plan 3×36" + elevation 21"/15" of the same island) → room-keyed
+  reconciliation on the roadmap.
+- **PR:** #232 (merge, gated), #236 (elevation-primary A/B); env flip by owner.
+
+### SCR-008 — Sideways plan pages render rotated and garble label reads
+- **Status:** resolved
+- **Reported:** 2026-08-11 by owner (Braun webdownload elevations)
+- **Description:** Landscape sheets drawn ROTATED on portrait pages with no
+  /Rotate flag rendered sideways; the model read rotated label text and
+  garbled sizes ("Oven Fridge Tall 18" for "36\" OVER FRIDGE"). mupdf honors
+  /Rotate — these pages simply have sideways content.
+- **Notes / fix:** `openPdf` detects dominant text orientation (bbox aspect +
+  baseline-anchor direction) and serves dims/renders/crops/fragments in
+  normalized upright space; 8 tests pin the empirically-probed mupdf
+  conventions (rotate(90)=raster CW; region bboxes shift −rawH/−rawW).
+- **PR:** #237
+
+### SCR-009 — Quotes list total ≠ Quote Builder tier price
+- **Status:** resolved
+- **Reported:** 2026-08-13 by owner ($34,141 list vs $49.8k–$65.3k builder)
+- **Description:** Stored quote totals came from the legacy per-line engine
+  while the builder displayed the validated tier estimate with tier choice in
+  client state only — two numbers for one quote (and the stored one was −53%
+  vs the real Wantoch quote; the tier engine was within 6.3%).
+- **Notes / fix:** `quotes.pricing_tier` persisted (migration 0005); stored
+  subtotal/total derive from the tier at create + patch; tier click PATCHes;
+  PDF defaults to the persisted tier. Pre-existing quotes re-price on first
+  PATCH.
+- **PR:** #238
 
 ### SCR-002 — All SPA "save" actions (PUT/PATCH/DELETE) blocked by CORS
 - **Status:** resolved (fix deployed; owner confirmed the AI cross-validation
