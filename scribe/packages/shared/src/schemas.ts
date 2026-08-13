@@ -59,13 +59,19 @@ export const LOW_CONFIDENCE_THRESHOLD = 0.8;
 // What the extraction model returns for one page (lines + page-level notes).
 export const PageExtraction = z.object({
   lines: z.array(CabinetLineItem),
+  // Lenient like bbox_2d: a malformed multiplier (count 0, wrong types) must
+  // never discard the page's lines. An invalid count becomes null and an
+  // unparseable entry becomes an ambiguous placeholder — both routes land in
+  // the existing not-applied-automatically flag instead of multiplying.
   unit_multipliers: z
     .array(
-      z.object({
-        unit_type: z.string(),
-        count: z.number().int().positive().nullable(),
-        ambiguous: z.boolean(),
-      })
+      z
+        .object({
+          unit_type: z.string(),
+          count: z.number().int().positive().nullable().catch(null),
+          ambiguous: z.boolean().catch(true),
+        })
+        .catch({ unit_type: "unrecognized", count: null, ambiguous: true })
     )
     .default([]),
   uncertainties: z.array(z.string()).default([]),
