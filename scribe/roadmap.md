@@ -26,7 +26,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition (match CabinetNow quotes ±10%) | 9 | 7 | pricing | done |
 | No-schedule reading: consistency hardening + tighter kitchen recall | 6 | 3 | takeoff | in-progress |
 | Estimate reading accuracy — most real CRM quotes within ±10% | 9 | 8 | takeoff | in-progress |
-| Decompose + DIM_SKELETON prompt A/B on fresh reads (~$5 API, owner go-ahead) | 8 | 3 | takeoff | backlog |
+| Decompose + DIM_SKELETON prompt A/B on fresh reads (~$5 API, owner go-ahead) | 8 | 3 | takeoff | in-progress |
 | Deterministic read checks — width-sum vs printed run, bbox overlap/aspect/coverage | 7 | 4 | takeoff | backlog |
 | Room-keyed cross-view reconciliation (island/tower double-count class) | 7 | 6 | takeoff | backlog |
 | End-panel handling — stop pricing 1.5" panels as full cabinets | 7 | 3 | pricing | backlog |
@@ -335,7 +335,7 @@ and text-layer schedule PDFs skip the page gate. BBoxes are advisory-quality
 (loose) by design.
 
 ### Decompose + DIM_SKELETON prompt A/B on fresh reads
-**Priority/LOE/Category/Status:** 8 / 3 / takeoff / backlog
+**Priority/LOE/Category/Status:** 8 / 3 / takeoff / in-progress
 Both levers are built and gated (`ESTIMATE_PROMPT=decompose`,
 `DIM_SKELETON=1`) but unmeasured — a prompt change invalidates the saved read
 kits, so this needs fresh API reads of the 10 test quotes (~$5, ask owner
