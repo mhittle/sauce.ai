@@ -9,6 +9,7 @@ import {
   productLines,
   projectDocuments,
   takeoffs,
+  takeoffDetections,
   takeoffLines,
   evalFixtures,
 } from "@scribe/db";
@@ -26,7 +27,7 @@ import {
 } from "@scribe/shared";
 import { matchLine } from "@scribe/pricing";
 import { exportCsv, type ExportableLine } from "@scribe/export";
-import { putObject, signedGetUrl } from "@scribe/storage";
+import { objectExists, putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
 
 const EXT_TO_KIND: Record<string, SourceKind> = {
@@ -308,6 +309,129 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       }
       const key = `takeoffs/${req.params.id}/reads/${req.params.readId}.png`;
       return { url: await signedGetUrl(key) };
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // Beta drag-to-detect view: on-demand region scans, independent of the
+  // takeoff line pipeline (no status transitions, no takeoff_lines writes).
+  // -------------------------------------------------------------------------
+
+  // Signed URL for the beta display render of a page. If the render doesn't
+  // exist yet, enqueue it (deduped by jobId) and return {url: null} — the
+  // client polls until the worker has written the PNG.
+  app.get<{ Params: { id: string; page: string } }>(
+    "/takeoffs/:id/beta/pages/:page/image",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const page = Number(req.params.page);
+      const pageCount = rows[0].pageCount;
+      if (
+        !Number.isInteger(page) ||
+        page < 1 ||
+        (pageCount != null && page > pageCount)
+      ) {
+        return reply.code(404).send({ error: "page out of range" });
+      }
+      if (rows[0].sourceKind !== "pdf") {
+        return reply.code(400).send({ error: "detect view is PDF-only" });
+      }
+      const key = `takeoffs/${req.params.id}/beta/pages/${page}.png`;
+      if (await objectExists(key)) return { url: await signedGetUrl(key) };
+      await getTakeoffQueue().add(
+        "beta_render",
+        { takeoff_id: req.params.id, page },
+        { jobId: `beta-render-${req.params.id}-${page}` }
+      );
+      return { url: null };
+    }
+  );
+
+  // One drag = one detection: persist the scanned rect and hand it to the
+  // worker. rect is [x0,y0,x1,y1] in pixels of the beta display render.
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/detections",
+    async (req, reply) => {
+      const body = z
+        .object({
+          page: z.number().int().positive(),
+          rect: BBox,
+        })
+        .parse(req.body);
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      if (rows[0].sourceKind !== "pdf") {
+        return reply.code(400).send({ error: "detect view is PDF-only" });
+      }
+      const pageCount = rows[0].pageCount;
+      if (pageCount != null && body.page > pageCount) {
+        return reply
+          .code(400)
+          .send({ error: `page out of range (document has ${pageCount} pages)` });
+      }
+      const [detection] = await db
+        .insert(takeoffDetections)
+        .values({
+          takeoffId: req.params.id,
+          page: body.page,
+          rect: body.rect,
+          status: "queued",
+        })
+        .returning();
+      await getTakeoffQueue().add("detect", {
+        takeoff_id: req.params.id,
+        detection_id: detection.id,
+      });
+      return detection;
+    }
+  );
+
+  // All detections for a takeoff (optionally one page), newest first.
+  app.get<{ Params: { id: string }; Querystring: { page?: string } }>(
+    "/takeoffs/:id/detections",
+    async (req) => {
+      const db = getDb();
+      const page = req.query.page != null ? Number(req.query.page) : null;
+      const where =
+        page != null && Number.isInteger(page)
+          ? and(
+              eq(takeoffDetections.takeoffId, req.params.id),
+              eq(takeoffDetections.page, page)
+            )
+          : eq(takeoffDetections.takeoffId, req.params.id);
+      return db
+        .select()
+        .from(takeoffDetections)
+        .where(where)
+        .orderBy(desc(takeoffDetections.createdAt));
+    }
+  );
+
+  app.delete<{ Params: { id: string; detectionId: string } }>(
+    "/takeoffs/:id/detections/:detectionId",
+    async (req, reply) => {
+      const db = getDb();
+      const deleted = await db
+        .delete(takeoffDetections)
+        .where(
+          and(
+            eq(takeoffDetections.id, req.params.detectionId),
+            eq(takeoffDetections.takeoffId, req.params.id)
+          )
+        )
+        .returning();
+      if (deleted.length === 0)
+        return reply.code(404).send({ error: "not found" });
+      return { ok: true };
     }
   );
 

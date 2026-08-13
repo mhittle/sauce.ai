@@ -194,6 +194,23 @@ export function mapBoxToPagePoints(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Beta drag-to-detect display renders
+// ---------------------------------------------------------------------------
+// The beta detect view shows one page as a single high-res PNG the user drags
+// over. 150 DPI keeps letter/tabloid sheets crisp; the edge cap stops a 36x48"
+// sheet from becoming a 7200px monster. Deterministic (pure function of the
+// page dims) so the worker that renders the PNG and anything reasoning about
+// its pixel space always agree without persisting extra state.
+export const BETA_DISPLAY_DPI = 150;
+export const BETA_DISPLAY_MAX_EDGE_PX = 6000;
+
+export function betaDisplayDpi(page: PageDims): number {
+  const longEdgeIn = Math.max(page.widthPt, page.heightPt) / PT_PER_IN;
+  if (longEdgeIn <= 0) return BETA_DISPLAY_DPI;
+  return Math.min(BETA_DISPLAY_DPI, BETA_DISPLAY_MAX_EDGE_PX / longEdgeIn);
+}
+
 export interface PlanOptions {
   maxEdgePx?: number;
   maxTokens?: number;

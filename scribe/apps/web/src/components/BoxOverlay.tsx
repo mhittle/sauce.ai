@@ -51,6 +51,7 @@ function normalize(b: BBox): BBox {
 export function BoxOverlay({
   src,
   boxes,
+  underlays = [],
   selectedId,
   drawMode,
   onSelect,
@@ -59,6 +60,9 @@ export function BoxOverlay({
 }: {
   src: string;
   boxes: OverlayBox[];
+  // Non-interactive dashed context rects (e.g. already-scanned regions),
+  // drawn beneath the boxes in the same natural-pixel space.
+  underlays?: BBox[];
   selectedId: string | null;
   // When true, dragging on empty canvas draws a new box instead of deselecting.
   drawMode: boolean;
@@ -171,6 +175,21 @@ export function BoxOverlay({
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
         >
+          {underlays.map((u, i) => (
+            <rect
+              key={`underlay-${i}`}
+              x={Math.min(u[0], u[2])}
+              y={Math.min(u[1], u[3])}
+              width={Math.abs(u[2] - u[0])}
+              height={Math.abs(u[3] - u[1])}
+              fill="none"
+              stroke="rgb(161,161,170)"
+              strokeWidth={1}
+              strokeDasharray="8 6"
+              vectorEffect="non-scaling-stroke"
+              className="pointer-events-none"
+            />
+          ))}
           {boxes.map((box) => {
             const b =
               draft && draft.id === box.id ? normalize(draft.bbox) : box.bbox;

@@ -1,5 +1,6 @@
 import {
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -56,6 +57,20 @@ export async function getObject(key: string): Promise<Buffer> {
   );
   const bytes = await res.Body!.transformToByteArray();
   return Buffer.from(bytes);
+}
+
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await getS3().send(new HeadObjectCommand({ Bucket: bucket(), Key: key }));
+    return true;
+  } catch (err) {
+    const status = (err as { $metadata?: { httpStatusCode?: number } })
+      .$metadata?.httpStatusCode;
+    const name = (err as { name?: string }).name;
+    if (status === 404 || name === "NotFound" || name === "NoSuchKey")
+      return false;
+    throw err;
+  }
 }
 
 export async function signedGetUrl(

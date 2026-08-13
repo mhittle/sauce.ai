@@ -3,6 +3,7 @@
 // so eval regressions can be traced to a prompt change.
 
 export * from "./classify.js";
+export * from "./detect.js";
 export * from "./extract.js";
 export * from "./regions.js";
 export * from "./estimate.js";

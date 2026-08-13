@@ -18,6 +18,7 @@ import { ProspectDetailPage } from "./pages/ProspectDetail";
 import { TakeoffsPage } from "./pages/Takeoffs";
 import { TakeoffReviewPage } from "./pages/TakeoffReview";
 import { PagePickerPage } from "./pages/PagePicker";
+import { BetaDetectPage } from "./pages/BetaDetect";
 import { QuotesPage } from "./pages/Quotes";
 import { QuoteBuilderPage } from "./pages/QuoteBuilder";
 import { AdminPage } from "./pages/Admin";
@@ -62,6 +63,14 @@ export const pagePickerRoute = createRoute({
   component: PagePickerPage,
 });
 
+// Beta drag-to-detect view: pick a page, drag over the drawing, get cabinet
+// bounding boxes. Separate from the takeoff pipeline.
+export const betaDetectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/takeoffs/$takeoffId/detect",
+  component: BetaDetectPage,
+});
+
 export const quotesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/quotes",
@@ -87,6 +96,7 @@ const routeTree = rootRoute.addChildren([
   takeoffsRoute,
   takeoffReviewRoute,
   pagePickerRoute,
+  betaDetectRoute,
   quotesRoute,
   quoteBuilderRoute,
   adminRoute,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { pagePickerRoute } from "../main";
 import { apiGet, apiSend } from "../api";
 import { Badge, Button, Card, PageTitle, statusTone } from "../ui";
@@ -102,15 +102,22 @@ export function PagePickerPage() {
     <div>
       <PageTitle
         actions={
-          <Button
-            variant="primary"
-            disabled={selectedCount === 0 || submit.isPending}
-            onClick={() => submit.mutate()}
-          >
-            {submit.isPending
-              ? "Starting…"
-              : `Process ${selectedCount} page${selectedCount === 1 ? "" : "s"} →`}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link to="/takeoffs/$takeoffId/detect" params={{ takeoffId }}>
+              <Button>
+                Detect <Badge tone="blue">beta</Badge>
+              </Button>
+            </Link>
+            <Button
+              variant="primary"
+              disabled={selectedCount === 0 || submit.isPending}
+              onClick={() => submit.mutate()}
+            >
+              {submit.isPending
+                ? "Starting…"
+                : `Process ${selectedCount} page${selectedCount === 1 ? "" : "s"} →`}
+            </Button>
+          </div>
         }
       >
         Select pages: {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}{" "}
