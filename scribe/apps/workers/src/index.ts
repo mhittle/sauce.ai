@@ -6,6 +6,7 @@ import {
   prepareTakeoff,
   processTakeoff,
 } from "./takeoff/process.js";
+import { detectRegion, renderBetaPage } from "./takeoff/detect.js";
 import { runSource, runAllSources } from "./crawler/run.js";
 import { redisConnection } from "./lib/redis.js";
 
@@ -29,6 +30,11 @@ const takeoffWorker = new Worker(
     if (job.name === "prepare") await prepareTakeoff(id, log);
     else if (job.name === "extract") await extractTakeoff(id, log);
     else if (job.name === "finalize") await finalizeTakeoff(id, log);
+    // Beta drag-to-detect jobs (no takeoff status transitions).
+    else if (job.name === "beta_render")
+      await renderBetaPage(id, job.data.page, log);
+    else if (job.name === "detect")
+      await detectRegion(job.data.detection_id, log);
     else await processTakeoff(id, log);
   },
   { connection, concurrency: 2 }

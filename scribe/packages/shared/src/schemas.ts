@@ -56,6 +56,35 @@ export type CabinetLineItem = z.infer<typeof CabinetLineItem>;
 
 export const LOW_CONFIDENCE_THRESHOLD = 0.8;
 
+// ---------------------------------------------------------------------------
+// Beta drag-to-detect scans (on-demand region detection, separate from the
+// takeoff line pipeline). One DetectionItem per cabinet the model finds in a
+// user-dragged region; bbox_2d is in pixels of the image the model saw (the
+// worker remaps it to display-render pixels before persisting).
+// ---------------------------------------------------------------------------
+
+export const DetectionCategory = z
+  .enum(["casework_base", "casework_wall", "casework_tall", "vanity", "other"])
+  .catch("other");
+export type DetectionCategory = z.infer<typeof DetectionCategory>;
+
+export const DetectionItem = z.object({
+  label: z.string().default(""),
+  category: DetectionCategory.default("other"),
+  width_in: z.number().positive().nullable().catch(null).default(null),
+  height_in: z.number().positive().nullable().catch(null).default(null),
+  confidence: z.number().min(0).max(1).catch(0.5).default(0.5),
+  bbox_2d: z
+    .tuple([z.number(), z.number(), z.number(), z.number()])
+    .nullable()
+    .catch(null)
+    .default(null),
+});
+export type DetectionItem = z.infer<typeof DetectionItem>;
+
+export const DetectionStatus = z.enum(["queued", "running", "done", "error"]);
+export type DetectionStatus = z.infer<typeof DetectionStatus>;
+
 // What the extraction model returns for one page (lines + page-level notes).
 export const PageExtraction = z.object({
   lines: z.array(CabinetLineItem),

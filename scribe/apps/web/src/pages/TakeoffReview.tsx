@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { takeoffReviewRoute } from "../main";
 import { API_URL, apiGet, apiSend } from "../api";
 import { Badge, Button, Card, Input, PageTitle, statusTone } from "../ui";
@@ -179,6 +179,13 @@ export function TakeoffReviewPage() {
       <PageTitle
         actions={
           <div className="flex items-center gap-2">
+            {takeoff.sourceKind === "pdf" && (
+              <Link to="/takeoffs/$takeoffId/detect" params={{ takeoffId }}>
+                <Button>
+                  Detect <Badge tone="blue">beta</Badge>
+                </Button>
+              </Link>
+            )}
             <a
               href={`${API_URL}/takeoffs/${takeoffId}/export.csv?template=${encodeURIComponent("Mozaik (default)")}`}
             >

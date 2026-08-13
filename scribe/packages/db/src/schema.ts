@@ -7,6 +7,7 @@ import {
   numeric,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uuid,
@@ -139,6 +140,23 @@ export const takeoffLines = pgTable("takeoff_lines", {
   readRect: jsonb("read_rect"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Beta drag-to-detect scans (migrations/0006): one row per drag over a page.
+// rect + items[].bbox are in pixels of the beta display render (display_dpi).
+export const takeoffDetections = pgTable("takeoff_detections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  takeoffId: uuid("takeoff_id").notNull(),
+  page: integer("page").notNull(),
+  rect: jsonb("rect").notNull(),
+  displayDpi: real("display_dpi"),
+  status: text("status").notNull().default("queued"),
+  items: jsonb("items"),
+  cropImageKey: text("crop_image_key"),
+  model: text("model"),
+  tokensUsed: bigint("tokens_used", { mode: "number" }).notNull().default(0),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const evalFixtures = pgTable("eval_fixtures", {
