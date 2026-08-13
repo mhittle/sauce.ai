@@ -87,6 +87,21 @@ _None._
 
 ## Resolved
 
+### SCR-010 — A count:0 unit multiplier discards the whole page's lines
+- **Status:** resolved
+- **Reported:** 2026-08-13 by session (fresh-read A/B, both/Q22 replay)
+- **Description:** A model response with `unit_multipliers: [{count: 0, …}]`
+  fails the strict positive-int schema inside `PageExtraction.parse`, which
+  throws AFTER lines validated — every cabinet read on that page was
+  discarded. Live prod behavior on any read where the model emits a zero or
+  malformed multiplier.
+- **Notes / fix:** lenient parse (same pattern as `bbox_2d`): invalid count →
+  null, which routes to the existing "multipliers not applied automatically —
+  verify quantities" review flag; a fully unparseable entry becomes
+  `{unit_type: "unrecognized", count: null, ambiguous: true}`. Never
+  multiplies, never drops. 3 new shared tests.
+- **PR:** #241
+
 ### SCR-007 — Router under-reads elevation-authoritative plans
 - **Status:** resolved (via `ROUTER_TOLERANT_MERGE=1`, LIVE on scribe-workers
   since 2026-08-12; kit macro F1 0.328 → 0.379; live Braun read went 5 → 23

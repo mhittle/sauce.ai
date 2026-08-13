@@ -75,6 +75,47 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-08-13 (b) — decompose + DIM_SKELETON A/B on fresh reads: both flags stay OFF
+
+**Context:** top open lever from the Wantoch audit — both flags built/gated but
+unmeasured (prompt changes invalidate saved kits). Owner approved fresh reads.
+
+**Method (new, reusable):** `apps/workers/scripts/run-reads.mjs` answers a read
+kit's pending requests via the real API (same call shape as `extract.ts`), so
+prompt A/Bs are now prepare-reads → run-reads → replay-reads per arm.
+Classify/locate responses were COPIED across arms from the manual kits —
+identical pages and region crops per arm, so score deltas attribute to the
+extract prompt alone. 4 arms × 10 kit quotes = 252 fresh Sonnet extract reads,
+$8.63 actual (est was ~$4; outputs ran ~3× longer than manual-read baselines).
+Scored vs labels.json with `ROUTER_TOLERANT_MERGE=1` (prod parity), N=1.
+
+**Result (macro F1): baseline 0.378 / decompose 0.325 / dim-skeleton 0.340 /
+both 0.352 → no flag flip; prod prompt confirmed best.** Fresh-API baseline
+0.378 ≈ the manual-kit 0.379 — the kit methodology transfers. Decompose
+over-splits everywhere (Q8 0.43→0.18, Q13 23→34 preds vs 10 real); its
+convention rules produce more phantoms than they fix. Dim-skeleton wins
+exactly where designed — Q5 Wantoch 0.44→**0.56** (recall 46→62%, the
+height-misread class) — but poisons sparse docs (Q24 0.67→0.29), same split
+as 2026-07-06; a doc-conditional gate (chain-rich docs only) is the surviving
+idea. Scorecard: `~/Desktop/Scribe Testing/reading-fresh-ab-4arms-n1.csv`;
+arm kits under `ab-decompose-dimskel/`.
+
+**Bug found+fixed by the run (SCR-010):** a live read returned
+`unit_multipliers: [{count: 0, …}]` → `PageExtraction.parse` threw → the whole
+page's lines were discarded (prod behavior too). Now lenient like `bbox_2d`:
+invalid count → null (flag-for-review path), unparseable entry → ambiguous
+placeholder. +3 shared tests (150 total).
+
+**Ops note:** ~190 back-to-back reads at concurrency 3 tripped a rate-limit
+window mid-run; `withSocketRetry`'s ~1.5s total backoff doesn't survive
+per-minute caps. Resume runs used concurrency 2 + inter-kit sleeps. If a
+future bulk run dies with a bare "Node.js v22…" line, check for 429s first.
+
+**PR #241.** Tests green (shared 150 / workers 21 / pricing 44). No prod
+actions — the outcome is that no env var changes.
+
+---
+
 ## 2026-08-13 — quote tier persisted: one number everywhere (migration 0005)
 
 Owner found the quotes LIST showing $34k while the Quote Builder offered

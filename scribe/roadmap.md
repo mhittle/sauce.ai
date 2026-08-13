@@ -26,7 +26,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Doors-aware pricing — Airtable $/ft² tiers + box→door/front decomposition (match CabinetNow quotes ±10%) | 9 | 7 | pricing | done |
 | No-schedule reading: consistency hardening + tighter kitchen recall | 6 | 3 | takeoff | in-progress |
 | Estimate reading accuracy — most real CRM quotes within ±10% | 9 | 8 | takeoff | in-progress |
-| Decompose + DIM_SKELETON prompt A/B on fresh reads (~$5 API, owner go-ahead) | 8 | 3 | takeoff | in-progress |
+| Decompose + DIM_SKELETON prompt A/B on fresh reads (~$5 API, owner go-ahead) | 8 | 3 | takeoff | done |
 | Deterministic read checks — width-sum vs printed run, bbox overlap/aspect/coverage | 7 | 4 | takeoff | backlog |
 | Room-keyed cross-view reconciliation (island/tower double-count class) | 7 | 6 | takeoff | backlog |
 | End-panel handling — stop pricing 1.5" panels as full cabinets | 7 | 3 | pricing | backlog |
@@ -335,15 +335,18 @@ and text-layer schedule PDFs skip the page gate. BBoxes are advisory-quality
 (loose) by design.
 
 ### Decompose + DIM_SKELETON prompt A/B on fresh reads
-**Priority/LOE/Category/Status:** 8 / 3 / takeoff / in-progress
-Both levers are built and gated (`ESTIMATE_PROMPT=decompose`,
-`DIM_SKELETON=1`) but unmeasured — a prompt change invalidates the saved read
-kits, so this needs fresh API reads of the 10 test quotes (~$5, ask owner
-first). Targets the two biggest residual error classes from the 2026-08-13
-Wantoch audit: decomposition-convention clash (custom 57"/66" bases read as
-smaller pieces) and height misreads (deep walls 33" vs printed 52.5").
-Measure on the per-unit ruler; flip flags only on a win, like
-ROUTER_TOLERANT_MERGE.
+**Priority/LOE/Category/Status:** 8 / 3 / takeoff / done (PR #241, 2026-08-13)
+MEASURED — both flags stay OFF. Fresh Sonnet reads of all 10 kit quotes, 4
+arms (classify/locate held constant across arms), scored vs labels.json with
+`ROUTER_TOLERANT_MERGE=1`: baseline **0.378** / decompose 0.325 / dim-skeleton
+0.340 / both 0.352 macro F1. Decompose over-splits everywhere (Q8 0.43→0.18);
+dim-skeleton nails the height-misread doc it was designed for (Q5 Wantoch
+0.44→0.56, misses 21→15) but poisons sparse docs (Q24 0.67→0.29) — same
+shape as 2026-07-06. A doc-conditional gate for DIM_SKELETON (structured,
+chain-rich docs only) is the surviving idea if this is revisited. Detail:
+`~/Desktop/Scribe Testing/reading-fresh-ab-4arms-n1.csv` + arm kits in
+`ab-decompose-dimskel/`. New harness piece: `run-reads.mjs` answers a kit's
+pending reads via the API (prepare → run → replay, ~$8.6 for 252 reads).
 
 ### Deterministic read checks (flag, never auto-fix)
 **Priority/LOE/Category/Status:** 7 / 4 / takeoff / backlog
