@@ -352,8 +352,9 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // One drag = one detection: persist the scanned rect and hand it to the
-  // worker. rect is [x0,y0,x1,y1] in pixels of the beta display render.
+  // One drag = one DRAWN detection (wizard step 2). Nothing is sent to the
+  // model yet — the run endpoint below queues all drawn boxes at once.
+  // rect is [x0,y0,x1,y1] in pixels of the beta display render.
   app.post<{ Params: { id: string } }>(
     "/takeoffs/:id/detections",
     async (req, reply) => {
@@ -384,14 +385,74 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           takeoffId: req.params.id,
           page: body.page,
           rect: body.rect,
-          status: "queued",
+          status: "drawn",
         })
         .returning();
-      await getTakeoffQueue().add("detect", {
-        takeoff_id: req.params.id,
-        detection_id: detection.id,
-      });
       return detection;
+    }
+  );
+
+  // Wizard step 3: send every drawn box to the model at once.
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/detections/run",
+    async (req, reply) => {
+      const db = getDb();
+      const drawn = await db
+        .update(takeoffDetections)
+        .set({ status: "queued" })
+        .where(
+          and(
+            eq(takeoffDetections.takeoffId, req.params.id),
+            eq(takeoffDetections.status, "drawn")
+          )
+        )
+        .returning();
+      if (drawn.length === 0)
+        return reply.code(400).send({ error: "no drawn boxes to detect" });
+      const queue = getTakeoffQueue();
+      for (const d of drawn) {
+        await queue.add("detect", {
+          takeoff_id: req.params.id,
+          detection_id: d.id,
+        });
+      }
+      return { queued: drawn.length };
+    }
+  );
+
+  // Remove ONE detected box (wizard: the table ✕). The row disappears with
+  // its last item.
+  app.delete<{ Params: { id: string; detectionId: string; index: string } }>(
+    "/takeoffs/:id/detections/:detectionId/items/:index",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffDetections)
+        .where(
+          and(
+            eq(takeoffDetections.id, req.params.detectionId),
+            eq(takeoffDetections.takeoffId, req.params.id)
+          )
+        );
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const items = Array.isArray(rows[0].items) ? [...rows[0].items] : [];
+      const index = Number(req.params.index);
+      if (!Number.isInteger(index) || index < 0 || index >= items.length) {
+        return reply.code(400).send({ error: "item index out of range" });
+      }
+      items.splice(index, 1);
+      if (items.length === 0) {
+        await db
+          .delete(takeoffDetections)
+          .where(eq(takeoffDetections.id, req.params.detectionId));
+      } else {
+        await db
+          .update(takeoffDetections)
+          .set({ items })
+          .where(eq(takeoffDetections.id, req.params.detectionId));
+      }
+      return { ok: true, remaining: items.length };
     }
   );
 
@@ -413,6 +474,58 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         .from(takeoffDetections)
         .where(where)
         .orderBy(desc(takeoffDetections.createdAt));
+    }
+  );
+
+  // Wizard step 4: turn every detected cabinet into real takeoff lines —
+  // one whole-input measurements pass, then the standard price+faces tail.
+  // REPLACES any existing lines (the UI confirms first).
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/build-takeoff",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const takeoff = rows[0];
+      if (takeoff.sourceKind !== "pdf") {
+        return reply.code(400).send({ error: "detect view is PDF-only" });
+      }
+      if (!["awaiting_pages", "review"].includes(takeoff.status)) {
+        return reply.code(409).send({
+          error: `cannot build takeoff from detections in status ${takeoff.status}`,
+        });
+      }
+      const detections = await db
+        .select()
+        .from(takeoffDetections)
+        .where(
+          and(
+            eq(takeoffDetections.takeoffId, req.params.id),
+            eq(takeoffDetections.status, "done")
+          )
+        );
+      const itemCount = detections.reduce(
+        (n, d) => n + (Array.isArray(d.items) ? d.items.length : 0),
+        0
+      );
+      if (itemCount === 0) {
+        return reply
+          .code(400)
+          .send({ error: "no detected cabinets — run detection first" });
+      }
+      const [updated] = await db
+        .update(takeoffs)
+        .set({ status: "processing", error: null, updatedAt: new Date() })
+        .where(eq(takeoffs.id, req.params.id))
+        .returning();
+      await getTakeoffQueue().add("beta_build", {
+        takeoff_id: req.params.id,
+        prior_status: takeoff.status,
+      });
+      return updated;
     }
   );
 
