@@ -227,10 +227,13 @@ export async function detectRegion(
 // printed dims as grounding), then the standard replace → price → review tail.
 // ---------------------------------------------------------------------------
 
-// Pages per measurements call. Each image costs ≤~1.5k tokens; 8 pages plus
-// grounding stays well inside a sane request while keeping ONE call for the
-// typical 1-4 page selection.
-const MEASURE_PAGES_PER_CALL = 8;
+// The measurements pass sends the WHOLE plan set in one call — an unmarked
+// floor plan or schedule page often carries the dims/scale that size the
+// marked cabinets. Each page image costs ≤~1.5k tokens (model-budget-fitted),
+// so even a 23-page set is ~35k input tokens. The cap is a runaway guard for
+// pathological documents: marker pages always make the cut, context pages
+// fill the remainder in page order.
+const MEASURE_MAX_PAGES = 30;
 
 const ANNOTATE_COLORS: Record<string, string> = {
   casework_base: "rgb(0,170,0)",
@@ -396,17 +399,32 @@ export async function buildFromDetections(
       }
       if (entries.length === 0) throw new Error("no detected cabinets");
 
-      // Per page: clean render (the review screen's read image) + annotated
-      // copy (the model's input), converting boxes display-px → render-px.
-      const annotatedByPage = new Map<number, Buffer>();
+      // The call sends EVERY page of the set (capped): marker pages get an
+      // annotated render, the rest ride along as clean context (an unused
+      // floor plan or schedule often holds the sizing context).
+      const allPages = Array.from({ length: pdf.pageCount }, (_, i) => i + 1);
+      const contextPages = allPages.filter((p) => !pages.includes(p));
+      const sentPages = [...pages, ...contextPages]
+        .slice(0, MEASURE_MAX_PAGES)
+        .sort((a, b) => a - b);
+      const omitted = allPages.length - sentPages.length;
+
+      // Per page: render + (marker pages only) reads copy + annotation,
+      // converting boxes display-px → render-px.
+      const imageByPage = new Map<number, Buffer | Uint8Array>();
       const groundingByPage = new Map<number, string | undefined>();
       const readRectByPage = new Map<number, RectPt & { dpi: number }>();
-      for (const page of pages) {
+      for (const page of sentPages) {
         const dims = pdf.pageDimsPt(page - 1);
         const dpi = fitDpi(dims.widthPt / PT_PER_IN, dims.heightPt / PT_PER_IN);
+        const png = pdf.renderPage(page - 1, dpi);
+        groundingByPage.set(page, buildDimGroundingSafe(pdf, page - 1, log));
+        if (!pages.includes(page)) {
+          imageByPage.set(page, png); // clean context page
+          continue;
+        }
         const displayDpi = betaDisplayDpi(dims);
         const toRender = dpi / displayDpi;
-        const png = pdf.renderPage(page - 1, dpi);
         await putObject(betaReadKey(takeoffId, page), png, "image/png");
         readRectByPage.set(page, {
           x0: 0,
@@ -435,95 +453,96 @@ export async function buildFromDetections(
           annotated,
           "image/png"
         );
-        annotatedByPage.set(page, annotated);
-        groundingByPage.set(
-          page,
-          buildDimGroundingSafe(pdf, page - 1, log)
-        );
+        imageByPage.set(page, annotated);
       }
 
-      // Measurements pass: one call per chunk of pages (usually one total).
+      // Measurements pass: ONE call with the whole (capped) set.
       const client = getAnthropic();
       let tokens = 0;
       const cabinets: unknown[] = [];
       const parseWarnings: string[] = [];
-      for (let i = 0; i < pages.length; i += MEASURE_PAGES_PER_CALL) {
-        const chunkPages = pages.slice(i, i + MEASURE_PAGES_PER_CALL);
-        const chunkMarkers: MeasureMarker[] = entries
-          .filter((e) => chunkPages.includes(e.page))
-          .map((e) => {
-            // Box center as % of the page: a text-side anchor so marker
-            // attribution survives even if the painted badge is illegible.
-            const rect = readRectByPage.get(e.page);
-            const b = e.bboxReadPx;
-            const pct =
-              rect && b
-                ? {
-                    xPct:
-                      (((b[0] + b[2]) / 2) * (PT_PER_IN / rect.dpi) * 100) /
-                      (rect.x1 - rect.x0),
-                    yPct:
-                      (((b[1] + b[3]) / 2) * (PT_PER_IN / rect.dpi) * 100) /
-                      (rect.y1 - rect.y0),
-                  }
-                : {};
-            return {
-              marker: e.marker,
-              page: e.page,
-              label: e.label,
-              category: e.category,
-              ...pct,
-            };
-          });
-        const chunkGrounding = new Map(
-          chunkPages.map((p) => [p, groundingByPage.get(p)] as const)
+      if (omitted > 0) {
+        parseWarnings.push(
+          `plan set has ${allPages.length} pages — ${omitted} context page(s) beyond the ${MEASURE_MAX_PAGES}-page cap were not sent to the measurements pass`
         );
-        const message = await withSocketRetry(() =>
-          client.messages
-            .stream({
-              model: DETECT_MODEL,
-              max_tokens: 16000,
-              ...(DETECT_MODEL.startsWith("claude-opus-4-8")
-                ? {}
-                : { temperature: 0 }),
-              system: MEASURE_SYSTEM,
-              messages: [
-                {
-                  role: "user",
-                  content: [
-                    ...chunkPages.map((p) => imageBlock(annotatedByPage.get(p)!)),
-                    {
-                      type: "text" as const,
-                      text: measureUserText(chunkMarkers, chunkGrounding),
-                    },
-                  ],
-                },
-              ],
-            })
-            .finalMessage()
-        );
-        tokens += message.usage.input_tokens + message.usage.output_tokens;
-        // Persist the raw response — when sizing goes wrong ("everything
-        // defaulted"), this is the evidence of what the model actually said.
-        const responseText = textOf(message);
-        await putObject(
-          `takeoffs/${takeoffId}/beta/measure/response-${i / MEASURE_PAGES_PER_CALL}.txt`,
-          Buffer.from(responseText, "utf-8"),
-          "text/plain"
-        );
-        try {
-          const obj = (extractJson(responseText) ?? {}) as {
-            cabinets?: unknown;
-          };
-          if (Array.isArray(obj.cabinets)) cabinets.push(...obj.cabinets);
-          else parseWarnings.push(
-            `measurements response for pages ${chunkPages.join(",")} had no cabinets array — sizes defaulted`
-          );
-        } catch {
+      }
+      const markers: MeasureMarker[] = entries.map((e) => {
+        // Box center as % of the page: a text-side anchor so marker
+        // attribution survives even if the painted badge is illegible.
+        const rect = readRectByPage.get(e.page);
+        const b = e.bboxReadPx;
+        const pct =
+          rect && b
+            ? {
+                xPct:
+                  (((b[0] + b[2]) / 2) * (PT_PER_IN / rect.dpi) * 100) /
+                  (rect.x1 - rect.x0),
+                yPct:
+                  (((b[1] + b[3]) / 2) * (PT_PER_IN / rect.dpi) * 100) /
+                  (rect.y1 - rect.y0),
+              }
+            : {};
+        return {
+          marker: e.marker,
+          page: e.page,
+          label: e.label,
+          category: e.category,
+          ...pct,
+        };
+      });
+      const message = await withSocketRetry(() =>
+        client.messages
+          .stream({
+            model: DETECT_MODEL,
+            max_tokens: 16000,
+            ...(DETECT_MODEL.startsWith("claude-opus-4-8")
+              ? {}
+              : { temperature: 0 }),
+            system: MEASURE_SYSTEM,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  ...sentPages.map((p) => imageBlock(imageByPage.get(p)!)),
+                  {
+                    type: "text" as const,
+                    text: measureUserText(
+                      markers,
+                      groundingByPage,
+                      sentPages.map((p) => ({
+                        page: p,
+                        hasMarkers: pages.includes(p),
+                      }))
+                    ),
+                  },
+                ],
+              },
+            ],
+          })
+          .finalMessage()
+      );
+      tokens += message.usage.input_tokens + message.usage.output_tokens;
+      // Persist the raw response — when sizing goes wrong ("everything
+      // defaulted"), this is the evidence of what the model actually said.
+      const responseText = textOf(message);
+      await putObject(
+        `takeoffs/${takeoffId}/beta/measure/response-0.txt`,
+        Buffer.from(responseText, "utf-8"),
+        "text/plain"
+      );
+      try {
+        const obj = (extractJson(responseText) ?? {}) as {
+          cabinets?: unknown;
+        };
+        if (Array.isArray(obj.cabinets)) cabinets.push(...obj.cabinets);
+        else
           parseWarnings.push(
-            `measurements response for pages ${chunkPages.join(",")} was not parseable JSON — sizes defaulted`
+            "measurements response had no cabinets array — sizes defaulted"
           );
-        }
+      } catch {
+        parseWarnings.push(
+          "measurements response was not parseable JSON — sizes defaulted"
+        );
       }
 
       const merged = mergeMeasuredLines(entries, cabinets);

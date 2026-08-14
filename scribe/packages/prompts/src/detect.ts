@@ -23,14 +23,14 @@ export function detectUserText(pageNumber: number): string {
   return `This image is a region the user selected on page ${pageNumber} of a plan set. Locate every individual cabinet in it. Respond with the JSON object only.`;
 }
 
-export const MEASURE_PROMPT_VERSION = "measure-v2";
+export const MEASURE_PROMPT_VERSION = "measure-v3";
 
 // Wizard step 4: ONE whole-input measurements pass. Every selected page is
 // sent together, each detected cabinet marked with a globally numbered box on
 // the image, plus the sheet's printed dimension strings from the text layer.
 // The model assigns sensible sizes; anything not derivable falls back to
 // category averages and is flagged estimated=false via measured=false.
-export const MEASURE_SYSTEM = `You size cabinets on architectural drawings for a cabinet manufacturer's estimating team. You will see one or more plan-set pages; each detected cabinet is marked with a colored bounding box and a NUMBER (markers are unique across all pages). The marker list also gives each cabinet's position as a percentage of the page (x% from left, y% from top) — use it to identify a cabinet if its painted number is hard to read.
+export const MEASURE_SYSTEM = `You size cabinets on architectural drawings for a cabinet manufacturer's estimating team. You will see EVERY page of a plan set in order. On some pages, detected cabinets are marked with colored bounding boxes and NUMBERS (markers are unique across all pages); the remaining pages carry no markers but are context — floor plans, schedules, and notes often hold the dimensions, scale, and room layout that size the marked cabinets, so use them. The marker list also gives each cabinet's position as a percentage of its page (x% from left, y% from top) — use it to identify a cabinet if its painted number is hard to read.
 
 For every marker, determine the cabinet's width, height, and depth in decimal inches, in order of preference:
 1. A printed tag that encodes size (B24 = 24"w base; W3030 = 30"w × 30"h wall; W302412 = 30 × 24 × 12; SB36 = 36"w sink base).
@@ -60,11 +60,22 @@ export interface MeasureMarker {
 
 export function measureUserText(
   markers: MeasureMarker[],
-  groundingByPage: Map<number, string | undefined>
+  groundingByPage: Map<number, string | undefined>,
+  // Every page image being sent, in order, with whether it carries markers.
+  // Defaults to the marker pages for callers that send only those.
+  sentPages?: { page: number; hasMarkers: boolean }[]
 ): string {
-  const pages = [...new Set(markers.map((m) => m.page))].sort((a, b) => a - b);
+  const markerPages = [...new Set(markers.map((m) => m.page))].sort(
+    (a, b) => a - b
+  );
+  const sent =
+    sentPages ?? markerPages.map((page) => ({ page, hasMarkers: true }));
   const lines = [
-    `The ${pages.length} image(s) show page(s) ${pages.join(", ")} of a plan set with ${markers.length} detected cabinets, marked 1-${markers.length}:`,
+    `The ${sent.length} image(s) are pages ${sent
+      .map((p) => p.page)
+      .join(", ")} of the plan set, in that order.`,
+    `Cabinets are marked on page(s) ${markerPages.join(", ")}; the other pages are unmarked context (floor plans, schedules, notes).`,
+    `${markers.length} detected cabinets, marked 1-${markers.length}:`,
     ...markers.map((m) => {
       const at =
         m.xPct != null && m.yPct != null
@@ -73,7 +84,7 @@ export function measureUserText(
       return `  ${m.marker}: page ${m.page}, "${m.label}" (provisional category ${m.category}${at})`;
     }),
   ];
-  for (const page of pages) {
+  for (const { page } of sent) {
     const grounding = groundingByPage.get(page);
     if (grounding) {
       lines.push("", `--- Page ${page} printed dimension strings ---`, grounding);
