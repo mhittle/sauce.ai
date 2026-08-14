@@ -25,6 +25,12 @@ interface QuoteDetail {
     priced: {
       takeoff_line_id: string;
       product_line_id: string;
+      tag: string | null;
+      category: string;
+      qty: number;
+      width_in: number | null;
+      height_in: number | null;
+      depth_in: number | null;
       unit_cents: number;
       total_cents: number;
       lead_time_days: number;
@@ -184,26 +190,39 @@ export function QuoteBuilderPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-zinc-500">
-                <th className="py-1">Product line</th>
+                <th className="py-1">Item</th>
+                <th>Qty</th>
                 <th>Unit</th>
                 <th>Total</th>
                 <th>Lead</th>
               </tr>
             </thead>
             <tbody>
-              {quote.pricing.priced.map((l) => (
-                <tr key={l.takeoff_line_id} className="border-t border-zinc-100">
-                  <td className="py-1">
-                    {l.product_line_id}
-                    {l.needs_review && (
-                      <Badge tone="red">NEEDS REVIEW rate</Badge>
-                    )}
-                  </td>
-                  <td>{formatUsd(l.unit_cents)}</td>
-                  <td>{formatUsd(l.total_cents)}</td>
-                  <td>{l.lead_time_days}d</td>
-                </tr>
-              ))}
+              {quote.pricing.priced.map((l) => {
+                const dims = [l.width_in, l.height_in, l.depth_in]
+                  .map((d) => (d == null ? "—" : `${d}"`))
+                  .join(" × ");
+                return (
+                  <tr key={l.takeoff_line_id} className="border-t border-zinc-100">
+                    <td className="py-1">
+                      <span className="font-medium">
+                        {l.tag ?? l.category.replace(/_/g, " ")}
+                      </span>{" "}
+                      <span className="text-zinc-500">{dims}</span>
+                      <span className="ml-1 text-xs text-zinc-400">
+                        {l.product_line_id}
+                      </span>
+                      {l.needs_review && (
+                        <Badge tone="red">NEEDS REVIEW rate</Badge>
+                      )}
+                    </td>
+                    <td>{l.qty}</td>
+                    <td>{formatUsd(l.unit_cents)}</td>
+                    <td>{formatUsd(l.total_cents)}</td>
+                    <td>{l.lead_time_days}d</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {quote.pricing.unpriced.length > 0 && (

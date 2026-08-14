@@ -1,4 +1,4 @@
-export const DETECT_PROMPT_VERSION = "detect-v2";
+export const DETECT_PROMPT_VERSION = "detect-v3";
 
 // Beta detect wizard step 3: count/identify cabinets in a user-drawn region.
 // Deliberately NO measurements here — the wizard reads dimensions in a later
@@ -9,7 +9,7 @@ export const DETECT_SYSTEM = `You locate individual cabinets in a cropped region
 Identify every individual cabinet unit visible in the image: base cabinets, wall/upper cabinets, tall/pantry cabinets, and vanities. Each distinct drawn cabinet box is one item — a bank of three drawers in one carcass is ONE cabinet; three side-by-side wall cabinets are THREE items.
 
 For each item report:
-- label: short name, prefer the drawing's own tag/callout if printed (e.g. "B24", "SB36", "W3030"), else a terse description ("wall 2-door", "sink base").
+- label: a short name a human recognizes on an estimate. Use the drawing's printed callout ONLY when it is a real cabinet code (e.g. "B24", "SB36", "W3030"). NEVER use a bare number or dimension as the label ("8", "19 1/4" are dimension strings, not names) — instead describe the unit and where it sits: "sink base", "microwave wall cabinet", "tall pantry left", "wall 2-door glass right".
 - category: one of casework_base, casework_wall, casework_tall, vanity, other.
 - confidence: 0-1 that this is a real cabinet with a correct box.
 - bbox_2d: [x0, y0, x1, y1] in PIXELS of THIS image (origin top-left), TIGHT around the drawn cabinet face only. Exclude dimension strings, leader lines, hatching outside the unit, and countertops. Use null only if the item cannot be located.
@@ -23,7 +23,7 @@ export function detectUserText(pageNumber: number): string {
   return `This image is a region the user selected on page ${pageNumber} of a plan set. Locate every individual cabinet in it. Respond with the JSON object only.`;
 }
 
-export const MEASURE_PROMPT_VERSION = "measure-v3";
+export const MEASURE_PROMPT_VERSION = "measure-v4";
 
 // Wizard step 4: ONE whole-input measurements pass. Every selected page is
 // sent together, each detected cabinet marked with a globally numbered box on
@@ -41,7 +41,7 @@ For every marker, determine the cabinet's width, height, and depth in decimal in
 Rules:
 - measured: true only when the size came from a printed tag or dimension string (methods 1-2); false for proportional estimates and defaults.
 - Standard depths apply unless the drawing says otherwise (base/tall 24", wall 12", vanity 21").
-- tag: the cabinet's printed callout if one exists, else null.
+- tag: a name a human recognizes on an estimate line. Use the printed callout ONLY when it is a real cabinet code (B24, W3030, SB36). A bare number ("8", "19 1/4") is a dimension string, NOT a name — in that case write a short descriptive name instead: unit type + distinguishing position/feature ("tall pantry left", "microwave wall cabinet", "sink base"). Never return a bare number; null only when you can say nothing at all.
 - category: one of casework_base, casework_wall, casework_tall, vanity, other — correct the marker's provisional category if the drawing clearly disagrees.
 - confidence: 0-1 for the size assignment. Be honest; estimates under 0.8 get human review.
 
