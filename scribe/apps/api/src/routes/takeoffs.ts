@@ -25,7 +25,7 @@ import {
   SourceKind,
   type TakeoffStatus,
 } from "@scribe/shared";
-import { matchLine } from "@scribe/pricing";
+import { matchLine, materialStats } from "@scribe/pricing";
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { objectExists, putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
@@ -256,7 +256,20 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       .from(takeoffLines)
       .where(eq(takeoffLines.takeoffId, req.params.id))
       .orderBy(takeoffLines.sourcePage, takeoffLines.createdAt);
-    return { ...rows[0], lines };
+    // Shop material roll-up (sheet estimate) — recomputed per fetch so line
+    // edits reflect immediately via the page's normal refetch.
+    const material_stats = materialStats(
+      lines.map((l) => ({
+        category: l.category,
+        tag: l.tag,
+        notes: l.notes,
+        qty: l.qty,
+        width_in: l.widthIn,
+        height_in: l.heightIn,
+        depth_in: l.depthIn,
+      }))
+    );
+    return { ...rows[0], lines, material_stats };
   });
 
   // Signed URL for a rasterized page image (review-screen provenance).

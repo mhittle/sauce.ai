@@ -43,6 +43,19 @@ interface TakeoffDetail {
     warnings?: string[];
   } | null;
   lines: Line[];
+  material_stats: {
+    box_count: number;
+    carcass_sqft: number;
+    carcass_sheets: number;
+    door_count: number;
+    door_sqft: number;
+    drawer_front_count: number;
+    front_sqft: number;
+    face_sheets: number;
+    skipped_no_dims: number;
+    waste_pct: number;
+    sheet_area_sqft: number;
+  } | null;
 }
 
 interface ProductLineRow {
@@ -264,6 +277,65 @@ export function TakeoffReviewPage() {
           </ul>
         </Card>
       )}
+
+      {takeoff.material_stats &&
+        takeoff.material_stats.box_count > 0 &&
+        ["review", "approved"].includes(takeoff.status) && (
+          <Card className="mb-4">
+            <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+              Materials
+            </h2>
+            <div className="flex flex-wrap gap-x-8 gap-y-2">
+              <div>
+                <div className="text-lg font-semibold">
+                  {takeoff.material_stats.box_count}
+                </div>
+                <div className="text-xs text-zinc-500">Cabinet boxes</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold">
+                  {takeoff.material_stats.carcass_sqft} ft²
+                  <span className="ml-1 text-sm font-normal text-zinc-500">
+                    → ~{takeoff.material_stats.carcass_sheets} sheets
+                  </span>
+                </div>
+                <div className="text-xs text-zinc-500">
+                  Carcass material (4×8 @ {takeoff.material_stats.waste_pct}%
+                  waste)
+                </div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold">
+                  {takeoff.material_stats.door_count} doors ·{" "}
+                  {takeoff.material_stats.door_sqft} ft²
+                </div>
+                <div className="text-xs text-zinc-500">Door fronts</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold">
+                  {takeoff.material_stats.drawer_front_count} fronts ·{" "}
+                  {takeoff.material_stats.front_sqft} ft²
+                </div>
+                <div className="text-xs text-zinc-500">Drawer fronts</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold">
+                  ~{takeoff.material_stats.face_sheets} sheets
+                </div>
+                <div className="text-xs text-zinc-500">
+                  Door/front material (4×8 @{" "}
+                  {takeoff.material_stats.waste_pct}% waste)
+                </div>
+              </div>
+            </div>
+            {takeoff.material_stats.skipped_no_dims > 0 && (
+              <p className="mt-2 text-xs text-amber-700">
+                {takeoff.material_stats.skipped_no_dims} box(es) missing
+                dimensions — not counted above.
+              </p>
+            )}
+          </Card>
+        )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="max-h-[75vh] overflow-auto">
