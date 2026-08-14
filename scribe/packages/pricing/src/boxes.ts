@@ -104,6 +104,29 @@ export function isCabinetBox(category: string): boolean {
   return BOX_CATEGORIES.includes(category);
 }
 
+// Total carcass panel area (std stock + shelves, ft²) for one box, using the
+// same family formulas and default depths as priceCabinetBoxCents. Null for
+// non-box lines or missing dimensions. Quantity is NOT applied.
+export function carcassSqft(line: {
+  category: string;
+  width_in: number | null;
+  height_in: number | null;
+  depth_in?: number | null;
+}): number | null {
+  if (!isCabinetBox(line.category)) return null;
+  const w = line.width_in;
+  const h = line.height_in;
+  const d = line.depth_in ?? (line.category === "casework_wall" ? 12 : 24);
+  if (w == null || h == null || w <= 0 || h <= 0 || d <= 0) return null;
+  const c =
+    line.category === "casework_wall"
+      ? wallComponents(w, h, d, 1)
+      : line.category === "casework_tall"
+        ? tallComponents(w, h, d, 4)
+        : baseComponents(w, h, d, 1);
+  return c.std_sqft + c.shelf_sqft;
+}
+
 export interface BoxPriceOptions {
   species?: string;
 }
