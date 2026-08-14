@@ -1,15 +1,30 @@
 import type { Logger } from "pino";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import sharp from "sharp";
+import { z } from "zod";
 import { getDb, takeoffDetections, takeoffs } from "@scribe/db";
 import {
+  BETA_DEFAULT_DIMS,
   betaDisplayDpi,
+  buildDimGrounding,
+  CabinetLineItem,
   clampRectToPage,
   DetectionItem,
   fitDpi,
+  LineCategory,
+  markEstimated,
   padRectToPage,
   RectPt,
 } from "@scribe/shared";
-import { DETECT_SYSTEM, detectUserText, SONNET_MODEL } from "@scribe/prompts";
+import {
+  DETECT_SYSTEM,
+  detectUserText,
+  MEASURE_PROMPT_VERSION,
+  MEASURE_SYSTEM,
+  MeasureMarker,
+  measureUserText,
+  SONNET_MODEL,
+} from "@scribe/prompts";
 import { getObject, objectExists, putObject } from "@scribe/storage";
 import {
   extractJson,
@@ -19,6 +34,7 @@ import {
   withSocketRetry,
 } from "../lib/anthropic.js";
 import { openPdf, OpenPdf } from "./pdf.js";
+import { priceAndExpand, ReadLine, replaceLines } from "./process.js";
 
 // ---------------------------------------------------------------------------
 // Beta drag-to-detect: on-demand cabinet detection over a user-dragged region
@@ -202,5 +218,334 @@ export async function detectRegion(
       .set({ status: "error", error: msg })
       .where(eq(takeoffDetections.id, detectionId));
     log.error({ detection: detectionId, err: msg }, "detection failed");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Wizard step 4: build the takeoff from detections. One whole-input
+// measurements pass (all pages together, cabinets numbered on the images,
+// printed dims as grounding), then the standard replace → price → review tail.
+// ---------------------------------------------------------------------------
+
+// Pages per measurements call. Each image costs ≤~1.5k tokens; 8 pages plus
+// grounding stays well inside a sane request while keeping ONE call for the
+// typical 1-4 page selection.
+const MEASURE_PAGES_PER_CALL = 8;
+
+const ANNOTATE_COLORS: Record<string, string> = {
+  casework_base: "rgb(0,170,0)",
+  casework_wall: "rgb(200,0,200)",
+  casework_tall: "rgb(0,90,220)",
+  vanity: "rgb(230,140,0)",
+};
+
+// One numbered cabinet entering the measurements pass.
+export interface MarkerEntry {
+  marker: number;
+  page: number;
+  label: string;
+  category: string;
+  confidence: number;
+  // bbox in the reads-image pixels of that page's render (null = not locatable)
+  bboxReadPx: [number, number, number, number] | null;
+}
+
+const MeasuredCabinet = z.object({
+  marker: z.number().int(),
+  tag: z.string().nullable().catch(null).default(null),
+  category: z.string().catch("other").default("other"),
+  width_in: z.number().positive().nullable().catch(null).default(null),
+  height_in: z.number().positive().nullable().catch(null).default(null),
+  depth_in: z.number().positive().nullable().catch(null).default(null),
+  confidence: z.number().min(0).max(1).catch(0.5).default(0.5),
+  measured: z.boolean().catch(false).default(false),
+});
+type MeasuredCabinet = z.infer<typeof MeasuredCabinet>;
+
+function toLineCategory(category: string): LineCategory {
+  const parsed = LineCategory.safeParse(category);
+  return parsed.success && parsed.data !== "unknown" ? parsed.data : "unknown";
+}
+
+// Pure merge of the measurements answer onto the numbered markers: model dims
+// where given, category-average defaults where not (marked estimated). Split
+// out for unit testing.
+export function mergeMeasuredLines(
+  entries: MarkerEntry[],
+  rawCabinets: unknown[]
+): CabinetLineItem[] {
+  const byMarker = new Map<number, MeasuredCabinet>();
+  for (const raw of rawCabinets) {
+    const parsed = MeasuredCabinet.safeParse(raw);
+    if (parsed.success) byMarker.set(parsed.data.marker, parsed.data);
+  }
+  return entries.map((entry) => {
+    const answer = byMarker.get(entry.marker);
+    const category = toLineCategory(answer?.category ?? entry.category);
+    const defaults =
+      BETA_DEFAULT_DIMS[answer?.category ?? entry.category] ??
+      BETA_DEFAULT_DIMS[entry.category];
+    const width = answer?.width_in ?? defaults?.w ?? null;
+    const height = answer?.height_in ?? defaults?.h ?? null;
+    const depth = answer?.depth_in ?? defaults?.d ?? null;
+    const defaulted =
+      answer?.width_in == null || answer?.height_in == null || answer == null;
+    const line: CabinetLineItem = {
+      source_page: entry.page,
+      tag: answer?.tag ?? (entry.label || null),
+      room: null,
+      qty: 1,
+      category,
+      width_in: width,
+      height_in: height,
+      depth_in: depth,
+      door_style: null,
+      material: null,
+      finish: null,
+      assembled: null,
+      notes: null,
+      confidence: Math.min(entry.confidence, answer?.confidence ?? 0.5),
+      estimated: false,
+      bbox_2d: entry.bboxReadPx,
+    };
+    return answer?.measured && !defaulted ? line : markEstimated(line);
+  });
+}
+
+// Draw numbered category-colored boxes onto a page render (the set-of-marks
+// input for the measurements pass).
+async function annotatePage(
+  png: Uint8Array,
+  widthPx: number,
+  heightPx: number,
+  boxes: { marker: number; category: string; bbox: [number, number, number, number] }[]
+): Promise<Buffer> {
+  const stroke = Math.max(2, Math.round(widthPx * 0.002));
+  const badge = Math.max(14, Math.round(widthPx * 0.014));
+  const parts = boxes.map(({ marker, category, bbox }) => {
+    const color = ANNOTATE_COLORS[category] ?? "rgb(220,38,38)";
+    const [x0, y0, x1, y1] = bbox;
+    const bx = Math.max(0, x0 - stroke);
+    const by = Math.max(badge * 1.4, y0);
+    return `
+      <rect x="${x0}" y="${y0}" width="${Math.max(1, x1 - x0)}" height="${Math.max(1, y1 - y0)}"
+        fill="none" stroke="${color}" stroke-width="${stroke}"/>
+      <rect x="${bx}" y="${by - badge * 1.4}" width="${badge * (String(marker).length * 0.62 + 0.9)}" height="${badge * 1.3}" fill="${color}"/>
+      <text x="${bx + badge * 0.45}" y="${by - badge * 0.35}" font-family="sans-serif"
+        font-size="${badge}" font-weight="bold" fill="white">${marker}</text>`;
+  });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${parts.join("")}</svg>`;
+  return sharp(Buffer.from(png))
+    .composite([{ input: Buffer.from(svg) }])
+    .png()
+    .toBuffer();
+}
+
+export function betaReadKey(takeoffId: string, page: number): string {
+  return `takeoffs/${takeoffId}/reads/p${page}-beta-full.png`;
+}
+
+// Build the takeoff from all done detections: measure, replace lines, price.
+// On failure the takeoff returns to the status it was in before the build.
+export async function buildFromDetections(
+  takeoffId: string,
+  priorStatus: string,
+  log: Logger
+): Promise<void> {
+  const db = getDb();
+  try {
+    const detections = await db
+      .select()
+      .from(takeoffDetections)
+      .where(
+        and(
+          eq(takeoffDetections.takeoffId, takeoffId),
+          eq(takeoffDetections.status, "done")
+        )
+      )
+      .orderBy(takeoffDetections.page, takeoffDetections.createdAt);
+    if (detections.length === 0) throw new Error("no completed detections");
+
+    const pdf = await openTakeoffPdf(takeoffId);
+    try {
+      // Number every detected cabinet globally (page order, then scan order).
+      const pages = [...new Set(detections.map((d) => d.page))].sort(
+        (a, b) => a - b
+      );
+      let nextMarker = 1;
+      const entries: MarkerEntry[] = [];
+      const perPage = new Map<
+        number,
+        { entry: MarkerEntry; displayBbox: [number, number, number, number] | null }[]
+      >();
+      for (const page of pages) perPage.set(page, []);
+      for (const d of detections) {
+        const items = z.array(DetectionItem).catch([]).parse(d.items ?? []);
+        for (const item of items) {
+          const entry: MarkerEntry = {
+            marker: nextMarker++,
+            page: d.page,
+            label: item.label,
+            category: item.category,
+            confidence: item.confidence,
+            bboxReadPx: null, // filled after the page render DPI is known
+          };
+          entries.push(entry);
+          perPage.get(d.page)!.push({ entry, displayBbox: item.bbox_2d });
+        }
+      }
+      if (entries.length === 0) throw new Error("no detected cabinets");
+
+      // Per page: clean render (the review screen's read image) + annotated
+      // copy (the model's input), converting boxes display-px → render-px.
+      const annotatedByPage = new Map<number, Buffer>();
+      const groundingByPage = new Map<number, string | undefined>();
+      const readRectByPage = new Map<number, RectPt & { dpi: number }>();
+      for (const page of pages) {
+        const dims = pdf.pageDimsPt(page - 1);
+        const dpi = fitDpi(dims.widthPt / PT_PER_IN, dims.heightPt / PT_PER_IN);
+        const displayDpi = betaDisplayDpi(dims);
+        const toRender = dpi / displayDpi;
+        const png = pdf.renderPage(page - 1, dpi);
+        await putObject(betaReadKey(takeoffId, page), png, "image/png");
+        readRectByPage.set(page, {
+          x0: 0,
+          y0: 0,
+          x1: dims.widthPt,
+          y1: dims.heightPt,
+          dpi,
+        });
+        const boxes: { marker: number; category: string; bbox: [number, number, number, number] }[] = [];
+        for (const { entry, displayBbox } of perPage.get(page)!) {
+          if (!displayBbox) continue;
+          const bbox: [number, number, number, number] = [
+            displayBbox[0] * toRender,
+            displayBbox[1] * toRender,
+            displayBbox[2] * toRender,
+            displayBbox[3] * toRender,
+          ];
+          entry.bboxReadPx = bbox;
+          boxes.push({ marker: entry.marker, category: entry.category, bbox });
+        }
+        const widthPx = Math.round((dims.widthPt / PT_PER_IN) * dpi);
+        const heightPx = Math.round((dims.heightPt / PT_PER_IN) * dpi);
+        const annotated = await annotatePage(png, widthPx, heightPx, boxes);
+        await putObject(
+          `takeoffs/${takeoffId}/beta/annotated/${page}.png`,
+          annotated,
+          "image/png"
+        );
+        annotatedByPage.set(page, annotated);
+        groundingByPage.set(
+          page,
+          buildDimGroundingSafe(pdf, page - 1, log)
+        );
+      }
+
+      // Measurements pass: one call per chunk of pages (usually one total).
+      const client = getAnthropic();
+      let tokens = 0;
+      const cabinets: unknown[] = [];
+      for (let i = 0; i < pages.length; i += MEASURE_PAGES_PER_CALL) {
+        const chunkPages = pages.slice(i, i + MEASURE_PAGES_PER_CALL);
+        const chunkMarkers: MeasureMarker[] = entries
+          .filter((e) => chunkPages.includes(e.page))
+          .map((e) => ({
+            marker: e.marker,
+            page: e.page,
+            label: e.label,
+            category: e.category,
+          }));
+        const chunkGrounding = new Map(
+          chunkPages.map((p) => [p, groundingByPage.get(p)] as const)
+        );
+        const message = await withSocketRetry(() =>
+          client.messages
+            .stream({
+              model: DETECT_MODEL,
+              max_tokens: 16000,
+              ...(DETECT_MODEL.startsWith("claude-opus-4-8")
+                ? {}
+                : { temperature: 0 }),
+              system: MEASURE_SYSTEM,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    ...chunkPages.map((p) => imageBlock(annotatedByPage.get(p)!)),
+                    {
+                      type: "text" as const,
+                      text: measureUserText(chunkMarkers, chunkGrounding),
+                    },
+                  ],
+                },
+              ],
+            })
+            .finalMessage()
+        );
+        tokens += message.usage.input_tokens + message.usage.output_tokens;
+        try {
+          const obj = (extractJson(textOf(message)) ?? {}) as {
+            cabinets?: unknown;
+          };
+          if (Array.isArray(obj.cabinets)) cabinets.push(...obj.cabinets);
+        } catch {
+          // an unparseable chunk falls back to defaults for its markers
+        }
+      }
+
+      const merged = mergeMeasuredLines(entries, cabinets);
+      const lines: ReadLine[] = merged.map((line, i) => ({
+        ...line,
+        read_image_key: betaReadKey(takeoffId, entries[i].page),
+        read_rect: readRectByPage.get(entries[i].page) ?? null,
+      }));
+
+      await replaceLines(takeoffId, lines, false);
+      const estimatedCount = merged.filter((l) => l.estimated).length;
+      const warnings =
+        estimatedCount > 0
+          ? [
+              `${estimatedCount} of ${merged.length} cabinets have estimated dimensions — verify against the drawing`,
+            ]
+          : [];
+      await db
+        .update(takeoffs)
+        .set({
+          docSummary: { warnings },
+          promptVersion: MEASURE_PROMPT_VERSION,
+          tokensUsed: sql`${takeoffs.tokensUsed} + ${tokens}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(takeoffs.id, takeoffId));
+      await priceAndExpand(takeoffId, log);
+      log.info(
+        { takeoff: takeoffId, cabinets: merged.length, estimatedCount, tokens },
+        "beta build done"
+      );
+    } finally {
+      pdf.close();
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Never fail the takeoff outright — restore where the user was.
+    await db
+      .update(takeoffs)
+      .set({ status: priorStatus, error: `build takeoff failed: ${msg}`, updatedAt: new Date() })
+      .where(eq(takeoffs.id, takeoffId));
+    log.error({ takeoff: takeoffId, err: msg }, "beta build failed");
+  }
+}
+
+function buildDimGroundingSafe(
+  pdf: OpenPdf,
+  pageIndex: number,
+  log: Logger
+): string | undefined {
+  try {
+    return buildDimGrounding(pdf.pageTextFragments(pageIndex));
+  } catch (err) {
+    log.warn({ pageIndex, err: String(err) }, "dim grounding failed");
+    return undefined;
   }
 }

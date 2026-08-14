@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { betaDetectRoute } from "../main";
 import { apiGet, apiSend } from "../api";
 import { Badge, Button, Card, PageTitle } from "../ui";
@@ -11,10 +11,13 @@ import {
   type OverlayBox,
 } from "../components/BoxOverlay";
 
-// Beta drag-to-detect view: pick a page, drag a rectangle over the drawing,
-// and the model scans that region for cabinets and draws a labeled box over
-// each one. Read-only with respect to the real takeoff — detections live in
-// their own table and never touch takeoff_lines or takeoff status.
+// Beta detect wizard (4 steps):
+//   1 Pages  — choose the relevant pages
+//   2 Draw   — drag boxes over cabinet areas (stored, nothing sent)
+//   3 Detect — send all drawn boxes; model counts/labels cabinets, no dims
+//   4 Build  — one whole-input measurements pass → priced takeoff (replaces
+//              existing lines, confirmed)
+// Steps are navigation, not hard gates — move back and forth freely.
 
 interface PageClassification {
   page: number;
@@ -29,13 +32,12 @@ interface TakeoffDetail {
   status: string;
   pageCount: number | null;
   classifiedPages: PageClassification[] | null;
+  error: string | null;
 }
 
 interface DetectionItem {
   label: string;
   category: string;
-  width_in: number | null;
-  height_in: number | null;
   confidence: number;
   bbox_2d: BBox | null;
 }
@@ -44,10 +46,16 @@ interface Detection {
   id: string;
   page: number;
   rect: BBox;
-  status: "queued" | "running" | "done" | "error";
+  status: "drawn" | "queued" | "running" | "done" | "error";
   items: DetectionItem[] | null;
   error: string | null;
 }
+
+const RELEVANT_CLASSES = new Set([
+  "floor_plan",
+  "kitchen_or_millwork_elevation",
+  "cabinet_schedule_table",
+]);
 
 const CLASS_SHORT: Record<string, string> = {
   floor_plan: "plan",
@@ -58,33 +66,27 @@ const CLASS_SHORT: Record<string, string> = {
   spec_text: "spec",
 };
 
+const STEPS = ["Pages", "Draw", "Detect", "Build"] as const;
+
 export function BetaDetectPage() {
   const { takeoffId } = betaDetectRoute.useParams();
   const qc = useQueryClient();
-  const [page, setPage] = useState(1);
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [selectedPages, setSelectedPages] = useState<number[]>([]);
+  const [page, setPage] = useState<number | null>(null);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
+  const [building, setBuilding] = useState(false);
 
   const takeoffQ = useQuery({
     queryKey: ["takeoff", takeoffId],
     queryFn: () => apiGet<TakeoffDetail>(`/takeoffs/${takeoffId}`),
   });
 
-  // The display render is produced on demand: {url: null} means the worker is
-  // still rasterizing — keep polling.
-  const imageQ = useQuery({
-    queryKey: ["beta-page", takeoffId, page],
-    queryFn: () =>
-      apiGet<{ url: string | null }>(
-        `/takeoffs/${takeoffId}/beta/pages/${page}/image`
-      ),
-    refetchInterval: (query) => (query.state.data?.url == null ? 2000 : false),
-    staleTime: 10 * 60 * 1000,
-  });
-
+  // All detections for the takeoff; poll while any are in flight.
   const detectionsQ = useQuery({
-    queryKey: ["detections", takeoffId, page],
-    queryFn: () =>
-      apiGet<Detection[]>(`/takeoffs/${takeoffId}/detections?page=${page}`),
+    queryKey: ["detections", takeoffId],
+    queryFn: () => apiGet<Detection[]>(`/takeoffs/${takeoffId}/detections`),
     refetchInterval: (query) =>
       (query.state.data ?? []).some(
         (d) => d.status === "queued" || d.status === "running"
@@ -93,34 +95,104 @@ export function BetaDetectPage() {
         : false,
   });
   const detections = useMemo(() => detectionsQ.data ?? [], [detectionsQ.data]);
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ["detections", takeoffId] });
 
-  const scan = useMutation({
+  // Pre-select pages that already have detections or look relevant.
+  useEffect(() => {
+    if (selectedPages.length > 0 || !takeoffQ.data) return;
+    const withDetections = new Set(detections.map((d) => d.page));
+    const relevant = (takeoffQ.data.classifiedPages ?? [])
+      .filter((c) => RELEVANT_CLASSES.has(c.class))
+      .map((c) => c.page);
+    const pre = [...new Set([...withDetections, ...relevant])].sort(
+      (a, b) => a - b
+    );
+    if (pre.length > 0) setSelectedPages(pre);
+    if (withDetections.size > 0) setStep(2);
+  }, [takeoffQ.data, detections, selectedPages.length]);
+
+  useEffect(() => {
+    if (page == null && selectedPages.length > 0) setPage(selectedPages[0]);
+    if (page != null && !selectedPages.includes(page))
+      setPage(selectedPages[0] ?? null);
+  }, [selectedPages, page]);
+
+  const imageQ = useQuery({
+    queryKey: ["beta-page", takeoffId, page],
+    enabled: page != null,
+    queryFn: () =>
+      apiGet<{ url: string | null }>(
+        `/takeoffs/${takeoffId}/beta/pages/${page}/image`
+      ),
+    refetchInterval: (query) => (query.state.data?.url == null ? 2000 : false),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const draw = useMutation({
     mutationFn: (rect: BBox) =>
       apiSend<Detection>("POST", `/takeoffs/${takeoffId}/detections`, {
         page,
         rect,
       }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["detections", takeoffId, page] }),
+    onSuccess: invalidate,
   });
 
-  const remove = useMutation({
+  const runDetect = useMutation({
+    mutationFn: () =>
+      apiSend<{ queued: number }>(
+        "POST",
+        `/takeoffs/${takeoffId}/detections/run`
+      ),
+    onSuccess: invalidate,
+  });
+
+  const removeItem = useMutation({
+    mutationFn: ({
+      detectionId,
+      index,
+    }: {
+      detectionId: string;
+      index: number;
+    }) =>
+      apiSend(
+        "DELETE",
+        `/takeoffs/${takeoffId}/detections/${detectionId}/items/${index}`
+      ),
+    onSuccess: invalidate,
+  });
+
+  const removeDetection = useMutation({
     mutationFn: (detectionId: string) =>
       apiSend("DELETE", `/takeoffs/${takeoffId}/detections/${detectionId}`),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["detections", takeoffId, page] }),
+    onSuccess: invalidate,
   });
 
-  // Flatten every done detection's items into overlay boxes; the scanned rects
-  // themselves render as faint dashed outlines underneath.
+  const build = useMutation({
+    mutationFn: () =>
+      apiSend("POST", `/takeoffs/${takeoffId}/build-takeoff`),
+    onSuccess: () => {
+      setBuilding(false);
+      navigate({ to: "/takeoffs/$takeoffId", params: { takeoffId } });
+    },
+    onError: () => setBuilding(false),
+  });
+
+  const pageDetections = useMemo(
+    () => detections.filter((d) => d.page === page),
+    [detections, page]
+  );
+
+  // Overlay boxes: detected items for the current page.
   const { boxes, rows } = useMemo(() => {
     const boxes: OverlayBox[] = [];
     const rows: {
       boxId: string | null;
       detectionId: string;
+      itemIndex: number;
       item: DetectionItem;
     }[] = [];
-    for (const d of detections) {
+    for (const d of pageDetections) {
       if (d.status !== "done") continue;
       (d.items ?? []).forEach((item, i) => {
         const boxId = item.bbox_2d ? `${d.id}:${i}` : null;
@@ -132,15 +204,20 @@ export function BetaDetectPage() {
             label: item.label,
           });
         }
-        rows.push({ boxId, detectionId: d.id, item });
+        rows.push({ boxId, detectionId: d.id, itemIndex: i, item });
       });
     }
     return { boxes, rows };
-  }, [detections]);
+  }, [pageDetections]);
 
-  const scanning =
-    scan.isPending ||
-    detections.some((d) => d.status === "queued" || d.status === "running");
+  const drawnCount = detections.filter((d) => d.status === "drawn").length;
+  const inFlight = detections.some(
+    (d) => d.status === "queued" || d.status === "running"
+  );
+  const detectedCount = detections.reduce(
+    (n, d) => n + (d.status === "done" ? (d.items?.length ?? 0) : 0),
+    0
+  );
 
   if (takeoffQ.isLoading) return <div className="text-zinc-500">Loading…</div>;
   if (takeoffQ.isError)
@@ -161,6 +238,76 @@ export function BetaDetectPage() {
     );
   }
 
+  const anyError = draw.error ?? runDetect.error ?? removeItem.error ??
+    removeDetection.error ?? build.error;
+
+  const stepAction = (() => {
+    switch (step) {
+      case 1:
+        return (
+          <Button
+            variant="primary"
+            disabled={selectedPages.length === 0}
+            onClick={() => setStep(2)}
+          >
+            Draw boxes on {selectedPages.length} page
+            {selectedPages.length === 1 ? "" : "s"} →
+          </Button>
+        );
+      case 2:
+        return (
+          <Button
+            variant="primary"
+            disabled={drawnCount === 0}
+            onClick={() => {
+              runDetect.mutate();
+              setStep(3);
+            }}
+          >
+            Detect cabinets in {drawnCount} box{drawnCount === 1 ? "" : "es"} →
+          </Button>
+        );
+      case 3:
+        return (
+          <div className="flex items-center gap-2">
+            {drawnCount > 0 && (
+              <Button disabled={runDetect.isPending} onClick={() => runDetect.mutate()}>
+                Detect {drawnCount} new box{drawnCount === 1 ? "" : "es"}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              disabled={detectedCount === 0 || inFlight}
+              onClick={() => setStep(4)}
+            >
+              Review {detectedCount} cabinets →
+            </Button>
+          </div>
+        );
+      default:
+        return (
+          <Button
+            variant="primary"
+            disabled={detectedCount === 0 || inFlight || build.isPending || building}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Build the takeoff from ${detectedCount} detected cabinets? This REPLACES the takeoff's current line items.`
+                )
+              ) {
+                setBuilding(true);
+                build.mutate();
+              }
+            }}
+          >
+            {building || build.isPending
+              ? "Building…"
+              : `Build takeoff (${detectedCount} cabinets)`}
+          </Button>
+        );
+    }
+  })();
+
   return (
     <div>
       <PageTitle
@@ -174,162 +321,281 @@ export function BetaDetectPage() {
         <Badge tone="blue">beta</Badge>
       </PageTitle>
 
-      <p className="mb-3 text-sm text-zinc-500">
-        Pick a page, then drag a rectangle over the drawing — the model scans
-        that region and draws a box over every cabinet it finds.
-      </p>
+      {/* Stepper */}
+      <div className="mb-4 flex items-center gap-1">
+        {STEPS.map((label, i) => {
+          const n = i + 1;
+          return (
+            <button
+              key={label}
+              onClick={() => setStep(n)}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                step === n
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-500 hover:bg-zinc-100"
+              }`}
+            >
+              <span
+                className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                  step === n ? "bg-white text-zinc-900" : "bg-zinc-200"
+                }`}
+              >
+                {n}
+              </span>
+              {label}
+            </button>
+          );
+        })}
+        <div className="ml-auto">{stepAction}</div>
+      </div>
 
-      {(scan.isError || remove.isError) && (
-        <p className="mb-2 text-sm text-red-600">
-          {String(scan.error ?? remove.error)}
-        </p>
+      {anyError && (
+        <p className="mb-2 text-sm text-red-600">{String(anyError)}</p>
+      )}
+      {takeoff.error && (
+        <p className="mb-2 text-sm text-red-600">{takeoff.error}</p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_1fr]">
-        {/* Page rail */}
-        <div className="flex max-h-[80vh] flex-row gap-2 overflow-auto lg:flex-col">
-          {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
-            <div
-              key={p}
-              className={`w-28 shrink-0 cursor-pointer rounded-lg border bg-white p-1 shadow-sm transition-colors lg:w-auto ${
-                p === page
-                  ? "border-blue-500 ring-2 ring-blue-200"
-                  : "border-zinc-200 hover:border-zinc-400"
-              }`}
-              onClick={() => {
-                setPage(p);
-                setSelectedBoxId(null);
-              }}
-            >
-              <PageThumb takeoffId={takeoffId} page={p} />
-              <div className="mt-0.5 flex items-center justify-between px-0.5">
-                <span className="text-xs font-medium text-zinc-600">p{p}</span>
-                <span className="truncate text-[10px] text-zinc-400">
-                  {CLASS_SHORT[classByPage.get(p) ?? ""] ?? ""}
-                </span>
-              </div>
-            </div>
-          ))}
-          {pageCount === 0 && (
-            <p className="text-sm text-zinc-400">
-              No pages yet — the upload is still being prepared.
-            </p>
-          )}
-        </div>
-
-        {/* Canvas + results */}
-        <div className="min-w-0">
-          <Card className="relative">
-            {imageQ.data?.url ? (
-              <div className="max-h-[75vh] overflow-auto">
-                <BoxOverlay
-                  src={imageQ.data.url}
-                  boxes={boxes}
-                  underlays={detections
-                    .filter((d) => d.status === "done")
-                    .map((d) => d.rect)}
-                  selectedId={selectedBoxId}
-                  drawMode
-                  onSelect={setSelectedBoxId}
-                  onChange={() => {}}
-                  onCreate={(bbox) => scan.mutate(bbox)}
-                />
-              </div>
-            ) : (
-              <div className="flex h-96 items-center justify-center">
-                <p className="animate-pulse text-sm text-zinc-500">
-                  Rendering page {page} at high resolution…
+      {step === 1 ? (
+        <>
+          <p className="mb-3 text-sm text-zinc-500">
+            Select the pages that show cabinets (plans, elevations, schedules).
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => {
+              const selected = selectedPages.includes(p);
+              return (
+                <div
+                  key={p}
+                  className={`cursor-pointer rounded-lg border bg-white p-2 shadow-sm transition-colors ${
+                    selected
+                      ? "border-blue-500 ring-2 ring-blue-200"
+                      : "border-zinc-200 hover:border-zinc-400"
+                  }`}
+                  onClick={() =>
+                    setSelectedPages((prev) =>
+                      selected
+                        ? prev.filter((x) => x !== p)
+                        : [...prev, p].sort((a, b) => a - b)
+                    )
+                  }
+                >
+                  <div className="relative">
+                    <PageThumb takeoffId={takeoffId} page={p} />
+                    {selected && (
+                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-xs font-medium text-zinc-600">
+                      p{p}
+                    </span>
+                    <span className="truncate text-xs text-zinc-400">
+                      {CLASS_SHORT[classByPage.get(p) ?? ""] ?? ""}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {pageCount === 0 && (
+              <Card className="col-span-full">
+                <p className="text-sm text-zinc-400">
+                  No pages yet — the upload is still being prepared.
                 </p>
-              </div>
+              </Card>
             )}
-            {scanning && (
-              <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 shadow-md">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                <span className="text-sm font-medium text-blue-700">
-                  Finding cabinets…
-                </span>
-              </div>
-            )}
-          </Card>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mb-3 text-sm text-zinc-500">
+            {step === 2 &&
+              "Drag boxes over every area that contains cabinets. Nothing is sent yet."}
+            {step === 3 &&
+              "Detected cabinets appear as colored boxes — hover to see labels, ✕ removes a wrong one. Draw more boxes any time."}
+            {step === 4 &&
+              "Check the counts below, then build the takeoff — one measurements pass sizes every cabinet (printed dims where available, standard sizes otherwise)."}
+          </p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_1fr]">
+            {/* Page rail (selected pages only) */}
+            <div className="flex max-h-[80vh] flex-row gap-2 overflow-auto lg:flex-col">
+              {selectedPages.map((p) => {
+                const count = detections
+                  .filter((d) => d.page === p)
+                  .reduce(
+                    (n, d) =>
+                      n +
+                      (d.status === "done"
+                        ? (d.items?.length ?? 0)
+                        : d.status === "drawn"
+                          ? 1
+                          : 0),
+                    0
+                  );
+                return (
+                  <div
+                    key={p}
+                    className={`w-28 shrink-0 cursor-pointer rounded-lg border bg-white p-1 shadow-sm transition-colors lg:w-auto ${
+                      p === page
+                        ? "border-blue-500 ring-2 ring-blue-200"
+                        : "border-zinc-200 hover:border-zinc-400"
+                    }`}
+                    onClick={() => {
+                      setPage(p);
+                      setSelectedBoxId(null);
+                    }}
+                  >
+                    <PageThumb takeoffId={takeoffId} page={p} />
+                    <div className="mt-0.5 flex items-center justify-between px-0.5">
+                      <span className="text-xs font-medium text-zinc-600">
+                        p{p}
+                      </span>
+                      {count > 0 && <Badge tone="blue">{count}</Badge>}
+                    </div>
+                  </div>
+                );
+              })}
+              {selectedPages.length === 0 && (
+                <p className="text-sm text-zinc-400">
+                  No pages selected — go back to step 1.
+                </p>
+              )}
+            </div>
 
-          <Card className="mt-4">
-            <h2 className="mb-2 text-sm font-semibold text-zinc-500">
-              Detected cabinets — page {page}
-            </h2>
-            {rows.length === 0 && !scanning ? (
-              <p className="text-sm text-zinc-400">
-                Nothing detected yet. Drag over a kitchen elevation or plan
-                region to scan it.
-              </p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500">
-                    <th className="py-1 pr-2">Label</th>
-                    <th className="py-1 pr-2">Category</th>
-                    <th className="py-1 pr-2">Size (in)</th>
-                    <th className="py-1 pr-2">Confidence</th>
-                    <th className="py-1" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ boxId, detectionId, item }, i) => (
-                    <tr
-                      key={boxId ?? `${detectionId}-nobox-${i}`}
-                      className={`cursor-pointer border-b border-zinc-100 ${
-                        boxId != null && boxId === selectedBoxId
-                          ? "bg-blue-50"
-                          : "hover:bg-zinc-50"
-                      }`}
-                      onClick={() => setSelectedBoxId(boxId)}
+            {/* Canvas + results */}
+            <div className="min-w-0">
+              <Card className="relative">
+                {page != null && imageQ.data?.url ? (
+                  <div className="max-h-[70vh] overflow-auto">
+                    <BoxOverlay
+                      src={imageQ.data.url}
+                      boxes={boxes}
+                      underlays={pageDetections.map((d) => d.rect)}
+                      selectedId={selectedBoxId}
+                      drawMode
+                      onSelect={setSelectedBoxId}
+                      onChange={() => {}}
+                      onCreate={(bbox) => draw.mutate(bbox)}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-96 items-center justify-center">
+                    <p className="animate-pulse text-sm text-zinc-500">
+                      {page == null
+                        ? "Select a page."
+                        : `Rendering page ${page} at high resolution…`}
+                    </p>
+                  </div>
+                )}
+                {(inFlight || building || build.isPending) && (
+                  <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 shadow-md">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                    <span className="text-sm font-medium text-blue-700">
+                      {inFlight ? "Finding cabinets…" : "Building takeoff…"}
+                    </span>
+                  </div>
+                )}
+              </Card>
+
+              <Card className="mt-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-zinc-500">
+                    Page {page ?? "—"}:{" "}
+                    {pageDetections.filter((d) => d.status === "drawn").length}{" "}
+                    drawn · {rows.length} detected
+                  </h2>
+                  {pageDetections.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      className="text-xs text-red-600"
+                      onClick={() =>
+                        pageDetections.forEach((d) =>
+                          removeDetection.mutate(d.id)
+                        )
+                      }
                     >
-                      <td className="py-1 pr-2 font-medium">
-                        <span
-                          className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm"
-                          style={{ backgroundColor: categoryColor(item.category) }}
-                        />
-                        {item.label || "—"}
-                      </td>
-                      <td className="py-1 pr-2 text-zinc-600">
-                        {item.category}
-                      </td>
-                      <td className="py-1 pr-2 text-zinc-600">
-                        {item.width_in != null && item.height_in != null
-                          ? `${item.width_in} × ${item.height_in}`
-                          : "—"}
-                      </td>
-                      <td className="py-1 pr-2 text-zinc-600">
-                        {Math.round(item.confidence * 100)}%
-                      </td>
-                      <td className="py-1 text-right">
-                        <Button
-                          variant="ghost"
-                          className="text-xs text-red-600"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            remove.mutate(detectionId);
-                          }}
-                          title="Delete this scan (removes all its boxes)"
+                      Clear page
+                    </Button>
+                  )}
+                </div>
+                {rows.length === 0 ? (
+                  <p className="text-sm text-zinc-400">
+                    {pageDetections.some((d) => d.status === "drawn")
+                      ? "Boxes drawn — run detection (step 3) to find the cabinets inside them."
+                      : "Drag over the drawing to mark cabinet areas."}
+                  </p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500">
+                        <th className="py-1 pr-2">Label</th>
+                        <th className="py-1 pr-2">Category</th>
+                        <th className="py-1 pr-2">Confidence</th>
+                        <th className="py-1" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(({ boxId, detectionId, itemIndex, item }) => (
+                        <tr
+                          key={boxId ?? `${detectionId}-${itemIndex}`}
+                          className={`cursor-pointer border-b border-zinc-100 ${
+                            boxId != null && boxId === selectedBoxId
+                              ? "bg-blue-50"
+                              : "hover:bg-zinc-50"
+                          }`}
+                          onClick={() => setSelectedBoxId(boxId)}
                         >
-                          ✕
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {detections.some((d) => d.status === "error") && (
-              <p className="mt-2 text-xs text-red-600">
-                {detections
-                  .filter((d) => d.status === "error")
-                  .map((d) => `Scan failed: ${d.error ?? "unknown error"}`)
-                  .join(" · ")}
-              </p>
-            )}
-          </Card>
-        </div>
-      </div>
+                          <td className="py-1 pr-2 font-medium">
+                            <span
+                              className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm"
+                              style={{
+                                backgroundColor: categoryColor(item.category),
+                              }}
+                            />
+                            {item.label || "—"}
+                          </td>
+                          <td className="py-1 pr-2 text-zinc-600">
+                            {item.category}
+                          </td>
+                          <td className="py-1 pr-2 text-zinc-600">
+                            {Math.round(item.confidence * 100)}%
+                          </td>
+                          <td className="py-1 text-right">
+                            <Button
+                              variant="ghost"
+                              className="text-xs text-red-600"
+                              title="Remove this cabinet"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeItem.mutate({
+                                  detectionId,
+                                  index: itemIndex,
+                                });
+                              }}
+                            >
+                              ✕
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {pageDetections.some((d) => d.status === "error") && (
+                  <p className="mt-2 text-xs text-red-600">
+                    {pageDetections
+                      .filter((d) => d.status === "error")
+                      .map((d) => `Scan failed: ${d.error ?? "unknown"}`)
+                      .join(" · ")}
+                  </p>
+                )}
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

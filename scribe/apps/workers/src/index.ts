@@ -6,7 +6,11 @@ import {
   prepareTakeoff,
   processTakeoff,
 } from "./takeoff/process.js";
-import { detectRegion, renderBetaPage } from "./takeoff/detect.js";
+import {
+  buildFromDetections,
+  detectRegion,
+  renderBetaPage,
+} from "./takeoff/detect.js";
 import { runSource, runAllSources } from "./crawler/run.js";
 import { redisConnection } from "./lib/redis.js";
 
@@ -35,6 +39,8 @@ const takeoffWorker = new Worker(
       await renderBetaPage(id, job.data.page, log);
     else if (job.name === "detect")
       await detectRegion(job.data.detection_id, log);
+    else if (job.name === "beta_build")
+      await buildFromDetections(id, job.data.prior_status ?? "review", log);
     else await processTakeoff(id, log);
   },
   { connection, concurrency: 2 }

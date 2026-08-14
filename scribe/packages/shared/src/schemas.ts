@@ -82,7 +82,13 @@ export const DetectionItem = z.object({
 });
 export type DetectionItem = z.infer<typeof DetectionItem>;
 
-export const DetectionStatus = z.enum(["queued", "running", "done", "error"]);
+export const DetectionStatus = z.enum([
+  "drawn",
+  "queued",
+  "running",
+  "done",
+  "error",
+]);
 export type DetectionStatus = z.infer<typeof DetectionStatus>;
 
 // What the extraction model returns for one page (lines + page-level notes).
@@ -354,7 +360,9 @@ export const TAKEOFF_STATUS_TRANSITIONS: Record<TakeoffStatus, TakeoffStatus[]> 
     awaiting_pages: ["processing", "failed"],
     awaiting_boxes: ["processing", "failed"],
     extracted: ["approved"],
-    review: ["approved"],
+    // review → processing: the beta detect wizard rebuilds a reviewed
+    // takeoff's lines from detections (replace-all, user-confirmed).
+    review: ["processing", "approved"],
     approved: [],
     failed: [],
   };

@@ -68,14 +68,14 @@ const MIN_REGION_IN = { width: 1.5, height: 1 };
 // The exact render a set of lines was read from: storage key of the PNG sent
 // to the model, plus the page rectangle (PDF points) + DPI it was rendered at
 // so a box can later be mapped into page space.
-interface ReadRect extends RectPt {
+export interface ReadRect extends RectPt {
   dpi: number;
 }
 interface ReadMeta {
   key: string;
   rect: ReadRect | null;
 }
-type ReadLine = CabinetLineItem & {
+export type ReadLine = CabinetLineItem & {
   read_image_key?: string | null;
   read_rect?: ReadRect | null;
 };
@@ -152,7 +152,7 @@ function avgConfidence(lines: { confidence: number }[]): number | null {
 // Insert extraction-stage lines at BOX level — no pricing match, no face
 // expansion (both happen at finalize, after the human approves the boxes).
 // Deletes existing lines first so a worker retry can't double-insert.
-async function replaceLines(
+export async function replaceLines(
   takeoffId: string,
   lines: ReadLine[],
   hasRaws: boolean
@@ -541,7 +541,10 @@ export async function extractTakeoff(
 // reviewer edits a cabinet at review.
 // ---------------------------------------------------------------------------
 
-async function priceAndExpand(takeoffId: string, log: Logger): Promise<void> {
+export async function priceAndExpand(
+  takeoffId: string,
+  log: Logger
+): Promise<void> {
   const db = getDb();
   // Re-run safety: drop previously derived faces before re-deriving them.
   await db

@@ -73,6 +73,9 @@ export function BoxOverlay({
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+  // Labels render only for the hovered/selected box — a dense elevation with
+  // every label visible at once is unreadable (all the text overlaps).
+  const [hovered, setHovered] = useState<string | null>(null);
   // Live bbox during a drag: id === null while drawing a new box.
   const [draft, setDraft] = useState<{ id: string | null; bbox: BBox } | null>(
     null
@@ -208,6 +211,10 @@ export function BoxOverlay({
                   strokeWidth={selected ? 3 : 1.5}
                   vectorEffect="non-scaling-stroke"
                   className="cursor-move"
+                  onPointerEnter={() => setHovered(box.id)}
+                  onPointerLeave={() =>
+                    setHovered((h) => (h === box.id ? null : h))
+                  }
                   onPointerDown={(e) => {
                     onSelect(box.id);
                     beginDrag(e, {
@@ -218,18 +225,20 @@ export function BoxOverlay({
                     });
                   }}
                 />
-                <text
-                  x={b[0] + handle / 2}
-                  y={Math.max(b[1] - handle / 2, handle * 1.5)}
-                  fontSize={handle * 1.8}
-                  fill={color}
-                  className="pointer-events-none select-none font-semibold"
-                  paintOrder="stroke"
-                  stroke="white"
-                  strokeWidth={handle / 3}
-                >
-                  {box.label}
-                </text>
+                {(box.id === hovered || selected) && (
+                  <text
+                    x={b[0] + handle / 2}
+                    y={Math.max(b[1] - handle / 2, handle * 1.5)}
+                    fontSize={handle * 1.8}
+                    fill={color}
+                    className="pointer-events-none select-none font-semibold"
+                    paintOrder="stroke"
+                    stroke="white"
+                    strokeWidth={handle / 3}
+                  >
+                    {box.label}
+                  </text>
+                )}
                 {selected &&
                   (
                     [

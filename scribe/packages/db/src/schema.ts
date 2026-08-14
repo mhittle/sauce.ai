@@ -150,7 +150,7 @@ export const takeoffDetections = pgTable("takeoff_detections", {
   page: integer("page").notNull(),
   rect: jsonb("rect").notNull(),
   displayDpi: real("display_dpi"),
-  status: text("status").notNull().default("queued"),
+  status: text("status").notNull().default("drawn"),
   items: jsonb("items"),
   cropImageKey: text("crop_image_key"),
   model: text("model"),
