@@ -270,6 +270,35 @@ function toLineCategory(category: string): LineCategory {
   return parsed.success && parsed.data !== "unknown" ? parsed.data : "unknown";
 }
 
+const CATEGORY_TAG_LABEL: Record<string, string> = {
+  casework_base: "Base cabinet",
+  casework_wall: "Wall cabinet",
+  casework_tall: "Tall cabinet",
+  vanity: "Vanity",
+};
+
+// A bare number or measurement ("8", "19 1/4", "27 1/2\"") is a dimension
+// string the detector picked up, not a name.
+export function isBareNumberTag(tag: string): boolean {
+  return /^[\d\s/.\-]*\d[\s/.\-]*(?:"|”|in\.?)?$/i.test(tag.trim());
+}
+
+// Backstop for the prompt rule: if the tag is still a bare number (or
+// missing), synthesize a recognizable one from category + width + marker.
+export function meaningfulTag(
+  tag: string | null,
+  category: string,
+  widthIn: number | null,
+  marker: number
+): { tag: string; callout: string | null } {
+  if (tag && tag.trim() && !isBareNumberTag(tag)) {
+    return { tag: tag.trim(), callout: null };
+  }
+  const base = CATEGORY_TAG_LABEL[category] ?? "Cabinet";
+  const width = widthIn != null ? ` ${widthIn}"w` : "";
+  return { tag: `${base}${width} (#${marker})`, callout: tag?.trim() || null };
+}
+
 // Pure merge of the measurements answer onto the numbered markers: model dims
 // where given, category-average defaults where not (marked estimated). Split
 // out for unit testing.
@@ -293,9 +322,15 @@ export function mergeMeasuredLines(
     const depth = answer?.depth_in ?? defaults?.d ?? null;
     const defaulted =
       answer?.width_in == null || answer?.height_in == null || answer == null;
+    const { tag, callout } = meaningfulTag(
+      answer?.tag ?? (entry.label || null),
+      answer?.category ?? entry.category,
+      width,
+      entry.marker
+    );
     const line: CabinetLineItem = {
       source_page: entry.page,
-      tag: answer?.tag ?? (entry.label || null),
+      tag,
       room: null,
       qty: 1,
       category,
@@ -306,7 +341,9 @@ export function mergeMeasuredLines(
       material: null,
       finish: null,
       assembled: null,
-      notes: null,
+      // Keep the drawing's bare-number callout as provenance when the tag
+      // had to be synthesized.
+      notes: callout ? `drawing callout: ${callout}` : null,
       confidence: Math.min(entry.confidence, answer?.confidence ?? 0.5),
       estimated: false,
       bbox_2d: entry.bboxReadPx,

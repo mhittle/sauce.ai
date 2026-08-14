@@ -38,6 +38,14 @@ export interface DbLine {
 export interface PricedLine {
   takeoff_line_id: string;
   product_line_id: string;
+  // Line identity, so quote UIs can show WHAT is priced, not just which
+  // product-line formula priced it.
+  tag: string | null;
+  category: string;
+  qty: number;
+  width_in: number | null;
+  height_in: number | null;
+  depth_in: number | null;
   unit_cents: number;
   total_cents: number;
   lead_time_days: number;
@@ -88,6 +96,12 @@ export async function runPricing(
     priced.push({
       takeoff_line_id: line.id,
       product_line_id: pl.id,
+      tag: line.tag,
+      category: line.category,
+      qty: line.qty,
+      width_in: line.widthIn,
+      height_in: line.heightIn,
+      depth_in: line.depthIn,
       unit_cents: result.unit_cents,
       total_cents: result.total_cents,
       lead_time_days: result.lead_time_days,

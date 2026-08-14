@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mergeMeasuredLines, MarkerEntry } from "../src/takeoff/detect.js";
+import {
+  isBareNumberTag,
+  meaningfulTag,
+  mergeMeasuredLines,
+  MarkerEntry,
+} from "../src/takeoff/detect.js";
 
 const entry = (marker: number, over: Partial<MarkerEntry> = {}): MarkerEntry => ({
   marker,
@@ -76,6 +81,26 @@ describe("mergeMeasuredLines", () => {
     expect(lines[0].category).toBe("unknown");
     expect(lines[1].category).toBe("casework_wall");
     expect(lines).toHaveLength(2);
+  });
+
+  it("replaces bare-number tags with synthesized names, keeping the callout", () => {
+    const [line] = mergeMeasuredLines(
+      [entry(5, { category: "casework_wall", label: "19 1/4" })],
+      [
+        {
+          marker: 5,
+          tag: "8",
+          category: "casework_wall",
+          width_in: 14,
+          height_in: 53,
+          depth_in: 12,
+          confidence: 0.9,
+          measured: true,
+        },
+      ]
+    );
+    expect(line.tag).toBe(`Wall cabinet 14"w (#5)`);
+    expect(line.notes).toBe("drawing callout: 8");
   });
 
   it("lets the model correct the provisional category", () => {
