@@ -446,16 +446,35 @@ export async function buildFromDetections(
       const client = getAnthropic();
       let tokens = 0;
       const cabinets: unknown[] = [];
+      const parseWarnings: string[] = [];
       for (let i = 0; i < pages.length; i += MEASURE_PAGES_PER_CALL) {
         const chunkPages = pages.slice(i, i + MEASURE_PAGES_PER_CALL);
         const chunkMarkers: MeasureMarker[] = entries
           .filter((e) => chunkPages.includes(e.page))
-          .map((e) => ({
-            marker: e.marker,
-            page: e.page,
-            label: e.label,
-            category: e.category,
-          }));
+          .map((e) => {
+            // Box center as % of the page: a text-side anchor so marker
+            // attribution survives even if the painted badge is illegible.
+            const rect = readRectByPage.get(e.page);
+            const b = e.bboxReadPx;
+            const pct =
+              rect && b
+                ? {
+                    xPct:
+                      (((b[0] + b[2]) / 2) * (PT_PER_IN / rect.dpi) * 100) /
+                      (rect.x1 - rect.x0),
+                    yPct:
+                      (((b[1] + b[3]) / 2) * (PT_PER_IN / rect.dpi) * 100) /
+                      (rect.y1 - rect.y0),
+                  }
+                : {};
+            return {
+              marker: e.marker,
+              page: e.page,
+              label: e.label,
+              category: e.category,
+              ...pct,
+            };
+          });
         const chunkGrounding = new Map(
           chunkPages.map((p) => [p, groundingByPage.get(p)] as const)
         );
@@ -484,13 +503,26 @@ export async function buildFromDetections(
             .finalMessage()
         );
         tokens += message.usage.input_tokens + message.usage.output_tokens;
+        // Persist the raw response — when sizing goes wrong ("everything
+        // defaulted"), this is the evidence of what the model actually said.
+        const responseText = textOf(message);
+        await putObject(
+          `takeoffs/${takeoffId}/beta/measure/response-${i / MEASURE_PAGES_PER_CALL}.txt`,
+          Buffer.from(responseText, "utf-8"),
+          "text/plain"
+        );
         try {
-          const obj = (extractJson(textOf(message)) ?? {}) as {
+          const obj = (extractJson(responseText) ?? {}) as {
             cabinets?: unknown;
           };
           if (Array.isArray(obj.cabinets)) cabinets.push(...obj.cabinets);
+          else parseWarnings.push(
+            `measurements response for pages ${chunkPages.join(",")} had no cabinets array — sizes defaulted`
+          );
         } catch {
-          // an unparseable chunk falls back to defaults for its markers
+          parseWarnings.push(
+            `measurements response for pages ${chunkPages.join(",")} was not parseable JSON — sizes defaulted`
+          );
         }
       }
 
@@ -503,12 +535,14 @@ export async function buildFromDetections(
 
       await replaceLines(takeoffId, lines, false);
       const estimatedCount = merged.filter((l) => l.estimated).length;
-      const warnings =
-        estimatedCount > 0
+      const warnings = [
+        ...parseWarnings,
+        ...(estimatedCount > 0
           ? [
               `${estimatedCount} of ${merged.length} cabinets have estimated dimensions — verify against the drawing`,
             ]
-          : [];
+          : []),
+      ];
       await db
         .update(takeoffs)
         .set({
