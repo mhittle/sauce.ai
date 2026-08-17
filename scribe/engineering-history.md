@@ -75,6 +75,45 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-08-17 — beta detect wizard → staged reads become the DEFAULT pipeline
+
+**Context.** Owner wanted takeoff reading to mirror TakeoffBOT's interaction
+(reference recording): draw over a plan, get labeled cabinet boxes; then
+staged it further — segment → boxes → detect (no dims) → one whole-input
+measurements pass — first as a human wizard, then as the automated pipeline.
+
+**What shipped (PRs 240, 242–247).**
+- Beta detect view `/takeoffs/:id/detect` → 4-step wizard (Pages/Draw/Detect/
+  Build); detections in new `takeoff_detections` (migrations 0006/0007);
+  jobs `beta_render`/`detect`/`beta_build` on the existing queue; builds run
+  `replaceLines` → `priceAndExpand` (replace-all, owner choice; `review →
+  processing` transition added).
+- Measure pass: whole PDF sent (marker pages annotated set-of-marks via
+  sharp, others as context), per-marker proximity dim grounding
+  (`dimsNearRect`, measure-v5), raw responses persisted to
+  `takeoffs/{id}/beta/measure/response-N.txt`.
+- **Fontconfig incident**: first prod run defaulted all 23 cabinets — worker
+  image had no fonts, SVG marker numbers rendered blank (Railway logs showed
+  `Fontconfig error`). Fixed: fonts-dejavu-core in workers Dockerfile (#243).
+- Labels: detect-v3/v4 + measure-v4 forbid bare-number names;
+  `meaningfulTag()` backstop; Quote Builder priced lines show item identity.
+- Materials card on review (carcassSqft/materialStats, 4×8 @15% waste).
+- **Staged auto-extraction** (`stagedExtractPdf`, #247): auto-seeds located
+  regions as detections, elevation-primary region routing, then the wizard
+  jobs. **Now the DEFAULT** (`STAGED_READS=0` reverts to classic).
+- Zero-API staged kit harness (`prepare-staged.mjs`/`replay-staged.mjs`):
+  full 18-quote test-set run with assistant-as-model — **mean F1 0.42 vs
+  0.32 classic; elevation-rich ~0.55** (Maurer 0.78, Boyle 0.75), plan-only
+  ~0.26. Kits + ANALYSIS.md: `~/Desktop/Scribe Testing/staged-kits/`.
+
+**Open items.** (1) Plan-only run→unit decomposition in the staged measure
+stage — biggest gap; classic estimate mode still stronger there. (2) Carcass
+granularity conventions (merge multi-bay vs split stacks) differ per
+manufacturer. (3) Same-model A/B via `score-reading.mjs` once deployed.
+(4) Q5/Q21/Q22 kits are partial page selections — extendable.
+
+---
+
 ## 2026-08-13 — quote tier persisted: one number everywhere (migration 0005)
 
 Owner found the quotes LIST showing $34k while the Quote Builder offered
