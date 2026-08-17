@@ -47,6 +47,7 @@ import { extractPage } from "./extract.js";
 import { OpenPdf, openPdf, PICKER_THUMBNAIL_DPI } from "./pdf.js";
 import { locateRegions, locateRooms } from "./regions.js";
 import { parseSpreadsheet } from "./spreadsheet.js";
+import { stagedExtractPdf } from "./staged.js";
 
 // ---------------------------------------------------------------------------
 // 2-step human review (2026-08-11): ONE blocking gate (page selection), then
@@ -477,6 +478,13 @@ export async function extractTakeoff(
       const selected = Array.isArray(takeoff.selectedPages)
         ? (takeoff.selectedPages as SelectedPage[])
         : null;
+      // Gated staged pipeline (segment → boxes → read → measure), mirroring
+      // the wizard. It owns its own persist/price tail (buildFromDetections),
+      // so return here; errors propagate to failTakeoff below.
+      if (process.env.STAGED_READS === "1") {
+        await stagedExtractPdf(takeoffId, file, classified, selected, budget, log);
+        return;
+      }
       const result = await extractPdf(
         takeoffId,
         file,
