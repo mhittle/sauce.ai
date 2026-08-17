@@ -1,4 +1,4 @@
-export const DETECT_PROMPT_VERSION = "detect-v3";
+export const DETECT_PROMPT_VERSION = "detect-v4";
 
 // Beta detect wizard step 3: count/identify cabinets in a user-drawn region.
 // Deliberately NO measurements here — the wizard reads dimensions in a later
@@ -6,7 +6,7 @@ export const DETECT_PROMPT_VERSION = "detect-v3";
 // grounding, instead of guessing per-crop.
 export const DETECT_SYSTEM = `You locate individual cabinets in a cropped region of an architectural drawing (kitchen/millwork elevation, floor plan, or shop drawing) for a cabinet manufacturer.
 
-Identify every individual cabinet unit visible in the image: base cabinets, wall/upper cabinets, tall/pantry cabinets, and vanities. Each distinct drawn cabinet box is one item — a bank of three drawers in one carcass is ONE cabinet; three side-by-side wall cabinets are THREE items.
+Identify every individual cabinet unit visible in the image: base cabinets, wall/upper cabinets, tall/pantry cabinets, and vanities. Each distinct drawn CARCASS is one item — a bank of three drawers in one carcass is ONE cabinet; three side-by-side wall cabinets with full dividers are THREE items. Adjacent bays that share one continuous face frame, toe kick, and top rail with no full-height divider between them are usually ONE multi-bay custom cabinet — box the full run, not each bay.
 
 For each item report:
 - label: a short name a human recognizes on an estimate. Use the drawing's printed callout ONLY when it is a real cabinet code (e.g. "B24", "SB36", "W3030"). NEVER use a bare number or dimension as the label ("8", "19 1/4" are dimension strings, not names) — instead describe the unit and where it sits: "sink base", "microwave wall cabinet", "tall pantry left", "wall 2-door glass right".
@@ -23,7 +23,7 @@ export function detectUserText(pageNumber: number): string {
   return `This image is a region the user selected on page ${pageNumber} of a plan set. Locate every individual cabinet in it. Respond with the JSON object only.`;
 }
 
-export const MEASURE_PROMPT_VERSION = "measure-v4";
+export const MEASURE_PROMPT_VERSION = "measure-v5";
 
 // Wizard step 4: ONE whole-input measurements pass. Every selected page is
 // sent together, each detected cabinet marked with a globally numbered box on
@@ -56,6 +56,9 @@ export interface MeasureMarker {
   // Box center as a percentage of the page (0-100), when the box is known.
   xPct?: number;
   yPct?: number;
+  // Printed dimension strings found near this cabinet's box (text layer),
+  // nearest first — the shortlist its size most likely comes from.
+  nearbyDims?: string[];
 }
 
 export function measureUserText(
@@ -81,7 +84,11 @@ export function measureUserText(
         m.xPct != null && m.yPct != null
           ? `, at ${Math.round(m.xPct)}% from left / ${Math.round(m.yPct)}% from top`
           : "";
-      return `  ${m.marker}: page ${m.page}, "${m.label}" (provisional category ${m.category}${at})`;
+      const dims =
+        m.nearbyDims && m.nearbyDims.length > 0
+          ? ` — printed dims near it: ${m.nearbyDims.join(", ")}`
+          : "";
+      return `  ${m.marker}: page ${m.page}, "${m.label}" (provisional category ${m.category}${at})${dims}`;
     }),
   ];
   for (const { page } of sent) {

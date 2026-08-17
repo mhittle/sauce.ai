@@ -2,11 +2,12 @@ import type { Logger } from "pino";
 import { and, eq, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
-import { getDb, takeoffDetections, takeoffs } from "@scribe/db";
+import { evalFixtures, getDb, takeoffDetections, takeoffs } from "@scribe/db";
 import {
   BETA_DEFAULT_DIMS,
   betaDisplayDpi,
   buildDimGrounding,
+  dimsNearRect,
   CabinetLineItem,
   clampRectToPage,
   DetectionItem,
@@ -15,6 +16,7 @@ import {
   markEstimated,
   padRectToPage,
   RectPt,
+  TextFragment,
 } from "@scribe/shared";
 import {
   DETECT_SYSTEM,
@@ -81,6 +83,55 @@ export async function renderBetaPage(
   } finally {
     pdf.close();
   }
+}
+
+// Pure detection-response processing: lenient JSON parse, per-item schema
+// parse, then map each box crop px → page pt → display px. Split out so the
+// offline kit harness replays raw responses through the IDENTICAL logic.
+export interface DetectionResponseCtx {
+  cropPt: RectPt;
+  cropDpi: number;
+  displayDpi: number;
+  dims: { widthPt: number; heightPt: number };
+}
+
+export function processDetectionResponse(
+  text: string,
+  ctx: DetectionResponseCtx
+): DetectionItem[] {
+  let rawItems: unknown[] = [];
+  try {
+    const obj = (extractJson(text) ?? {}) as { items?: unknown };
+    if (Array.isArray(obj.items)) rawItems = obj.items;
+  } catch {
+    // no parseable JSON — an empty result, not a failure
+  }
+  const cropToPt = PT_PER_IN / ctx.cropDpi;
+  const ptToDisplay = ctx.displayDpi / PT_PER_IN;
+  return rawItems.flatMap((raw) => {
+    const parsed = DetectionItem.safeParse(raw);
+    if (!parsed.success) return [];
+    const item = parsed.data;
+    if (item.bbox_2d) {
+      const [bx0, by0, bx1, by1] = item.bbox_2d;
+      const boxPt = clampRectToPage(
+        {
+          x0: ctx.cropPt.x0 + Math.min(bx0, bx1) * cropToPt,
+          y0: ctx.cropPt.y0 + Math.min(by0, by1) * cropToPt,
+          x1: ctx.cropPt.x0 + Math.max(bx0, bx1) * cropToPt,
+          y1: ctx.cropPt.y0 + Math.max(by0, by1) * cropToPt,
+        },
+        ctx.dims
+      );
+      item.bbox_2d = [
+        boxPt.x0 * ptToDisplay,
+        boxPt.y0 * ptToDisplay,
+        boxPt.x1 * ptToDisplay,
+        boxPt.y1 * ptToDisplay,
+      ];
+    }
+    return [item];
+  });
 }
 
 // Run one queued detection: crop the dragged region at a legible DPI, ask the
@@ -153,43 +204,11 @@ export async function detectRegion(
       );
       const tokens =
         message.usage.input_tokens + message.usage.output_tokens;
-
-      let rawItems: unknown[] = [];
-      try {
-        const obj = (extractJson(textOf(message)) ?? {}) as {
-          items?: unknown;
-        };
-        if (Array.isArray(obj.items)) rawItems = obj.items;
-      } catch {
-        // no parseable JSON — persist an empty result rather than failing
-      }
-
-      // Lenient per-item parse, then map each box crop px → page pt → display px.
-      const cropToPt = PT_PER_IN / cropDpi;
-      const ptToDisplay = displayDpi / PT_PER_IN;
-      const items = rawItems.flatMap((raw) => {
-        const parsed = DetectionItem.safeParse(raw);
-        if (!parsed.success) return [];
-        const item = parsed.data;
-        if (item.bbox_2d) {
-          const [bx0, by0, bx1, by1] = item.bbox_2d;
-          const boxPt = clampRectToPage(
-            {
-              x0: cropPt.x0 + Math.min(bx0, bx1) * cropToPt,
-              y0: cropPt.y0 + Math.min(by0, by1) * cropToPt,
-              x1: cropPt.x0 + Math.max(bx0, bx1) * cropToPt,
-              y1: cropPt.y0 + Math.max(by0, by1) * cropToPt,
-            },
-            dims
-          );
-          item.bbox_2d = [
-            boxPt.x0 * ptToDisplay,
-            boxPt.y0 * ptToDisplay,
-            boxPt.x1 * ptToDisplay,
-            boxPt.y1 * ptToDisplay,
-          ];
-        }
-        return [item];
+      const items = processDetectionResponse(textOf(message), {
+        cropPt,
+        cropDpi,
+        displayDpi,
+        dims,
       });
 
       await db
@@ -353,8 +372,8 @@ export function mergeMeasuredLines(
 }
 
 // Draw numbered category-colored boxes onto a page render (the set-of-marks
-// input for the measurements pass).
-async function annotatePage(
+// input for the measurements pass). Exported for the offline staged kit.
+export async function annotatePage(
   png: Uint8Array,
   widthPx: number,
   heightPx: number,
@@ -385,13 +404,46 @@ export function betaReadKey(takeoffId: string, page: number): string {
   return `takeoffs/${takeoffId}/reads/p${page}-beta-full.png`;
 }
 
+// Pure measure-response parse (harness-replayable): the cabinets array plus
+// human-visible warnings when the response is unusable.
+export function parseMeasureResponse(text: string): {
+  cabinets: unknown[];
+  warnings: string[];
+} {
+  try {
+    const obj = (extractJson(text) ?? {}) as { cabinets?: unknown };
+    if (Array.isArray(obj.cabinets)) return { cabinets: obj.cabinets, warnings: [] };
+    return {
+      cabinets: [],
+      warnings: ["measurements response had no cabinets array — sizes defaulted"],
+    };
+  } catch {
+    return {
+      cabinets: [],
+      warnings: ["measurements response was not parseable JSON — sizes defaulted"],
+    };
+  }
+}
+
+export interface BuildOpts {
+  // "restore" (wizard default): failure puts the takeoff back to priorStatus.
+  // "throw": rethrow so the caller's failure handling (failTakeoff) runs.
+  onError?: "restore" | "throw";
+  // Staged pipeline parity: also write the eval fixture and docConfidence.
+  evalFixture?: boolean;
+  // Upstream warnings (e.g. locate fallbacks) surfaced ahead of the build's own.
+  extraWarnings?: string[];
+}
+
 // Build the takeoff from all done detections: measure, replace lines, price.
-// On failure the takeoff returns to the status it was in before the build.
+// On failure the takeoff returns to the status it was in before the build
+// (or rethrows under opts.onError = "throw"). Returns the merged lines.
 export async function buildFromDetections(
   takeoffId: string,
   priorStatus: string,
-  log: Logger
-): Promise<void> {
+  log: Logger,
+  opts: BuildOpts = {}
+): Promise<CabinetLineItem[]> {
   const db = getDb();
   try {
     const detections = await db
@@ -450,12 +502,21 @@ export async function buildFromDetections(
       // converting boxes display-px → render-px.
       const imageByPage = new Map<number, Buffer | Uint8Array>();
       const groundingByPage = new Map<number, string | undefined>();
+      const fragmentsByPage = new Map<number, TextFragment[]>();
       const readRectByPage = new Map<number, RectPt & { dpi: number }>();
       for (const page of sentPages) {
         const dims = pdf.pageDimsPt(page - 1);
         const dpi = fitDpi(dims.widthPt / PT_PER_IN, dims.heightPt / PT_PER_IN);
         const png = pdf.renderPage(page - 1, dpi);
-        groundingByPage.set(page, buildDimGroundingSafe(pdf, page - 1, log));
+        try {
+          fragmentsByPage.set(page, pdf.pageTextFragments(page - 1));
+        } catch {
+          fragmentsByPage.set(page, []);
+        }
+        groundingByPage.set(
+          page,
+          buildDimGrounding(fragmentsByPage.get(page) ?? [])
+        );
         if (!pages.includes(page)) {
           imageByPage.set(page, png); // clean context page
           continue;
@@ -519,12 +580,35 @@ export async function buildFromDetections(
                   (rect.y1 - rect.y0),
               }
             : {};
+        // Per-marker printed-dim shortlist: box in page points + half-box
+        // slack so the dimension bands beside/above the cabinet are included.
+        let nearbyDims: string[] | undefined;
+        if (rect && b) {
+          const toPt = PT_PER_IN / rect.dpi;
+          const boxPt = {
+            x0: Math.min(b[0], b[2]) * toPt,
+            y0: Math.min(b[1], b[3]) * toPt,
+            x1: Math.max(b[0], b[2]) * toPt,
+            y1: Math.max(b[1], b[3]) * toPt,
+          };
+          const slack = Math.max(
+            36,
+            0.5 * Math.max(boxPt.x1 - boxPt.x0, boxPt.y1 - boxPt.y0)
+          );
+          const found = dimsNearRect(
+            fragmentsByPage.get(e.page) ?? [],
+            boxPt,
+            slack
+          );
+          if (found.length > 0) nearbyDims = found;
+        }
         return {
           marker: e.marker,
           page: e.page,
           label: e.label,
           category: e.category,
           ...pct,
+          ...(nearbyDims ? { nearbyDims } : {}),
         };
       });
       const message = await withSocketRetry(() =>
@@ -567,20 +651,9 @@ export async function buildFromDetections(
         Buffer.from(responseText, "utf-8"),
         "text/plain"
       );
-      try {
-        const obj = (extractJson(responseText) ?? {}) as {
-          cabinets?: unknown;
-        };
-        if (Array.isArray(obj.cabinets)) cabinets.push(...obj.cabinets);
-        else
-          parseWarnings.push(
-            "measurements response had no cabinets array — sizes defaulted"
-          );
-      } catch {
-        parseWarnings.push(
-          "measurements response was not parseable JSON — sizes defaulted"
-        );
-      }
+      const parsedResponse = parseMeasureResponse(responseText);
+      cabinets.push(...parsedResponse.cabinets);
+      parseWarnings.push(...parsedResponse.warnings);
 
       const merged = mergeMeasuredLines(entries, cabinets);
       const lines: ReadLine[] = merged.map((line, i) => ({
@@ -592,6 +665,7 @@ export async function buildFromDetections(
       await replaceLines(takeoffId, lines, false);
       const estimatedCount = merged.filter((l) => l.estimated).length;
       const warnings = [
+        ...(opts.extraWarnings ?? []),
         ...parseWarnings,
         ...(estimatedCount > 0
           ? [
@@ -599,24 +673,43 @@ export async function buildFromDetections(
             ]
           : []),
       ];
+      const avgConfidence =
+        merged.length > 0
+          ? merged.reduce((s, l) => s + l.confidence, 0) / merged.length
+          : null;
       await db
         .update(takeoffs)
         .set({
           docSummary: { warnings },
           promptVersion: MEASURE_PROMPT_VERSION,
           tokensUsed: sql`${takeoffs.tokensUsed} + ${tokens}`,
+          ...(opts.evalFixture ? { docConfidence: avgConfidence } : {}),
           updatedAt: new Date(),
         })
         .where(eq(takeoffs.id, takeoffId));
+      if (opts.evalFixture) {
+        // Staged-pipeline parity with extractTakeoff: snapshot the
+        // pre-correction lines so the eval corpus keeps building.
+        await db
+          .delete(evalFixtures)
+          .where(eq(evalFixtures.takeoffId, takeoffId));
+        await db.insert(evalFixtures).values({
+          takeoffId,
+          extractedLines: merged,
+          promptVersion: MEASURE_PROMPT_VERSION,
+        });
+      }
       await priceAndExpand(takeoffId, log);
       log.info(
         { takeoff: takeoffId, cabinets: merged.length, estimatedCount, tokens },
         "beta build done"
       );
+      return merged;
     } finally {
       pdf.close();
     }
   } catch (err) {
+    if (opts.onError === "throw") throw err;
     const msg = err instanceof Error ? err.message : String(err);
     // Never fail the takeoff outright — restore where the user was.
     await db
@@ -624,18 +717,7 @@ export async function buildFromDetections(
       .set({ status: priorStatus, error: `build takeoff failed: ${msg}`, updatedAt: new Date() })
       .where(eq(takeoffs.id, takeoffId));
     log.error({ takeoff: takeoffId, err: msg }, "beta build failed");
+    return [];
   }
 }
 
-function buildDimGroundingSafe(
-  pdf: OpenPdf,
-  pageIndex: number,
-  log: Logger
-): string | undefined {
-  try {
-    return buildDimGrounding(pdf.pageTextFragments(pageIndex));
-  } catch (err) {
-    log.warn({ pageIndex, err: String(err) }, "dim grounding failed");
-    return undefined;
-  }
-}

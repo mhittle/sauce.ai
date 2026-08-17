@@ -10,6 +10,14 @@ real secret *values* here — document var names only.
 
 ## Open
 
+### MA-012 — (No action to enable; rollback knob only) Staged reads default
+PR #247 makes the staged pipeline the default for PDF takeoffs — nothing to
+set; migrations 0006/0007 apply at API boot. **Rollback knob**: if staged
+misbehaves in prod, set `STAGED_READS=0` on `scribe-workers` (Railway →
+Variables) and redeploy to restore the classic one-shot reader. Known-weak
+class either way: plan-only sketches (see roadmap "Plan-only run→unit
+decomposition").
+
 ### MA-011 — Rotate the ANTHROPIC_API_KEY (key was shared in chat 2026-06-18)
 During the 2026-06-18 pricing session an Anthropic API key was pasted directly
 into chat to enable local harness runs. Treat it as compromised:

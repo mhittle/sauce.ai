@@ -181,3 +181,42 @@ export function formatDimGrounding(skel: DimSkeleton): string | undefined {
 export function buildDimGrounding(fragments: TextFragment[]): string | undefined {
   return formatDimGrounding(extractDimSkeleton(fragments));
 }
+
+// Printed dimension values near a page-point rectangle (fragment anchors are
+// top-left points in the same upright page space). Used to give the measure
+// pass a per-cabinet shortlist — the dims that size a cabinet sit just
+// outside its box (dimension bands above/below/beside), hence the slack.
+// Returns the deduped raw strings nearest-first, or [] when none qualify.
+export function dimsNearRect(
+  fragments: TextFragment[],
+  rect: { x0: number; y0: number; x1: number; y1: number },
+  slackPt: number,
+  max = 12
+): string[] {
+  const cx = (rect.x0 + rect.x1) / 2;
+  const cy = (rect.y0 + rect.y1) / 2;
+  const near: { raw: string; d: number }[] = [];
+  for (const f of fragments) {
+    const t = f.text.trim();
+    const inches = parseDimInches(t);
+    if (inches == null || inches <= 0 || inches > 300) continue;
+    if (
+      f.x < rect.x0 - slackPt ||
+      f.x > rect.x1 + slackPt ||
+      f.y < rect.y0 - slackPt ||
+      f.y > rect.y1 + slackPt
+    )
+      continue;
+    near.push({ raw: t, d: Math.hypot(f.x - cx, f.y - cy) });
+  }
+  near.sort((a, b) => a.d - b.d);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const n of near) {
+    if (seen.has(n.raw)) continue;
+    seen.add(n.raw);
+    out.push(n.raw);
+    if (out.length >= max) break;
+  }
+  return out;
+}

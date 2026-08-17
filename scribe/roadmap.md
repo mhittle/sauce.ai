@@ -14,6 +14,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
+| Staged reads (segment→boxes→detect→measure) as DEFAULT pipeline + beta detect wizard + zero-API kit harness | 9 | 8 | takeoff | done |
+| Plan-only run→unit decomposition in the staged measure stage (staged ≈0.26 F1 on plans vs elevations ≈0.55) | 8 | 4 | takeoff | backlog |
 | v1 framework — monorepo, takeoff pipeline, pricing, freight, quotes, UI, crawler, evals | 10 | 9 | infra | done |
 | First Railway deploy (api/web/workers + PG + Redis + MinIO) | 10 | 4 | ops | done |
 | Validate extraction on real plan sets + first real eval fixtures | 10 | 5 | takeoff | backlog |
@@ -54,6 +56,30 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 ---
 
 ## Items in detail
+
+### Staged reads as DEFAULT pipeline + beta detect wizard + zero-API kit harness
+
+- **Status: done** (PRs #240, #242–#247, 2026-08-13→17). Segment
+  (locateRegions/Rooms) → auto-seed `takeoff_detections` → per-region detect
+  (count/label/box, no dims) → ONE whole-input set-of-marks measurements pass
+  (per-marker proximity dim grounding, measure-v5) → replaceLines +
+  priceAndExpand. Default since #247; `STAGED_READS=0` reverts to classic.
+  Human wizard (`/takeoffs/:id/detect`) shares the same tables/jobs, so auto
+  runs are inspectable/correctable. Zero-API harness: `prepare-staged.mjs` /
+  `replay-staged.mjs`; 18-quote run: mean F1 0.42 vs 0.32 classic
+  (elevations ≈0.55, plans ≈0.26) — kits in
+  `~/Desktop/Scribe Testing/staged-kits/`.
+
+### Plan-only run→unit decomposition in the staged measure stage
+
+- **Priority 8 / LOE 4 / takeoff / backlog.** Staged v1 emits plan-view
+  counter RUNS as single boxes; gold counts manufactured units — the whole
+  staged-vs-classic gap on plan/sketch inputs (≈0.26 vs elevations ≈0.55).
+  Port the classic decompose behavior (ESTIMATE_DECOMPOSE_SUFFIX spirit) into
+  the measure stage for plan-kind regions: split runs into standard-width
+  units at measure time, keyed off the run's printed length. Re-run the
+  staged kits on the plan-only quotes (2, 6, 8, 1, 23) to verify before any
+  further default changes.
 
 ### v1 framework — monorepo, takeoff pipeline, pricing, freight, quotes, UI, crawler, evals
 **Priority/LOE/Category/Status:** 10 / 9 / infra / done (PR: this PR, 2026-06-10)

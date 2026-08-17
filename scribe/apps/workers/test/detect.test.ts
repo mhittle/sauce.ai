@@ -3,8 +3,64 @@ import {
   isBareNumberTag,
   meaningfulTag,
   mergeMeasuredLines,
+  parseMeasureResponse,
+  processDetectionResponse,
   MarkerEntry,
 } from "../src/takeoff/detect.js";
+
+describe("processDetectionResponse", () => {
+  // 10x10in crop at 100dpi starting at page point (72, 144); display at 72dpi
+  // → display px == page pt, so expected values are easy to read.
+  const ctx = {
+    cropPt: { x0: 72, y0: 144, x1: 792, y1: 864 },
+    cropDpi: 100,
+    displayDpi: 72,
+    dims: { widthPt: 1224, heightPt: 1584 },
+  };
+
+  it("parses items and remaps boxes crop px → display px", () => {
+    const text = `{"items":[{"label":"sink base","category":"casework_base","confidence":0.9,"bbox_2d":[100,200,300,400]}]}`;
+    const [item] = processDetectionResponse(text, ctx);
+    expect(item.label).toBe("sink base");
+    // crop px 100 @100dpi = 72pt → page pt 72+72=144 → display px 144
+    expect(item.bbox_2d![0]).toBeCloseTo(144, 5);
+    expect(item.bbox_2d![1]).toBeCloseTo(288, 5);
+    expect(item.bbox_2d![2]).toBeCloseTo(288, 5);
+    expect(item.bbox_2d![3]).toBeCloseTo(432, 5);
+  });
+
+  it("drops malformed items and survives fenced/prose responses", () => {
+    const text =
+      'Here you go:\n```json\n{"items":[{"label":"ok","category":"casework_wall","confidence":0.8,"bbox_2d":null},"garbage"]}\n```';
+    const items = processDetectionResponse(text, ctx);
+    expect(items).toHaveLength(1);
+    expect(items[0].bbox_2d).toBeNull();
+  });
+
+  it("returns empty on unparseable text", () => {
+    expect(processDetectionResponse("no json here", ctx)).toEqual([]);
+  });
+});
+
+describe("parseMeasureResponse", () => {
+  it("returns the cabinets array", () => {
+    const r = parseMeasureResponse('{"cabinets":[{"marker":1}]}');
+    expect(r.cabinets).toHaveLength(1);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it("warns on a missing cabinets array", () => {
+    const r = parseMeasureResponse('{"nope":true}');
+    expect(r.cabinets).toEqual([]);
+    expect(r.warnings[0]).toMatch(/no cabinets array/);
+  });
+
+  it("warns on unparseable JSON", () => {
+    const r = parseMeasureResponse("total garbage");
+    expect(r.cabinets).toEqual([]);
+    expect(r.warnings[0]).toMatch(/not parseable/);
+  });
+});
 
 const entry = (marker: number, over: Partial<MarkerEntry> = {}): MarkerEntry => ({
   marker,
