@@ -22,7 +22,9 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { extname, join } from "node:path";
 import {
   betaDisplayDpi,
   buildDimGrounding,
@@ -121,7 +123,18 @@ function writeRequest(id, kind, system, userText, images) {
   );
 }
 
-const pdf = openPdf(readFileSync(input));
+// Same image→PDF conversion as prepare-reads.mjs (macOS sips).
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".heic"]);
+function toPdfPath(inputPath) {
+  if (!IMAGE_EXT.has(extname(inputPath).toLowerCase())) return inputPath;
+  const out = join(tmpdir(), `scribe-staged-${Date.now()}.pdf`);
+  execSync(`sips -s format pdf ${JSON.stringify(inputPath)} --out ${JSON.stringify(out)}`, {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  return out;
+}
+
+const pdf = openPdf(readFileSync(toPdfPath(input)));
 const pageDims = new Map(
   pages.map((p) => [p.page, pdf.pageDimsPt(p.page - 1)])
 );
