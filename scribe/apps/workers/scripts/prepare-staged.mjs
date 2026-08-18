@@ -56,6 +56,7 @@ const PT_PER_IN = 72;
 const MIN_REGION_IN = { width: 1.5, height: 1 };
 const DETECTABLE_KINDS = new Set(["elevation", "plan"]);
 const MEASURE_MAX_PAGES = 30;
+const MEASURE_MAX_CROPS = 8;
 
 const args = process.argv.slice(2);
 const input = args.find((a) => !a.startsWith("--"));
@@ -232,7 +233,7 @@ const detections = []; // { page, rect(display px), items }
 for (const [page, regions] of regionsByPage) {
   const dims = pageDims.get(page);
   const displayDpi = betaDisplayDpi(dims);
-  regions.forEach(({ rect: cropPt }, i) => {
+  regions.forEach(({ kind, rect: cropPt }, i) => {
     const id = `detect-p${page}-r${i}`;
     const cropWIn = (cropPt.x1 - cropPt.x0) / PT_PER_IN;
     const cropHIn = (cropPt.y1 - cropPt.y0) / PT_PER_IN;
@@ -255,6 +256,9 @@ for (const [page, regions] of regionsByPage) {
     const toDisplay = displayDpi / PT_PER_IN;
     detections.push({
       page,
+      kind,
+      cropPt,
+      cropDpi,
       rect: [
         cropPt.x0 * toDisplay,
         cropPt.y0 * toDisplay,
@@ -284,8 +288,12 @@ const sentPages = [...markerPages, ...allPages.filter((p) => !markerPages.includ
 
 let nextMarker = 1;
 const entries = [];
-const boxesByPage = new Map(markerPages.map((p) => [p, []]));
+// Plan detections become high-resolution crops in the measure request, exactly
+// like buildFromDetections — a whole large-format sheet renders too small to
+// read the run dimensions the decomposition keys off.
+const planDetections = [];
 for (const d of detections) {
+  const group = [];
   for (const item of d.items) {
     const entry = {
       marker: nextMarker++,
@@ -293,11 +301,15 @@ for (const d of detections) {
       label: item.label,
       category: item.category,
       confidence: item.confidence,
+      kind: d.kind,
       bboxReadPx: null,
       displayBbox: item.bbox_2d,
     };
     entries.push(entry);
+    group.push(entry);
   }
+  if (d.kind === "plan" && group.length > 0)
+    planDetections.push({ detection: d, entries: group });
 }
 
 const readRectByPage = {};
@@ -353,11 +365,45 @@ for (const page of sentPages) {
   }
 }
 
+// Plan-region crops, annotated with the same marker numbers and appended after
+// the pages (mirrors buildFromDetections).
+const crops = [];
+for (const { detection, entries: group } of planDetections.slice(
+  0,
+  MEASURE_MAX_CROPS
+)) {
+  const { cropPt, cropDpi, page } = detection;
+  const ptToCrop = cropDpi / PT_PER_IN;
+  const dims = pageDims.get(page);
+  const displayDpi = betaDisplayDpi(dims);
+  const toPt = PT_PER_IN / displayDpi;
+  const png = pdf.renderRegion(page - 1, cropPt, cropDpi);
+  const boxes = group
+    .filter((e) => e.displayBbox)
+    .map((e) => ({
+      marker: e.marker,
+      category: e.category,
+      bbox: [
+        (e.displayBbox[0] * toPt - cropPt.x0) * ptToCrop,
+        (e.displayBbox[1] * toPt - cropPt.y0) * ptToCrop,
+        (e.displayBbox[2] * toPt - cropPt.x0) * ptToCrop,
+        (e.displayBbox[3] * toPt - cropPt.y0) * ptToCrop,
+      ],
+    }));
+  const wPx = Math.round(((cropPt.x1 - cropPt.x0) / PT_PER_IN) * cropDpi);
+  const hPx = Math.round(((cropPt.y1 - cropPt.y0) / PT_PER_IN) * cropDpi);
+  const name = `measure-crop-p${page}-m${group[0].marker}.png`;
+  writeFileSync(join(REQ, name), await annotatePage(png, wPx, hPx, boxes));
+  images.push(name);
+  crops.push({ page, markers: group.map((e) => e.marker) });
+}
+
 const markers = entries.map((e) => ({
   marker: e.marker,
   page: e.page,
   label: e.label,
   category: e.category,
+  ...(e.kind ? { kind: e.kind } : {}),
   ...(e.xPct != null ? { xPct: e.xPct, yPct: e.yPct } : {}),
   ...(e.nearbyDims ? { nearbyDims: e.nearbyDims } : {}),
 }));
@@ -368,7 +414,8 @@ writeRequest(
   measureUserText(
     markers,
     groundingByPage,
-    sentPages.map((p) => ({ page: p, hasMarkers: markerPages.includes(p) }))
+    sentPages.map((p) => ({ page: p, hasMarkers: markerPages.includes(p) })),
+    crops
   ),
   images
 );

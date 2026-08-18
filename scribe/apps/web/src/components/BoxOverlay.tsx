@@ -1,11 +1,17 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-// Interactive bounding-box overlay: an <img> with an SVG drawn over it in the
-// image's NATURAL pixel coordinates (viewBox does the scaling — no manual
-// math). Pure component: no data fetching; the parent owns the boxes and
-// hears about edits via callbacks. Boxes are advisory-quality visual anchors
-// (the model's self-reported boxes are loose) — the reviewer corrects them.
+// Interactive overlay for the cabinets found on a read image: an <img> with an
+// SVG drawn over it in the image's NATURAL pixel coordinates (viewBox does the
+// scaling — no manual math). Pure component: no data fetching; the parent owns
+// the boxes and hears about edits via callbacks.
+//
+// Each cabinet shows as a DOT at the centre of its box, not as an outlined
+// rectangle (owner feedback 2026-08-18: a plan covered in loose rectangles
+// reads as clutter, and the boxes are advisory-quality anyway — the model's
+// own boxes are loose and the inch fields drive price). The rectangle is still
+// there, revealed on hover and while selected, where it is useful and where
+// the reviewer can drag/resize it.
 
 export type BBox = [number, number, number, number];
 
@@ -48,6 +54,10 @@ function normalize(b: BBox): BBox {
   ];
 }
 
+function centerOf(b: BBox): { cx: number; cy: number } {
+  return { cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2 };
+}
+
 export function BoxOverlay({
   src,
   boxes,
@@ -61,7 +71,7 @@ export function BoxOverlay({
   src: string;
   boxes: OverlayBox[];
   // Non-interactive dashed context rects (e.g. already-scanned regions),
-  // drawn beneath the boxes in the same natural-pixel space.
+  // drawn beneath the dots in the same natural-pixel space.
   underlays?: BBox[];
   selectedId: string | null;
   // When true, dragging on empty canvas draws a new box instead of deselecting.
@@ -73,13 +83,31 @@ export function BoxOverlay({
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
-  // Labels render only for the hovered/selected box — a dense elevation with
-  // every label visible at once is unreadable (all the text overlaps).
+  // Image px per CSS px, so a dot stays the same size on screen whatever the
+  // sheet's resolution or the panel's width.
+  const [scale, setScale] = useState(1);
+  // Labels render only for the hovered/selected cabinet — a dense elevation
+  // with every label visible at once is unreadable (all the text overlaps).
   const [hovered, setHovered] = useState<string | null>(null);
   // Live bbox during a drag: id === null while drawing a new box.
   const [draft, setDraft] = useState<{ id: string | null; bbox: BBox } | null>(
     null
   );
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || !nat) return;
+    const update = () =>
+      setScale(svg.getBoundingClientRect().width / nat.w || 1);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, [nat]);
+
+  // CSS pixels → image pixels, for anything that should keep a constant
+  // on-screen size (dots, hit targets, handles, label text).
+  const px = (cssPx: number) => cssPx / (scale || 1);
 
   const toImage = (e: { clientX: number; clientY: number }) => {
     const svg = svgRef.current!;
@@ -151,8 +179,9 @@ export function BoxOverlay({
     }
   };
 
-  // Handle size in image px, so handles stay grabbable at any zoom.
-  const handle = nat ? Math.max(6, nat.w * 0.008) : 8;
+  const dot = px(6);
+  const hit = px(15);
+  const handle = px(7);
 
   return (
     <div className={`relative inline-block w-full ${drawMode ? "cursor-crosshair" : ""}`}>
@@ -198,18 +227,45 @@ export function BoxOverlay({
               draft && draft.id === box.id ? normalize(draft.bbox) : box.bbox;
             const color = categoryColor(box.category);
             const selected = box.id === selectedId;
+            const active = selected || box.id === hovered;
+            const { cx, cy } = centerOf(b);
             return (
               <g key={box.id}>
-                <rect
-                  x={b[0]}
-                  y={b[1]}
-                  width={Math.max(1, b[2] - b[0])}
-                  height={Math.max(1, b[3] - b[1])}
+                {/* The box itself is context, shown only when the cabinet is
+                    hovered or selected — and it is what the reviewer edits. */}
+                {active && (
+                  <rect
+                    x={b[0]}
+                    y={b[1]}
+                    width={Math.max(1, b[2] - b[0])}
+                    height={Math.max(1, b[3] - b[1])}
+                    fill={color}
+                    fillOpacity={selected ? 0.12 : 0.06}
+                    stroke={color}
+                    strokeWidth={selected ? 2 : 1.5}
+                    strokeDasharray={selected ? undefined : "6 4"}
+                    vectorEffect="non-scaling-stroke"
+                    className="pointer-events-none"
+                  />
+                )}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={selected ? dot * 1.35 : dot}
                   fill={color}
-                  fillOpacity={selected ? 0.18 : 0.08}
-                  stroke={color}
-                  strokeWidth={selected ? 3 : 1.5}
+                  fillOpacity={active ? 1 : 0.85}
+                  stroke="white"
+                  strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
+                  className="pointer-events-none"
+                />
+                {/* Invisible, comfortably sized hit target: the dot is small on
+                    purpose, but it still has to be easy to grab and hover. */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={hit}
+                  fill="transparent"
                   className="cursor-move"
                   onPointerEnter={() => setHovered(box.id)}
                   onPointerLeave={() =>
@@ -225,16 +281,16 @@ export function BoxOverlay({
                     });
                   }}
                 />
-                {(box.id === hovered || selected) && (
+                {active && (
                   <text
-                    x={b[0] + handle / 2}
-                    y={Math.max(b[1] - handle / 2, handle * 1.5)}
-                    fontSize={handle * 1.8}
+                    x={cx + hit * 0.8}
+                    y={cy - hit * 0.5}
+                    fontSize={px(13)}
                     fill={color}
                     className="pointer-events-none select-none font-semibold"
                     paintOrder="stroke"
                     stroke="white"
-                    strokeWidth={handle / 3}
+                    strokeWidth={px(4)}
                   >
                     {box.label}
                   </text>
@@ -247,11 +303,11 @@ export function BoxOverlay({
                       ["sw", b[0], b[3]],
                       ["se", b[2], b[3]],
                     ] as const
-                  ).map(([corner, cx, cy]) => (
+                  ).map(([corner, hx, hy]) => (
                     <rect
                       key={corner}
-                      x={cx - handle}
-                      y={cy - handle}
+                      x={hx - handle}
+                      y={hy - handle}
                       width={handle * 2}
                       height={handle * 2}
                       fill="white"

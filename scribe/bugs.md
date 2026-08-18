@@ -19,6 +19,23 @@ Format:
 
 ## Open
 
+### SCR-010 — Door swings priced as cabinets on plan reads
+- **Status:** resolved (prompt fix; existing takeoffs need a re-run)
+- **Reported:** 2026-08-18 by owner (takeoff a6e317a3, Piestewa floor plan)
+- **Description:** The review screen showed a "bath vanity NEW 2668" line whose
+  box looked slightly off the vanity. It is not an offset: the box sits exactly
+  on the DOOR SWING (arc + leaf) tagged `NEW 2668` — a 2'-6" x 6'-8" door — in
+  Bath 3. The real vanity is the sink to its left. The rendering is fine; on the
+  same page the sink base, dishwasher, range and microwave boxes all land dead
+  on their objects. The detector was counting a door as a cabinet and inheriting
+  the door's schedule tag as the cabinet's name.
+- **Notes / fix:** detect-v5 forbids boxing a door swing, its leaf, its callout,
+  a lone plumbing fixture, stairs, or a dimension string — in any view. Shared
+  `stripDoorCallout` scrubs a door tag out of any name that still arrives
+  ("bath vanity NEW 2668" → "bath vanity", raw text kept as note provenance).
+  Takeoffs already in review keep the bad line until re-run.
+- **PR:** this PR
+
 ### SCR-006 — Estimate reads vary wildly run-to-run (same plan, temp 0)
 - **Status:** attempted (variance tamed; under-read bias remains → SCR-004)
 - **Reported:** 2026-06-29 by session (CRM backtest)

@@ -40,3 +40,54 @@ export function markEstimated<T extends CabinetLineItem>(line: T): T {
     notes,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Plan-run decomposition (measure-v6)
+// ---------------------------------------------------------------------------
+// A plan-view marker boxes a counter RUN, and the measure pass splits it into
+// the units a shop builds. The run has ONE box, so each unit needs its own
+// visual anchor: slice the run's box along its long axis in proportion to the
+// unit widths. Advisory only — like every bbox in this pipeline it is an
+// anchor for the reviewer, not a measurement.
+
+export type RunBBox = [number, number, number, number];
+
+export function sliceRunBbox(
+  bbox: RunBBox,
+  widths: number[]
+): (RunBBox | null)[] {
+  if (widths.length === 0) return [];
+  const [x0, y0, x1, y1] = [
+    Math.min(bbox[0], bbox[2]),
+    Math.min(bbox[1], bbox[3]),
+    Math.max(bbox[0], bbox[2]),
+    Math.max(bbox[1], bbox[3]),
+  ];
+  const total = widths.reduce((s, w) => s + (w > 0 ? w : 0), 0);
+  // Nothing to divide by (all widths missing/zero) — every unit inherits the
+  // whole run box rather than getting a degenerate sliver.
+  if (total <= 0) return widths.map(() => [x0, y0, x1, y1] as RunBBox);
+  const horizontal = x1 - x0 >= y1 - y0;
+  const span = horizontal ? x1 - x0 : y1 - y0;
+  let at = 0;
+  return widths.map((w) => {
+    const frac = (w > 0 ? w : 0) / total;
+    const start = at;
+    at += frac * span;
+    return horizontal
+      ? ([x0 + start, y0, x0 + at, y1] as RunBBox)
+      : ([x0, y0 + start, x1, y0 + at] as RunBBox);
+  });
+}
+
+// A door-schedule callout ("NEW 2668", "2868 PKT.", "3068 S.G.D.") is a door
+// size in feet-inches (2'6" x 6'8"), not a cabinet name — the plan-view
+// detector picks them up next to vanities (owner-reported false vanity on the
+// Piestewa read, 2026-08-18). Cabinet codes never end in a door height, so the
+// height suffix is what makes this safe: B24/W3030/2436 do not match.
+const DOOR_CALLOUT =
+  /\b(?:new\s+)?[1-9]\d(?:68|80|610)(?:\s*(?:pkt|pocket|s\.?g\.?d|bi-?fold|door))?\.?/gi;
+
+export function stripDoorCallout(tag: string): string {
+  return tag.replace(DOOR_CALLOUT, "").replace(/\s{2,}/g, " ").trim();
+}

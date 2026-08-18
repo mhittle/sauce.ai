@@ -75,6 +75,76 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-08-18 — plan runs decompose into units; dots replace boxes; a door swing was being priced
+
+**Context.** Staged reads scored ~0.55 F1 on elevation inputs but ~0.26 on
+plan/sketch inputs: a plan draws each wall's casework as one unbroken band, so
+the measure stage priced a whole counter RUN as one cabinet while gold counts
+manufactured units.
+
+**The blocker nobody had measured: the measure stage cannot READ a plan.** A
+36x24 sheet renders at ~37 DPI to fit the model's 1568px cap — its dimension
+strings are a smudge at that size, so "split the run by its printed length" was
+impossible from the page image. The detect-stage REGION crops are ~160-200 DPI
+and perfectly legible. So the measure call now carries the plan-region crops as
+extra images (annotated with the same marker numbers, `MEASURE_MAX_CROPS = 8`),
+alongside the pages it already sent.
+
+**Shipped (measure-v6 / detect-v5).**
+- `takeoff_detections.kind` (migration `0008`) — 'plan' | 'elevation', written
+  by `stagedExtractPdf` from the located region. NULL = wizard-drawn, treated
+  as elevation. This is what tells the measure stage which markers are runs.
+- Plan markers are flagged `[PLAN RUN — decompose into units]` and come back
+  with `run_length_in` + a `units[]` array; `mergeMeasuredLines` emits ONE LINE
+  PER UNIT (never the run), slicing the run's bbox along its long axis in width
+  proportion (`sliceRunBbox`, shared) so each unit keeps a visual anchor. Guards:
+  16 units/run cap, zero-width units dropped, warnings when a run comes back
+  undecomposed, over-splits past its printed length, or fills under 25% of it.
+  `mergeMeasuredLines` now returns `{lines, warnings}`.
+- Layout rules ported from `ESTIMATE_SYSTEM` (appliance-specific units, DW/fridge
+  are GAPS not cabinets, one corner cabinet where runs meet, standard widths,
+  arithmetic must close on the printed length). **Vanities stay ONE unit per
+  drawn run** — ESTIMATE_SYSTEM v3's rule, NOT the gated DECOMPOSE suffix's
+  per-sink split (Piestewa gold prices a 77" double vanity as one line).
+- detect-v5: on plan views box the RUN, never a door swing / its callout
+  ("NEW 2668") / a lone fixture / a dimension string. `stripDoorCallout` (shared)
+  also scrubs a door tag out of a name that survived.
+- `annotatePage` now measures its own image instead of trusting the caller's
+  inches x DPI (a 1px rounding difference made sharp refuse the overlay).
+
+**Measured, ZERO API** (staged kit harness, assistant as the vision model;
+baselines kept as `~/Desktop/Scribe Testing/staged-kits/qN-baseline-v5/`):
+Piestewa 0.21→**0.44**, Stephens 0.07→**0.30**, Walters 0.21→**0.33**,
+Kondylis 0.04→**0.21**. Plan-kind mean **0.13 → 0.32**; whole 18-quote set
+**0.42 → 0.47**. The other 14 kits replay through the new merge code with
+IDENTICAL scores (the path is inert without a plan-kind marker). Precision rose
+as well as recall — decomposed units are standard widths keyed to a printed
+length, where a single run line was a category default.
+
+**Owner-reported false cabinet, root-caused (takeoff a6e317a3, Piestewa).** The
+"bath vanity NEW 2668" line's box sits exactly on a DOOR SWING tagged NEW 2668
+(2'-6" x 6'-8") in Bath 3 — a false cabinet, not a rendering offset. Proof that
+the geometry is fine: on the same page the sink base, dishwasher, range and
+microwave boxes all land dead on their objects. detect-v5's exclusion list is
+the fix; that takeoff needs a re-run to clear the existing line.
+
+**Review UI: dots, not boxes** (owner: "bounding boxes are looking kindof bad").
+`BoxOverlay` draws one category-colored DOT at each cabinet's centre; the
+rectangle, its label and the resize handles appear on hover/selection, where
+they are useful. Everything else is unchanged — click-to-select still syncs
+with the line table, drag moves, corners resize, draw-new-box still draws. Dot
+and handle sizes are computed from a ResizeObserver so they stay constant on
+screen at any sheet resolution or panel width.
+
+**Gotchas.** (1) Q2/Q16 sit in the plan-only score bucket but their kits locate
+an ELEVATION region, so decomposition never fires there — both stay 0.00, an
+under-detection problem on sketches. (2) Nothing dedupes markers across
+overlapping regions: Walters is a mirrored duplex whose located regions
+overlap, so a run can still be boxed twice. (3) Tall heights still default to
+84" where gold wants 96" — outside the ruler's ±6".
+
+---
+
 ## 2026-08-17 — beta detect wizard → staged reads become the DEFAULT pipeline
 
 **Context.** Owner wanted takeoff reading to mirror TakeoffBOT's interaction

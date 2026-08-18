@@ -74,7 +74,7 @@ const entry = (marker: number, over: Partial<MarkerEntry> = {}): MarkerEntry => 
 
 describe("mergeMeasuredLines", () => {
   it("uses model dims for measured markers and keeps them unestimated", () => {
-    const [line] = mergeMeasuredLines(
+    const { lines: [line] } = mergeMeasuredLines(
       [entry(1)],
       [
         {
@@ -98,7 +98,7 @@ describe("mergeMeasuredLines", () => {
   });
 
   it("falls back to category defaults and marks estimated when a marker is unanswered", () => {
-    const [line] = mergeMeasuredLines([entry(7, { category: "casework_base" })], []);
+    const { lines: [line] } = mergeMeasuredLines([entry(7, { category: "casework_base" })], []);
     expect(line.width_in).toBe(30);
     expect(line.height_in).toBe(34.5);
     expect(line.depth_in).toBe(24);
@@ -110,7 +110,7 @@ describe("mergeMeasuredLines", () => {
   });
 
   it("marks measured=false answers estimated even when dims are present", () => {
-    const [line] = mergeMeasuredLines(
+    const { lines: [line] } = mergeMeasuredLines(
       [entry(1)],
       [
         {
@@ -130,7 +130,7 @@ describe("mergeMeasuredLines", () => {
   });
 
   it("maps unknown categories to 'unknown' and drops malformed answers", () => {
-    const lines = mergeMeasuredLines(
+    const { lines } = mergeMeasuredLines(
       [entry(1, { category: "other" }), entry(2)],
       ["not-an-object", { marker: 2, category: "casework_wall", measured: false }]
     );
@@ -140,7 +140,7 @@ describe("mergeMeasuredLines", () => {
   });
 
   it("replaces bare-number tags with synthesized names, keeping the callout", () => {
-    const [line] = mergeMeasuredLines(
+    const { lines: [line] } = mergeMeasuredLines(
       [entry(5, { category: "casework_wall", label: "19 1/4" })],
       [
         {
@@ -159,8 +159,149 @@ describe("mergeMeasuredLines", () => {
     expect(line.notes).toBe("drawing callout: 8");
   });
 
+  it("expands a plan run into one line per unit, slicing the run box", () => {
+    const { lines, warnings } = mergeMeasuredLines(
+      [
+        entry(1, {
+          kind: "plan",
+          label: "north wall run",
+          category: "casework_base",
+          bboxReadPx: [0, 100, 300, 140],
+        }),
+      ],
+      [
+        {
+          marker: 1,
+          tag: "north wall run",
+          category: "casework_base",
+          width_in: 120,
+          height_in: 34.5,
+          depth_in: 24,
+          confidence: 0.8,
+          measured: true,
+          run_length_in: 120,
+          units: [
+            { tag: "Sink Base 36", category: "casework_base", width_in: 36, height_in: 34.5, depth_in: 24, confidence: 0.8, measured: true },
+            { tag: "Base 3 Drawers 24", category: "casework_base", width_in: 24, height_in: 34.5, depth_in: 24, confidence: 0.8, measured: true },
+            { tag: "Base 36", category: "casework_base", width_in: 36, height_in: 34.5, depth_in: 24, confidence: 0.8, measured: true },
+          ],
+        },
+      ]
+    );
+    expect(lines).toHaveLength(3);
+    expect(lines.map((l) => l.tag)).toEqual([
+      "Sink Base 36",
+      "Base 3 Drawers 24",
+      "Base 36",
+    ]);
+    // 36:24:36 of a 300px-wide run → 112.5 / 75 / 112.5, laid end to end
+    expect(lines[0].bbox_2d).toEqual([0, 100, 112.5, 140]);
+    expect(lines[1].bbox_2d).toEqual([112.5, 100, 187.5, 140]);
+    expect(lines[2].bbox_2d).toEqual([187.5, 100, 300, 140]);
+    expect(lines[0].notes).toContain('unit 1 of 3 in plan run "north wall run"');
+    expect(lines[0].estimated).toBe(false);
+    // 96" of units in a 120" run is a normal amount of appliance gap
+    expect(warnings).toEqual([]);
+  });
+
+  it("never decomposes an elevation marker, even if units come back", () => {
+    const { lines } = mergeMeasuredLines(
+      [entry(1, { kind: "elevation" })],
+      [
+        {
+          marker: 1,
+          tag: "B24",
+          category: "casework_base",
+          width_in: 24,
+          height_in: 34.5,
+          depth_in: 24,
+          confidence: 0.9,
+          measured: true,
+          units: [
+            { tag: "a", category: "casework_base", width_in: 12, measured: true },
+            { tag: "b", category: "casework_base", width_in: 12, measured: true },
+          ],
+        },
+      ]
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0].tag).toBe("B24");
+  });
+
+  it("warns when a plan run comes back undecomposed or does not close", () => {
+    const undecomposed = mergeMeasuredLines(
+      [entry(1, { kind: "plan", label: "kitchen run" })],
+      [{ marker: 1, category: "casework_base", width_in: 120, measured: true }]
+    );
+    expect(undecomposed.lines).toHaveLength(1);
+    expect(undecomposed.warnings[0]).toMatch(/undecomposed/);
+
+    const overSplit = mergeMeasuredLines(
+      [entry(2, { kind: "plan", label: "long run" })],
+      [
+        {
+          marker: 2,
+          category: "casework_base",
+          measured: true,
+          run_length_in: 60,
+          units: [
+            { tag: "a", category: "casework_base", width_in: 36, measured: true },
+            { tag: "b", category: "casework_base", width_in: 36, measured: true },
+          ],
+        },
+      ]
+    );
+    expect(overSplit.lines).toHaveLength(2);
+    expect(overSplit.warnings[0]).toMatch(/over-split or over-wide/);
+  });
+
+  it("drops zero-width units and caps a runaway decomposition", () => {
+    const { lines, warnings } = mergeMeasuredLines(
+      [entry(1, { kind: "plan" })],
+      [
+        {
+          marker: 1,
+          category: "casework_base",
+          measured: true,
+          units: [
+            { tag: "real", category: "casework_base", width_in: 24, measured: true },
+            { tag: "no width", category: "casework_base", width_in: null, measured: true },
+            ...Array.from({ length: 20 }, (_, i) => ({
+              tag: `u${i}`,
+              category: "casework_base",
+              width_in: 12,
+              measured: true,
+            })),
+          ],
+        },
+      ]
+    );
+    expect(lines).toHaveLength(16);
+    expect(warnings[0]).toMatch(/kept the first 16/);
+  });
+
+  it("strips a door-schedule callout out of the tag", () => {
+    const { lines } = mergeMeasuredLines(
+      [entry(1, { category: "vanity" })],
+      [
+        {
+          marker: 1,
+          tag: "bath vanity NEW 2668",
+          category: "vanity",
+          width_in: 36,
+          height_in: 32.5,
+          depth_in: 21,
+          confidence: 0.6,
+          measured: true,
+        },
+      ]
+    );
+    expect(lines[0].tag).toBe("bath vanity");
+    expect(lines[0].notes).toContain("drawing callout: bath vanity NEW 2668");
+  });
+
   it("lets the model correct the provisional category", () => {
-    const [line] = mergeMeasuredLines(
+    const { lines: [line] } = mergeMeasuredLines(
       [entry(1, { category: "casework_base" })],
       [{ marker: 1, category: "casework_tall", measured: false }]
     );

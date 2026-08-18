@@ -59,8 +59,12 @@ try {
   // raw text response
 }
 
-const { cabinets, warnings } = parseMeasureResponse(text);
-const merged = mergeMeasuredLines(entries, cabinets);
+const { cabinets, warnings: parseWarnings } = parseMeasureResponse(text);
+const { lines: merged, warnings: mergeWarnings } = mergeMeasuredLines(
+  entries,
+  cabinets
+);
+const warnings = [...parseWarnings, ...mergeWarnings];
 const finalLines = dropNonBoxCasework(merged);
 writeFileSync(
   join(STEPS, "final.json"),
