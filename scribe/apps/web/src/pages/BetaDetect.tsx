@@ -412,9 +412,9 @@ export function BetaDetectPage() {
         <>
           <p className="mb-3 text-sm text-zinc-500">
             {step === 2 &&
-              "Drag boxes over every area that contains cabinets. Nothing is sent yet."}
+              "Drag boxes over every area that contains cabinets. Nothing is sent yet. Zoom with ⌘/ctrl + scroll (or the buttons); hold space to drag the sheet around."}
             {step === 3 &&
-              "Detected cabinets appear as colored boxes — hover to see labels, ✕ removes a wrong one. Draw more boxes any time."}
+              "Detected cabinets appear as colored dots — hover one to see its label and box, ✕ removes a wrong one. Draw more boxes any time."}
             {step === 4 &&
               "Check the counts below, then build the takeoff — one measurements pass sizes every cabinet (printed dims where available, standard sizes otherwise)."}
           </p>
@@ -468,18 +468,17 @@ export function BetaDetectPage() {
             <div className="min-w-0">
               <Card className="relative">
                 {page != null && imageQ.data?.url ? (
-                  <div className="max-h-[70vh] overflow-auto">
-                    <BoxOverlay
-                      src={imageQ.data.url}
-                      boxes={boxes}
-                      underlays={pageDetections.map((d) => d.rect)}
-                      selectedId={selectedBoxId}
-                      drawMode
-                      onSelect={setSelectedBoxId}
-                      onChange={() => {}}
-                      onCreate={(bbox) => draw.mutate(bbox)}
-                    />
-                  </div>
+                  <BoxOverlay
+                    src={imageQ.data.url}
+                    boxes={boxes}
+                    underlays={pageDetections.map((d) => d.rect)}
+                    selectedId={selectedBoxId}
+                    drawMode
+                    maxHeight="72vh"
+                    onSelect={setSelectedBoxId}
+                    onChange={() => {}}
+                    onCreate={(bbox) => draw.mutate(bbox)}
+                  />
                 ) : (
                   <div className="flex h-96 items-center justify-center">
                     <p className="animate-pulse text-sm text-zinc-500">
