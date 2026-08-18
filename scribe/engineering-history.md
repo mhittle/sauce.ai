@@ -128,13 +128,24 @@ the geometry is fine: on the same page the sink base, dishwasher, range and
 microwave boxes all land dead on their objects. detect-v5's exclusion list is
 the fix; that takeoff needs a re-run to clear the existing line.
 
-**Review UI: dots, not boxes** (owner: "bounding boxes are looking kindof bad").
+**Review UI: zoom/pan, and dots instead of boxes** (owner: "bounding boxes are
+looking kindof bad", then "give the pdf more control to zoom in on parts of
+it"). `BoxOverlay` now owns a scroll viewport whose inner width is
+`zoom x 100%`, so panning is native scrolling and every coordinate stays in
+image space (the SVG viewBox keeps mapping; nothing needed a transform matrix).
+Zoom 1-10x via buttons or ctrl/cmd+wheel anchored at the cursor; drag the sheet
+to pan (hold SPACE to pan while the beta wizard is in draw mode, which is
+always); "Fit" resets. Selecting a line SCROLLS ITS CABINET INTO VIEW — at 4x
+zoom the dot is otherwise off-screen, which would have made the whole
+click-a-line-to-find-it flow useless. Dots, labels and handles are sized off
+the SVG's measured width, so they stay constant on screen at any zoom. Verified
+by driving the real component in a throwaway vite sandbox: zoom anchoring lands
+on the exact expected scroll offsets, drag-pans are 1:1, space-drag in draw mode
+pans without creating a box.
 `BoxOverlay` draws one category-colored DOT at each cabinet's centre; the
 rectangle, its label and the resize handles appear on hover/selection, where
 they are useful. Everything else is unchanged — click-to-select still syncs
-with the line table, drag moves, corners resize, draw-new-box still draws. Dot
-and handle sizes are computed from a ResizeObserver so they stay constant on
-screen at any sheet resolution or panel width.
+with the line table, drag moves, corners resize, draw-new-box still draws.
 
 **Gotchas.** (1) Q2/Q16 sit in the plan-only score bucket but their kits locate
 an ELEVATION region, so decomposition never fires there — both stay 0.00, an

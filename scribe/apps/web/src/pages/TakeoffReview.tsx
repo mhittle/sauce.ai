@@ -250,8 +250,8 @@ export function TakeoffReviewPage() {
       <p className="mb-3 text-xs text-zinc-400">
         Keyboard: ↑/↓ navigate · e edit · enter accept line · del delete line.
         Click a dot on the drawing to jump to its line; hover a dot to see its
-        cabinet and box. Box edits are visual anchors — the inch fields drive
-        pricing.
+        cabinet and box. Zoom with ⌘/ctrl + scroll (or the buttons) and drag to
+        pan. Box edits are visual anchors — the inch fields drive pricing.
       </p>
 
       {takeoff.status === "processing" && (
