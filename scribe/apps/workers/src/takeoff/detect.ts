@@ -16,6 +16,8 @@ import {
   markEstimated,
   padRectToPage,
   RectPt,
+  sliceRunBbox,
+  stripDoorCallout,
   TextFragment,
 } from "@scribe/shared";
 import {
@@ -23,6 +25,7 @@ import {
   detectUserText,
   MEASURE_PROMPT_VERSION,
   MEASURE_SYSTEM,
+  MeasureCrop,
   MeasureMarker,
   measureUserText,
   SONNET_MODEL,
@@ -253,6 +256,9 @@ export async function detectRegion(
 // pathological documents: marker pages always make the cut, context pages
 // fill the remainder in page order.
 const MEASURE_MAX_PAGES = 30;
+// Plan-region crops sent alongside the pages. Each is one legible drawing at
+// ~1.5k tokens; a plan-only set rarely has more than a handful of rooms.
+const MEASURE_MAX_CROPS = 8;
 
 const ANNOTATE_COLORS: Record<string, string> = {
   casework_base: "rgb(0,170,0)",
@@ -268,9 +274,28 @@ export interface MarkerEntry {
   label: string;
   category: string;
   confidence: number;
+  // Kind of drawing it was detected in. "plan" markers box a counter RUN and
+  // the measure pass decomposes them into units; everything else (including a
+  // wizard-drawn detection, which has no kind) is one cabinet.
+  kind?: string | null;
   // bbox in the reads-image pixels of that page's render (null = not locatable)
   bboxReadPx: [number, number, number, number] | null;
 }
+
+// A plan run that decomposes into more units than this is a runaway answer,
+// not a wall of cabinets: keep the first N and say so.
+const MAX_UNITS_PER_RUN = 16;
+
+const MeasuredUnit = z.object({
+  tag: z.string().nullable().catch(null).default(null),
+  category: z.string().catch("other").default("other"),
+  width_in: z.number().positive().nullable().catch(null).default(null),
+  height_in: z.number().positive().nullable().catch(null).default(null),
+  depth_in: z.number().positive().nullable().catch(null).default(null),
+  confidence: z.number().min(0).max(1).catch(0.5).default(0.5),
+  measured: z.boolean().catch(false).default(false),
+});
+type MeasuredUnit = z.infer<typeof MeasuredUnit>;
 
 const MeasuredCabinet = z.object({
   marker: z.number().int(),
@@ -281,6 +306,12 @@ const MeasuredCabinet = z.object({
   depth_in: z.number().positive().nullable().catch(null).default(null),
   confidence: z.number().min(0).max(1).catch(0.5).default(0.5),
   measured: z.boolean().catch(false).default(false),
+  // Plan runs only: the run's printed overall length, and the units it splits
+  // into. A malformed unit is dropped, never the whole run.
+  run_length_in: z.number().positive().nullable().catch(null).default(null),
+  units: z.array(MeasuredUnit.catch(() => MeasuredUnit.parse({})))
+    .catch([])
+    .default([]),
 });
 type MeasuredCabinet = z.infer<typeof MeasuredCabinet>;
 
@@ -302,51 +333,80 @@ export function isBareNumberTag(tag: string): boolean {
   return /^[\d\s/.\-]*\d[\s/.\-]*(?:"|”|in\.?)?$/i.test(tag.trim());
 }
 
-// Backstop for the prompt rule: if the tag is still a bare number (or
-// missing), synthesize a recognizable one from category + width + marker.
+// Backstop for the prompt rules: drop any door-schedule callout the reader
+// dragged into the name ("bath vanity NEW 2668"), and if what remains is a
+// bare number (or nothing), synthesize a recognizable name from category +
+// width + marker. The raw drawing text survives as `callout` provenance.
 export function meaningfulTag(
   tag: string | null,
   category: string,
   widthIn: number | null,
   marker: number
 ): { tag: string; callout: string | null } {
-  if (tag && tag.trim() && !isBareNumberTag(tag)) {
-    return { tag: tag.trim(), callout: null };
+  const raw = tag?.trim() ?? "";
+  const cleaned = stripDoorCallout(raw);
+  if (cleaned && !isBareNumberTag(cleaned)) {
+    return { tag: cleaned, callout: cleaned === raw ? null : raw };
   }
   const base = CATEGORY_TAG_LABEL[category] ?? "Cabinet";
   const width = widthIn != null ? ` ${widthIn}"w` : "";
-  return { tag: `${base}${width} (#${marker})`, callout: tag?.trim() || null };
+  return { tag: `${base}${width} (#${marker})`, callout: raw || null };
 }
 
 // Pure merge of the measurements answer onto the numbered markers: model dims
-// where given, category-average defaults where not (marked estimated). Split
-// out for unit testing.
+// where given, category-average defaults where not (marked estimated). A
+// plan-run marker that came back with `units` expands into one line PER UNIT
+// (measure-v6) — the run itself is never priced. Split out for unit testing.
 export function mergeMeasuredLines(
   entries: MarkerEntry[],
   rawCabinets: unknown[]
-): CabinetLineItem[] {
+): { lines: CabinetLineItem[]; warnings: string[] } {
   const byMarker = new Map<number, MeasuredCabinet>();
   for (const raw of rawCabinets) {
     const parsed = MeasuredCabinet.safeParse(raw);
     if (parsed.success) byMarker.set(parsed.data.marker, parsed.data);
   }
-  return entries.map((entry) => {
-    const answer = byMarker.get(entry.marker);
-    const category = toLineCategory(answer?.category ?? entry.category);
+  const warnings: string[] = [];
+  const lines: CabinetLineItem[] = [];
+
+  const buildLine = (
+    entry: MarkerEntry,
+    sized: {
+      tag: string | null;
+      category: string;
+      width_in: number | null;
+      height_in: number | null;
+      depth_in: number | null;
+      confidence: number;
+      measured: boolean;
+    } | null,
+    bbox: [number, number, number, number] | null,
+    extraNote: string | null
+  ): CabinetLineItem => {
+    const rawCategory = sized?.category ?? entry.category;
+    const category = toLineCategory(rawCategory);
     const defaults =
-      BETA_DEFAULT_DIMS[answer?.category ?? entry.category] ??
-      BETA_DEFAULT_DIMS[entry.category];
-    const width = answer?.width_in ?? defaults?.w ?? null;
-    const height = answer?.height_in ?? defaults?.h ?? null;
-    const depth = answer?.depth_in ?? defaults?.d ?? null;
+      BETA_DEFAULT_DIMS[rawCategory] ?? BETA_DEFAULT_DIMS[entry.category];
+    const width = sized?.width_in ?? defaults?.w ?? null;
+    const height = sized?.height_in ?? defaults?.h ?? null;
+    const depth = sized?.depth_in ?? defaults?.d ?? null;
     const defaulted =
-      answer?.width_in == null || answer?.height_in == null || answer == null;
+      sized == null || sized.width_in == null || sized.height_in == null;
     const { tag, callout } = meaningfulTag(
-      answer?.tag ?? (entry.label || null),
-      answer?.category ?? entry.category,
+      sized?.tag ?? (entry.label || null),
+      rawCategory,
       width,
       entry.marker
     );
+    // Keep the drawing's bare-number callout as provenance when the tag had to
+    // be synthesized, and the run's identity when this line is one of its units.
+    const notes =
+      [
+        extraNote,
+        callout ? `drawing callout: ${callout}` : null,
+      ]
+        .filter(Boolean)
+        .join(" — ") || null;
     const line: CabinetLineItem = {
       source_page: entry.page,
       tag,
@@ -360,15 +420,74 @@ export function mergeMeasuredLines(
       material: null,
       finish: null,
       assembled: null,
-      // Keep the drawing's bare-number callout as provenance when the tag
-      // had to be synthesized.
-      notes: callout ? `drawing callout: ${callout}` : null,
-      confidence: Math.min(entry.confidence, answer?.confidence ?? 0.5),
+      notes,
+      confidence: Math.min(entry.confidence, sized?.confidence ?? 0.5),
       estimated: false,
-      bbox_2d: entry.bboxReadPx,
+      bbox_2d: bbox,
     };
-    return answer?.measured && !defaulted ? line : markEstimated(line);
-  });
+    return sized?.measured && !defaulted ? line : markEstimated(line);
+  };
+
+  for (const entry of entries) {
+    const answer = byMarker.get(entry.marker);
+    const isPlanRun = entry.kind === "plan";
+    let units: MeasuredUnit[] = isPlanRun
+      ? (answer?.units ?? []).filter((u) => (u.width_in ?? 0) > 0)
+      : [];
+    if (units.length > MAX_UNITS_PER_RUN) {
+      warnings.push(
+        `plan run "${entry.label}" (marker ${entry.marker}) decomposed into ${units.length} units — kept the first ${MAX_UNITS_PER_RUN}, check it by hand`
+      );
+      units = units.slice(0, MAX_UNITS_PER_RUN);
+    }
+    if (units.length === 0) {
+      if (isPlanRun) {
+        warnings.push(
+          `plan run "${entry.label}" (marker ${entry.marker}) came back undecomposed — it is priced as ONE cabinet, so a multi-cabinet run is under-counted`
+        );
+      }
+      lines.push(buildLine(entry, answer ?? null, entry.bboxReadPx, null));
+      continue;
+    }
+
+    // The unit widths should close on the run's printed length, minus any
+    // appliance gaps (a dishwasher is a 24" hole, not a cabinet). Only the
+    // implausible directions are worth a reviewer's attention.
+    const sum = units.reduce((t, u) => t + (u.width_in ?? 0), 0);
+    const runLength = answer?.run_length_in ?? null;
+    if (runLength != null && sum - runLength > 3) {
+      warnings.push(
+        `plan run "${entry.label}": units total ${Math.round(sum)}" but the run measures ${Math.round(runLength)}" — over-split or over-wide`
+      );
+    } else if (runLength != null && sum < runLength * 0.25) {
+      // A run really can be mostly appliance: a range (36") plus a fridge
+      // (40") eats two thirds of a 112" wall. Only a run that is nearly all
+      // gap is worth flagging.
+      warnings.push(
+        `plan run "${entry.label}": units total only ${Math.round(sum)}" of a ${Math.round(runLength)}" run — cabinets are probably missing`
+      );
+    }
+
+    const boxes = entry.bboxReadPx
+      ? sliceRunBbox(
+          entry.bboxReadPx,
+          units.map((u) => u.width_in ?? 0)
+        )
+      : units.map(() => null);
+    units.forEach((unit, i) => {
+      lines.push(
+        buildLine(
+          entry,
+          unit,
+          boxes[i] ?? null,
+          `unit ${i + 1} of ${units.length} in plan run "${entry.label}"${
+            runLength != null ? ` (${Math.round(runLength)}" overall)` : ""
+          }`
+        )
+      );
+    });
+  }
+  return { lines, warnings };
 }
 
 // Draw numbered category-colored boxes onto a page render (the set-of-marks
@@ -379,6 +498,13 @@ export async function annotatePage(
   heightPx: number,
   boxes: { marker: number; category: string; bbox: [number, number, number, number] }[]
 ): Promise<Buffer> {
+  // The caller's pixel size is computed from inches x DPI and can land a pixel
+  // off the actual render; sharp refuses an overlay even 1px too large, so the
+  // image itself is the authority.
+  const image = sharp(Buffer.from(png));
+  const meta = await image.metadata();
+  widthPx = meta.width ?? widthPx;
+  heightPx = meta.height ?? heightPx;
   const stroke = Math.max(2, Math.round(widthPx * 0.002));
   const badge = Math.max(14, Math.round(widthPx * 0.014));
   const parts = boxes.map(({ marker, category, bbox }) => {
@@ -394,7 +520,7 @@ export async function annotatePage(
         font-size="${badge}" font-weight="bold" fill="white">${marker}</text>`;
   });
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${parts.join("")}</svg>`;
-  return sharp(Buffer.from(png))
+  return image
     .composite([{ input: Buffer.from(svg) }])
     .png()
     .toBuffer();
@@ -470,9 +596,22 @@ export async function buildFromDetections(
         number,
         { entry: MarkerEntry; displayBbox: [number, number, number, number] | null }[]
       >();
+      // Plan detections keep their own grouping: each becomes a high-resolution
+      // crop so the measure pass can read the run's printed length.
+      const planDetections: {
+        detection: (typeof detections)[number];
+        boxes: {
+          entry: MarkerEntry;
+          displayBbox: [number, number, number, number] | null;
+        }[];
+      }[] = [];
       for (const page of pages) perPage.set(page, []);
       for (const d of detections) {
         const items = z.array(DetectionItem).catch([]).parse(d.items ?? []);
+        const group: {
+          entry: MarkerEntry;
+          displayBbox: [number, number, number, number] | null;
+        }[] = [];
         for (const item of items) {
           const entry: MarkerEntry = {
             marker: nextMarker++,
@@ -480,11 +619,15 @@ export async function buildFromDetections(
             label: item.label,
             category: item.category,
             confidence: item.confidence,
+            kind: d.kind,
             bboxReadPx: null, // filled after the page render DPI is known
           };
           entries.push(entry);
+          group.push({ entry, displayBbox: item.bbox_2d });
           perPage.get(d.page)!.push({ entry, displayBbox: item.bbox_2d });
         }
+        if (d.kind === "plan" && group.length > 0)
+          planDetections.push({ detection: d, boxes: group });
       }
       if (entries.length === 0) throw new Error("no detected cabinets");
 
@@ -564,6 +707,79 @@ export async function buildFromDetections(
           `plan set has ${allPages.length} pages — ${omitted} context page(s) beyond the ${MEASURE_MAX_PAGES}-page cap were not sent to the measurements pass`
         );
       }
+      // Plan runs are decomposed from their PRINTED length, and a large-format
+      // sheet renders far below the resolution those strings need (a 36x24
+      // sheet fits inside ~1340px — about 37 DPI, where a dimension string is
+      // a smudge). So every plan region also rides along as its own
+      // high-resolution crop, annotated with the same marker numbers.
+      const cropImages: Buffer[] = [];
+      const cropDescriptors: MeasureCrop[] = [];
+      if (planDetections.length > MEASURE_MAX_CROPS) {
+        parseWarnings.push(
+          `${planDetections.length} plan regions found — only the first ${MEASURE_MAX_CROPS} were sent at full resolution, so runs beyond that were split from the low-resolution page`
+        );
+      }
+      for (const { detection, boxes } of planDetections.slice(
+        0,
+        MEASURE_MAX_CROPS
+      )) {
+        const dims = pdf.pageDimsPt(detection.page - 1);
+        const displayDpi = detection.displayDpi ?? betaDisplayDpi(dims);
+        const toPt = PT_PER_IN / displayDpi;
+        const r = detection.rect as [number, number, number, number];
+        const cropPt = padRectToPage(
+          clampRectToPage(
+            {
+              x0: Math.min(r[0], r[2]) * toPt,
+              y0: Math.min(r[1], r[3]) * toPt,
+              x1: Math.max(r[0], r[2]) * toPt,
+              y1: Math.max(r[1], r[3]) * toPt,
+            },
+            dims
+          ),
+          DETECT_PAD_FRAC,
+          dims
+        );
+        const wIn = (cropPt.x1 - cropPt.x0) / PT_PER_IN;
+        const hIn = (cropPt.y1 - cropPt.y0) / PT_PER_IN;
+        if (wIn <= 0 || hIn <= 0) continue;
+        const cropDpi = fitDpi(wIn, hIn);
+        const ptToCrop = cropDpi / PT_PER_IN;
+        const png = pdf.renderRegion(detection.page - 1, cropPt, cropDpi);
+        const cropBoxes = boxes.flatMap(({ entry, displayBbox }) =>
+          displayBbox
+            ? [
+                {
+                  marker: entry.marker,
+                  category: entry.category,
+                  bbox: [
+                    (displayBbox[0] * toPt - cropPt.x0) * ptToCrop,
+                    (displayBbox[1] * toPt - cropPt.y0) * ptToCrop,
+                    (displayBbox[2] * toPt - cropPt.x0) * ptToCrop,
+                    (displayBbox[3] * toPt - cropPt.y0) * ptToCrop,
+                  ] as [number, number, number, number],
+                },
+              ]
+            : []
+        );
+        const annotated = await annotatePage(
+          png,
+          Math.round(wIn * cropDpi),
+          Math.round(hIn * cropDpi),
+          cropBoxes
+        );
+        await putObject(
+          `takeoffs/${takeoffId}/beta/annotated/crop-${detection.id}.png`,
+          annotated,
+          "image/png"
+        );
+        cropImages.push(annotated);
+        cropDescriptors.push({
+          page: detection.page,
+          markers: boxes.map((b) => b.entry.marker),
+        });
+      }
+
       const markers: MeasureMarker[] = entries.map((e) => {
         // Box center as % of the page: a text-side anchor so marker
         // attribution survives even if the painted badge is illegible.
@@ -607,6 +823,7 @@ export async function buildFromDetections(
           page: e.page,
           label: e.label,
           category: e.category,
+          ...(e.kind ? { kind: e.kind } : {}),
           ...pct,
           ...(nearbyDims ? { nearbyDims } : {}),
         };
@@ -625,6 +842,7 @@ export async function buildFromDetections(
                 role: "user",
                 content: [
                   ...sentPages.map((p) => imageBlock(imageByPage.get(p)!)),
+                  ...cropImages.map((img) => imageBlock(img)),
                   {
                     type: "text" as const,
                     text: measureUserText(
@@ -633,7 +851,8 @@ export async function buildFromDetections(
                       sentPages.map((p) => ({
                         page: p,
                         hasMarkers: pages.includes(p),
-                      }))
+                      })),
+                      cropDescriptors
                     ),
                   },
                 ],
@@ -655,11 +874,16 @@ export async function buildFromDetections(
       cabinets.push(...parsedResponse.cabinets);
       parseWarnings.push(...parsedResponse.warnings);
 
-      const merged = mergeMeasuredLines(entries, cabinets);
-      const lines: ReadLine[] = merged.map((line, i) => ({
+      const { lines: merged, warnings: mergeWarnings } = mergeMeasuredLines(
+        entries,
+        cabinets
+      );
+      // Indexing by position no longer works — one plan-run marker expands
+      // into several lines — so provenance rides on the line's own page.
+      const lines: ReadLine[] = merged.map((line) => ({
         ...line,
-        read_image_key: betaReadKey(takeoffId, entries[i].page),
-        read_rect: readRectByPage.get(entries[i].page) ?? null,
+        read_image_key: betaReadKey(takeoffId, line.source_page ?? pages[0]),
+        read_rect: readRectByPage.get(line.source_page ?? pages[0]) ?? null,
       }));
 
       await replaceLines(takeoffId, lines, false);
@@ -667,6 +891,7 @@ export async function buildFromDetections(
       const warnings = [
         ...(opts.extraWarnings ?? []),
         ...parseWarnings,
+        ...mergeWarnings,
         ...(estimatedCount > 0
           ? [
               `${estimatedCount} of ${merged.length} cabinets have estimated dimensions — verify against the drawing`,

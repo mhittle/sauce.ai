@@ -15,7 +15,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
 | Staged reads (segment→boxes→detect→measure) as DEFAULT pipeline + beta detect wizard + zero-API kit harness | 9 | 8 | takeoff | done |
-| Plan-only run→unit decomposition in the staged measure stage (staged ≈0.26 F1 on plans vs elevations ≈0.55) | 8 | 4 | takeoff | backlog |
+| Plan-only run→unit decomposition in the staged measure stage (plan-kind kits 0.13 → 0.32 F1) | 8 | 4 | takeoff | done |
+| Dedupe markers across overlapping staged regions (mirrored/duplicate plans double-count a run) | 6 | 3 | takeoff | backlog |
+| Tall-cabinet height convention — key 84 vs 96 off the drawing's printed ceiling height | 5 | 2 | takeoff | backlog |
 | v1 framework — monorepo, takeoff pipeline, pricing, freight, quotes, UI, crawler, evals | 10 | 9 | infra | done |
 | First Railway deploy (api/web/workers + PG + Redis + MinIO) | 10 | 4 | ops | done |
 | Validate extraction on real plan sets + first real eval fixtures | 10 | 5 | takeoff | backlog |
@@ -72,14 +74,31 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 ### Plan-only run→unit decomposition in the staged measure stage
 
-- **Priority 8 / LOE 4 / takeoff / backlog.** Staged v1 emits plan-view
-  counter RUNS as single boxes; gold counts manufactured units — the whole
-  staged-vs-classic gap on plan/sketch inputs (≈0.26 vs elevations ≈0.55).
-  Port the classic decompose behavior (ESTIMATE_DECOMPOSE_SUFFIX spirit) into
-  the measure stage for plan-kind regions: split runs into standard-width
-  units at measure time, keyed off the run's printed length. Re-run the
-  staged kits on the plan-only quotes (2, 6, 8, 1, 23) to verify before any
-  further default changes.
+- **Status: done** (2026-08-18, measure-v6 / detect-v5, migration `0008`).
+  Plan-kind regions are persisted as `takeoff_detections.kind='plan'`; their
+  markers reach the measure stage flagged as RUNS and come back with a
+  `units[]` decomposition keyed off the run's printed length, one priced line
+  per unit (bbox sliced along the run). The measure call also carries the
+  high-resolution plan-region crops — a 36x24 sheet renders at ~37 DPI, where
+  the dimension chains the split depends on are unreadable. Zero-API kit
+  measurement: Piestewa 0.21→0.44, Stephens 0.07→0.30, Walters 0.21→0.33,
+  Kondylis 0.04→0.21 (plan-kind mean 0.13→0.32, full set 0.42→0.47); the 14
+  elevation kits are byte-identical. Follow-ups below: tall heights, vanity
+  granularity, duplicate regions.
+
+### Dedupe markers across overlapping staged regions
+
+- **Priority 6 / LOE 3 / takeoff / backlog.** Nothing collapses the same run
+  boxed by two overlapping located regions (Walters: a mirrored duplex whose
+  regions overlap; the classic path has `collapseCrossViewDuplicates`, the
+  staged path has nothing). Costs precision on every multi-region plan.
+
+### Tall-cabinet height convention (84 vs 96)
+
+- **Priority 5 / LOE 2 / takeoff / backlog.** Staged talls default to 84"h
+  where CabinetNow gold prices 96" — past the reading ruler's ±6" tolerance, so
+  a physically-found pantry/linen still scores as a miss. Key the default off
+  the drawing's printed ceiling height ("8'-1" CLG").
 
 ### v1 framework — monorepo, takeoff pipeline, pricing, freight, quotes, UI, crawler, evals
 **Priority/LOE/Category/Status:** 10 / 9 / infra / done (PR: this PR, 2026-06-10)

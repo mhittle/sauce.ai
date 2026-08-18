@@ -149,6 +149,8 @@ export const takeoffDetections = pgTable("takeoff_detections", {
   takeoffId: uuid("takeoff_id").notNull(),
   page: integer("page").notNull(),
   rect: jsonb("rect").notNull(),
+  // "plan" | "elevation" (migrations/0008) — null for wizard-drawn regions.
+  kind: text("kind"),
   displayDpi: real("display_dpi"),
   status: text("status").notNull().default("drawn"),
   items: jsonb("items"),

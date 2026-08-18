@@ -158,6 +158,8 @@ export async function stagedExtractPdf(
       await db.insert(takeoffDetections).values({
         takeoffId,
         page: r.page,
+        // Carried into the measure stage: plan regions are RUNS to decompose.
+        kind: r.kind,
         rect: [
           r.rect.x0 * ptToDisplay,
           r.rect.y0 * ptToDisplay,
