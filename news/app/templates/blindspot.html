@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Blindspot{% endblock %}
+{% block content %}
+<header class="feed-header">
+  <h1>Blindspot</h1>
+  <p class="muted">
+    The biggest stories the world is covering right now that your active
+    algorithm would <strong>not</strong> show you &mdash; with the exact
+    knob that's hiding each one.
+  </p>
+</header>
+
+{% if onboarding %}
+  <div class="blindspot-empty muted">
+    <p>
+      Build your algorithm first &mdash; then we'll show you what it's hiding.
+    </p>
+    {% if current_user %}
+      <p>
+        <a class="btn" href="{{ url_for('algo.onboarding') }}">Start onboarding</a>
+        or <a href="{{ url_for('algo.index') }}">jump straight to /algo</a>.
+      </p>
+    {% else %}
+      <p>
+        <a class="btn" href="{{ url_for('auth.signup') }}">Sign up</a>
+        or <a href="{{ url_for('auth.login') }}">sign in</a> to build your feed.
+      </p>
+    {% endif %}
+  </div>
+{% elif disabled %}
+  <p class="blindspot-empty muted">
+    Blindspot is currently disabled.
+  </p>
+{% elif error %}
+  <p class="blindspot-empty muted">
+    Couldn't compute your blindspots right now. Try again in a minute.
+  </p>
+{% elif not blindspots %}
+  <p class="blindspot-empty muted">
+    No blindspots right now &mdash; your algorithm is covering every
+    high-coverage story from the last
+    {{ window_hours or 48 }} hours. Either you're well-informed, or the
+    world's been quiet.
+  </p>
+{% else %}
+  <p class="blindspot-intro muted">
+    {{ blindspots|length }} {% if blindspots|length == 1 %}story{% else %}stories{% endif %}
+    that {{ blindspots[0].outlet_count }}+ outlets are covering right now
+    &mdash; and your algorithm isn't surfacing.
+  </p>
+
+  <ul class="blindspot-list">
+    {% for item in blindspots %}
+      <li class="blindspot-card">
+        <div class="blindspot-head">
+          <span class="blindspot-count" title="distinct outlets covering this">
+            {{ item.outlet_count }} outlets
+          </span>
+          <span class="blindspot-reason blindspot-reason-{{ item.hidden_reason }}">
+            {{ item.reason_label }} &middot;
+            <a href="{{ url_for('algo.index') }}">change in /algo</a>
+          </span>
+        </div>
+        <h2 class="blindspot-title">
+          <a href="{{ url_for('story.view', story_id=item.story_id) }}">
+            {{ item.title }}
+          </a>
+        </h2>
+        {% if item.summary %}
+          <p class="blindspot-summary">{{ item.summary|striptags|truncate(260) }}</p>
+        {% endif %}
+        {% if item.spectrum and item.spectrum.sample %}
+          {% include "partials/blindspot_spectrum.html" %}
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

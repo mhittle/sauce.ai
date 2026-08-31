@@ -1,0 +1,28 @@
+{# Cross-spectrum coverage strip for one Blindspot card. Mirrors the
+   /story dossier's spectrum-peek partial so an L/C/R blindspot looks
+   the same wherever the user encounters it. #}
+<div class="spectrum-box blindspot-spectrum">
+  <div class="spectrum-head">
+    <span class="spectrum-label">Coverage across the spectrum</span>
+    <a class="spectrum-full" href="{{ url_for('story.view', story_id=item.story_id) }}">
+      Full dossier{% if item.spectrum.total_others > item.spectrum.sample|length %}
+        &middot; all {{ item.spectrum.total_others + 1 }} sources
+      {% endif %} &rarr;
+    </a>
+  </div>
+  <ul class="spectrum-list">
+    {% for m in item.spectrum.sample %}
+      <li class="spectrum-item spectrum-{{ m.bucket }}">
+        <div class="spectrum-item-meta">
+          <span class="lean-dot" style="--lean: {{ m.political_lean or 0.0 }}"
+                title="article lean {{ '%+.2f' % (m.political_lean or 0.0) }}"></span>
+          <span class="source">{{ m.source_name }}</span>
+          <span class="muted">{{ m.published_at.strftime('%b %d, %H:%M') if m.published_at else '' }}</span>
+        </div>
+        <a class="spectrum-item-title" href="{{ m.url }}" target="_blank" rel="noopener">
+          {{ m.title }}
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+</div>

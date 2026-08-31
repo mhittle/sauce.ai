@@ -121,6 +121,13 @@ If that prints the path, you're ready.
         ASK_MAX_PER_DAY         25             (per-user daily cap on Ask submissions)
         ASK_MAX_TURNS           6              (carried multi-turn history pairs)
 
+    Optional (Blindspot — `/blindspot` page; sane defaults, only set
+    to override):
+        BLINDSPOT_ENABLED       1              (kill-switch; set 0 to render an empty state)
+        BLINDSPOT_WINDOW_HOURS  48             (outlet-burst recency window for candidates)
+        BLINDSPOT_MIN_OUTLETS   5              (distinct-source floor for a candidate)
+        BLINDSPOT_MAX_ITEMS     8              (cap on rendered blindspot cards per page)
+
     Do NOT set APPLICATION_ROOT. LiteSpeed/Passenger already
     mounts the app at /news via the "Application URL" setting;
     setting APPLICATION_ROOT in env vars causes a double-prefix

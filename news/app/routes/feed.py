@@ -85,6 +85,90 @@ def _maybe_signal_topup(page, page_size):
         current_app.logger.warning("classify topup signal skipped: %s", e)
 
 
+def _selected_story_ids(weights, active_algo_id, *, limit):
+    """The story_ids `feed.index()` would surface for the current viewer.
+
+    Used by `/blindspot` to compute "what the home feed would NOT show
+    me." Composes the same selection-stage building blocks as `index()`
+    (`build_affinity_sql` + `build_filters_sql` + `build_term_clauses` +
+    the same visibility / downvote / canonical-member predicates), but
+    `SELECT`s only `a.story_id` with the same affinity `ORDER BY` and the
+    same `FEED_SELECTION_POOL`-style limit cap.
+
+    The returned set is canonical-member-only and excludes rows whose
+    story_id is NULL (a NULL-clustered article cannot be "the same big
+    story" as a clustered one). Anonymous callers (no `g.user`) get a
+    bare visibility / canonical SELECT — but `/blindspot` is signed-in
+    only, so that branch is just defensive.
+    """
+    affinity_expr, affinity_params = build_affinity_sql(weights)
+    filter_sql, filter_params = build_filters_sql(weights)
+
+    u = getattr(g, "user", None)
+    pref_join_sql = ""
+    pref_filter_sql = ""
+    pref_params = {}
+    term_mute_sql = ""
+    term_params = {}
+    down_filter_sql = ""
+    if u:
+        down_filter_sql = (
+            " AND a.id NOT IN (SELECT article_id FROM user_signals "
+            "WHERE user_id = %(_dv_uid)s AND signal_type = 'thumb_down')"
+        )
+        pref_params["_dv_uid"] = u["id"]
+        pref_join_sql = (
+            " LEFT JOIN user_source_prefs usp "
+            "ON usp.user_id = %(_pref_uid)s AND usp.source_id = s.id"
+        )
+        pref_filter_sql = " AND COALESCE(usp.weight, 1.0) > 0"
+        pref_params["_pref_uid"] = u["id"]
+
+        term_rows = []
+        if active_algo_id:
+            term_rows = query(
+                "SELECT term, mode, weight FROM algorithm_term_prefs "
+                "WHERE algorithm_id = %s",
+                (active_algo_id,),
+            ) or []
+        term_mute_sql, _term_boost_expr, term_params = build_term_clauses(term_rows)
+
+    uid = u["id"] if u else None
+    vis_sql = "(s.owner_id IS NULL OR s.owner_id = %(_vis_owner)s)" if uid else "s.owner_id IS NULL"
+    vis_params = {"_vis_owner": uid} if uid else {}
+
+    sel_pool = min(
+        int(limit or 0),
+        MAX_FETCH_ROWS,
+    )
+    if sel_pool <= 0:
+        return set()
+
+    sql = f"""
+      SELECT a.story_id
+      FROM articles a
+      JOIN sources s ON s.id = a.source_id
+      JOIN article_features f ON f.article_id = a.id
+      {pref_join_sql}
+      WHERE a.status = 'classified'
+        AND a.published_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+        AND a.story_id IS NOT NULL
+        AND a.id = a.story_id
+        AND {vis_sql}
+        {filter_sql}
+        {pref_filter_sql}
+        {term_mute_sql}
+        {down_filter_sql}
+      ORDER BY ({affinity_expr}) DESC, a.published_at DESC
+      LIMIT %(selpool)s
+    """
+    params = {**affinity_params, **filter_params,
+              **pref_params, **vis_params, **term_params,
+              "selpool": sel_pool}
+    rows = query(sql, params) or []
+    return {r["story_id"] for r in rows if r.get("story_id") is not None}
+
+
 def _dedupe_switcher_rows(rows):
     """Collapse duplicate-named profiles for the header switcher so each name
     shows once. Rows arrive ordered `is_active DESC, updated_at DESC`, so the

@@ -113,6 +113,19 @@ class Config:
     ASK_MAX_PER_DAY = int(os.environ.get("ASK_MAX_PER_DAY", "25"))
     ASK_MAX_TURNS = int(os.environ.get("ASK_MAX_TURNS", "6"))
 
+    # Blindspot (`/blindspot`). The biggest stories the live home feed
+    # would not surface for the signed-in viewer. ENABLED is the master
+    # kill-switch (default on). WINDOW_HOURS scopes the global
+    # outlet-burst universe (wider than breaking's 6h to catch slower
+    # news cycles). MIN_OUTLETS is the distinct-source floor that makes
+    # a story a candidate (lower than breaking's 12 — Blindspot is the
+    # "lots of outlets are covering this" gate, not the "this is breaking
+    # news" gate). MAX_ITEMS caps the rendered list.
+    BLINDSPOT_ENABLED = os.environ.get("BLINDSPOT_ENABLED", "1") not in ("0", "false", "False")
+    BLINDSPOT_WINDOW_HOURS = int(os.environ.get("BLINDSPOT_WINDOW_HOURS", "48"))
+    BLINDSPOT_MIN_OUTLETS = int(os.environ.get("BLINDSPOT_MIN_OUTLETS", "5"))
+    BLINDSPOT_MAX_ITEMS = int(os.environ.get("BLINDSPOT_MAX_ITEMS", "8"))
+
     DISCOVER_PROMOTION_SCORE_MIN = int(os.environ.get("DISCOVER_PROMOTION_SCORE_MIN", "3"))
     DISCOVER_PROMOTE_BUDGET_SECONDS = int(os.environ.get("DISCOVER_PROMOTE_BUDGET_SECONDS", "1500"))
     DISCOVER_PROMOTE_WORKERS = int(os.environ.get("DISCOVER_PROMOTE_WORKERS", "8"))

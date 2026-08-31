@@ -83,7 +83,7 @@ shipped.
 | 7 | 4 | new-feature, ui, algo, backend | News Near You — local news section over the geo features we already compute | done |
 | 7 | 4 | ui, new-feature, algo | The Brief — Top Stories rail on the home feed with inline spectrum spread | backlog |
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
-| 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | in-progress |
+| 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | done |
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
 
 ---
@@ -91,7 +91,40 @@ shipped.
 ## Items in detail
 
 ### Blindspot — the biggest stories your algorithm is hiding from you
-**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, algo, backend · **Status:** in-progress
+**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, algo, backend · **Status:** done (PR #170, merged 2026-06-01)
+
+> **Shipped 2026-06-01 (PR #170, dev-agent unattended).** A new `/blindspot` page
+> (signed-in topnav link) that uses the reader's own algorithm against
+> itself: surfaces the biggest stories the world is covering right now
+> that the live home feed would NOT show this viewer, names the
+> responsible knob (mute keyword / hard filter / low relevance) with a
+> link to `/algo`, and renders the cross-spectrum coverage strip. New
+> pure `app/blindspot.py` (22 tests) carries the priority rule (mute >
+> filter > low_relevance) + the `reason_label` strings; a thin
+> `feed._selected_story_ids(weights, active_algo_id, *, limit)` helper
+> composes the same selection-stage SQL as `feed.index()` (affinity +
+> filters + mutes + visibility + downvote + canonical-member) but
+> `SELECT`s only `a.story_id`, so the "what the feed would surface" set
+> can never drift from `/`. New `routes/blindspot.py` runs the outlet-
+> burst query (same shape as `breaking_alerts._candidate_query`,
+> 48-hour window, ≥5 distinct outlets, candidate cap 200), pulls
+> canonical title/summary, computes mute_hits via `term_prefs.
+> normalize_term` (mirrors `_MATCH_EXPR` semantics), computes
+> filter_hits via a second `build_filters_sql` SELECT, then calls
+> `classify_blindspots` and renders ≤`BLINDSPOT_MAX_ITEMS` cards.
+> Each card carries `_fetch_cluster` + `pick_spectrum_sample` L/C/R
+> peek + dossier link. `index()` is byte-for-byte unchanged
+> (selection helper is added as a new function, not extracted). NOT
+> BUG-007 class: no migration, no cron, no new env var (4
+> `BLINDSPOT_*` knobs default), no new pip dep, no symlink. The whole
+> page body is wrapped in try/except → graceful "couldn't compute"
+> panel, never a 500. Signed-in only (anon → onboarding empty state);
+> no-active-algo → same onboarding state. **Post-merge prod action:**
+> Passenger restart so the new `/blindspot` blueprint registers
+> (`manual-actions.md` Open). v2 follow-ons (cached Haiku one-liner per
+> card, swap `pick_spectrum_sample` for `pick_steelman` once Steel-man
+> merges, weekly digest, in-feed rail, count badge, share the outlet-
+> burst helper with breaking + The Brief) remain backlog.
 
 **User value / why now — the "category of one" feature.** Every personalization
 engine on earth deepens the reader's bubble; we are the only product that can do
