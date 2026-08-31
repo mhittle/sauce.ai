@@ -1969,6 +1969,173 @@ on the deployed page.
 
 ---
 
+## PM proposals (2026-06-08)
+
+PM-agent suggestions from the 2026-06-08 cycle. Each is `status:
+proposed` — not yet authorized for dev. The human promotes a proposal
+to `ready-for-agent` (and folds its row into the at-a-glance table) to
+dispatch it. Telemetry (`/admin/cron-health`, `/admin/usage-summary`)
+was unavailable this run — `SMOKE_TEST_USER`/`SMOKE_TEST_PASS` were
+not exported to the workflow environment, so the login POST returned
+HTTP 400 and could not authenticate. Rationales below cite
+engineering-history / bugs / roadmap signals only.
+
+### Auto-restart Passenger on code-only deploys (extend the migration executor)
+**Priority:** 7 · **LOE:** 2 · **Category:** infra, ops · **Status:** proposed
+
+**Rationale:** Phase 4's migration / restart executor (PR #106) already
+ships `POST /agent-ops/restart-app` (HMAC-signed) and the workflow that
+calls it after a `needs-migration`-labeled PR — but the trigger only
+fires when the PR carries a migration. Every code-only deploy still
+files a separate "Python App restart" line in `manual-actions.md` Open
+and waits on a human, because Passenger caches imports until restart
+and any new blueprint, route, template, or `config.py` knob is invisible
+until the bounce. The last 14 days of `engineering-history.md` show
+this lag hurts repeatedly:
+
+- **PR #140** (NL keyword chips, 2026-05-27) — restart Open. **BUG-029**'s
+  first session was blocked on "has the worker been restarted since PR
+  #140?" for an entire round before the team could rule the stale-worker
+  hypothesis in or out (`bugs.md` BUG-029 hypothesis 1).
+- **PR #144** (BUG-030 feed selection/ranking split — new `feed.index()`,
+  2026-05-31) — restart Open. Flagged as cause-hypothesis-2 for the
+  still-open **BUG-031** (anonymous `/` returning HTTP 500, `bugs.md`
+  hypothesis 2: *"A half-loaded worker serving a new template against
+  an old route — or a config key read before restart — can 500 `/`"*).
+- **PR #145** (article TL;DR — new `/article/<id>/summary` route + new
+  feed.summary endpoint, 2026-05-31) — restart Open; same BUG-031
+  cause-hypothesis cluster.
+- **PR #160** (News Near You — new `local` blueprint, 2026-05-31) —
+  Passenger restart on deploy (engineering-history 2026-05-31 entry).
+- **PR #166** (Ask your feed — new `ask` blueprint, 2026-06-01) — Passenger
+  restart on deploy + `manual-actions.md` Open per the
+  engineering-history 2026-06-01 entry.
+
+Five deploys in fourteen days, all carrying a human-paged restart as an
+Open action, and one currently-open production 500 (BUG-031) whose
+leading hypotheses include exactly this stale-worker mode. The fleet
+already owns the secure building block: the `agent_ops.restart-app`
+HMAC route + `AGENT_OPS_SECRET`. What is missing is wiring a tiny
+workflow that fires it on every push-to-main once the FTP deploy has
+finished, regardless of whether there is a migration in the diff.
+
+Propose a new `.github/workflows/post-deploy-restart.yml` triggered on
+`push: branches: [main]` (mirroring `.github/workflows/post-deploy.yml`'s
+~120-180s settle so the FTP sync finishes). Gate on
+`vars.AGENTS_ENABLED == 'true'`; reuse `AGENT_OPS_SECRET`. Restart only
+when the push diff actually changes Python-import surface or the
+template tree: any modification under `news/app/__init__.py`,
+`news/app/routes/`, `news/app/config.py`, `news/jobs/`,
+`news/app/templates/`, or `news/requirements.txt`. Pure docs / static
+CSS / pure markdown diffs no-op (CSS is statically served, Jinja
+templates auto-reload on this host). The existing migration executor
+keeps issuing its own restart after a labeled migration; sequence the
+new workflow so it short-circuits when the executor already restarted
+in the same push (a small "skip if AGENT_OPS_LAST_RESTART within 60s"
+read of an inert sentinel under `/agent-ops/restart-app`, OR — simpler
+— a `concurrency:` group shared with `migration-executor.yml` so the
+labeled job runs first and this one no-ops when its precondition file
+glob matches *only* code paths the executor already covers). Either
+shape is acceptable — justify in the PR.
+
+Eliminates the recurring "Python App restart" line from
+`manual-actions.md` for every routine code deploy, closes the
+stale-worker hypothesis cluster powering BUG-031 + the BUG-029
+mis-triage, and lets the Phase 3 post-deploy QA agent distinguish
+"code shipped + worker stale" from "code shipped + actually broken"
+because the worker is always fresh by the time it runs.
+
+Scope: one new ~60-line workflow file + the file-glob filter; no app
+code change, no migration, no env var (reuses `AGENT_OPS_SECRET`), no
+new dependency, no new secret. NOT BUG-007 class. NOT sharp-edge — the
+restart route is the same HMAC-gated `tmp/restart.txt` touch the
+executor has been issuing since PR #106 (Phase 4 went live 2026-05-22
+with the live throwaway create-then-drop dummy-table prod test).
+
+### Defensive home-feed render — graceful degrade when the DB shape lags the deploy
+**Priority:** 7 · **LOE:** 3 · **Category:** backend, infra · **Status:** proposed
+
+**Rationale:** **BUG-031** (open in `bugs.md`, opened 2026-05-31 by the
+post-deploy QA agent) is anonymous `GET /` returning HTTP 500 after the
+PR #145 deploy, while `/auth/login` and `/firehose` both stay 200. The
+investigation's hypothesis 1 is *"`article_summaries` migration still
+unapplied + a code-path gap. The read path is supposed to degrade
+gracefully on a missing table (`load_bullets` catches it), but a 500
+on the full `/` render suggests a gap in that guard on the feed-index
+path specifically"* (`bugs.md` BUG-031). This is the same failure
+class as **BUG-025** (resolved 2026-05-26 — `classify_pending` crashed
+for 6 days on `Unknown column 'geo_lat'` because the 2026-05-20 geo
+migration wasn't applied) and the original **BUG-007** (the "Unknown
+column" 500-storm regression that has fired three times in this repo:
+original PR #30/#31 2026-05-13, recurrence on PR #64 2026-05-17, and
+the geo-classify variant 2026-05-26). Bugs.md BUG-025's process
+learning was explicit: *"The crash was on the cron write path rather
+than a user route, so it failed silently — every
+`news/seed/migrations/*.sql` that adds a column written by a cron job
+must get an Open `manual-actions.md` entry the moment it merges."*
+BUG-031 shows the analogous gap on the **read** path: every
+`migrations/*.sql` that adds a column or table read by a user route
+needs the route to tolerate the missing shape, not 500.
+
+The migrate-after-deploy model that Phase 4 (PR #106) introduced is the
+right shape for the merge gate, but it creates a hard correctness
+requirement at runtime: *every request-path read of a column or table
+that may not be on prod yet must catch a missing-shape
+`pymysql.OperationalError` / `ProgrammingError` and degrade — not 500*.
+Recent code already does this in two places:
+- **Ask your feed** (PR #166, 2026-06-01) — the route catches a missing-
+  `ask_queries` `ProgrammingError` and falls back to an in-process
+  `SlidingWindowLimiter` so the page still works pre-migration.
+- **Breaking-news alerts** (PR #132, 2026-05-31) — `settings()`, the
+  cron, and the unsubscribe route all tolerate both new tables being
+  absent (engineering-history 2026-05-22).
+
+But the **feed-index path** — the highest-traffic and highest-blast-
+radius route in the app — does not yet have a top-level guard, so a
+single unapplied migration on a column the new SELECT touches takes
+the *whole front page* down for anon and signed-in users alike. That
+is the worst possible failure surface, and the existing 2026-05-21 PM
+proposal **`Schema-drift sentinel`** (a detection / admin-banner layer)
+explicitly does not close the request-path gap — it tells the operator
+which column is missing, but does not stop the 500 storm in the
+meantime.
+
+Propose a top-level defensive wrapper around `feed.index()` (and its
+HTMX `?page=N` "Load more" partial): a single
+`try / except (pymysql.OperationalError, pymysql.ProgrammingError) as e`
+around the existing select / diversify / render sequence. On catch,
+log at WARNING with `feed.index.degraded shape_error=<message>`,
+swap in a small `templates/feed_degraded.html` partial (one-line
+"Some feed features are loading right now — try `/firehose` for the
+unfiltered stream" + a link + a hidden retry hint), and return HTTP
+**200**. The unchanged success path stays byte-identical so the
+existing feed-route tests pass without modification. Cover `/`,
+`/search`, `/saved`, `/trending`, and `/local` the same way, since
+each of them issues SELECTs that may reference newly-added columns —
+the daily digest cron is already isolated by separate failure
+handling, and `/firehose` reads a stable column set so it is the
+natural fallback link. **Critically pair-able with the existing
+2026-05-21 `Schema-drift sentinel` proposal**: the sentinel tells the
+operator *which migration is missing*; this guard ensures the user-
+facing surface degrades quietly while they apply it. They compose
+additively. **Distinct from the 2026-06-01 `Rendered-template smoke
+pass` proposal** — that catches template-bug regressions before merge
+(BUG-029 class); this catches schema-shape regressions at runtime
+post-merge (BUG-007 / BUG-025 / BUG-031 class).
+
+Scope: a small Python change to ~6 route entry points + one new
+template (~10 lines) + an INSTALL.txt note. No DB migration, no cron,
+no env var, no new dependency, no sharp-edge infra. NOT BUG-007 class
+— it is purely additive error handling and removes a BUG-007 *symptom*
+class. New pure tests in `news/tests/test_feed_degraded.py` mock the
+SELECT layer to raise `pymysql.OperationalError("1054, Unknown
+column …")` and `pymysql.ProgrammingError("1146, Table … doesn't
+exist")` and assert HTTP 200 + the degraded partial; the existing
+feed-route happy-path tests must pass unchanged. No test requires a
+live DB, Haiku, or a browser.
+
+---
+
 ## PM proposals (2026-05-25)
 
 PM-agent suggestions from the 2026-05-25 cycle. Each is `status:
