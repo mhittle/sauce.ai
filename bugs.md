@@ -26,6 +26,36 @@ Sort with `open` and `in-progress` at the top, then `attempted`, then
 
 ## Open
 
+### BUG-033 — All routes return HTTP 415 Unsupported Media Type (site fully inaccessible)
+**Status:** open · **Reporter:** agent (post-deploy QA) · **Opened:** 2026-06-07
+
+All checked routes on `https://sauce.ai/news/` return **HTTP 415 Unsupported Media Type** from Apache, making the site completely inaccessible to users. The smoke job did not catch this because it only flags 5xx responses; 415 is a 4xx.
+
+**Observed (2026-06-07 18:25 UTC):**
+- `https://sauce.ai/news/` => 415
+- `https://sauce.ai/news/auth/login` => 415
+- `https://sauce.ai/news/firehose` => 415
+- `https://sauce.ai/news/algo` => 415
+
+**Apache response body:**
+```
+415 Unsupported Media Type
+The supplied request data is not in a format acceptable for processing by this resource.
+Additionally, a 415 Unsupported Media Type error was encountered while trying to use an ErrorDocument to handle the request.
+```
+
+**Response headers:** `server: Apache`, `content-type: text/html; charset=iso-8859-1`
+
+**Note:** Playwright browser received a Cloudflare JS challenge page rather than the 415, suggesting Cloudflare CDN is in front for browser traffic while direct/curl requests reach Apache and receive 415. This differs from BUG-032 (TCP-level connection refusal) — TCP connections are now accepted but Apache is rejecting all requests.
+
+**Possible causes (uninvestigated):** broken `.htaccess` rule, mod_security misconfiguration, a cPanel/Apache directive applied to all routes, or a recently pushed configuration change. Check Apache error log and recent `.htaccess` modifications.
+
+**Repro:**
+```bash
+curl -sS -o /dev/null -w "%{http_code}\n" https://sauce.ai/news/
+# returns: 415
+```
+
 ### BUG-031 — Anonymous `/` (home feed) returns HTTP 500 after the PR #145 deploy
 **Status:** open · **Reporter:** post-deploy QA agent (was PR #147, closed) · **Opened:** 2026-05-31
 **Note:** originally auto-filed by the QA agent as a draft PR (#147) that
