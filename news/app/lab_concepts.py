@@ -37,6 +37,8 @@ LAB_CONCEPT_KEYS = frozenset({
     "decide",
     "friend",
     "mirror",
+    # Health & science wave (2026-09-07)
+    "claim",
 })
 
 VOTE_UP = 1
