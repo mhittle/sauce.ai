@@ -85,7 +85,7 @@ shipped.
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
 | 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | in-progress |
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
-| 8 | 5 | new-feature, ui, backend, algo | Claim — health-headline reality check (sauce.ai/claim) | backlog |
+| 8 | 5 | new-feature, ui, backend, algo | Claim — health-headline reality check (sauce.ai/claim) | in-progress |
 
 ---
 
@@ -1880,7 +1880,25 @@ All thirteen concepts are on the root landing page (`index.html`,
   eval and per-entity provenance.
 
 ### Claim — health-headline reality check (sauce.ai/claim)
-**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, backend, algo · **Status:** backlog
+**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, backend, algo · **Status:** in-progress
+
+**Progress (2026-09-08, PR #TBD).** Sequencing steps 1 + 2 shipped together:
+the pure engine (`app/claim.py`), the Crossref / PubMed / Europe PMC
+resolvers (`app/claim_sources.py`), the three model calls
+(`classifier/claim_prompts.py`, `classifier/claim_llm.py`), the shared
+orchestrator (`app/claim_pipeline.py`, reused by the nightly pass in step
+3), the anonymous `/claim` page + `/claim/<id>` permalink, the
+`claim_checks` table (migration `2026-09-08-claim-checks.sql`,
+`has-migration`), and the landing-page card flipped to live. Remaining:
+step 3 (feed "Check claim" action + nightly `--claims-only` pre-compute,
+**gated on the owner's eval set below**) and step 4 (OG share image +
+"wrong paper" feedback). Design choices that differ from the sketch:
+`sample-under-50` / `no-study-located` / `preprint-unlabeled` /
+`press-release-source` / `relative-only` are computed in code from the
+validated fields, the model only proposes the judgment flags; the
+resolver refuses a search hit unless the article's own title / author
+matches it (never the top hit on faith); structured JSON via
+`output_config.format` with a plain-text fallback.
 
 **User value / why now.** Health headlines are the most-shared and least-checked
 content in any feed: "cuts risk by 40%", "linked to", "study finds", podcast

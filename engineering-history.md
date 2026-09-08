@@ -134,6 +134,69 @@ these.
 
 ---
 
+## 2026-09-08
+
+- **Claim — health-headline reality check, steps 1 + 2 (interactive
+  session, PR #TBD).** First health & science product. Anonymous
+  `sauce.ai/news/claim`: paste a URL or a headline + paragraph, get a
+  card at `/claim/<id>`. Four-stage pipeline in `app/claim_pipeline.py`
+  (Flask-free, every collaborator injectable, reused later by the nightly
+  pass): **locate** (Haiku, `CLAIM_MODEL_LOCATE`, strict JSON) pulls the
+  claim sentence + DOI / PMID / title / author / journal, with a regex
+  DOI/PMID pre-pass that overrides the model; **resolve**
+  (`app/claim_sources.py`: Crossref `works/<doi>` -> Europe PMC / PubMed
+  for the abstract; else Crossref bibliographic search; else PubMed
+  esearch over title/author/journal; a hit is accepted only when the
+  article's own title tokens or author surname match and journal / year
+  don't contradict — journal initialisms like NEJM handled); **extract**
+  (Sonnet, `CLAIM_MODEL_EXTRACT`) returns design / species / n /
+  population / exposure / comparator / outcome / effect / baseline /
+  funding / peer-review each with a verbatim `span`, and
+  `claim.validate_spans` drops any field whose span is not in the
+  abstract *or whose number is not in its own span* — the
+  anti-hallucination rule, unit-tested; **grade** (Haiku) scores
+  headline-vs-abstract concordance 0-2 and proposes judgment flags from a
+  closed list. Pure `app/claim.py` does the math (ARR / NNT / NNH / 100-
+  person icon array; OR->RR only below 10% baseline, HR treated as RR with
+  a note, MD not translated, missing baseline never invented) and the
+  deterministic rubric (design tier -> non-human floors at 4 -> +1 n<50 ->
+  concordance +0/+1/+2 -> +1 any flag, +1 at three; no study = 5). The
+  model never emits a grade. Code-derived flags (`no-study-located`,
+  `sample-under-50`, `animal-or-in-vitro-reported-as-human`,
+  `preprint-unlabeled`, `press-release-source`, `relative-only`) merge
+  with the model's; unknown flags are discarded. Route: per-IP
+  `SlidingWindowLimiter` (`CLAIM_RATE_PER_IP_HOUR`), global daily cap via
+  `COUNT(*)` on `claim_checks` (`CLAIM_DAILY_CAP`) with an in-process
+  fallback when the table is missing, URL results cached by SHA-256 of the
+  tracking-stripped URL (`uq_claim_url`), `LLMUnavailable` -> inline
+  "couldn't check this one", usage rows into `llm_usage` (Sonnet priced
+  separately in `claim_llm.estimate_cost`). Structured output requested
+  via `output_config.format` (SDK 0.101 supports it); a `BadRequestError`
+  falls back to a plain call + tolerant JSON parse. `extractor.py` now
+  surfaces the page `title` (additive key; `classify_pending` reads
+  named keys only). **NOT BUG-007 class**: every `claim_checks` read /
+  write catches `ProgrammingError` and the card still renders without a
+  permalink. Topnav gains an anonymous-visible **Claim** link; the root
+  landing card flipped to `card live` -> `/news/claim/`. Sandbox note:
+  the full suite runs here after `pip install` of the pinned deps
+  (`sgmllib3k` needs its sdist copied by hand; `cffi` for bcrypt).
+  *Code:* `app/claim.py`, `app/claim_sources.py`, `app/claim_pipeline.py`,
+  `app/classifier/claim_prompts.py`, `app/classifier/claim_llm.py`,
+  `app/routes/claim.py`, `app/templates/claim.html`,
+  `partials/claim_result.html`, `partials/claim_card.html`,
+  `app/static/style.css`, `app/extractor.py`, `app/config.py` (7
+  `CLAIM_*` knobs), `app/__init__.py`, `base.html`, `seed/schema.sql`,
+  `seed/migrations/2026-09-08-claim-checks.sql`, `INSTALL.txt`, root
+  `index.html`, tests `test_claim.py` / `test_claim_sources.py` /
+  `test_claim_llm.py` / `test_claim_pipeline.py` / `test_claim_route.py`
+  (+95; suite 769 pass). *Server state:* one migration (`has-migration`,
+  SQL in `manual-actions.md` Open) + Passenger restart; set
+  `CLAIM_CONTACT_EMAIL` in cPanel env (optional but polite). *Open:*
+  owner eval set (40-60 hand-labelled articles) before step 3; step 4
+  share image.
+
+---
+
 ## 2026-09-07
 
 - **Fleet health audit (interactive session, docs-only).** The closed-loop

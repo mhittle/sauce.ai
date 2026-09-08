@@ -1,0 +1,151 @@
+{# The claim card. Every rendered field carries its verbatim abstract span
+   (as a tooltip and in the "show sources" list); fields without one were
+   dropped upstream and simply do not appear. #}
+{% set f = check.fields or {} %}
+{% set n = check.numbers or {} %}
+{% set study = check.study %}
+<article class="claim-card claim-grade-{{ check.grade }}" x-data="{ spans: false }">
+  <header class="claim-card-head">
+    <div class="claim-grains" aria-label="{{ check.grade }} of 5 grains of salt">
+      {% for i in range(1, 6) %}<span class="grain{% if i <= check.grade %} on{% endif %}"></span>{% endfor %}
+      <span class="claim-grains-n">{{ check.grade }}/5 grains of salt</span>
+    </div>
+    <p class="claim-grade-label">{{ check.grade_label }}</p>
+  </header>
+
+  <section class="claim-split">
+    <div class="claim-col">
+      <h3>The claim</h3>
+      <p class="claim-headline">{{ check.headline or check.claim.claim }}</p>
+      {% if check.claim.claim and check.claim.claim != check.headline %}
+        <p class="claim-sentence">&ldquo;{{ check.claim.claim }}&rdquo;</p>
+      {% endif %}
+      {% if check.source_url %}
+        <p class="muted"><a href="{{ check.source_url }}" rel="noopener nofollow" target="_blank">Source article</a></p>
+      {% endif %}
+    </div>
+    <div class="claim-col">
+      <h3>What the study measured</h3>
+      {% if check.status == 'no-study' %}
+        <p class="claim-none">No study could be located from what the article says
+          {% if check.claim.identifiers and (check.claim.identifiers.journal or check.claim.identifiers.first_author) %}
+            (looked for
+            {%- if check.claim.identifiers.first_author %} {{ check.claim.identifiers.first_author }}{% endif %}
+            {%- if check.claim.identifiers.journal %} in {{ check.claim.identifiers.journal }}{% endif -%}
+            ){% endif %}.</p>
+      {% elif not study.abstract %}
+        <p class="claim-none">The paper was found but no abstract is available, so nothing can be read from it.</p>
+      {% else %}
+        <dl class="claim-fields">
+          {% for key, label in [('population', 'Who'), ('exposure', 'Exposure or treatment'),
+                                ('comparator', 'Compared with'), ('outcome', 'Outcome'),
+                                ('follow_up', 'Follow-up')] %}
+            {% if f[key] %}
+              <dt>{{ label }}</dt>
+              <dd title="Abstract: &ldquo;{{ f[key].span }}&rdquo;">{{ f[key].value }}
+                {% if key == 'outcome' and f.outcome_type %}<span class="claim-tag">{{ f.outcome_type.value }} outcome</span>{% endif %}
+              </dd>
+            {% endif %}
+          {% endfor %}
+        </dl>
+        {% if not (f.population or f.exposure or f.outcome) %}
+          <p class="claim-none">The abstract did not state these in a way that could be quoted.</p>
+        {% endif %}
+      {% endif %}
+    </div>
+  </section>
+
+  {% if study %}
+  <section class="claim-study">
+    <h3>The study</h3>
+    <ul class="claim-study-facts">
+      {% if f.design %}<li title="Abstract: &ldquo;{{ f.design.span }}&rdquo;"><strong>Design</strong> {{ f.design.value }}</li>{% endif %}
+      {% if f.species %}<li title="Abstract: &ldquo;{{ f.species.span }}&rdquo;"><strong>In</strong> {{ 'people' if f.species.value == 'human' else f.species.value }}</li>{% endif %}
+      {% if f.n %}<li title="Abstract: &ldquo;{{ f.n.span }}&rdquo;"><strong>n</strong> {{ '{:,}'.format(f.n.value) }}</li>{% endif %}
+      {% if f.peer_review %}
+        <li title="Abstract: &ldquo;{{ f.peer_review.span }}&rdquo;"><strong>Status</strong> {{ f.peer_review.value }}</li>
+      {% elif study.is_preprint %}
+        <li><strong>Status</strong> preprint (by venue)</li>
+      {% endif %}
+      {% if f.funding %}<li title="Abstract: &ldquo;{{ f.funding.span }}&rdquo;"><strong>Funding</strong> {{ f.funding.value }}</li>{% endif %}
+    </ul>
+    <p class="claim-citation">
+      {% if study.title %}<em>{{ study.title }}</em>{% if check.citation %} &mdash; {% endif %}{% endif %}{{ check.citation }}
+      {% if check.study_url %}<a href="{{ check.study_url }}" rel="noopener" target="_blank">{{ 'DOI' if study.doi else 'PubMed' }} &rarr;</a>{% endif %}
+    </p>
+    <p class="muted claim-fulltext">Abstract only{% if study.resolver %} via {{ study.resolver.replace('+', ' + ') }}{% endif %}; full text not available.</p>
+  </section>
+  {% endif %}
+
+  {% if n.type %}
+  <section class="claim-numbers">
+    <h3>The numbers, translated</h3>
+    <p class="claim-relative" title="Abstract: &ldquo;{{ f.effect.span }}&rdquo;">
+      As reported: <strong>{{ n.type }} {{ n.point }}</strong>
+      {% if n.ci_low is not none %}(95% CI {{ n.ci_low }} to {{ n.ci_high }}){% endif %}
+    </p>
+    {% if n.arr_pct is not none %}
+      <p class="claim-absolute">
+        Out of 100 people like those in the study, about <strong>{{ n.icon_control }}</strong>
+        would have the outcome without the {{ f.exposure.value if f.exposure else 'exposure' }} and
+        about <strong>{{ n.icon_treated }}</strong> with it &mdash;
+        <strong>{{ n.arr_pct|abs }} {{ 'fewer' if n.direction == 'fewer' else 'more' }} per 100</strong>
+        {% if n.arr_ci_low_pct is not none %}(95% CI {{ n.arr_ci_low_pct }} to {{ n.arr_ci_high_pct }}){% endif %}.
+        {% if n.nnt %}<span class="claim-nnt">{{ n.nnt_kind }} = {{ n.nnt }}</span>{% endif %}
+      </p>
+      <div class="icon-array" role="img"
+           aria-label="{{ n.icon_control }} of 100 affected without, {{ n.icon_treated }} with">
+        {% set lo = [n.icon_control, n.icon_treated]|min %}
+        {% set hi = [n.icon_control, n.icon_treated]|max %}
+        {% for i in range(100) %}<span class="ic{% if i < lo %} both{% elif i < hi %} {{ 'avoided' if n.direction == 'fewer' else 'added' }}{% endif %}"></span>{% endfor %}
+      </div>
+      <p class="muted icon-array-key">
+        <span class="ic both"></span> outcome either way
+        <span class="ic {{ 'avoided' if n.direction == 'fewer' else 'added' }}"></span>
+        {{ 'outcome avoided' if n.direction == 'fewer' else 'extra outcome' }}
+        <span class="ic"></span> no outcome
+      </p>
+    {% elif n.baseline_missing and n.type in ('RR', 'OR', 'HR') %}
+      <p class="claim-none">The abstract gives no baseline risk, so this relative figure cannot be turned into people out of 100.</p>
+    {% endif %}
+    {% for note in n.notes %}<p class="muted claim-note">{{ note }}</p>{% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="claim-flags">
+    <h3>Spin flags{% if not check.flags %} <span class="muted">none</span>{% endif %}</h3>
+    {% if check.flags %}
+      <ul>
+        {% for fl in check.flags %}
+          <li><strong>{{ check.flag_labels.get(fl.flag, fl.flag) }}</strong>{% if fl.why %} &mdash; {{ fl.why }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if check.concordance is not none %}
+      <p class="claim-concordance">
+        <strong>Headline vs. abstract:</strong>
+        {{ {2: 'faithful', 1: 'stretched', 0: 'unsupported'}[check.concordance] }}{% if check.concordance_why %} &mdash; {{ check.concordance_why }}{% endif %}
+      </p>
+    {% endif %}
+  </section>
+
+  {% if f %}
+  <section class="claim-spans">
+    <button type="button" class="linkbtn" @click="spans = !spans" x-text="spans ? 'Hide abstract sources' : 'Show abstract sources'">Show abstract sources</button>
+    <ul x-show="spans" x-cloak>
+      {% for key, item in f.items() %}
+        <li><strong>{{ key.replace('_', ' ') }}</strong>: &ldquo;{{ item.span }}&rdquo;</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <footer class="claim-card-foot muted">
+    {% if check.permalink %}
+      <a href="{{ check.permalink }}">Permalink</a> &middot;
+      <button type="button" class="linkbtn" @click="navigator.clipboard && navigator.clipboard.writeText('{{ check.permalink }}')">Copy link</button> &middot;
+    {% endif %}
+    {% if check.created_at %}Checked {{ check.created_at.strftime('%Y-%m-%d') if check.created_at.strftime else check.created_at }} &middot; {% endif %}
+    {{ check.disclaimer }}
+  </footer>
+</article>

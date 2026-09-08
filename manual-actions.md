@@ -40,6 +40,84 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-09-08 — Migration + restart + env var: Claim (claim_checks)
+**Status:** open · **PR:** #TBD (Claim — health-headline reality check, branch `claude/claim-app-5m6ixp`) ·
+**Opened:** 2026-09-08 · **File reference:** `news/seed/migrations/2026-09-08-claim-checks.sql`
+
+Backs the new anonymous `/claim` page and `/claim/<id>` permalinks.
+**NOT BUG-007 class** — every `claim_checks` read/write in
+`routes/claim.py` catches the missing-table `ProgrammingError`; before
+the migration the card still renders, just without a permalink, and the
+daily cap falls back to an in-process limiter. PR labeled
+`has-migration`. Apply once on prod via phpMyAdmin → SQL tab (database
+`lt1ih6uyy2z6_news`):
+
+```sql
+CREATE TABLE IF NOT EXISTS claim_checks (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  article_id    BIGINT UNSIGNED NULL,
+  url_hash      CHAR(64) NULL,
+  input_kind    ENUM('article','url','text') NOT NULL DEFAULT 'url',
+  headline      VARCHAR(500) NOT NULL DEFAULT '',
+  source_url    VARCHAR(2000) NULL,
+  claim_json    MEDIUMTEXT NOT NULL,
+  study_json    MEDIUMTEXT NOT NULL,
+  numbers_json  TEXT NOT NULL,
+  flags_json    TEXT NOT NULL,
+  grade         TINYINT UNSIGNED NOT NULL DEFAULT 5,
+  status        ENUM('ok','no-study','llm-unavailable','error') NOT NULL DEFAULT 'ok',
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_claim_url (url_hash),
+  KEY idx_claim_article (article_id),
+  KEY idx_claim_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**Then:** Setup Python App → `sauce.ai/news` → **Restart** so the new
+`/claim` blueprint registers and the topnav **Claim** link stops 404'ing.
+Optionally add the env var `CLAIM_CONTACT_EMAIL=<a real mailbox>` on the
+same page first (it rides the Crossref / PubMed User-Agent; Crossref's
+polite pool is faster and more reliable with one) — a restart picks it up.
+
+**Verify (any browser, signed out):**
+
+1. `https://sauce.ai/news/claim/` renders the form; topnav shows
+   **Claim** between Gallery and the search box. Root landing page card
+   `sauce.ai/claim` now reads **Live** and links here.
+2. Paste (Headline + text tab):
+   *Daily aspirin cuts heart attack risk by 40%*
+   *A randomized trial published in the New England Journal of Medicine
+   (doi:10.1056/NEJMoa1804988) followed 19,114 older adults.*
+   Expect a card within ~30 s with a grain count, "The study" naming a
+   2018 NEJM aspirin trial with a DOI link, and either translated numbers
+   or a "no baseline risk" note. **Permalink** at the foot must resolve.
+3. Paste a headline with no citation (e.g. *Chocolate cures cancer* +
+   a made-up paragraph): expect **5/5 grains**, flag *No study could be
+   located*, no crash.
+4. Submit the same URL twice: the second response is instant (cache hit,
+   no new `llm_usage` rows).
+5. Optional DB checks:
+
+   ```sql
+   SELECT id, input_kind, status, grade, created_at FROM claim_checks ORDER BY id DESC LIMIT 10;
+   SELECT model, COUNT(*), SUM(est_cost_usd) FROM llm_usage
+    WHERE ts >= UTC_DATE() GROUP BY model;   -- expect claude-sonnet-5 rows alongside Haiku
+   ```
+
+If `/claim/` 500s on first visit, check `news/logs/error.log` for an
+import error in the new blueprint (most likely a missed restart). If
+every check comes back "No study could be located", confirm outbound
+HTTPS from the app to `api.crossref.org`, `eutils.ncbi.nlm.nih.gov`,
+and `www.ebi.ac.uk` is not blocked by the host firewall.
+
+The seven `CLAIM_*` knobs (`CLAIM_ENABLED`, `CLAIM_RATE_PER_IP_HOUR`,
+`CLAIM_DAILY_CAP`, `CLAIM_MODEL_LOCATE`, `CLAIM_MODEL_EXTRACT`,
+`CLAIM_CONTACT_EMAIL`, `CLAIM_NIGHTLY_MAX`) are env-defaulted; no action
+required to ship. `CLAIM_ENABLED=0` is the instant kill-switch.
+
+---
+
 ### 2026-05-31 — Re-test NL keyword chips after the x-data quote fix (BUG-029)
 **Status:** open · **PR:** BUG-029 final fix (`x-data` quoting) on branch `claude/blissful-hamilton-Dh7SD` · **Opened:** 2026-05-31
 ### 2026-06-01 — Migration + restart: Ask your feed (ask_queries)
