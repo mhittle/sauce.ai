@@ -166,16 +166,20 @@ these.
   LOE 5, four sequenced PRs, eval gate before feed integration, NOT BUG-007
   class: `claim_checks` reads degrade like `load_bullets`). Status **backlog**
   — the fleet is down anyway, and dispatch is the owner's call. Root landing
-  page now has a **"Health & science" grid** ahead of the consumer grid with
-  all thirteen concepts as `Coming soon` cards (`claim`, `outbreak`,
+  page carries all thirteen as `Coming soon` cards (`claim`, `outbreak`,
   `causal`, `strobe`, `atlas`, `radar`, `rx`, `ddx`, `compare`, `power`,
-  `cohort`, `n1`, `deid`); all thirteen keys added to `LAB_CONCEPT_KEYS`
-  (30 total) so voting works. The consumer grid is untouched (`/doctor` and
-  `/fit` overlap with `/ddx` and `/n1`; resolve in the restructure). Remaining
-  landing-page restructure (hero copy, cut the consumer list, surface signal
-  + scribe under Industry, fleet stat block) is the next PM task; `/scribe`
-  naming collision with ambient clinical scribes flagged. *Code:*
-  `index.html`, `app/lab_concepts.py`, `roadmap.md`. *Server state:* none.
+  `cohort`, `n1`, `deid`) in the **single existing product grid, ordered
+  immediately after the live `/news` card**; all thirteen keys added to
+  `LAB_CONCEPT_KEYS` (30 total) so voting works. Hero, title, and the
+  "Products / 1 live · 30 in development" heading are unchanged — an
+  interim commit rewrote the hero into health-and-science marketing copy
+  and split the grid in two; the owner reverted both (PR #251), since the
+  ask was cards-and-order only. Remaining landing-page questions (whether
+  to cut the consumer list, surface signal + scribe under an Industry
+  shelf, a fleet stat block, and the `/doctor` vs `/ddx` + `/fit` vs `/n1`
+  overlap) are still open; `/scribe` naming collision with ambient clinical
+  scribes flagged. *Code:* `index.html`, `app/lab_concepts.py`,
+  `roadmap.md`. *Server state:* none.
 
 ---
 

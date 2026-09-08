@@ -1847,9 +1847,10 @@ Products that lean into the lab's medicine + epidemiology + digital-health
 thesis. Unlike the consumer concepts on the landing page, these are meant to
 be *instruments*: published methodology, provenance on every number, an eval
 set before the feed integration ships. First spec'd item is `/claim` below.
-All thirteen concepts are on the root landing page (`index.html`,
-"Health & science" grid, vote keys in `app/lab_concepts.py`) as
-`Coming soon` cards; each becomes its own detail section when spec'd:
+All thirteen concepts are on the root landing page (`index.html`, in the
+single product grid immediately after the live `/news` card; vote keys in
+`app/lab_concepts.py`) as `Coming soon` cards; each becomes its own detail
+section when spec'd:
 
 - `/claim` — health-headline reality check (spec'd below).
 - `/outbreak` — live epi signal reader (wastewater, FluView, WHO DON,
