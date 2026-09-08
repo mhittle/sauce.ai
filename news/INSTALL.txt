@@ -121,6 +121,16 @@ If that prints the path, you're ready.
         ASK_MAX_PER_DAY         25             (per-user daily cap on Ask submissions)
         ASK_MAX_TURNS           6              (carried multi-turn history pairs)
 
+    Optional (Claim — health-headline reality check at /claim; anonymous,
+    rate-limited; sane defaults, only set to override):
+        CLAIM_ENABLED           1              (kill-switch; set 0 to disable /claim)
+        CLAIM_RATE_PER_IP_HOUR  10             (new checks per client IP per hour; cache hits are free)
+        CLAIM_DAILY_CAP         200            (global new checks per UTC day — the cost ceiling)
+        CLAIM_MODEL_LOCATE      <blank>        (claim + identifiers + concordance calls; blank = ANTHROPIC_MODEL)
+        CLAIM_MODEL_EXTRACT     claude-sonnet-5 (abstract -> fields with verbatim spans)
+        CLAIM_CONTACT_EMAIL     claim@sauce.ai (rides the Crossref / PubMed User-Agent; unrouted placeholder)
+        CLAIM_NIGHTLY_MAX       60             (reserved for the feed pre-compute pass; unused until it ships)
+
     Do NOT set APPLICATION_ROOT. LiteSpeed/Passenger already
     mounts the app at /news via the "Application URL" setting;
     setting APPLICATION_ROOT in env vars causes a double-prefix
@@ -273,6 +283,13 @@ itself before invoking python.
 5c) Sign up a second test account, pick a preset, the feed loads.
 
 5d) /firehose shows articles streaming in.
+
+5e) /claim (anonymous) renders the form. Paste a health headline plus
+    a paragraph naming a journal or author; within ~30 s a card with
+    "N/5 grains of salt" appears. Needs ANTHROPIC_API_KEY and outbound
+    HTTPS to api.crossref.org, eutils.ncbi.nlm.nih.gov and
+    www.ebi.ac.uk. Without the claim_checks table the card still
+    renders (no permalink) — apply seed/migrations/2026-09-08-claim-checks.sql.
 
 
 ------------------------------------------------------------------

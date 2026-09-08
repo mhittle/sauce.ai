@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Claim — a grain of salt for every health headline{% endblock %}
+{% block content %}
+<header class="feed-header claim-header">
+  <h1>Claim</h1>
+  <p class="muted">
+    Paste a health headline. Claim finds the study behind it, turns
+    &ldquo;cuts risk 40%&rdquo; into people out of a hundred, and flags mice
+    reported as humans. Every number on the card comes with the sentence of
+    the abstract it was read from &mdash; or it isn&rsquo;t shown.
+  </p>
+</header>
+
+{% if claim_enabled %}
+<form class="claim-form"
+      method="post"
+      action="{{ url_for('claim.submit') }}"
+      hx-post="{{ url_for('claim.submit') }}"
+      hx-target="#claim-result"
+      hx-swap="innerHTML"
+      hx-disabled-elt="find button[type=submit]"
+      hx-indicator=".claim-spinner"
+      x-data="{ mode: '{{ 'text' if text_draft and not url_draft else 'url' }}' }">
+  {{ csrf_field() }}
+  <div class="claim-mode" role="tablist">
+    <button type="button" role="tab" :class="{ active: mode === 'url' }" @click="mode = 'url'">Link</button>
+    <button type="button" role="tab" :class="{ active: mode === 'text' }" @click="mode = 'text'">Headline + text</button>
+  </div>
+  <div x-show="mode === 'url'">
+    <label for="claim-url" class="visually-hidden">Article link</label>
+    <input id="claim-url" type="url" name="url" maxlength="2000"
+           placeholder="https://&hellip; the article link"
+           value="{{ url_draft }}" x-bind:disabled="mode !== 'url'" />
+  </div>
+  <div x-show="mode === 'text'" x-cloak>
+    <label for="claim-text" class="visually-hidden">Headline and paragraph</label>
+    <textarea id="claim-text" name="text" rows="6" maxlength="20000"
+              placeholder="Headline on the first line, then paste the paragraph(s) that mention the study"
+              x-bind:disabled="mode !== 'text'">{{ text_draft }}</textarea>
+  </div>
+  <div class="claim-form-row">
+    <button type="submit">Check this claim</button>
+    <span class="claim-spinner" aria-hidden="true">Finding the study&hellip; this takes 10&ndash;30 seconds</span>
+  </div>
+</form>
+{% else %}
+  <div class="alert alert-warn" role="status">Claim is currently disabled.</div>
+{% endif %}
+
+<div id="claim-result" aria-live="polite">
+  {% include "partials/claim_result.html" %}
+</div>
+
+<p class="claim-disclaimer muted">{{ disclaimer }}</p>
+<p class="claim-method muted">
+  Grades reporting, not treatment, using a fixed rubric: study design, species,
+  sample size, headline&ndash;abstract concordance, and spin flags drawn from the
+  HealthNewsReview criteria and the Schwartz&ndash;Woloshin checklist. Study
+  lookup via Crossref, PubMed, and Europe PMC; abstract only, never full text.
+</p>
+{% endblock %}

@@ -25,7 +25,7 @@ _WS = re.compile(r"\s+")
 class ExtractResult(dict):
     """Dict with explicit keys to keep callers honest.
 
-    Keys: body_text, body_html, lead_image, author, word_count, status.
+    Keys: body_text, body_html, lead_image, author, title, word_count, status.
     status is one of: 'ok', 'empty', 'blocked', 'error'.
     """
 
@@ -33,7 +33,7 @@ class ExtractResult(dict):
 def _empty(status):
     return ExtractResult(
         body_text=None, body_html=None, lead_image=None, author=None,
-        word_count=0, status=status,
+        title=None, word_count=0, status=status,
     )
 
 
@@ -80,10 +80,13 @@ def _extract_with_trafilatura(html, url):
     if meta is not None:
         author = getattr(meta, "author", None)
         image = getattr(meta, "image", None)
+        title = getattr(meta, "title", None)
         if author:
             meta_dict["author"] = author
         if image:
             meta_dict["lead_image"] = image
+        if title:
+            meta_dict["title"] = title
     return text, body_html, meta_dict
 
 
@@ -118,6 +121,7 @@ def extract_body(url, *, session=None, timeout=8.0):
         body_html=body_html,
         lead_image=(meta.get("lead_image") or None),
         author=(meta.get("author") or None),
+        title=(meta.get("title") or None),
         word_count=word_count,
         status="ok",
     )

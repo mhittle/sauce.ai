@@ -1,0 +1,6 @@
+{% if error %}
+  <div class="alert {% if hold %}alert-warn{% else %}alert-error{% endif %}" role="status">{{ error }}</div>
+{% endif %}
+{% if check %}
+  {% include "partials/claim_card.html" %}
+{% endif %}
