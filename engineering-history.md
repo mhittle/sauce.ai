@@ -165,13 +165,17 @@ these.
   Wrote a build-ready roadmap item (new "Health & science cluster", Pri 8 /
   LOE 5, four sequenced PRs, eval gate before feed integration, NOT BUG-007
   class: `claim_checks` reads degrade like `load_bullets`). Status **backlog**
-  — the fleet is down anyway, and dispatch is the owner's call. Added the
-  `claim` card to the root landing page (18 in development) and the
-  `claim` key to `LAB_CONCEPT_KEYS`. Landing-page restructure (Health &
-  Science / Industry / Consumer shelves, cut the consumer list, surface
-  signal + scribe, fleet stat block) is the next PM task; `/scribe` naming
-  collision with ambient clinical scribes flagged. *Code:* `index.html`,
-  `app/lab_concepts.py`, `roadmap.md`. *Server state:* none.
+  — the fleet is down anyway, and dispatch is the owner's call. Root landing
+  page now has a **"Health & science" grid** ahead of the consumer grid with
+  all thirteen concepts as `Coming soon` cards (`claim`, `outbreak`,
+  `causal`, `strobe`, `atlas`, `radar`, `rx`, `ddx`, `compare`, `power`,
+  `cohort`, `n1`, `deid`); all thirteen keys added to `LAB_CONCEPT_KEYS`
+  (30 total) so voting works. The consumer grid is untouched (`/doctor` and
+  `/fit` overlap with `/ddx` and `/n1`; resolve in the restructure). Remaining
+  landing-page restructure (hero copy, cut the consumer list, surface signal
+  + scribe under Industry, fleet stat block) is the next PM task; `/scribe`
+  naming collision with ambient clinical scribes flagged. *Code:*
+  `index.html`, `app/lab_concepts.py`, `roadmap.md`. *Server state:* none.
 
 ---
 

@@ -39,6 +39,18 @@ LAB_CONCEPT_KEYS = frozenset({
     "mirror",
     # Health & science wave (2026-09-07)
     "claim",
+    "outbreak",
+    "causal",
+    "strobe",
+    "atlas",
+    "radar",
+    "rx",
+    "ddx",
+    "compare",
+    "power",
+    "cohort",
+    "n1",
+    "deid",
 })
 
 VOTE_UP = 1

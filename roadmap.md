@@ -1846,8 +1846,38 @@ are fine; if nothing meaningful surfaces, no PR is opened. New
 Products that lean into the lab's medicine + epidemiology + digital-health
 thesis. Unlike the consumer concepts on the landing page, these are meant to
 be *instruments*: published methodology, provenance on every number, an eval
-set before the feed integration ships. First item below; `/outbreak`,
-`/causal`, `/strobe`, `/atlas` are candidates to spec next.
+set before the feed integration ships. First spec'd item is `/claim` below.
+All thirteen concepts are on the root landing page (`index.html`,
+"Health & science" grid, vote keys in `app/lab_concepts.py`) as
+`Coming soon` cards; each becomes its own detail section when spec'd:
+
+- `/claim` — health-headline reality check (spec'd below).
+- `/outbreak` — live epi signal reader (wastewater, FluView, WHO DON,
+  press) on the news engine with a user-tuned ranking. Likely flagship.
+- `/causal` — DAG builder → minimal adjustment sets, open-path check,
+  bias simulation, R/Python code export. Methods signature piece.
+- `/strobe` — reporting-guideline checker (STROBE / CONSORT / TRIPOD)
+  with line-anchored fixes. Cheap, immediately useful.
+- `/atlas` — county health atlas (CDC PLACES, County Health Rankings,
+  EPA AQI, overdose, wastewater) with an LLM "what is driving this" read.
+  Pairs with `/local`.
+- `/radar` — research feed you rank (PubMed / medRxiv / arXiv) with a
+  methods-quality score as a ranking feature. News for papers.
+- `/rx` — pharmacovigilance explorer over openFDA FAERS (PRR / ROR),
+  interactions, plain-language safety cards.
+- `/ddx` — calibrated differential: pretest probability from prevalence,
+  likelihood ratios per finding, posterior with reasoning. Successor to
+  the `/doctor` consumer concept.
+- `/compare` — risk-adjusted hospital / procedure outcomes from CMS Care
+  Compare, patient-readable.
+- `/power` — study-design workbench: sample size / power across designs +
+  grant/IRB justification text.
+- `/cohort` — natural language → OMOP-style cohort definition + SQL over
+  synthetic patients (Synthea). No real data.
+- `/n1` — personal N-of-1 trials over wearable data with real crossover
+  design and analysis. Successor to the `/fit` consumer concept.
+- `/deid` — open-source PHI scrubber for clinical text with a published
+  eval and per-entity provenance.
 
 ### Claim — health-headline reality check (sauce.ai/claim)
 **Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, backend, algo · **Status:** backlog
