@@ -76,9 +76,9 @@ CREATE TABLE IF NOT EXISTS claim_checks (
 
 **Then:** Setup Python App → `sauce.ai/news` → **Restart** so the new
 `/claim` blueprint registers and the topnav **Claim** link stops 404'ing.
-Optionally add the env var `CLAIM_CONTACT_EMAIL=<a real mailbox>` on the
-same page first (it rides the Crossref / PubMed User-Agent; Crossref's
-polite pool is faster and more reliable with one) — a restart picks it up.
+No env var needed: the Crossref / PubMed User-Agent contact defaults in
+code to `claim@sauce.ai` (an unrouted placeholder for now; override with
+`CLAIM_CONTACT_EMAIL` only if that ever needs to change).
 
 **Verify (any browser, signed out):**
 

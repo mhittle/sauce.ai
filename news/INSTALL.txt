@@ -128,7 +128,7 @@ If that prints the path, you're ready.
         CLAIM_DAILY_CAP         200            (global new checks per UTC day — the cost ceiling)
         CLAIM_MODEL_LOCATE      <blank>        (claim + identifiers + concordance calls; blank = ANTHROPIC_MODEL)
         CLAIM_MODEL_EXTRACT     claude-sonnet-5 (abstract -> fields with verbatim spans)
-        CLAIM_CONTACT_EMAIL     <blank>        (rides the Crossref / PubMed User-Agent; set a real mailbox)
+        CLAIM_CONTACT_EMAIL     claim@sauce.ai (rides the Crossref / PubMed User-Agent; unrouted placeholder)
         CLAIM_NIGHTLY_MAX       60             (reserved for the feed pre-compute pass; unused until it ships)
 
     Do NOT set APPLICATION_ROOT. LiteSpeed/Passenger already

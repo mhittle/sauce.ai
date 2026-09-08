@@ -119,7 +119,8 @@ class Config:
     # are free). MODEL_LOCATE (claim + identifiers, headline concordance)
     # falls back to ANTHROPIC_MODEL; MODEL_EXTRACT (abstract -> fields with
     # verbatim spans) defaults to Sonnet. CONTACT_EMAIL rides the Crossref /
-    # PubMed User-Agent (polite-pool etiquette). NIGHTLY_MAX caps the
+    # PubMed User-Agent (polite-pool etiquette); claim@sauce.ai is a
+    # placeholder with no routing yet. NIGHTLY_MAX caps the
     # optional pre-compute pass (not wired until the feed integration PR).
     CLAIM_ENABLED = os.environ.get("CLAIM_ENABLED", "1") not in ("0", "false", "False")
     CLAIM_RATE_PER_IP_HOUR = int(os.environ.get("CLAIM_RATE_PER_IP_HOUR", "10"))
@@ -127,7 +128,7 @@ class Config:
     CLAIM_NIGHTLY_MAX = int(os.environ.get("CLAIM_NIGHTLY_MAX", "60"))
     CLAIM_MODEL_LOCATE = os.environ.get("CLAIM_MODEL_LOCATE", "")
     CLAIM_MODEL_EXTRACT = os.environ.get("CLAIM_MODEL_EXTRACT", "claude-sonnet-5")
-    CLAIM_CONTACT_EMAIL = os.environ.get("CLAIM_CONTACT_EMAIL", "")
+    CLAIM_CONTACT_EMAIL = os.environ.get("CLAIM_CONTACT_EMAIL", "claim@sauce.ai")
 
     DISCOVER_PROMOTION_SCORE_MIN = int(os.environ.get("DISCOVER_PROMOTION_SCORE_MIN", "3"))
     DISCOVER_PROMOTE_BUDGET_SECONDS = int(os.environ.get("DISCOVER_PROMOTE_BUDGET_SECONDS", "1500"))

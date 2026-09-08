@@ -190,8 +190,9 @@ these.
   `index.html`, tests `test_claim.py` / `test_claim_sources.py` /
   `test_claim_llm.py` / `test_claim_pipeline.py` / `test_claim_route.py`
   (+95; suite 769 pass). *Server state:* one migration (`has-migration`,
-  SQL in `manual-actions.md` Open) + Passenger restart; set
-  `CLAIM_CONTACT_EMAIL` in cPanel env (optional but polite). *Open:*
+  SQL in `manual-actions.md` Open) + Passenger restart. No env var: the
+  Crossref / PubMed contact defaults in code to `claim@sauce.ai` (unrouted
+  placeholder, owner's call). *Open:*
   owner eval set (40-60 hand-labelled articles) before step 3; step 4
   share image.
 
