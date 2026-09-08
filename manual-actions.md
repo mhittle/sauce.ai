@@ -41,7 +41,7 @@ Sort **Open** newest-first. **Completed** newest-first.
 ## Open
 
 ### 2026-09-08 — Migration + restart + env var: Claim (claim_checks)
-**Status:** open · **PR:** #TBD (Claim — health-headline reality check, branch `claude/claim-app-5m6ixp`) ·
+**Status:** open · **PR:** #251 (Claim — health-headline reality check, branch `claude/claim-app-5m6ixp`) ·
 **Opened:** 2026-09-08 · **File reference:** `news/seed/migrations/2026-09-08-claim-checks.sql`
 
 Backs the new anonymous `/claim` page and `/claim/<id>` permalinks.

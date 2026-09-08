@@ -137,7 +137,7 @@ these.
 ## 2026-09-08
 
 - **Claim — health-headline reality check, steps 1 + 2 (interactive
-  session, PR #TBD).** First health & science product. Anonymous
+  session, PR #251).** First health & science product. Anonymous
   `sauce.ai/news/claim`: paste a URL or a headline + paragraph, get a
   card at `/claim/<id>`. Four-stage pipeline in `app/claim_pipeline.py`
   (Flask-free, every collaborator injectable, reused later by the nightly

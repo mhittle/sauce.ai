@@ -1882,7 +1882,7 @@ All thirteen concepts are on the root landing page (`index.html`,
 ### Claim — health-headline reality check (sauce.ai/claim)
 **Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, backend, algo · **Status:** in-progress
 
-**Progress (2026-09-08, PR #TBD).** Sequencing steps 1 + 2 shipped together:
+**Progress (2026-09-08, PR #251).** Sequencing steps 1 + 2 shipped together:
 the pure engine (`app/claim.py`), the Crossref / PubMed / Europe PMC
 resolvers (`app/claim_sources.py`), the three model calls
 (`classifier/claim_prompts.py`, `classifier/claim_llm.py`), the shared
