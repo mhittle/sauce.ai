@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sauce.ai &mdash; an autonomous AI product lab</title>
+<title>sauce.ai &mdash; AI instruments for health &amp; science</title>
 <meta name="description" content="sauce.ai is an autonomous AI product development and engineering lab. Agent systems &mdash; semi-autonomously and autonomously &mdash; build consumer products you'll love. Vote on what we should build next.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='4' y='48' font-family='Georgia,serif' font-size='52' font-weight='600'%3Es%3C/text%3E%3C/svg%3E">
 <style>
@@ -200,21 +200,241 @@
   </header>
 
   <section class="hero">
-    <h1>An autonomous AI <em>product lab</em>.</h1>
+    <h1>AI instruments for <em>health and science</em>.</h1>
     <p class="lede">
-      sauce.ai is an AI product development and engineering lab where
-      agent systems &mdash; semi&#8209;autonomously and autonomously &mdash;
-      design, build, and ship consumer products you'll love.
+      sauce.ai is a lab where medicine, epidemiology, and engineering
+      meet. We build AI tools that find the study behind the headline,
+      turn relative risk into people out of a hundred, and show their
+      work &mdash; with provenance on every number.
     </p>
     <p class="sub">
-      The first is <a href="/news">sauce.ai/news</a>, a news reader you
-      build yourself. Below are concepts we're considering next &mdash;
-      <strong>vote on which we should ship first</strong>.
+      The lab runs itself: agent systems design, build, and ship, with a
+      human in the loop. Health &amp; science concepts come first below
+      &mdash; <strong>vote on which we should ship next</strong>.
+      <a href="/news">sauce.ai/news</a>, a news reader you build yourself,
+      is live.
     </p>
   </section>
 
   <div class="section-head">
-    <h2>Products</h2>
+    <h2>Health &amp; science</h2>
+    <span class="note"><span id="health-count">13</span> in development</span>
+  </div>
+
+  <div class="grid" id="health-grid">
+
+    <div class="card soon" data-concept-key="claim">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>claim</em></p>
+      <p class="pitch">
+        A grain of salt for every health headline. Paste the link; it
+        finds the study, turns "cuts risk 40%" into people out of a
+        hundred, and flags mice reported as humans.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="outbreak">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>outbreak</em></p>
+      <p class="pitch">
+        A live epidemiological signal reader. Wastewater, FluView, WHO
+        outbreak notices, and the press, ranked by an algorithm you tune
+        &mdash; pathogen, place, severity. News for public health.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="causal">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>causal</em></p>
+      <p class="pitch">
+        Draw the DAG, get the minimal adjustment set, see which paths
+        your model leaves open, and export the analysis in R or Python.
+        Causal inference with the reasoning shown.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="strobe">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>strobe</em></p>
+      <p class="pitch">
+        Paste a manuscript; get STROBE, CONSORT, or TRIPOD compliance
+        with line&#8209;anchored fixes &mdash; before your co&#8209;authors,
+        the reviewers, or the editor find them.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="atlas">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>atlas</em></p>
+      <p class="pitch">
+        Your county's health, explained. Chronic disease, air quality,
+        overdoses, and wastewater signals from public data, with a
+        plain&#8209;language read on what is driving the numbers.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="radar">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>radar</em></p>
+      <p class="pitch">
+        A research feed you rank. PubMed, medRxiv, and arXiv scored on
+        design, sample size, and preregistration, so the strongest
+        evidence rises and the press releases sink.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="rx">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>rx</em></p>
+      <p class="pitch">
+        Drug safety, from the source. Disproportionality signals from FDA
+        adverse&#8209;event reports for any drug and outcome, interaction
+        lookups, and plain&#8209;language safety cards.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="ddx">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>ddx</em></p>
+      <p class="pitch">
+        A differential you can audit. Pretest probability from real
+        prevalence, likelihood ratios per finding, and the posterior
+        shown with every step of the reasoning.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="compare">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>compare</em></p>
+      <p class="pitch">
+        Choosing where to have surgery? Risk&#8209;adjusted hospital and
+        procedure outcomes from public CMS data, side by side, in
+        language a patient can use.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="power">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>power</em></p>
+      <p class="pitch">
+        A study&#8209;design workbench. Sample size and power across
+        designs, plus the plain&#8209;English justification paragraph
+        your grant or IRB wants.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="cohort">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>cohort</em></p>
+      <p class="pitch">
+        Describe a cohort in plain English; get the OMOP&#8209;style
+        definition and the SQL, run against synthetic patients so
+        nothing real is ever touched.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="n1">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>n1</em></p>
+      <p class="pitch">
+        Run a real trial on yourself. Crossover design over your
+        wearable data, with proper washout and analysis, so the
+        supplement claim gets an actual p&#8209;value.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+    <div class="card soon" data-concept-key="deid">
+      <div><span class="badge soon">Coming soon</span></div>
+      <p class="name">sauce<span class="slash">.ai/</span><em>deid</em></p>
+      <p class="pitch">
+        An open PHI scrubber for clinical text, with a published eval
+        and per&#8209;entity provenance. De&#8209;identification you can
+        inspect rather than trust.
+      </p>
+      <div class="vote">
+        <button class="up"   aria-label="Upvote"   data-vote="up">&#9650;</button>
+        <span class="score" aria-live="polite">&middot;</span>
+        <button class="down" aria-label="Downvote" data-vote="down">&#9660;</button>
+        <span class="label">Vote</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section-head">
+    <h2>Consumer</h2>
     <span class="note">1 live &middot; <span id="soon-count">17</span> in development</span>
   </div>
 

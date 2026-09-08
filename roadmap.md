@@ -85,6 +85,7 @@ shipped.
 | 7 | 3 | ui, algo, new-feature | Steel-man — strongest opposing-view coverage of a story | backlog |
 | 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | in-progress |
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
+| 8 | 5 | new-feature, ui, backend, algo | Claim — health-headline reality check (sauce.ai/claim) | backlog |
 
 ---
 
@@ -1837,6 +1838,223 @@ paragraph citing specific data. Opens one PR titled
 the at-a-glance table — human folds in when promoting). Empty weeks
 are fine; if nothing meaningful surfaces, no PR is opened. New
 `.github/agents/pm-agent.md` prompt.
+
+---
+
+## Health & science cluster (added 2026-09-07)
+
+Products that lean into the lab's medicine + epidemiology + digital-health
+thesis. Unlike the consumer concepts on the landing page, these are meant to
+be *instruments*: published methodology, provenance on every number, an eval
+set before the feed integration ships. First spec'd item is `/claim` below.
+All thirteen concepts are on the root landing page (`index.html`,
+"Health & science" grid, vote keys in `app/lab_concepts.py`) as
+`Coming soon` cards; each becomes its own detail section when spec'd:
+
+- `/claim` — health-headline reality check (spec'd below).
+- `/outbreak` — live epi signal reader (wastewater, FluView, WHO DON,
+  press) on the news engine with a user-tuned ranking. Likely flagship.
+- `/causal` — DAG builder → minimal adjustment sets, open-path check,
+  bias simulation, R/Python code export. Methods signature piece.
+- `/strobe` — reporting-guideline checker (STROBE / CONSORT / TRIPOD)
+  with line-anchored fixes. Cheap, immediately useful.
+- `/atlas` — county health atlas (CDC PLACES, County Health Rankings,
+  EPA AQI, overdose, wastewater) with an LLM "what is driving this" read.
+  Pairs with `/local`.
+- `/radar` — research feed you rank (PubMed / medRxiv / arXiv) with a
+  methods-quality score as a ranking feature. News for papers.
+- `/rx` — pharmacovigilance explorer over openFDA FAERS (PRR / ROR),
+  interactions, plain-language safety cards.
+- `/ddx` — calibrated differential: pretest probability from prevalence,
+  likelihood ratios per finding, posterior with reasoning. Successor to
+  the `/doctor` consumer concept.
+- `/compare` — risk-adjusted hospital / procedure outcomes from CMS Care
+  Compare, patient-readable.
+- `/power` — study-design workbench: sample size / power across designs +
+  grant/IRB justification text.
+- `/cohort` — natural language → OMOP-style cohort definition + SQL over
+  synthetic patients (Synthea). No real data.
+- `/n1` — personal N-of-1 trials over wearable data with real crossover
+  design and analysis. Successor to the `/fit` consumer concept.
+- `/deid` — open-source PHI scrubber for clinical text with a published
+  eval and per-entity provenance.
+
+### Claim — health-headline reality check (sauce.ai/claim)
+**Priority:** 8 · **LOE:** 5 · **Category:** new-feature, ui, backend, algo · **Status:** backlog
+
+**User value / why now.** Health headlines are the most-shared and least-checked
+content in any feed: "cuts risk by 40%", "linked to", "study finds", podcast
+protocols quoted as settled science. The reader has no fast way to see the
+study behind the claim, whether it was in humans, how big the effect is in
+absolute terms, or whether the headline says something the abstract does not.
+We already extract article bodies, cluster stories, summarize, and run a
+grounded LLM step on the request path, so the marginal build is the
+study-resolution + effect-extraction layer. The output is a shareable card
+that is unmistakably a physician-epidemiologist's product: relative risk
+turned into absolute risk and NNT, a design/species/sample-size read, and
+spin flags graded by a fixed, citable rubric (HealthNewsReview's ten criteria
+and the Schwartz-Woloshin checklist). Grades *reporting*, never treatment.
+
+**What it is.** Two surfaces sharing one engine:
+
+1. **Standalone `sauce.ai/claim` page** (served by the news Flask app at
+   `/claim`, anonymous, rate-limited): paste a URL or a headline + paragraph,
+   get the claim card at a permalink `/claim/<id>`.
+2. **Feed integration**: a "Check claim" action on feed cards and the reader
+   view, lazy-loaded like the TL;DR panel (`partials/summary_panel.html`
+   pattern), plus a nightly pre-compute for gated health articles so most
+   cards are instant.
+
+**The claim card** (every element has provenance or is omitted):
+
+- **The claim** as the headline states it, beside **what the study measured**
+  (population, exposure/intervention, comparator, outcome, follow-up).
+- **The study**: design (RCT / meta-analysis / cohort / case-control /
+  cross-sectional / animal / in-vitro / none found), species, n, peer-reviewed
+  vs preprint vs press release, funding if stated, linked citation (DOI /
+  PMID). Each field shows the verbatim abstract span it came from.
+- **The numbers translated**: relative measure as reported → absolute risk
+  difference, NNT or NNH, and a 100-person icon array. If the abstract gives
+  no baseline risk, the card says so and shows only the relative figure with a
+  flag; it never invents a baseline.
+- **Spin flags** from a closed list: `causal-language-on-observational`,
+  `animal-or-in-vitro-reported-as-human`, `surrogate-as-hard-outcome`,
+  `relative-only`, `no-study-located`, `single-study-as-consensus`,
+  `preprint-unlabeled`, `press-release-source`, `sample-under-50`.
+- **Grade**: 1–5 grains of salt, computed in code from the extracted fields
+  (design tier, species, n, headline/abstract concordance, flag count). The
+  model never emits the grade.
+- Permalink + share image (OG card) — the distribution loop is "send the
+  card back to whoever sent you the headline."
+
+**Pipeline (four stages, three model calls, cached per article/URL).**
+
+1. **Locate the study.** Input body comes from `article_bodies.body_text`
+   for feed articles, or from `extractor.extract_body(url)` for pasted URLs.
+   A Haiku call (`claude-haiku-4-5`, strict JSON) returns the claim
+   sentence(s) and any study identifiers: DOI, journal, first author,
+   institution, "published in" phrases. A deterministic resolver then tries,
+   in order: DOI → Crossref `works/<doi>`; else Crossref `works?query.bibliographic=`
+   (title/author/journal); else PubMed E-utilities `esearch` → `efetch`
+   (abstract). Europe PMC as the abstract fallback. **No study located is a
+   first-class outcome** (grade 5, flag `no-study-located`), not an error.
+2. **Extract the evidence.** One Sonnet call (`claude-sonnet-5`, strict JSON
+   with `additionalProperties: false`) over the abstract returns design,
+   population, n, exposure, comparator, outcome + outcome type
+   (hard/surrogate), effect measure {type: RR|OR|HR|MD|other, point, ci_low,
+   ci_high}, baseline risk if reported, funding, peer-review status. **Every
+   field carries `span`, the verbatim abstract substring it came from; the
+   pure validator drops any field whose span is not found in the abstract.**
+   This is the anti-hallucination rule and the eval tests it directly.
+3. **Do the math.** Pure Python in `app/claim.py`: ARR from RR/OR/HR +
+   baseline risk (OR→RR conversion only when baseline < 10%, else flag),
+   NNT/NNH, icon-array counts (out of 100), CI propagated where possible.
+   No LLM; fully unit-tested; mirrors the pure-helper convention of
+   `app/ask.py` / `app/spectrum.py`.
+4. **Grade and compare.** A Haiku call scores headline-vs-abstract
+   concordance (0–2) and selects spin flags from the closed list with a
+   one-line justification each. `claim.grade(fields, flags, concordance)`
+   maps to grains. Prompt lives in `app/classifier/claim_prompts.py`.
+
+**Sketch — files to touch.**
+
+- `news/app/claim.py` (new, pure): span validation, effect math, rubric,
+  citation normalization. ~250 lines, no Flask/DB/SDK imports.
+- `news/app/classifier/claim_llm.py` (new): the three calls via the same
+  lazy-`anthropic`-import + `LLMUnavailable` + `llm_usage` logging pattern as
+  `classifier/summary.py`; 30 s timeout; `LLMUnavailable` → inline "couldn't
+  check this one" state, never a 500.
+- `news/app/claim_sources.py` (new): Crossref / PubMed / Europe PMC HTTP
+  resolvers with `requests`, 8 s timeouts, a polite `User-Agent` with a
+  contact address (Crossref etiquette), stdlib-only parsing.
+- `news/app/routes/claim.py` (new blueprint at `/claim`): `GET /claim`
+  (form), `POST /claim` (HTMX; URL or text), `GET /claim/<id>` (permalink),
+  `GET /claim/<id>/card.png` deferred to a later PR. Anonymous; CSRF on;
+  `SlidingWindowLimiter` per IP (e.g. 10/hour) and a global daily cap via
+  config, same shape as `routes/ask.py`'s daily hold.
+- `news/app/templates/claim.html`, `partials/claim_card.html` (shared by the
+  standalone page and the feed panel).
+- `news/app/templates/partials/feed_cards.html`, `reader.html`: "Check
+  claim" action, shown only when the article passes the health lexicon
+  gate (below); HTMX lazy-load into the card, mirroring the TL;DR toggle.
+- `news/seed/schema.sql` + `news/seed/migrations/2026-09-XX-claim-checks.sql`:
+  new table `claim_checks` (id, article_id NULL, url_hash CHAR(64) UNIQUE
+  NULL, input_kind ENUM('article','url','text'), headline, claim_json,
+  study_json, numbers_json, flags_json, grade TINYINT, status
+  ENUM('ok','no-study','llm-unavailable','error'), created_at) with an index
+  on `article_id`. Reads tolerate the table being absent
+  (`pymysql.err.ProgrammingError` → empty), exactly like
+  `article_summary.load_bullets`. **NOT BUG-007 class** by construction, but
+  label the PR `has-migration`, write the `manual-actions.md` Open entry with
+  inline SQL and the real account substituted.
+- `news/jobs/classify_pending.py`: optional nightly pre-compute pass
+  (`--claims-only` flag) over gated articles from the last 24 h whose
+  extracted body matches the health lexicon (`claim.is_health_text`: a
+  keyword list — study, trial, risk, patients, mice, cohort, dose, journal
+  names — over title + first 1,500 chars). Cap per run via config
+  (`CLAIM_NIGHTLY_MAX`, default 60). Wrapped in `job_lock` like every other
+  job. INSTALL.txt cron line only if this pass gets its own cron entry.
+- `news/app/config.py`: `CLAIM_RATE_PER_IP_HOUR`, `CLAIM_DAILY_CAP`,
+  `CLAIM_NIGHTLY_MAX`, `CLAIM_MODEL_EXTRACT`, `CLAIM_MODEL_LOCATE`,
+  `CLAIM_CONTACT_EMAIL`. Defaults in code; no new required env var.
+- `news/app/__init__.py`: register the blueprint. `base.html`: nav link.
+- `news/INSTALL.txt`: document the new route, config knobs, and the
+  Passenger restart.
+- Root `index.html`: card already added (this PR) as `data-concept-key="claim"`;
+  flip to a `card live` link when the standalone page ships.
+
+**Constraints / what to preserve.**
+
+- Numbers without a verbatim span do not render. No exceptions.
+- The grade is deterministic given the extracted fields; the model never
+  outputs a grade or a recommendation.
+- No medical advice anywhere in copy. The card grades reporting. Fixed
+  disclaimer line on the standalone page and the permalink.
+- Synchronous LLM on the request path is allowed only as a single-flight,
+  user-initiated call (same class as `/ask` and `algo.describe`); nightly
+  pre-compute is where volume lives. No process spawn, no new cron unless the
+  nightly pass is split out.
+- Abstract-only is the expected case; the card states "full text not
+  available" rather than pretending. Never scrape publisher full text.
+- Crossref/PubMed calls carry a contact UA and are cached in `claim_checks`
+  by DOI/PMID so repeated headlines about one study do not re-fetch.
+- Cost target ≤ $0.02 per check (two Haiku + one Sonnet call over ≤ 3k
+  tokens); visible in `/admin/usage-summary` via `llm_usage`.
+- `feed.index()` output and ranking untouched; the card action is purely
+  additive UI.
+
+**Eval gate (owner task, before PR 3).** Hand-label 40–60 articles across
+the grade range (HealthNewsReview's archived reviews are a ready source).
+Three checks: correct study located (≥ 85%), extracted effect matches the
+abstract (≥ 95% of rendered numbers exactly right; any fabricated number is
+a failure), grade within one grain of the label (≥ 85%). Fixtures live in
+`news/tests/fixtures/claim/`; the eval is a pytest module that runs offline
+against saved abstracts (no network, no API key) plus a separate
+`--live` marker.
+
+**Tests expected.** Pure: span validation drops unfound spans; ARR/NNT/
+icon-array math including OR→RR guard and missing-baseline path; rubric
+table-driven (design × species × n × concordance × flags → grains);
+`is_health_text` precision on a small fixture set; citation normalization
+(DOI forms, PMID). Route: anonymous GET renders; POST with a bad URL returns
+the inline error; rate limit trips; missing `claim_checks` table degrades to
+the "couldn't check" state; permalink 404s cleanly. Resolver: mocked
+Crossref/PubMed responses → correct precedence and fallbacks.
+
+**Sequencing (one PR each, each independently mergeable).**
+
+1. `app/claim.py` pure module + tests (math, rubric, spans). No UI. LOE 1.
+2. Standalone `/claim` page: resolvers, LLM calls, `claim_checks` table,
+   permalink. LOE 3. Migration via `has-migration`.
+3. Feed integration + nightly pre-compute + health lexicon gate. LOE 1.
+   Gated on the eval above.
+4. Share image + OG tags + "wrong paper" feedback button (feeds the eval
+   set). LOE 1.
+
+**Non-goals (v1).** Video/podcast transcripts (the Huberman case is v2:
+transcript → claim list → this pipeline per claim); grading treatments or
+giving advice; full-text retrieval; non-English; user accounts on the
+standalone page.
 
 ---
 

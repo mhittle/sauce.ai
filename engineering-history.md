@@ -134,6 +134,51 @@ these.
 
 ---
 
+## 2026-09-07
+
+- **Fleet health audit (interactive session, docs-only).** The closed-loop
+  agent fleet has been down since ~2026-06-21: `AGENT_PUSH_TOKEN` returns
+  `401 Bad credentials` on every `repository_dispatch` (last successful
+  dispatch 2026-06-20; PM agent has failed every Monday since at least
+  07-06), and the last BUG-007 gate runs (08-13) exit in 257 ms with
+  `is_error: true`, `total_cost_usd: 0` (API key / credit failure).
+  `post-deploy.yml` and `qa-code.yml` were manually disabled 2026-08-14 after
+  ~2,600 silent failed cron runs. Full findings + prioritized fixes
+  (GitHub App token instead of PAT, weekly credential health check, path
+  filters so scribe/signal pushes stop triggering news QA, real cost from
+  `claude-execution-output.json`, narrower QA-agent permissions, model
+  upgrades to `claude-opus-5` / `claude-sonnet-5`) are queued as the next
+  engineering work. *No fleet change this session.* Open: mint a fresh
+  fleet credential or set `AGENTS_ENABLED=false`; `engineering-history.md`
+  is at 63 KB vs the 34 KB budget — run the archive procedure next session.
+- **PM session — lab repositioning + first health product spec: Claim
+  (roadmap-only, NOT dispatched).** Owner wants sauce.ai to read as a
+  physician-epidemiologist's lab (med + AI + eng + epi + digital health)
+  rather than a consumer-concept board. Brainstormed a health & science
+  product shelf (`/claim`, `/outbreak`, `/causal`, `/strobe`, `/atlas`, `/rx`,
+  `/ddx`, `/n1`, `/deid`) and picked **`sauce.ai/claim`** — a health-headline
+  reality check — as the first build: locate the study behind a headline
+  (Crossref / PubMed / Europe PMC), extract design / n / effect with verbatim
+  abstract spans (no span, no number), convert relative to absolute risk +
+  NNT + icon array in pure Python, flag spin from a closed list, and grade
+  1–5 grains of salt by a fixed rubric (HealthNewsReview / Schwartz-Woloshin).
+  Wrote a build-ready roadmap item (new "Health & science cluster", Pri 8 /
+  LOE 5, four sequenced PRs, eval gate before feed integration, NOT BUG-007
+  class: `claim_checks` reads degrade like `load_bullets`). Status **backlog**
+  — the fleet is down anyway, and dispatch is the owner's call. Root landing
+  page now has a **"Health & science" grid** ahead of the consumer grid with
+  all thirteen concepts as `Coming soon` cards (`claim`, `outbreak`,
+  `causal`, `strobe`, `atlas`, `radar`, `rx`, `ddx`, `compare`, `power`,
+  `cohort`, `n1`, `deid`); all thirteen keys added to `LAB_CONCEPT_KEYS`
+  (30 total) so voting works. The consumer grid is untouched (`/doctor` and
+  `/fit` overlap with `/ddx` and `/n1`; resolve in the restructure). Remaining
+  landing-page restructure (hero copy, cut the consumer list, surface signal
+  + scribe under Industry, fleet stat block) is the next PM task; `/scribe`
+  naming collision with ambient clinical scribes flagged. *Code:*
+  `index.html`, `app/lab_concepts.py`, `roadmap.md`. *Server state:* none.
+
+---
+
 ## 2026-06-01
 
 - **PM session — Blindspot DISPATCHED (flipped `backlog → ready-for-agent`).**
