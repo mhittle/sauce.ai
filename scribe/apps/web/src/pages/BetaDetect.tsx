@@ -219,9 +219,9 @@ export function BetaDetectPage() {
     0
   );
 
-  if (takeoffQ.isLoading) return <div className="text-zinc-500">Loading…</div>;
+  if (takeoffQ.isLoading) return <div className="text-muted">Loading…</div>;
   if (takeoffQ.isError)
-    return <div className="text-red-600">{String(takeoffQ.error)}</div>;
+    return <div className="text-bad">{String(takeoffQ.error)}</div>;
   const takeoff = takeoffQ.data!;
   const pageCount = takeoff.pageCount ?? 0;
   const classByPage = new Map(
@@ -231,7 +231,7 @@ export function BetaDetectPage() {
   if (takeoff.sourceKind !== "pdf") {
     return (
       <Card>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted">
           The detect view only works on PDF plan sets.
         </p>
       </Card>
@@ -330,14 +330,14 @@ export function BetaDetectPage() {
               key={label}
               onClick={() => setStep(n)}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                step === n
-                  ? "bg-zinc-900 text-white"
-                  : "text-zinc-500 hover:bg-zinc-100"
+ step === n
+ ?"bg-ink text-paper"
+                  : "text-muted hover:bg-rule-soft"
               }`}
             >
               <span
                 className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
-                  step === n ? "bg-white text-zinc-900" : "bg-zinc-200"
+ step === n ?"bg-paper text-ink" : "bg-rule"
                 }`}
               >
                 {n}
@@ -350,15 +350,15 @@ export function BetaDetectPage() {
       </div>
 
       {anyError && (
-        <p className="mb-2 text-sm text-red-600">{String(anyError)}</p>
+        <p className="mb-2 text-sm text-bad">{String(anyError)}</p>
       )}
       {takeoff.error && (
-        <p className="mb-2 text-sm text-red-600">{takeoff.error}</p>
+        <p className="mb-2 text-sm text-bad">{takeoff.error}</p>
       )}
 
       {step === 1 ? (
         <>
-          <p className="mb-3 text-sm text-zinc-500">
+          <p className="mb-3 text-sm text-muted">
             Select the pages that show cabinets (plans, elevations, schedules).
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -367,10 +367,10 @@ export function BetaDetectPage() {
               return (
                 <div
                   key={p}
-                  className={`cursor-pointer rounded-lg border bg-white p-2 shadow-sm transition-colors ${
-                    selected
-                      ? "border-blue-500 ring-2 ring-blue-200"
-                      : "border-zinc-200 hover:border-zinc-400"
+                  className={`cursor-pointer rounded-lg border bg-paper p-2 transition-colors ${
+ selected
+ ?"border-accent ring-2 ring-accent-soft"
+                      : "border-rule hover:border-muted"
                   }`}
                   onClick={() =>
                     setSelectedPages((prev) =>
@@ -383,16 +383,16 @@ export function BetaDetectPage() {
                   <div className="relative">
                     <PageThumb takeoffId={takeoffId} page={p} />
                     {selected && (
-                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-sm font-bold text-paper">
                         ✓
                       </span>
                     )}
                   </div>
                   <div className="mt-1 flex items-center justify-between">
-                    <span className="text-xs font-medium text-zinc-600">
+                    <span className="text-xs font-medium text-muted">
                       p{p}
                     </span>
-                    <span className="truncate text-xs text-zinc-400">
+                    <span className="truncate text-xs text-faint">
                       {CLASS_SHORT[classByPage.get(p) ?? ""] ?? ""}
                     </span>
                   </div>
@@ -401,7 +401,7 @@ export function BetaDetectPage() {
             })}
             {pageCount === 0 && (
               <Card className="col-span-full">
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-faint">
                   No pages yet — the upload is still being prepared.
                 </p>
               </Card>
@@ -410,7 +410,7 @@ export function BetaDetectPage() {
         </>
       ) : (
         <>
-          <p className="mb-3 text-sm text-zinc-500">
+          <p className="mb-3 text-sm text-muted">
             {step === 2 &&
               "Drag boxes over every area that contains cabinets. Nothing is sent yet. Zoom with ⌘/ctrl + scroll (or the buttons); hold space to drag the sheet around."}
             {step === 3 &&
@@ -437,10 +437,10 @@ export function BetaDetectPage() {
                 return (
                   <div
                     key={p}
-                    className={`w-28 shrink-0 cursor-pointer rounded-lg border bg-white p-1 shadow-sm transition-colors lg:w-auto ${
-                      p === page
-                        ? "border-blue-500 ring-2 ring-blue-200"
-                        : "border-zinc-200 hover:border-zinc-400"
+                    className={`w-28 shrink-0 cursor-pointer rounded-lg border bg-paper p-1 transition-colors lg:w-auto ${
+ p === page
+ ?"border-accent ring-2 ring-accent-soft"
+                        : "border-rule hover:border-muted"
                     }`}
                     onClick={() => {
                       setPage(p);
@@ -449,7 +449,7 @@ export function BetaDetectPage() {
                   >
                     <PageThumb takeoffId={takeoffId} page={p} />
                     <div className="mt-0.5 flex items-center justify-between px-0.5">
-                      <span className="text-xs font-medium text-zinc-600">
+                      <span className="text-xs font-medium text-muted">
                         p{p}
                       </span>
                       {count > 0 && <Badge tone="blue">{count}</Badge>}
@@ -458,7 +458,7 @@ export function BetaDetectPage() {
                 );
               })}
               {selectedPages.length === 0 && (
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-faint">
                   No pages selected — go back to step 1.
                 </p>
               )}
@@ -481,7 +481,7 @@ export function BetaDetectPage() {
                   />
                 ) : (
                   <div className="flex h-96 items-center justify-center">
-                    <p className="animate-pulse text-sm text-zinc-500">
+                    <p className="animate-pulse text-sm text-muted">
                       {page == null
                         ? "Select a page."
                         : `Rendering page ${page} at high resolution…`}
@@ -489,9 +489,9 @@ export function BetaDetectPage() {
                   </div>
                 )}
                 {(inFlight || building || build.isPending) && (
-                  <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 shadow-md">
+                  <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-blue bg-paper px-3 py-1.5 shadow-md">
                     <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                    <span className="text-sm font-medium text-blue-700">
+                    <span className="text-sm font-medium text-blue">
                       {inFlight ? "Finding cabinets…" : "Building takeoff…"}
                     </span>
                   </div>
@@ -500,7 +500,7 @@ export function BetaDetectPage() {
 
               <Card className="mt-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-zinc-500">
+                  <h2 className="text-sm font-semibold text-muted">
                     Page {page ?? "—"}:{" "}
                     {pageDetections.filter((d) => d.status === "drawn").length}{" "}
                     drawn · {rows.length} detected
@@ -508,7 +508,7 @@ export function BetaDetectPage() {
                   {pageDetections.length > 0 && (
                     <Button
                       variant="ghost"
-                      className="text-xs text-red-600"
+                      className="text-xs text-bad"
                       onClick={() =>
                         pageDetections.forEach((d) =>
                           removeDetection.mutate(d.id)
@@ -520,7 +520,7 @@ export function BetaDetectPage() {
                   )}
                 </div>
                 {rows.length === 0 ? (
-                  <p className="text-sm text-zinc-400">
+                  <p className="text-sm text-faint">
                     {pageDetections.some((d) => d.status === "drawn")
                       ? "Boxes drawn — run detection (step 3) to find the cabinets inside them."
                       : "Drag over the drawing to mark cabinet areas."}
@@ -528,7 +528,7 @@ export function BetaDetectPage() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500">
+                      <tr className="border-b border-rule text-left text-xs text-muted">
                         <th className="py-1 pr-2">Label</th>
                         <th className="py-1 pr-2">Category</th>
                         <th className="py-1 pr-2">Confidence</th>
@@ -539,10 +539,10 @@ export function BetaDetectPage() {
                       {rows.map(({ boxId, detectionId, itemIndex, item }) => (
                         <tr
                           key={boxId ?? `${detectionId}-${itemIndex}`}
-                          className={`cursor-pointer border-b border-zinc-100 ${
-                            boxId != null && boxId === selectedBoxId
-                              ? "bg-blue-50"
-                              : "hover:bg-zinc-50"
+                          className={`cursor-pointer border-b border-rule-soft ${
+ boxId != null && boxId === selectedBoxId
+ ?"bg-accent-soft"
+                              : "hover:bg-rule-soft"
                           }`}
                           onClick={() => setSelectedBoxId(boxId)}
                         >
@@ -555,16 +555,16 @@ export function BetaDetectPage() {
                             />
                             {item.label || "—"}
                           </td>
-                          <td className="py-1 pr-2 text-zinc-600">
+                          <td className="py-1 pr-2 text-muted">
                             {item.category}
                           </td>
-                          <td className="py-1 pr-2 text-zinc-600">
+                          <td className="py-1 pr-2 text-muted">
                             {Math.round(item.confidence * 100)}%
                           </td>
                           <td className="py-1 text-right">
                             <Button
                               variant="ghost"
-                              className="text-xs text-red-600"
+                              className="text-xs text-bad"
                               title="Remove this cabinet"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -583,7 +583,7 @@ export function BetaDetectPage() {
                   </table>
                 )}
                 {pageDetections.some((d) => d.status === "error") && (
-                  <p className="mt-2 text-xs text-red-600">
+                  <p className="mt-2 text-xs text-bad">
                     {pageDetections
                       .filter((d) => d.status === "error")
                       .map((d) => `Scan failed: ${d.error ?? "unknown"}`)
@@ -609,14 +609,14 @@ function PageThumb({ takeoffId, page }: { takeoffId: string; page: number }) {
     staleTime: 10 * 60 * 1000,
   });
   if (!q.data?.url) {
-    return <div className="aspect-[3/4] w-full animate-pulse rounded bg-zinc-100" />;
+    return <div className="aspect-[3/4] w-full animate-pulse rounded bg-rule-soft" />;
   }
   return (
     <img
       src={q.data.url}
       alt={`page ${page}`}
       loading="lazy"
-      className="w-full rounded border border-zinc-100 object-contain"
+      className="w-full rounded border border-rule-soft object-contain"
     />
   );
 }

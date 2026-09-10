@@ -1,3 +1,4 @@
+import { categoryHex } from "../labels";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
@@ -29,17 +30,10 @@ export interface OverlayBox {
   label: string;
 }
 
-// Category palette from the detector-PoC verify_boxes.py overlays.
-const CATEGORY_COLORS: Record<string, string> = {
-  casework_base: "rgb(0,170,0)",
-  casework_wall: "rgb(200,0,200)",
-  casework_tall: "rgb(0,90,220)",
-  vanity: "rgb(230,140,0)",
-};
-const DEFAULT_COLOR = "rgb(220,38,38)";
-
+// Category palette is shared with the line table and legend (labels.ts).
+// Concrete hex: the sheet under the dots is always white.
 export function categoryColor(category: string): string {
-  return CATEGORY_COLORS[category] ?? DEFAULT_COLOR;
+  return categoryHex(category);
 }
 
 const MIN_ZOOM = 1;
@@ -343,12 +337,12 @@ export function BoxOverlay({
     <div className="relative">
       <div
         ref={scrollRef}
-        className="overflow-auto border border-zinc-200"
+        className="overflow-auto border border-rule"
         style={{ maxHeight }}
       >
         <div
           className={`relative ${
-            drawMode && !spaceHeld ? "cursor-crosshair" : "cursor-grab"
+ drawMode && !spaceHeld ?"cursor-crosshair" : "cursor-grab"
           }`}
           style={{ width: `${zoom * 100}%` }}
         >
@@ -546,10 +540,10 @@ function ZoomControls({
   onFit: () => void;
 }) {
   const btn =
-    "px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:text-zinc-300 disabled:hover:bg-transparent";
+    "px-2 py-1 text-xs font-medium text-ink hover:bg-rule-soft disabled:text-faint disabled:hover:bg-transparent";
   return (
     <div className="pointer-events-none absolute bottom-2 right-2 flex items-center">
-      <div className="pointer-events-auto flex items-center divide-x divide-zinc-200 overflow-hidden rounded-md border border-zinc-300 bg-white/95 shadow-sm">
+      <div className="pointer-events-auto flex items-center divide-x divide-rule overflow-hidden rounded-md border border-rule bg-paper/95">
         <button
           className={btn}
           onClick={() => onZoom(1 / ZOOM_STEP)}
@@ -559,7 +553,7 @@ function ZoomControls({
         >
           −
         </button>
-        <span className="px-2 py-1 text-xs tabular-nums text-zinc-500">
+        <span className="px-2 py-1 text-xs tabular-nums text-muted">
           {Math.round(zoom * 100)}%
         </span>
         <button

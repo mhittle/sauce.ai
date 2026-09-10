@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { apiGet, apiSend, formatUsd } from "../api";
-import { Badge, Button, Card, PageTitle, statusTone } from "../ui";
+import { Badge, Button, Card, PageTitle, StatusPill } from "../ui";
 
 interface ProjectDoc {
   id: string;
@@ -80,8 +80,8 @@ export function ProspectDetailPage() {
     staleTime: 10 * 60 * 1000,
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
-  if (q.isError) return <div className="text-red-600">{String(q.error)}</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
 
   const p = q.data!;
   const title = p.canonicalAddress ?? p.permitNumber ?? "Unknown project";
@@ -105,19 +105,19 @@ export function ProspectDetailPage() {
       </PageTitle>
 
       <div className="mb-4 flex items-center gap-3">
-        <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+        <StatusPill status={p.status} />
         {p.cabinetRelevanceScore != null && (
-          <span className="text-sm text-zinc-500">
+          <span className="text-sm text-muted">
             Relevance score{" "}
-            <span className="font-semibold text-zinc-800">
+            <span className="font-semibold text-ink">
               {Math.round(p.cabinetRelevanceScore)}
             </span>
           </span>
         )}
         {p.estCabinetScopeUsd != null && (
-          <span className="text-sm text-zinc-500">
+          <span className="text-sm text-muted">
             Est. cabinet scope{" "}
-            <span className="font-semibold text-zinc-800">
+            <span className="font-semibold text-ink">
               ${Math.round(p.estCabinetScopeUsd).toLocaleString()}
             </span>
           </span>
@@ -126,7 +126,7 @@ export function ProspectDetailPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="mb-3 text-sm font-semibold text-zinc-700">Details</h2>
+          <h2 className="mb-3 text-sm font-semibold text-ink">Details</h2>
           <dl className="space-y-2 text-sm">
             <Field label="Address" value={p.canonicalAddress} />
             <Field label="Jurisdiction" value={p.jurisdiction} />
@@ -145,7 +145,7 @@ export function ProspectDetailPage() {
               (r) => r.url
             ) && (
               <div>
-                <dt className="text-zinc-500">Source</dt>
+                <dt className="text-muted">Source</dt>
                 <dd className="space-y-1">
                   {(Array.isArray(p.sourceRefs) ? p.sourceRefs : [])
                     .filter((r) => r.url)
@@ -155,7 +155,7 @@ export function ProspectDetailPage() {
                         href={r.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="block truncate text-blue-600 hover:underline"
+                        className="block truncate text-blue hover:underline"
                         title={r.url}
                       >
                         {r.external_id
@@ -168,8 +168,8 @@ export function ProspectDetailPage() {
             )}
             {p.description && (
               <div>
-                <dt className="text-zinc-500">Description</dt>
-                <dd className="whitespace-pre-wrap text-zinc-800">
+                <dt className="text-muted">Description</dt>
+                <dd className="whitespace-pre-wrap text-ink">
                   {p.description}
                 </dd>
               </div>
@@ -178,11 +178,11 @@ export function ProspectDetailPage() {
         </Card>
 
         <Card>
-          <h2 className="mb-3 text-sm font-semibold text-zinc-700">
+          <h2 className="mb-3 text-sm font-semibold text-ink">
             Documents &amp; plans
           </h2>
           {p.documents.length === 0 ? (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted">
               No documents discovered for this prospect.
             </p>
           ) : (
@@ -190,7 +190,7 @@ export function ProspectDetailPage() {
               {p.documents.map((d) => (
                 <li
                   key={d.id}
-                  className="rounded-md border border-zinc-200 p-3"
+                  className="rounded-md border border-rule p-3"
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -198,7 +198,7 @@ export function ProspectDetailPage() {
                         {d.docClass.replace(/_/g, " ")}
                       </Badge>
                       {d.pageCount != null && (
-                        <span className="text-xs text-zinc-400">
+                        <span className="text-xs text-faint">
                           {d.pageCount} pp
                         </span>
                       )}
@@ -223,7 +223,7 @@ export function ProspectDetailPage() {
                     </div>
                   </div>
                   <div
-                    className="truncate text-xs text-zinc-400"
+                    className="truncate text-xs text-faint"
                     title={d.fetchedFromUrl}
                   >
                     {d.fetchedFromUrl}
@@ -231,12 +231,12 @@ export function ProspectDetailPage() {
                   {previewDocId === d.id && (
                     <div className="mt-3">
                       {preview.isLoading && (
-                        <div className="text-xs text-zinc-500">
+                        <div className="text-xs text-muted">
                           Loading preview…
                         </div>
                       )}
                       {preview.isError && (
-                        <div className="text-xs text-red-600">
+                        <div className="text-xs text-bad">
                           Could not load preview.
                         </div>
                       )}
@@ -245,13 +245,13 @@ export function ProspectDetailPage() {
                           <iframe
                             src={preview.data.url}
                             title="Plan preview"
-                            className="h-[28rem] w-full rounded border border-zinc-200"
+                            className="h-[28rem] w-full rounded border border-rule"
                           />
                           <a
                             href={preview.data.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-1 inline-block text-xs text-blue-600 hover:underline"
+                            className="mt-1 inline-block text-xs text-blue hover:underline"
                           >
                             Open in new tab ↗
                           </a>
@@ -279,8 +279,8 @@ function Field({
   if (!value) return null;
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-zinc-500">{label}</dt>
-      <dd className="text-right text-zinc-800">{value}</dd>
+      <dt className="text-muted">{label}</dt>
+      <dd className="text-right text-ink">{value}</dd>
     </div>
   );
 }

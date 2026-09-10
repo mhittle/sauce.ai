@@ -10,8 +10,11 @@ import {
 import "./styles.css";
 import { captureSessionFromUrl } from "./api";
 import { Layout } from "./pages/Layout";
+import { ToastProvider } from "./components/ui";
+import { applyTheme, readThemePref } from "./theme";
 
 captureSessionFromUrl();
+applyTheme(readThemePref());
 import { DashboardPage } from "./pages/Dashboard";
 import { ProspectQueuePage } from "./pages/ProspectQueue";
 import { ProspectDetailPage } from "./pages/ProspectDetail";
@@ -25,10 +28,18 @@ import { AdminPage } from "./pages/Admin";
 
 const rootRoute = createRootRoute({ component: Layout });
 
+// Jobs is the app (product-plan.md §2). The pipeline dashboard is an
+// operator screen, reachable from the account menu.
 export const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/",
+  path: "/dashboard",
   component: DashboardPage,
+});
+
+export const jobsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
+  component: TakeoffsPage,
 });
 
 export const prospectsRoute = createRoute({
@@ -90,6 +101,7 @@ export const adminRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
+  jobsRoute,
   dashboardRoute,
   prospectsRoute,
   prospectDetailRoute,
@@ -117,7 +129,9 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </QueryClientProvider>
   </StrictMode>
 );

@@ -150,9 +150,9 @@ export function SourceBoxPanel({
               <button
                 key={g.key}
                 className={`rounded-md border px-2 py-1 text-xs ${
-                  g.key === effectiveKey
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50"
+ g.key === effectiveKey
+ ?"border-accent bg-accent-soft text-blue"
+                    : "border-rule bg-paper text-muted hover:bg-rule-soft"
                 }`}
                 onClick={() => setCurrentKey(g.key)}
               >
@@ -160,7 +160,7 @@ export function SourceBoxPanel({
               </button>
             ))
           ) : (
-            <span className="text-sm font-semibold text-zinc-500">
+            <span className="text-sm font-semibold text-muted">
               {labelByKey.get(effectiveKey)}
             </span>
           )}
@@ -208,7 +208,7 @@ export function SourceBoxPanel({
           onCreate={(bbox) => setPendingBox(bbox)}
         />
       ) : (
-        <p className="text-sm text-zinc-400">Loading read image…</p>
+        <p className="text-sm text-faint">Loading read image…</p>
       )}
     </div>
   );
@@ -231,12 +231,12 @@ function NewLineForm({
   });
   const num = (s: string) => (s.trim() === "" ? null : Number(s));
   return (
-    <Card className="mb-2 border-blue-300">
-      <h2 className="mb-2 text-sm font-semibold text-blue-800">
+    <Card className="mb-2 border-blue">
+      <h2 className="mb-2 text-sm font-semibold text-blue">
         New cabinet for the drawn box
       </h2>
       <div className="flex flex-wrap items-end gap-2 text-sm">
-        <label className="flex flex-col text-xs text-zinc-500">
+        <label className="flex flex-col text-xs text-muted">
           Tag
           <Input
             className="w-32"
@@ -245,10 +245,10 @@ function NewLineForm({
             onChange={(e) => setFields({ ...fields, tag: e.target.value })}
           />
         </label>
-        <label className="flex flex-col text-xs text-zinc-500">
+        <label className="flex flex-col text-xs text-muted">
           Category
           <select
-            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm"
+            className="rounded-md border border-rule bg-paper px-2 py-1 text-sm"
             value={fields.category}
             onChange={(e) => setFields({ ...fields, category: e.target.value })}
           >
@@ -259,7 +259,7 @@ function NewLineForm({
             ))}
           </select>
         </label>
-        <label className="flex flex-col text-xs text-zinc-500">
+        <label className="flex flex-col text-xs text-muted">
           Qty
           <Input
             className="w-12"
@@ -268,7 +268,7 @@ function NewLineForm({
           />
         </label>
         {(["width_in", "height_in", "depth_in"] as const).map((f) => (
-          <label key={f} className="flex flex-col text-xs text-zinc-500">
+          <label key={f} className="flex flex-col text-xs text-muted">
             {f === "width_in" ? "W" : f === "height_in" ? "H" : "D"} (in)
             <Input
               className="w-14"

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { pagePickerRoute } from "../main";
 import { apiGet, apiSend } from "../api";
-import { Badge, Button, Card, PageTitle, statusTone } from "../ui";
+import { Badge, Button, Card, errorMessage, PageTitle, StatusPill, useToast } from "../ui";
 
 interface PageClassification {
   page: number;
@@ -49,6 +49,7 @@ export function PagePickerPage() {
   const navigate = useNavigate();
   // page -> chosen class; presence in the map = selected.
   const [picked, setPicked] = useState<Record<number, string>>({});
+  const toast = useToast();
 
   const q = useQuery({
     queryKey: ["takeoff", takeoffId],
@@ -86,14 +87,15 @@ export function PagePickerPage() {
           })
           .sort((a, b) => a.page - b.page),
       }),
+    onError: (e) => toast.error("Couldn't start reading", errorMessage(e)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
       navigate({ to: "/takeoffs/$takeoffId", params: { takeoffId } });
     },
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
-  if (q.isError) return <div className="text-red-600">{String(q.error)}</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
   const takeoff = q.data!;
   const pageCount = takeoff.pageCount ?? 0;
   const selectedCount = Object.keys(picked).length;
@@ -121,22 +123,19 @@ export function PagePickerPage() {
         }
       >
         Select pages: {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}{" "}
-        <Badge tone={statusTone(takeoff.status)}>{takeoff.status}</Badge>
+        <StatusPill status={takeoff.status} />
       </PageTitle>
 
-      {submit.isError && (
-        <p className="mb-2 text-sm text-red-600">{String(submit.error)}</p>
-      )}
 
       {takeoff.status === "processing" ? (
         <Card>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             Preparing page thumbnails… this page refreshes automatically.
           </p>
         </Card>
       ) : (
         <>
-          <p className="mb-3 text-sm text-zinc-500">
+          <p className="mb-3 text-sm text-muted">
             Click the pages the takeoff should read, and correct the suggested
             page type where it's wrong — the type decides how a page is read.
             Pages tagged “Other” are skipped.
@@ -148,10 +147,10 @@ export function PagePickerPage() {
               return (
                 <div
                   key={page}
-                  className={`cursor-pointer rounded-lg border bg-white p-2 shadow-sm transition-colors ${
-                    selected
-                      ? "border-blue-500 ring-2 ring-blue-200"
-                      : "border-zinc-200 hover:border-zinc-400"
+                  className={`cursor-pointer rounded-lg border bg-paper p-2 transition-colors ${
+ selected
+ ?"border-accent ring-2 ring-accent-soft"
+                      : "border-rule hover:border-muted"
                   }`}
                   onClick={() =>
                     setPicked((prev) => {
@@ -165,18 +164,18 @@ export function PagePickerPage() {
                   <div className="relative">
                     <PageThumb takeoffId={takeoffId} page={page} />
                     {selected && (
-                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-sm font-bold text-paper">
                         ✓
                       </span>
                     )}
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-1">
-                    <span className="text-xs font-medium text-zinc-600">
+                    <span className="text-xs font-medium text-muted">
                       p{page}
                     </span>
                     {selected ? (
                       <select
-                        className="min-w-0 flex-1 rounded-md border border-zinc-300 px-1 py-0.5 text-xs"
+                        className="min-w-0 flex-1 rounded-md border border-rule px-1 py-0.5 text-xs"
                         value={picked[page]}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) =>
@@ -190,7 +189,7 @@ export function PagePickerPage() {
                         ))}
                       </select>
                     ) : (
-                      <span className="truncate text-xs text-zinc-400">
+                      <span className="truncate text-xs text-faint">
                         {classLabel(suggested)}
                       </span>
                     )}
@@ -200,7 +199,7 @@ export function PagePickerPage() {
             })}
             {pageCount === 0 && (
               <Card className="col-span-full">
-                <p className="text-sm text-zinc-400">No pages found.</p>
+                <p className="text-sm text-faint">No pages found.</p>
               </Card>
             )}
           </div>
@@ -218,14 +217,14 @@ function PageThumb({ takeoffId, page }: { takeoffId: string; page: number }) {
     staleTime: 10 * 60 * 1000,
   });
   if (!q.data?.url) {
-    return <div className="aspect-[3/4] w-full animate-pulse rounded bg-zinc-100" />;
+    return <div className="aspect-[3/4] w-full animate-pulse rounded bg-rule-soft" />;
   }
   return (
     <img
       src={q.data.url}
       alt={`page ${page}`}
       loading="lazy"
-      className="w-full rounded border border-zinc-100 object-contain"
+      className="w-full rounded border border-rule-soft object-contain"
     />
   );
 }
