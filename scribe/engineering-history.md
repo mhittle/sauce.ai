@@ -75,6 +75,61 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-10 — product pivot agreed; Stage 1 UI PR 1: design system + shell
+
+**Context.** Owner (Mike) tasked Rida with turning Scribe into a self-serve,
+takeoff-only product: sign up → upload → pick pages → review the breakdown →
+quote, metered by credits. The staged plan lives in `product-plan.md` (PR #253):
+Stage 1 UI rework, Stage V verification layers (whole-set deterministic checks
++ a one-call model reviewer, flags only), Stage 2 accounts (email provider
+first, then orgs + tenant scoping — today `GET /takeoffs` returns every row to
+any signed-in user), Stage 3 usage ledger → per-page credits → Stripe, Stage 4
+beta. All decisions closed: style direction A, Google + magic link + optional
+password, 1 credit = 1 page read, freight gate kept, prospector hidden (code
+stays), name stays Scribe, Admin ported as the control panel. PRD §2/§3 are
+superseded on these points; `PRD.md` itself still needs the amendment.
+
+**Shipped (PR 1 of 4).** Web only, no API change.
+- `styles.css`: runtime token set (vellum ground, ink, redline accent,
+  blueprint blue, semantic good/warn/bad, fixed cabinet-category palette)
+  mapped into Tailwind 4 via `@theme inline`, so utilities like `bg-paper` /
+  `text-muted` flip with the theme and pages never need `dark:`. Three theme
+  states (un-stamped follows the OS; `data-theme` light/dark wins), toggle in
+  the top bar, preference in localStorage. Archivo (headings, `wide` utility =
+  wdth 110) / IBM Plex Sans / IBM Plex Mono from Google Fonts with fallbacks.
+- `components/ui/`: Button (primary/default/quiet/danger, sizes, `loading`),
+  Input/NumberInput/Select/Textarea/Field, Badge + **StatusPill**, Card +
+  SectionLabel, PageTitle, ToastProvider/useToast, Skeleton(Rows), EmptyState,
+  Stepper (the §2 job stepper), Dialog, Kbd. `ui.tsx` is a re-export shim so
+  every page keeps compiling; `statusTone` kept as a legacy helper.
+- `labels.ts`: one `labelFor(status)` / `toneFor(status)` map (takeoff, quote,
+  prospect, source enums → "Reading", "Choose pages", "Needs review", …) and
+  the category palette shared by `BoxOverlay` (concrete hex — the sheet under
+  the dots is always white) and the chrome (`categoryDotClass`).
+- Shell (`Layout.tsx`): Jobs (`/`, the old Takeoffs list) · Quotes · Admin
+  (admin only); Dashboard moved to `/dashboard` and Prospects reachable only
+  from the account menu's Operator section; account menu with sign-out; new
+  sign-in screen. Review/detect routes are full-bleed, everything else a column.
+- Mechanical sweep: 149 hard-coded zinc/blue/red/amber classes across 13 files
+  → token classes (scoped to class strings only). Table heads are mono
+  uppercase. Every raw status enum on screen → `StatusPill`. Toasts on every
+  mutation in Takeoffs / PagePicker / TakeoffReview / QuoteBuilder (approve,
+  patch, delete and create-quote failures were silent before). Jobs list polls
+  only while a row is `processing`; skeleton + empty state.
+
+**Verified** against a throwaway mock API (no DB, no auth) in the browser:
+Jobs (populated + empty), Review, Pages, Quote Builder, account menu, light and
+dark. `pnpm build` (tsc + vite) green. Not exercised against the real API.
+
+**Gotchas.** (1) Tailwind 4 `@theme inline` is what makes var-backed utilities
+work; a plain `@theme` would bake the light values. (2) `bg-white`/`text-white`
+were swept to `bg-paper`/`text-paper` — on the accent button that is fine in
+both themes, but anything drawn OVER THE DRAWING IMAGE must keep concrete
+colors (see `categoryHex`). (3) The `Detect (beta)` wizard route and
+`awaiting_boxes` legacy path are untouched; PR 3 folds them in.
+
+---
+
 ## 2026-08-18 — plan runs decompose into units; dots replace boxes; a door swing was being priced
 
 **Context.** Staged reads scored ~0.55 F1 on elevation inputs but ~0.26 on

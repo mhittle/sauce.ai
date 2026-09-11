@@ -1,5 +1,117 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
-body {
-  @apply bg-zinc-50 text-zinc-900 antialiased;
+/* ---------------------------------------------------------------------------
+ * Scribe design tokens — direction A, "vellum + redline" (product-plan.md §3.1).
+ * Runtime CSS variables flip with the theme; Tailwind utilities below map
+ * onto them, so pages never need dark: prefixes. Three theme states:
+ * un-stamped (follows the OS), data-theme="light", data-theme="dark".
+ * ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+  --bg: #f2f4f6;          /* drafting vellum, faint blue bias */
+  --paper: #ffffff;       /* sheets, cards, table surfaces */
+  --ink: #18222e;         /* navy-black text */
+  --muted: #5c6876;       /* secondary text */
+  --faint: #8b95a1;       /* placeholders, disabled, hints */
+  --rule: #d4dae1;        /* borders */
+  --rule-soft: #e7ebef;   /* row dividers, subtle fills */
+  --accent: #e0522b;      /* redline — primary action + selection, nothing else */
+  --accent-hover: #c8431f;
+  --accent-soft: #fbe9e3;
+  --blue: #2c5a8c;        /* blueprint — links, informational */
+  --blue-soft: #e4ecf5;
+  --good: #2f8a66;
+  --good-soft: #e3f2ec;
+  --warn: #b7791f;
+  --warn-soft: #fbf1dc;
+  --bad: #c4382b;
+  --bad-soft: #fbe6e3;
+  --cat-base: #2c5a8c;
+  --cat-wall: #2f8a66;
+  --cat-tall: #7a55c4;
+  --cat-vanity: #c2782b;
+  --cat-other: #e0522b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #14181d; --paper: #1c2128; --ink: #e4e8ec; --muted: #97a2ae; --faint: #6b7683;
+    --rule: #2c343d; --rule-soft: #242b33;
+    --accent: #f2683f; --accent-hover: #ff7d55; --accent-soft: #3a2119;
+    --blue: #6fa0d8; --blue-soft: #1d2b3b;
+    --good: #4fb48b; --good-soft: #17302a; --warn: #d9a03a; --warn-soft: #33290f;
+    --bad: #e8604f; --bad-soft: #3a1c19;
+    --cat-base: #6fa0d8; --cat-wall: #4fb48b; --cat-tall: #a88be0; --cat-vanity: #de9a4c; --cat-other: #f2683f;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14181d; --paper: #1c2128; --ink: #e4e8ec; --muted: #97a2ae; --faint: #6b7683;
+  --rule: #2c343d; --rule-soft: #242b33;
+  --accent: #f2683f; --accent-hover: #ff7d55; --accent-soft: #3a2119;
+  --blue: #6fa0d8; --blue-soft: #1d2b3b;
+  --good: #4fb48b; --good-soft: #17302a; --warn: #d9a03a; --warn-soft: #33290f;
+  --bad: #e8604f; --bad-soft: #3a1c19;
+  --cat-base: #6fa0d8; --cat-wall: #4fb48b; --cat-tall: #a88be0; --cat-vanity: #de9a4c; --cat-other: #f2683f;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-cat-base: var(--cat-base);
+  --color-cat-wall: var(--cat-wall);
+  --color-cat-tall: var(--cat-tall);
+  --color-cat-vanity: var(--cat-vanity);
+  --color-cat-other: var(--cat-other);
+
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+}
+
+/* Archivo's width axis: headings and the wordmark sit slightly wide, like a
+   title-block stamp. */
+@utility wide {
+  font-variation-settings: "wdth" 110;
+}
+
+@layer base {
+  html { font-family: var(--font-sans); }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  ::selection { background: var(--accent-soft); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
 }

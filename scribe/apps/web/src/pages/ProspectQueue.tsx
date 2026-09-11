@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { apiGet, apiSend, formatUsd } from "../api";
-import { Badge, Button, Card, PageTitle, statusTone } from "../ui";
+import { Badge, Button, Card, PageTitle, StatusPill } from "../ui";
 
 interface ProjectDoc {
   id: string;
@@ -46,8 +46,8 @@ export function ProspectQueuePage() {
       navigate({ to: "/takeoffs/$takeoffId", params: { takeoffId: t.id } }),
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
-  if (q.isError) return <div className="text-red-600">{String(q.error)}</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
 
   const projects = q.data!;
   const aboveFold = projects.filter(
@@ -62,7 +62,7 @@ export function ProspectQueuePage() {
       <PageTitle>Prospect Queue</PageTitle>
       {projects.length === 0 && (
         <Card>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             No prospected projects yet. The crawler runs every 6 hours; an
             admin can trigger a source manually from the Admin screen.
           </p>
@@ -77,7 +77,7 @@ export function ProspectQueuePage() {
       />
       {belowFold.length > 0 && (
         <>
-          <h2 className="mb-2 mt-6 text-sm font-semibold text-zinc-400">
+          <h2 className="mb-2 mt-6 text-sm font-semibold text-faint">
             Below the fold (est. scope &lt; $35k)
           </h2>
           <ProjectTable
@@ -111,7 +111,7 @@ function ProjectTable({
     <Card className="overflow-x-auto p-0">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-zinc-200 text-left text-zinc-500">
+          <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
             <th className="px-3 py-2">Score</th>
             <th className="px-3 py-2">Est. scope</th>
             <th className="px-3 py-2">Project</th>
@@ -125,7 +125,7 @@ function ProjectTable({
           {projects.map((p) => {
             const planDoc = p.documents.find((d) => d.docClass === "plan_set");
             return (
-              <tr key={p.id} className="border-b border-zinc-100 align-top">
+              <tr key={p.id} className="border-b border-rule-soft align-top">
                 <td className="px-3 py-2 font-semibold">
                   {p.cabinetRelevanceScore != null
                     ? Math.round(p.cabinetRelevanceScore)
@@ -141,12 +141,12 @@ function ProjectTable({
                     {p.canonicalAddress ?? p.permitNumber ?? "Unknown"}
                   </div>
                   <div
-                    className="truncate text-xs text-zinc-500"
+                    className="truncate text-xs text-muted"
                     title={p.description ?? undefined}
                   >
                     {p.description}
                   </div>
-                  <div className="text-xs text-zinc-400">
+                  <div className="text-xs text-faint">
                     {p.scoreRationale} ·{" "}
                     {p.valuationCents != null
                       ? `valuation ${formatUsd(p.valuationCents)}`
@@ -161,11 +161,11 @@ function ProjectTable({
                       {p.documents.length === 1 ? "" : "s"}
                     </Badge>
                   ) : (
-                    <span className="text-zinc-300">—</span>
+                    <span className="text-faint">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+                  <StatusPill status={p.status} />
                 </td>
                 <td className="space-x-1 whitespace-nowrap px-3 py-2">
                   <Button onClick={() => onView(p.id)}>View</Button>

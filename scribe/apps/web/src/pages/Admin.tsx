@@ -113,7 +113,7 @@ function PricingEditor() {
     },
   });
 
-  if (q.isLoading || !draft) return <div className="text-zinc-500">Loading…</div>;
+  if (q.isLoading || !draft) return <div className="text-muted">Loading…</div>;
 
   const update = (i: number, patch: Partial<ProductLine>) => {
     setDraft(draft.map((p, j) => (j === i ? { ...p, ...patch } : p)));
@@ -122,7 +122,7 @@ function PricingEditor() {
   return (
     <div className="space-y-4">
       <Card className="flex items-center justify-between">
-        <span className="text-sm text-zinc-500">
+        <span className="text-sm text-muted">
           Latest config: v{q.data!.versions[0]?.version ?? "—"}. Saving creates
           a new immutable version; existing quotes keep their pinned version.
         </span>
@@ -135,7 +135,7 @@ function PricingEditor() {
         </Button>
       </Card>
       {save.isError && (
-        <p className="text-sm text-red-600">{String(save.error)}</p>
+        <p className="text-sm text-bad">{String(save.error)}</p>
       )}
 
       {draft.map((pl, i) => (
@@ -166,7 +166,7 @@ function PricingEditor() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase text-zinc-400">
+              <h3 className="mb-1 text-xs font-semibold uppercase text-faint">
                 Material rates ($/{pl.size_measure})
               </h3>
               {Object.entries(pl.material_rates).map(([mat, rate]) => (
@@ -195,7 +195,7 @@ function PricingEditor() {
               ))}
             </div>
             <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase text-zinc-400">
+              <h3 className="mb-1 text-xs font-semibold uppercase text-faint">
                 Finish adders
               </h3>
               {Object.entries(pl.finish_adders).map(([finish, adder]) => (
@@ -219,7 +219,7 @@ function PricingEditor() {
                       });
                     }}
                   />
-                  <span className="text-zinc-400">
+                  <span className="text-faint">
                     {adder.kind === "flat" ? "$" : "%"}
                   </span>
                 </div>
@@ -246,7 +246,7 @@ function PricingEditor() {
                       });
                     }}
                   />
-                  <span className="text-zinc-400">
+                  <span className="text-faint">
                     {pl.assembly_adder.kind === "flat" ? "$" : "%"}
                   </span>
                 </div>
@@ -294,15 +294,15 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
   });
 
   return (
-    <Card className="border-blue-200">
-      <h2 className="mb-2 text-sm font-semibold text-blue-700">
+    <Card className="border-blue">
+      <h2 className="mb-2 text-sm font-semibold text-blue">
         Test calculator — prices against the DRAFT config above (before saving)
       </h2>
       <div className="flex flex-wrap items-end gap-3 text-sm">
         <label>
           Line
           <select
-            className="ml-1 rounded-md border border-zinc-300 px-2 py-1"
+            className="ml-1 rounded-md border border-rule px-2 py-1"
             value={plId}
             onChange={(e) => setPlId(e.target.value)}
           >
@@ -326,7 +326,7 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
         <label>
           Material
           <select
-            className="ml-1 rounded-md border border-zinc-300 px-2 py-1"
+            className="ml-1 rounded-md border border-rule px-2 py-1"
             value={form.material}
             onChange={(e) => setForm({ ...form, material: e.target.value })}
           >
@@ -339,7 +339,7 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
         <label>
           Finish
           <select
-            className="ml-1 rounded-md border border-zinc-300 px-2 py-1"
+            className="ml-1 rounded-md border border-rule px-2 py-1"
             value={form.finish}
             onChange={(e) => setForm({ ...form, finish: e.target.value })}
           >
@@ -362,7 +362,7 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
         </Button>
       </div>
       {result && (
-        <div className="mt-3 rounded-md bg-zinc-50 p-2 text-sm">
+        <div className="mt-3 rounded-md bg-bg p-2 text-sm">
           {result.ok ? (
             <span>
               Unit {formatUsd(result.unit_cents as number)} · Total{" "}
@@ -373,7 +373,7 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
               )}
             </span>
           ) : (
-            <span className="text-red-600">{String(result.detail)}</span>
+            <span className="text-bad">{String(result.detail)}</span>
           )}
         </div>
       )}
@@ -410,13 +410,13 @@ function OrgSettings() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["org-settings"] }),
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
   const s = q.data!;
 
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-500">Logo</h2>
+        <h2 className="mb-2 text-sm font-semibold text-muted">Logo</h2>
         {s.logo_url && (
           <img src={s.logo_url} alt="logo" className="mb-2 h-16" />
         )}
@@ -439,19 +439,19 @@ function OrgSettings() {
       </Card>
 
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+        <h2 className="mb-2 text-sm font-semibold text-muted">
           Quote terms (markdown)
         </h2>
         <textarea
-          className="h-32 w-full rounded-md border border-zinc-300 p-2 text-sm"
+          className="h-32 w-full rounded-md border border-rule p-2 text-sm"
           value={terms ?? s.quoteTermsMd}
           onChange={(e) => setTerms(e.target.value)}
         />
-        <h2 className="mb-2 mt-3 text-sm font-semibold text-zinc-500">
+        <h2 className="mb-2 mt-3 text-sm font-semibold text-muted">
           Quote footer (markdown)
         </h2>
         <textarea
-          className="h-16 w-full rounded-md border border-zinc-300 p-2 text-sm"
+          className="h-16 w-full rounded-md border border-rule p-2 text-sm"
           value={footer ?? s.quoteFooterMd}
           onChange={(e) => setFooter(e.target.value)}
         />
@@ -470,7 +470,7 @@ function OrgSettings() {
       </Card>
 
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-500">Freight</h2>
+        <h2 className="mb-2 text-sm font-semibold text-muted">Freight</h2>
         <label className="block py-1 text-sm">
           Pallet rate $
           <Input
@@ -483,7 +483,7 @@ function OrgSettings() {
               })
             }
           />
-          <span className="ml-2 text-zinc-400">
+          <span className="ml-2 text-faint">
             flat per pallet ({s.freightProvider} provider; Uber Freight in v1.1)
           </span>
         </label>
@@ -503,7 +503,7 @@ function OrgSettings() {
       </Card>
 
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+        <h2 className="mb-2 text-sm font-semibold text-muted">
           Extraction
         </h2>
         <label className="flex items-center gap-2 py-1 text-sm">
@@ -517,7 +517,7 @@ function OrgSettings() {
           />
           <span className="font-medium">AI Cross Validation</span>
         </label>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-faint">
           Always extracts with Anthropic. When on, each page is also sent to a
           secondary OpenAI vision model; lines where the two models disagree
           have their confidence lowered so they surface for review. Requires
@@ -564,11 +564,11 @@ function ExportTemplates() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["export-templates"] }),
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-muted">
         Columns map takeoff-line fields → CSV headers. Edit the JSON to match
         your Mozaik/KCD import dialog (fields: tag, room, qty, category,
         width_in, height_in, depth_in, door_style, material, finish, assembled,
@@ -588,7 +588,7 @@ function ExportTemplates() {
             </Button>
           </div>
           <textarea
-            className="h-40 w-full rounded-md border border-zinc-300 p-2 font-mono text-xs"
+            className="h-40 w-full rounded-md border border-rule p-2 font-mono text-xs"
             value={drafts[t.name] ?? JSON.stringify(t.columns, null, 2)}
             onChange={(e) =>
               setDrafts({ ...drafts, [t.name]: e.target.value })
@@ -597,7 +597,7 @@ function ExportTemplates() {
         </Card>
       ))}
       {save.isError && (
-        <p className="text-sm text-red-600">{String(save.error)}</p>
+        <p className="text-sm text-bad">{String(save.error)}</p>
       )}
     </div>
   );
@@ -632,13 +632,13 @@ function Sources() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
 
   return (
     <Card className="p-0">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-zinc-200 text-left text-zinc-500">
+          <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
             <th className="px-3 py-2">Source</th>
             <th className="px-3 py-2">Type</th>
             <th className="px-3 py-2">Status</th>
@@ -649,7 +649,7 @@ function Sources() {
         </thead>
         <tbody>
           {(q.data ?? []).map((s) => (
-            <tr key={s.id} className="border-b border-zinc-100">
+            <tr key={s.id} className="border-b border-rule-soft">
               <td className="px-3 py-2 font-medium">{s.name}</td>
               <td className="px-3 py-2">{s.type}</td>
               <td className="px-3 py-2">
@@ -657,10 +657,10 @@ function Sources() {
                   {s.status}
                 </Badge>
               </td>
-              <td className="px-3 py-2 text-zinc-500">
+              <td className="px-3 py-2 text-muted">
                 {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString() : "never"}
               </td>
-              <td className="max-w-xs truncate px-3 py-2 text-red-600" title={s.lastError ?? ""}>
+              <td className="max-w-xs truncate px-3 py-2 text-bad" title={s.lastError ?? ""}>
                 {s.lastError ?? ""}
               </td>
               <td className="space-x-1 whitespace-nowrap px-3 py-2">
@@ -727,7 +727,7 @@ function Users() {
         <label className="text-sm">
           Role
           <select
-            className="ml-2 rounded-md border border-zinc-300 px-2 py-1 text-sm"
+            className="ml-2 rounded-md border border-rule px-2 py-1 text-sm"
             value={role}
             onChange={(e) => setRole(e.target.value)}
           >
@@ -744,7 +744,7 @@ function Users() {
         <table className="w-full text-sm">
           <tbody>
             {(q.data ?? []).map((u) => (
-              <tr key={u.id} className="border-b border-zinc-100">
+              <tr key={u.id} className="border-b border-rule-soft">
                 <td className="px-3 py-2 font-medium">{u.email}</td>
                 <td className="px-3 py-2">{u.name}</td>
                 <td className="px-3 py-2">

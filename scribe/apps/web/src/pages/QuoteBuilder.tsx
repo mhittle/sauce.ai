@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { quoteBuilderRoute } from "../main";
 import { apiGet, apiSend, formatUsd } from "../api";
-import { Badge, Button, Card, Input, PageTitle, statusTone } from "../ui";
+import { Badge, Button, Card, errorMessage, Input, PageTitle, StatusPill, useToast } from "../ui";
 
 interface Me {
   role: string;
@@ -67,7 +67,7 @@ interface QuoteDetail {
 export function QuoteBuilderPage() {
   const { quoteId } = quoteBuilderRoute.useParams();
   const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   // Local override for instant feedback; the persisted quote.pricingTier is
   // the source of truth (stored totals follow it, so the quotes list agrees).
   const [tierChoice, setTierChoice] = useState<"low" | "medium" | "high" | null>(
@@ -85,27 +85,27 @@ export function QuoteBuilderPage() {
     mutationFn: (body: Record<string, unknown>) =>
       apiSend("PATCH", `/quotes/${quoteId}`, body),
     onSuccess: () => {
-      setError(null);
       qc.invalidateQueries({ queryKey: ["quote", quoteId] });
       qc.invalidateQueries({ queryKey: ["quotes"] });
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => toast.error("Quote not saved", errorMessage(e)),
   });
 
   const verifyFreight = useMutation({
     mutationFn: () => apiSend("POST", `/quotes/${quoteId}/verify-freight`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["quote", quoteId] }),
+    onError: (e) => toast.error("Freight not verified", errorMessage(e)),
   });
 
   const generatePdf = useMutation({
     mutationFn: () =>
       apiSend<{ url: string }>("POST", `/quotes/${quoteId}/pdf?tier=${tier}`),
     onSuccess: (r) => window.open(r.url, "_blank"),
-    onError: (e) => setError(e.message),
+    onError: (e) => toast.error("PDF not generated", errorMessage(e)),
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
-  if (q.isError) return <div className="text-red-600">{String(q.error)}</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
   const quote = q.data!;
   const totals = quote.pricing.totals;
   const isAdmin = me.data?.role === "admin" || me.data?.role === "sales";
@@ -159,14 +159,12 @@ export function QuoteBuilderPage() {
         }
       >
         Quote #{quote.id.slice(0, 8).toUpperCase()}{" "}
-        <Badge tone={statusTone(quote.status)}>{quote.status}</Badge>
+        <StatusPill status={quote.status} />
       </PageTitle>
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
       {totals.any_needs_review && (
-        <Card className="mb-4 border-red-300 bg-red-50">
-          <p className="text-sm text-red-700">
+        <Card className="mb-4 border-bad bg-bad-soft">
+          <p className="text-sm text-bad">
             This quote prices against seeded NEEDS REVIEW rates. An admin must
             enter real rates in the Pricing Editor before it can be sent.
           </p>
@@ -174,8 +172,8 @@ export function QuoteBuilderPage() {
       )}
 
       {totals.mixed_lead_times && (
-        <Card className="mb-4 border-amber-300 bg-amber-50">
-          <p className="text-sm text-amber-800">
+        <Card className="mb-4 border-warn bg-warn-soft">
+          <p className="text-sm text-warn">
             Lines have mixed lead times (max {totals.max_lead_time_days} days)
             — consider a split shipment.
           </p>
@@ -184,12 +182,12 @@ export function QuoteBuilderPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+          <h2 className="mb-2 text-sm font-semibold text-muted">
             Priced lines (pricing config v{quote.pricing_config_version})
           </h2>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-zinc-500">
+              <tr className="text-left font-mono text-[11px] uppercase tracking-wider text-muted">
                 <th className="py-1">Item</th>
                 <th>Qty</th>
                 <th>Unit</th>
@@ -203,13 +201,13 @@ export function QuoteBuilderPage() {
                   .map((d) => (d == null ? "—" : `${d}"`))
                   .join(" × ");
                 return (
-                  <tr key={l.takeoff_line_id} className="border-t border-zinc-100">
+                  <tr key={l.takeoff_line_id} className="border-t border-rule-soft">
                     <td className="py-1">
                       <span className="font-medium">
                         {l.tag ?? l.category.replace(/_/g, " ")}
                       </span>{" "}
-                      <span className="text-zinc-500">{dims}</span>
-                      <span className="ml-1 text-xs text-zinc-400">
+                      <span className="text-muted">{dims}</span>
+                      <span className="ml-1 text-xs text-faint">
                         {l.product_line_id}
                       </span>
                       {l.needs_review && (
@@ -226,7 +224,7 @@ export function QuoteBuilderPage() {
             </tbody>
           </table>
           {quote.pricing.unpriced.length > 0 && (
-            <div className="mt-3 rounded-md bg-red-50 p-2 text-sm text-red-700">
+            <div className="mt-3 rounded-md bg-bad-soft p-2 text-sm text-bad">
               {quote.pricing.unpriced.length} unpriced line(s) — resolve them
               in the takeoff review screen.
             </div>
@@ -235,7 +233,7 @@ export function QuoteBuilderPage() {
 
         <div className="space-y-4">
           <Card>
-            <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+            <h2 className="mb-2 text-sm font-semibold text-muted">
               Adjustments
             </h2>
             <label className="mb-2 block text-sm">
@@ -265,7 +263,7 @@ export function QuoteBuilderPage() {
               />
             </label>
             {isAdmin && (
-              <p className="mt-2 text-xs text-zinc-500">
+              <p className="mt-2 text-xs text-muted">
                 Margin: {formatUsd(tierMarkupCents)} on{" "}
                 {formatUsd(tierSubtotalCents)}
               </p>
@@ -276,11 +274,11 @@ export function QuoteBuilderPage() {
             className={
               quote.pricing.freight_verification_required &&
               !quote.freightVerified
-                ? "border-amber-400"
+                ? "border-warn"
                 : ""
             }
           >
-            <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+            <h2 className="mb-2 text-sm font-semibold text-muted">
               Freight
             </h2>
             <p className="text-sm">
@@ -315,10 +313,10 @@ export function QuoteBuilderPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-1 text-sm font-semibold text-zinc-500">
+            <h2 className="mb-1 text-sm font-semibold text-muted">
               Estimated Price (boxes + doors + hardware)
             </h2>
-            <p className="mb-2 text-xs text-zinc-400">
+            <p className="mb-2 text-xs text-faint">
               Pick a tier. Base is the real Shaker rate; Upgraded/Premium are
               estimated. Boxes &amp; hardware stay constant across tiers.
             </p>
@@ -334,9 +332,9 @@ export function QuoteBuilderPage() {
                       patch.mutate({ pricing_tier: t });
                     }}
                     className={`flex w-full items-center justify-between rounded border px-2 py-1 text-sm ${
-                      tier === t
-                        ? "border-emerald-500 bg-emerald-50 font-medium"
-                        : "border-zinc-200 hover:border-zinc-300"
+ tier === t
+ ?"border-accent bg-accent-soft font-medium"
+                        : "border-rule hover:border-muted"
                     }`}
                   >
                     <span>{qt.label}</span>
@@ -345,7 +343,7 @@ export function QuoteBuilderPage() {
                 );
               })}
             </div>
-            <p className="mt-2 text-xs text-zinc-400">
+            <p className="mt-2 text-xs text-faint">
               {formatUsd(quote.quote_tiers[tier].box_cents)} boxes (
               {quote.quote_tiers[tier].box_count}) +{" "}
               {formatUsd(
@@ -360,7 +358,7 @@ export function QuoteBuilderPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-2 text-sm font-semibold text-zinc-500">Totals</h2>
+            <h2 className="mb-2 text-sm font-semibold text-muted">Totals</h2>
             <Row
               label={`Subtotal (${quote.quote_tiers[tier].label})`}
               value={formatUsd(tierSubtotalCents)}
@@ -368,10 +366,10 @@ export function QuoteBuilderPage() {
             <Row label="Markup" value={formatUsd(tierMarkupCents)} />
             <Row label="Handling" value={formatUsd(quote.handlingCents)} />
             <Row label="Freight" value={formatUsd(totals.freight_cents)} />
-            <div className="mt-1 border-t border-zinc-200 pt-1">
+            <div className="mt-1 border-t border-rule pt-1">
               <Row label="Total" value={formatUsd(tierGrandTotalCents)} bold />
             </div>
-            <p className="mt-2 text-xs text-zinc-400">
+            <p className="mt-2 text-xs text-faint">
               Subtotal is the selected {quote.quote_tiers[tier].label} estimate
               (boxes + doors + drawer-box hardware). Glides, shelf pins &amp;
               toe-kick not yet included. Valid until {quote.validUntil ?? "—"}{" "}
@@ -395,7 +393,7 @@ function Row({
 }) {
   return (
     <div
-      className={`flex justify-between py-0.5 text-sm ${bold ? "font-semibold" : ""}`}
+      className={`flex justify-between py-0.5 text-sm ${bold ?"font-semibold" : ""}`}
     >
       <span>{label}</span>
       <span>{value}</span>

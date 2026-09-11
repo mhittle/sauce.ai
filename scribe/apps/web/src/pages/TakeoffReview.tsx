@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { takeoffReviewRoute } from "../main";
 import { API_URL, apiGet, apiSend } from "../api";
-import { Badge, Button, Card, Input, PageTitle, statusTone } from "../ui";
+import { Badge, Button, Card, errorMessage, Input, PageTitle, StatusPill, useToast } from "../ui";
 import { BoxReviewSection } from "./BoxReview";
 import { SourceBoxPanel } from "../components/SourceBoxPanel";
 
@@ -71,6 +71,7 @@ export function TakeoffReviewPage() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(0);
   const [editing, setEditing] = useState(false);
+  const toast = useToast();
 
   const q = useQuery({
     queryKey: ["takeoff", takeoffId],
@@ -97,22 +98,29 @@ export function TakeoffReviewPage() {
     mutationFn: ({ id, patch }: { id: string; patch: Record<string, unknown> }) =>
       apiSend("PATCH", `/takeoff-lines/${id}`, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
+    onError: (e) => toast.error("Line not saved", errorMessage(e)),
   });
 
   const deleteLine = useMutation({
     mutationFn: (id: string) => apiSend("DELETE", `/takeoff-lines/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
+    onError: (e) => toast.error("Line not deleted", errorMessage(e)),
   });
 
   const createLine = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       apiSend("POST", "/takeoff-lines", { takeoff_id: takeoffId, ...body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
+    onError: (e) => toast.error("Cabinet not added", errorMessage(e)),
   });
 
   const approve = useMutation({
     mutationFn: () => apiSend("POST", `/takeoffs/${takeoffId}/approve`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
+      toast.success("Takeoff approved");
+    },
+    onError: (e) => toast.error("Couldn't approve", errorMessage(e)),
   });
 
   const createQuote = useMutation({
@@ -120,6 +128,7 @@ export function TakeoffReviewPage() {
       apiSend<{ id: string }>("POST", "/quotes", { takeoff_id: takeoffId }),
     onSuccess: (quote) =>
       navigate({ to: "/quotes/$quoteId", params: { quoteId: quote.id } }),
+    onError: (e) => toast.error("Couldn't create the quote", errorMessage(e)),
   });
 
   const lines = q.data?.lines ?? [];
@@ -177,8 +186,8 @@ export function TakeoffReviewPage() {
     [lines]
   );
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
-  if (q.isError) return <div className="text-red-600">{String(q.error)}</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
   const takeoff = q.data!;
 
   // Box-review gate: same page, different content — the priced review table
@@ -244,10 +253,10 @@ export function TakeoffReviewPage() {
         }
       >
         Review: {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}{" "}
-        <Badge tone={statusTone(takeoff.status)}>{takeoff.status}</Badge>
+        <StatusPill status={takeoff.status} />
       </PageTitle>
 
-      <p className="mb-3 text-xs text-zinc-400">
+      <p className="mb-3 text-xs text-faint">
         Keyboard: ↑/↓ navigate · e edit · enter accept line · del delete line.
         Click a dot on the drawing to jump to its line; hover a dot to see its
         cabinet and box. Zoom with ⌘/ctrl + scroll (or the buttons) and drag to
@@ -256,7 +265,7 @@ export function TakeoffReviewPage() {
 
       {takeoff.status === "processing" && (
         <Card>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             Processing (extraction or pricing)… this page refreshes
             automatically.
           </p>
@@ -265,11 +274,11 @@ export function TakeoffReviewPage() {
 
       {((takeoff.docSummary?.uncertainties?.length ?? 0) > 0 ||
         (takeoff.docSummary?.warnings?.length ?? 0) > 0) && (
-        <Card className="mb-4 border-amber-300 bg-amber-50">
-          <h2 className="mb-1 text-sm font-semibold text-amber-800">
+        <Card className="mb-4 border-warn bg-warn-soft">
+          <h2 className="mb-1 text-sm font-semibold text-warn">
             Flagged for review
           </h2>
-          <ul className="list-inside list-disc text-sm text-amber-800">
+          <ul className="list-inside list-disc text-sm text-warn">
             {[...(takeoff.docSummary?.uncertainties ?? []), ...(takeoff.docSummary?.warnings ?? [])].map(
               (u, i) => (
                 <li key={i}>{u}</li>
@@ -283,7 +292,7 @@ export function TakeoffReviewPage() {
         takeoff.material_stats.box_count > 0 &&
         ["review", "approved"].includes(takeoff.status) && (
           <Card className="mb-4">
-            <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+            <h2 className="mb-2 text-sm font-semibold text-muted">
               Materials
             </h2>
             <div className="flex flex-wrap gap-x-8 gap-y-2">
@@ -291,16 +300,16 @@ export function TakeoffReviewPage() {
                 <div className="text-lg font-semibold">
                   {takeoff.material_stats.box_count}
                 </div>
-                <div className="text-xs text-zinc-500">Cabinet boxes</div>
+                <div className="text-xs text-muted">Cabinet boxes</div>
               </div>
               <div>
                 <div className="text-lg font-semibold">
                   {takeoff.material_stats.carcass_sqft} ft²
-                  <span className="ml-1 text-sm font-normal text-zinc-500">
+                  <span className="ml-1 text-sm font-normal text-muted">
                     → ~{takeoff.material_stats.carcass_sheets} sheets
                   </span>
                 </div>
-                <div className="text-xs text-zinc-500">
+                <div className="text-xs text-muted">
                   Carcass material (4×8 @ {takeoff.material_stats.waste_pct}%
                   waste)
                 </div>
@@ -310,27 +319,27 @@ export function TakeoffReviewPage() {
                   {takeoff.material_stats.door_count} doors ·{" "}
                   {takeoff.material_stats.door_sqft} ft²
                 </div>
-                <div className="text-xs text-zinc-500">Door fronts</div>
+                <div className="text-xs text-muted">Door fronts</div>
               </div>
               <div>
                 <div className="text-lg font-semibold">
                   {takeoff.material_stats.drawer_front_count} fronts ·{" "}
                   {takeoff.material_stats.front_sqft} ft²
                 </div>
-                <div className="text-xs text-zinc-500">Drawer fronts</div>
+                <div className="text-xs text-muted">Drawer fronts</div>
               </div>
               <div>
                 <div className="text-lg font-semibold">
                   ~{takeoff.material_stats.face_sheets} sheets
                 </div>
-                <div className="text-xs text-zinc-500">
+                <div className="text-xs text-muted">
                   Door/front material (4×8 @{" "}
                   {takeoff.material_stats.waste_pct}% waste)
                 </div>
               </div>
             </div>
             {takeoff.material_stats.skipped_no_dims > 0 && (
-              <p className="mt-2 text-xs text-amber-700">
+              <p className="mt-2 text-xs text-warn">
                 {takeoff.material_stats.skipped_no_dims} box(es) missing
                 dimensions — not counted above.
               </p>
@@ -356,7 +365,7 @@ export function TakeoffReviewPage() {
             />
           ) : (
             <>
-              <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+              <h2 className="mb-2 text-sm font-semibold text-muted">
                 Source
                 {selectedLine?.sourcePage
                   ? ` — page ${selectedLine.sourcePage}`
@@ -366,10 +375,10 @@ export function TakeoffReviewPage() {
                 <img
                   src={pageImage.data.url}
                   alt="source page"
-                  className="w-full border border-zinc-200"
+                  className="w-full border border-rule"
                 />
               ) : (
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-faint">
                   {selectedLine?.sourcePage
                     ? "Loading page image…"
                     : "No page image for this line (spreadsheet/manual source)."}
@@ -381,8 +390,8 @@ export function TakeoffReviewPage() {
 
         <Card className="max-h-[75vh] overflow-auto p-0">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white">
-              <tr className="border-b border-zinc-200 text-left text-zinc-500">
+            <thead className="sticky top-0 bg-paper">
+              <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
                 <th className="px-2 py-2">Tag</th>
                 <th className="px-2 py-2">Qty</th>
                 <th className="px-2 py-2">W×H×D</th>
@@ -414,7 +423,7 @@ export function TakeoffReviewPage() {
               ))}
               {lines.length === 0 && takeoff.status !== "processing" && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-zinc-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-faint">
                     No lines extracted.
                   </td>
                 </tr>
@@ -425,19 +434,19 @@ export function TakeoffReviewPage() {
       </div>
 
       {unmatched.length > 0 && (
-        <Card className="mt-4 border-red-200">
-          <h2 className="mb-2 text-sm font-semibold text-red-700">
+        <Card className="mt-4 border-bad">
+          <h2 className="mb-2 text-sm font-semibold text-bad">
             Unmatched bucket ({unmatched.length}) — assign a product line
           </h2>
           {unmatched.map((l) => (
             <div
               key={l.id}
-              className="flex items-center gap-3 border-t border-zinc-100 py-2 text-sm"
+              className="flex items-center gap-3 border-t border-rule-soft py-2 text-sm"
             >
               <span className="w-24 font-medium">{l.tag ?? l.category}</span>
-              <span className="flex-1 text-zinc-500">{l.unmatchedReason}</span>
+              <span className="flex-1 text-muted">{l.unmatchedReason}</span>
               <select
-                className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                className="rounded-md border border-rule px-2 py-1 text-sm"
                 defaultValue=""
                 onChange={(e) => {
                   if (!e.target.value) return;
@@ -514,7 +523,7 @@ function LineRow({
   if (editing) {
     const num = (s: string) => (s.trim() === "" ? null : Number(s));
     return (
-      <tr className="border-b border-zinc-100 bg-blue-50">
+      <tr className="border-b border-rule-soft bg-accent-soft">
         <td className="px-2 py-1">
           <Input
             className="w-20"
@@ -582,13 +591,13 @@ function LineRow({
     <tr
       onClick={onSelect}
       onDoubleClick={onEdit}
-      className={`cursor-pointer border-b border-zinc-100 ${
-        selected ? "bg-blue-50" : lowConfidence ? "bg-amber-50" : ""
+      className={`cursor-pointer border-b border-rule-soft ${
+ selected ?"bg-accent-soft" : lowConfidence ? "bg-warn-soft" : ""
       }`}
     >
       <td className="px-2 py-1.5 font-medium">
         {line.tag ?? "—"}
-        {line.room && <span className="ml-1 text-xs text-zinc-400">{line.room}</span>}
+        {line.room && <span className="ml-1 text-xs text-faint">{line.room}</span>}
       </td>
       <td className="px-2 py-1.5">{line.qty}</td>
       <td className="whitespace-nowrap px-2 py-1.5">
@@ -615,7 +624,7 @@ function LineRow({
       <td className="px-2 py-1.5 text-right">
         <Button
           variant="ghost"
-          className="px-1.5 py-0.5 text-red-600"
+          className="px-1.5 py-0.5 text-bad"
           title="Delete line (and its box)"
           onClick={(e) => {
             e.stopPropagation();

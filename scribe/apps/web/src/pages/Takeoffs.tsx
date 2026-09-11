@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { apiUpload, apiGet } from "../api";
-import { Badge, Button, Card, PageTitle, statusTone } from "../ui";
+import { Button, Card, EmptyState, errorMessage, PageTitle, SkeletonRows, StatusPill, useToast } from "../ui";
 
 export interface Takeoff {
   id: string;
@@ -19,14 +19,18 @@ export function TakeoffsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
   const q = useQuery({
     queryKey: ["takeoffs"],
     queryFn: () => apiGet<Takeoff[]>("/takeoffs"),
-    refetchInterval: 5000,
+    // Poll only while a job is still being read.
+    refetchInterval: (query) =>
+      query.state.data?.some((t) => t.status === "processing") ? 4000 : false,
   });
 
   const upload = useMutation({
     mutationFn: (file: File) => apiUpload<Takeoff>("/takeoffs", file),
+    onError: (e) => toast.error("Upload failed", errorMessage(e)),
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["takeoffs"] });
       // PDFs stop at the page-picker gate first; everything else lands on the
@@ -57,46 +61,43 @@ export function TakeoffsPage() {
             />
             <Button
               variant="primary"
-              disabled={upload.isPending}
+              loading={upload.isPending}
               onClick={() => fileRef.current?.click()}
             >
-              {upload.isPending ? "Uploading…" : "Upload plan / schedule"}
+              {upload.isPending ? "Uploading…" : "New job"}
             </Button>
           </div>
         }
       >
-        Takeoffs
+        Jobs
       </PageTitle>
 
-      {upload.isError && (
-        <p className="mb-2 text-sm text-red-600">{String(upload.error)}</p>
-      )}
 
       <Card className="p-0">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-200 text-left text-zinc-500">
+            <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
               <th className="px-3 py-2">File</th>
               <th className="px-3 py-2">Kind</th>
               <th className="px-3 py-2">Pages</th>
               <th className="px-3 py-2">Confidence</th>
               <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Created</th>
+              <th className="px-3 py-2">Started</th>
             </tr>
           </thead>
           <tbody>
             {(q.data ?? []).map((t) => (
-              <tr key={t.id} className="border-b border-zinc-100 hover:bg-zinc-50">
+              <tr key={t.id} className="border-b border-rule-soft hover:bg-rule-soft">
                 <td className="px-3 py-2">
                   <Link
                     to="/takeoffs/$takeoffId"
                     params={{ takeoffId: t.id }}
-                    className="font-medium text-blue-700 hover:underline"
+                    className="font-medium text-blue hover:underline"
                   >
                     {t.sourceFilename ?? t.id.slice(0, 8)}
                   </Link>
                   {t.error && (
-                    <div className="text-xs text-red-600">{t.error}</div>
+                    <div className="text-xs text-bad">{t.error}</div>
                   )}
                 </td>
                 <td className="px-3 py-2 uppercase">{t.sourceKind}</td>
@@ -107,18 +108,32 @@ export function TakeoffsPage() {
                     : "—"}
                 </td>
                 <td className="px-3 py-2">
-                  <Badge tone={statusTone(t.status)}>{t.status}</Badge>
+                  <StatusPill status={t.status} />
                 </td>
-                <td className="px-3 py-2 text-zinc-500">
+                <td className="px-3 py-2 text-muted">
                   {new Date(t.createdAt).toLocaleString()}
                 </td>
               </tr>
             ))}
-            {(q.data ?? []).length === 0 && (
+            {q.isLoading && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-zinc-400">
-                  Upload a plan set PDF, spreadsheet, or schedule photo to run
-                  your first takeoff.
+                <td colSpan={6} className="p-0">
+                  <SkeletonRows rows={4} />
+                </td>
+              </tr>
+            )}
+            {!q.isLoading && (q.data ?? []).length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-3">
+                  <EmptyState
+                    title="No jobs yet"
+                    description="Upload a plan set PDF, a spreadsheet, or a photo of a cabinet schedule. Scribe reads it and drafts the cabinet breakdown for you to check."
+                    action={
+                      <Button variant="primary" onClick={() => fileRef.current?.click()}>
+                        Upload the first drawings
+                      </Button>
+                    }
+                  />
                 </td>
               </tr>
             )}

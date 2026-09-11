@@ -25,8 +25,8 @@ export function DashboardPage() {
     queryFn: () => apiGet<DashboardData>("/dashboard"),
   });
 
-  if (q.isLoading) return <div className="text-zinc-500">Loading…</div>;
-  if (q.isError) return <div className="text-red-600">{String(q.error)}</div>;
+  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
   const d = q.data!;
 
   return (
@@ -34,11 +34,11 @@ export function DashboardPage() {
       <PageTitle>Pipeline Dashboard</PageTitle>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card>
-          <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+          <h2 className="mb-2 text-sm font-semibold text-muted">
             Quotes by status
           </h2>
           {d.quotes_by_status.length === 0 && (
-            <p className="text-sm text-zinc-400">No quotes yet.</p>
+            <p className="text-sm text-faint">No quotes yet.</p>
           )}
           {d.quotes_by_status.map((s) => (
             <div key={s.status} className="flex justify-between py-1 text-sm">
@@ -50,7 +50,7 @@ export function DashboardPage() {
           ))}
         </Card>
         <Card>
-          <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+          <h2 className="mb-2 text-sm font-semibold text-muted">
             Turnaround & freight
           </h2>
           <div className="flex justify-between py-1 text-sm">
@@ -71,11 +71,11 @@ export function DashboardPage() {
           </div>
         </Card>
         <Card>
-          <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+          <h2 className="mb-2 text-sm font-semibold text-muted">
             Prospects
           </h2>
           {d.prospects_by_status.length === 0 && (
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-faint">
               Crawler hasn't found projects yet.
             </p>
           )}
@@ -89,12 +89,12 @@ export function DashboardPage() {
       </div>
 
       <Card className="mt-4">
-        <h2 className="mb-2 text-sm font-semibold text-zinc-500">
+        <h2 className="mb-2 text-sm font-semibold text-muted">
           $ quoted / won per week
         </h2>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-zinc-500">
+            <tr className="text-left font-mono text-[11px] uppercase tracking-wider text-muted">
               <th className="py-1">Week</th>
               <th>Quotes</th>
               <th>Quoted</th>
@@ -103,7 +103,7 @@ export function DashboardPage() {
           </thead>
           <tbody>
             {d.weekly.map((w) => (
-              <tr key={w.week} className="border-t border-zinc-100">
+              <tr key={w.week} className="border-t border-rule-soft">
                 <td className="py-1">{String(w.week).slice(0, 10)}</td>
                 <td>{w.quotes}</td>
                 <td>{formatUsd(Number(w.quoted_cents))}</td>
@@ -112,7 +112,7 @@ export function DashboardPage() {
             ))}
             {d.weekly.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-2 text-zinc-400">
+                <td colSpan={4} className="py-2 text-faint">
                   No activity yet — upload a takeoff to get started.
                 </td>
               </tr>

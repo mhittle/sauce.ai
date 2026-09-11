@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiSend } from "../api";
-import { Badge, Button, Card, Input, PageTitle, statusTone } from "../ui";
+import { Button, Card, Input, PageTitle, StatusPill } from "../ui";
 import {
   BoxOverlay,
   categoryColor,
@@ -224,7 +224,7 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
       <PageTitle
         actions={
           <div className="flex items-center gap-2">
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted">
               {boxCount} cabinet{boxCount === 1 ? "" : "s"}
             </span>
             <Button
@@ -238,16 +238,16 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
         }
       >
         Review boxes: {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}{" "}
-        <Badge tone={statusTone(takeoff.status)}>{takeoff.status}</Badge>
+        <StatusPill status={takeoff.status} />
       </PageTitle>
 
       {(finalize.isError || createLine.isError) && (
-        <p className="mb-2 text-sm text-red-600">
+        <p className="mb-2 text-sm text-bad">
           {String(finalize.error ?? createLine.error)}
         </p>
       )}
 
-      <p className="mb-3 text-xs text-zinc-400">
+      <p className="mb-3 text-xs text-faint">
         Boxes are the model's own (loose) anchors — drag to move, corner handles
         to resize, Delete removes box + line. Box edits are visual only; the
         inch fields drive pricing. Finalizing prices the list and opens the
@@ -262,9 +262,9 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
                 <button
                   key={g.key}
                   className={`rounded-md border px-2 py-1 text-xs ${
-                    g.key === effectiveKey
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50"
+ g.key === effectiveKey
+ ?"border-accent bg-accent-soft text-blue"
+                      : "border-rule bg-paper text-muted hover:bg-rule-soft"
                   }`}
                   onClick={() => setCurrentKey(g.key)}
                 >
@@ -275,14 +275,14 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
           )}
           <Card className="max-h-[75vh] overflow-auto">
             {effectiveKey == null ? (
-              <p className="text-sm text-zinc-400">
+              <p className="text-sm text-faint">
                 No drawing for these lines (read from the document's text
                 schedule) — review the list on the right.
               </p>
             ) : imageUrl.data?.url ? (
               <>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-zinc-500">
+                  <span className="text-sm font-semibold text-muted">
                     {groupLabel(effectiveKey)}
                   </span>
                   <Button
@@ -306,7 +306,7 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
                 />
               </>
             ) : (
-              <p className="text-sm text-zinc-400">Loading read image…</p>
+              <p className="text-sm text-faint">Loading read image…</p>
             )}
           </Card>
         </div>
@@ -331,8 +331,8 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
           )}
           <Card className="max-h-[75vh] overflow-auto p-0">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white">
-                <tr className="border-b border-zinc-200 text-left text-zinc-500">
+              <thead className="sticky top-0 bg-paper">
+                <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
                   <th className="px-2 py-2">Tag</th>
                   <th className="px-2 py-2">Category</th>
                   <th className="px-2 py-2">Qty</th>
@@ -356,7 +356,7 @@ export function BoxReviewSection({ takeoff }: { takeoff: BoxReviewTakeoff }) {
                 ))}
                 {lines.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-zinc-400">
+                    <td colSpan={5} className="px-3 py-6 text-center text-faint">
                       No cabinets extracted — draw boxes to add them, or
                       finalize with an empty list.
                     </td>
@@ -392,8 +392,8 @@ function LineGroup({
 }) {
   return (
     <>
-      <tr className={current ? "bg-blue-50/50" : "bg-zinc-50"}>
-        <td colSpan={5} className="px-2 py-1 text-xs font-semibold text-zinc-500">
+      <tr className={current ? "bg-accent-soft/50" : "bg-bg"}>
+        <td colSpan={5} className="px-2 py-1 text-xs font-semibold text-muted">
           {label} — {group.lines.length} line{group.lines.length === 1 ? "" : "s"}
         </td>
       </tr>
@@ -448,8 +448,8 @@ function BoxLineRow({
     <tr
       ref={rowRef}
       onClick={onSelect}
-      className={`cursor-pointer border-b border-zinc-100 ${
-        selected ? "bg-blue-50" : ""
+      className={`cursor-pointer border-b border-rule-soft ${
+ selected ?"bg-accent-soft" : ""
       }`}
     >
       <td className="px-2 py-1">
@@ -468,7 +468,7 @@ function BoxLineRow({
       </td>
       <td className="px-2 py-1">
         <select
-          className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-sm"
+          className="rounded-md border border-rule bg-paper px-1 py-1 text-sm"
           value={line.category}
           onChange={(e) => onPatch({ category: e.target.value })}
           onClick={(e) => e.stopPropagation()}
@@ -512,7 +512,7 @@ function BoxLineRow({
       <td className="px-2 py-1 text-right">
         <Button
           variant="ghost"
-          className="text-red-600"
+          className="text-bad"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
@@ -544,12 +544,12 @@ function NewLineForm({
   });
   const num = (s: string) => (s.trim() === "" ? null : Number(s));
   return (
-    <Card className="mb-3 border-blue-300">
-      <h2 className="mb-2 text-sm font-semibold text-blue-800">
+    <Card className="mb-3 border-blue">
+      <h2 className="mb-2 text-sm font-semibold text-blue">
         New cabinet for the drawn box
       </h2>
       <div className="flex flex-wrap items-end gap-2 text-sm">
-        <label className="flex flex-col text-xs text-zinc-500">
+        <label className="flex flex-col text-xs text-muted">
           Tag
           <Input
             className="w-36"
@@ -558,10 +558,10 @@ function NewLineForm({
             onChange={(e) => setFields({ ...fields, tag: e.target.value })}
           />
         </label>
-        <label className="flex flex-col text-xs text-zinc-500">
+        <label className="flex flex-col text-xs text-muted">
           Category
           <select
-            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm"
+            className="rounded-md border border-rule bg-paper px-2 py-1 text-sm"
             value={fields.category}
             onChange={(e) => setFields({ ...fields, category: e.target.value })}
           >
@@ -572,7 +572,7 @@ function NewLineForm({
             ))}
           </select>
         </label>
-        <label className="flex flex-col text-xs text-zinc-500">
+        <label className="flex flex-col text-xs text-muted">
           Qty
           <Input
             className="w-14"
@@ -581,7 +581,7 @@ function NewLineForm({
           />
         </label>
         {(["width_in", "height_in", "depth_in"] as const).map((f) => (
-          <label key={f} className="flex flex-col text-xs text-zinc-500">
+          <label key={f} className="flex flex-col text-xs text-muted">
             {f === "width_in" ? "W" : f === "height_in" ? "H" : "D"} (in)
             <Input
               className="w-16"
