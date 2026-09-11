@@ -75,6 +75,51 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-11 — Stage 1 UI PR 2: Jobs list, live reading progress, quotes named by file
+
+**Shipped (PR 2 of 4, stacked on PR 1).**
+- **`takeoffs.progress` jsonb** (migration `0009`, applies at API boot):
+  `{stage, done, total, message, started_at, updated_at}`; shared
+  `TakeoffProgress` / `TAKEOFF_STAGES` (prepare · classify · locate · detect ·
+  measure · read · price). Workers write it through `takeoff/progress.ts`
+  `setProgress()` at every stage boundary — prepare (thumbnails every 5 pages,
+  then classify), staged reads (locate per page, detect per region, measure
+  before `buildFromDetections`), image reads, and `priceAndExpand` (so every
+  path reports "price"). `resetProgress()` at the start of prepare/extract
+  keeps `started_at` per run. Best-effort: a failed write never fails a job.
+- **`GET /jobs`**: takeoffs (by `updated_at`) joined to their latest quote
+  (`{id, status, totalCents}`) + `selectedPageCount` + `progress`. One call
+  for the list.
+- **Quotes ↔ filenames** (owner ask: "quote ids don't mean anything"):
+  `GET /quotes` rows carry `sourceFilename`; `GET /quotes/:id` carries
+  `sourceFilename` + `takeoff_status`. Quotes list and Quote Builder title
+  show the job's filename; the hex id survives only as a small mono
+  `quoteRef()` (#XXXXXXXX) for support and the PDF email subject.
+- **Web**: Jobs page (`Takeoffs.tsx`) — `UploadZone` (drag-drop + picker,
+  type/size validation, compact once jobs exist), filter tabs with counts
+  (All / Needs attention / In progress / Quoted), one row per job with step
+  pill + live progress message, quote total, relative time; row links to the
+  right step (pages / takeoff / quote); polls only while a job is processing.
+  `ReadingProgress` checklist (PDF: 6 stages; image/spreadsheet: read → price)
+  with done/now/next states, counts, elapsed timer — rendered by
+  `TakeoffReview` while `processing` and by `PagePicker` while preparing.
+  Quote Builder gets an "Open the takeoff" action.
+
+**Verified** in the browser against the mock API (Jobs populated with a live
+progress row, Reading screen, Quotes, Quote Builder); `pnpm build` and
+`pnpm test` green across the monorepo. NOT run against the real worker —
+the first prod job after deploy is the real test of the progress writes.
+
+**Gotchas.** (1) `setProgress` uses `jsonb_build_object(...) || ...` so
+`started_at` survives later writes; a plain `.set({progress})` would reset
+the timer at every stage. (2) The classic (`STAGED_READS=0`) PDF path only
+reports `read` at load and `price` at the end — per-page progress there was
+not wired (the path is a rollback knob, not the default). (3) Routes are
+still `/takeoffs/:id`; the plan's `/jobs/:id` naming is deferred to avoid
+churning deep links while PRs 3–4 land.
+
+---
+
 ## 2026-09-10 — product pivot agreed; Stage 1 UI PR 1: design system + shell
 
 **Context.** Owner (Mike) tasked Rida with turning Scribe into a self-serve,

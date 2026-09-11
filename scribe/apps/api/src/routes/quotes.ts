@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import {
   customers,
   getDb,
@@ -143,9 +143,24 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // Quotes carry their job's filename: a hex id means nothing to a person.
   app.get("/quotes", async () => {
     const db = getDb();
-    return db.select().from(quotes).orderBy(desc(quotes.createdAt)).limit(200);
+    const rows = await db
+      .select()
+      .from(quotes)
+      .orderBy(desc(quotes.createdAt))
+      .limit(200);
+    if (rows.length === 0) return [];
+    const tRows = await db
+      .select({ id: takeoffs.id, sourceFilename: takeoffs.sourceFilename })
+      .from(takeoffs)
+      .where(inArray(takeoffs.id, [...new Set(rows.map((r) => r.takeoffId))]));
+    const names = new Map(tRows.map((t) => [t.id, t.sourceFilename]));
+    return rows.map((q) => ({
+      ...q,
+      sourceFilename: names.get(q.takeoffId) ?? null,
+    }));
   });
 
   app.get<{ Params: { id: string } }>("/quotes/:id", async (req, reply) => {
@@ -173,8 +188,14 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
         qty: l.qty,
       }))
     );
+    const [job] = await db
+      .select({ sourceFilename: takeoffs.sourceFilename, status: takeoffs.status })
+      .from(takeoffs)
+      .where(eq(takeoffs.id, quote.takeoffId));
     return {
       ...quote,
+      sourceFilename: job?.sourceFilename ?? null,
+      takeoff_status: job?.status ?? null,
       pricing: run,
       pricing_config_version: config.version,
       quote_tiers: quoteTiers,

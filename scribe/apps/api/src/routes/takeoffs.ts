@@ -1,17 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
-  getDb,
+  evalFixtures,
   exportTemplates,
+  getDb,
   pricingConfigs,
   productLines,
   projectDocuments,
-  takeoffs,
+  quotes,
   takeoffDetections,
   takeoffLines,
-  evalFixtures,
+  takeoffs,
 } from "@scribe/db";
 import {
   CabinetLineItem,
@@ -242,6 +243,52 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
   app.get("/takeoffs", async () => {
     const db = getDb();
     return db.select().from(takeoffs).orderBy(desc(takeoffs.createdAt)).limit(200);
+  });
+
+  // Jobs list (product-plan.md §3.3): every takeoff with its latest quote, so
+  // the list shows one row per job with its step and quote total.
+  app.get("/jobs", async () => {
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(takeoffs)
+      .orderBy(desc(takeoffs.updatedAt))
+      .limit(200);
+    if (rows.length === 0) return [];
+    const qRows = await db
+      .select({
+        id: quotes.id,
+        takeoffId: quotes.takeoffId,
+        status: quotes.status,
+        totalCents: quotes.totalCents,
+        createdAt: quotes.createdAt,
+      })
+      .from(quotes)
+      .where(inArray(quotes.takeoffId, rows.map((r) => r.id)))
+      .orderBy(desc(quotes.createdAt));
+    const latest = new Map<string, (typeof qRows)[number]>();
+    for (const q of qRows) if (!latest.has(q.takeoffId)) latest.set(q.takeoffId, q);
+    return rows.map((t) => {
+      const q = latest.get(t.id) ?? null;
+      return {
+        id: t.id,
+        sourceFilename: t.sourceFilename,
+        sourceKind: t.sourceKind,
+        status: t.status,
+        pageCount: t.pageCount,
+        selectedPageCount: Array.isArray(t.selectedPages)
+          ? t.selectedPages.length
+          : null,
+        docConfidence: t.docConfidence,
+        progress: t.progress,
+        error: t.error,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+        quote: q
+          ? { id: q.id, status: q.status, totalCents: q.totalCents, createdAt: q.createdAt }
+          : null,
+      };
+    });
   });
 
   app.get<{ Params: { id: string } }>("/takeoffs/:id", async (req, reply) => {

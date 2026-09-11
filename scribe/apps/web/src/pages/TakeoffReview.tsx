@@ -6,6 +6,7 @@ import { API_URL, apiGet, apiSend } from "../api";
 import { Badge, Button, Card, errorMessage, Input, PageTitle, StatusPill, useToast } from "../ui";
 import { BoxReviewSection } from "./BoxReview";
 import { SourceBoxPanel } from "../components/SourceBoxPanel";
+import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 
 interface Line {
   id: string;
@@ -37,6 +38,9 @@ interface TakeoffDetail {
   sourceKind: string;
   status: string;
   pageCount: number | null;
+  progress: Progress | null;
+  createdAt: string;
+  updatedAt: string;
   docSummary: {
     uncertainties?: string[];
     unreadable_pages?: number[];
@@ -196,6 +200,24 @@ export function TakeoffReviewPage() {
     return <BoxReviewSection takeoff={takeoff} />;
   }
 
+  // Reading screen: the worker reports its stage in takeoffs.progress; this
+  // page already polls every 3 s while processing.
+  if (takeoff.status === "processing") {
+    return (
+      <div>
+        <PageTitle eyebrow="Reading">
+          {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}
+        </PageTitle>
+        <ReadingProgress
+          progress={takeoff.progress}
+          sourceKind={takeoff.sourceKind}
+          pageCount={takeoff.pageCount}
+          fallbackStartedAt={takeoff.updatedAt}
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageTitle
@@ -262,15 +284,6 @@ export function TakeoffReviewPage() {
         cabinet and box. Zoom with ⌘/ctrl + scroll (or the buttons) and drag to
         pan. Box edits are visual anchors — the inch fields drive pricing.
       </p>
-
-      {takeoff.status === "processing" && (
-        <Card>
-          <p className="text-sm text-muted">
-            Processing (extraction or pricing)… this page refreshes
-            automatically.
-          </p>
-        </Card>
-      )}
 
       {((takeoff.docSummary?.uncertainties?.length ?? 0) > 0 ||
         (takeoff.docSummary?.warnings?.length ?? 0) > 0) && (

@@ -106,6 +106,7 @@ export const takeoffs = pgTable("takeoffs", {
   docSummary: jsonb("doc_summary"),
   promptVersion: text("prompt_version"),
   tokensUsed: bigint("tokens_used", { mode: "number" }).notNull().default(0),
+  progress: jsonb("progress"),
   error: text("error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

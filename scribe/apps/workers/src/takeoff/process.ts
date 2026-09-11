@@ -40,6 +40,7 @@ import { matchLine } from "@scribe/pricing";
 import { EXTRACT_PROMPT_VERSION } from "@scribe/prompts";
 import { getObject, putObject } from "@scribe/storage";
 import { BudgetExceededError, TakeoffBudget } from "../lib/anthropic.js";
+import { setProgress, resetProgress } from "./progress.js";
 import { openaiConfigured } from "../lib/openai.js";
 import { classifyPages } from "./classify.js";
 import { crossValidatePage } from "./cross-validate.js";
@@ -331,6 +332,8 @@ export async function prepareTakeoff(
     if (takeoff.sourceKind !== "pdf") {
       throw new Error(`prepare stage only handles PDFs (got ${takeoff.sourceKind})`);
     }
+    await resetProgress(takeoffId);
+    await setProgress(takeoffId, "prepare", { message: "Opening the PDF" });
     const file = await getObject(takeoff.sourceFileS3Key);
     const pdf = openPdf(file);
     try {
@@ -394,6 +397,11 @@ export async function prepareTakeoff(
       // Picker thumbnails: EVERY page (the autonomous flow only wrote read
       // pages), stored for the picker UI and reused as classification input.
       log.info({ takeoffId, pageCount }, "rendering picker thumbnails");
+      await setProgress(takeoffId, "prepare", {
+        done: 0,
+        total: pageCount,
+        message: "Rendering page thumbnails",
+      });
       const thumbnails: { page: number; png: Uint8Array }[] = [];
       for (let i = 0; i < pageCount; i++) {
         const png = pdf.renderPage(i, PICKER_THUMBNAIL_DPI);
@@ -403,8 +411,19 @@ export async function prepareTakeoff(
           "image/png"
         );
         thumbnails.push({ page: i + 1, png });
+        if ((i + 1) % 5 === 0 || i + 1 === pageCount) {
+          await setProgress(takeoffId, "prepare", {
+            done: i + 1,
+            total: pageCount,
+            message: "Rendering page thumbnails",
+          });
+        }
       }
 
+      await setProgress(takeoffId, "classify", {
+        total: pageCount,
+        message: "Classifying page types",
+      });
       const classified = await classifyPages(thumbnails, budget);
 
       await db
@@ -443,6 +462,8 @@ export async function extractTakeoff(
   const budget = new TakeoffBudget();
   const crossVal = await loadCrossVal();
   try {
+    await resetProgress(takeoffId);
+    await setProgress(takeoffId, "read", { message: "Loading the file" });
     const file = await getObject(takeoff.sourceFileS3Key);
 
     let lines: ReadLine[];
@@ -459,6 +480,11 @@ export async function extractTakeoff(
       await putObject(`takeoffs/${takeoffId}/pages/1.png`, file, "image/png");
       const readKey = `takeoffs/${takeoffId}/reads/p1-c0-full.png`;
       await putObject(readKey, file, "image/png");
+      await setProgress(takeoffId, "read", {
+        done: 0,
+        total: 1,
+        message: "Reading the image",
+      });
       const { extraction, raw } = await extractPage(1, file, budget);
       raws = [raw];
       const validated = crossVal.enabled
@@ -558,6 +584,9 @@ export async function priceAndExpand(
   log: Logger
 ): Promise<void> {
   const db = getDb();
+  await setProgress(takeoffId, "price", {
+    message: "Matching products and pricing",
+  });
   // Re-run safety: drop previously derived faces before re-deriving them.
   await db
     .delete(takeoffLines)

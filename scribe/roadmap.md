@@ -65,8 +65,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 - **Priority 9 / LOE 8 / ui / in-progress.** Spec: `product-plan.md` §3 (agreed
   2026-09-10, supersedes PRD §2/§3 per the owner). Four PRs: (1) tokens, fonts,
   component library, shell, human status labels, toasts — **shipped**
-  (`claude/scribe-ui-1-design-system`); (2) Jobs list + upload + `takeoffs.progress`
-  + Reading screen; (3) Pages step with the wizard folded in + Review rework +
+  (`claude/scribe-ui-1-design-system`); (2) Jobs list + drop-zone upload +
+  `takeoffs.progress` (migration 0009) + Reading screen + quotes named by
+  their job's file — **shipped** (`claude/scribe-ui-2-jobs-progress`); (3) Pages step with the wizard folded in + Review rework +
   live estimate + Flags panel slot; (4) Quote step + Done + Admin ported to the
   new components. Stage V (verification layers) runs alongside; Stages 2–4
   (accounts, credits, beta) follow — all in `product-plan.md`.

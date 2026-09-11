@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { quoteBuilderRoute } from "../main";
+import { quoteRef } from "../labels";
 import { apiGet, apiSend, formatUsd } from "../api";
 import { Badge, Button, Card, errorMessage, Input, PageTitle, StatusPill, useToast } from "../ui";
 
@@ -10,6 +12,8 @@ interface Me {
 
 interface QuoteDetail {
   id: string;
+  takeoffId: string;
+  sourceFilename: string | null;
   status: string;
   pricingTier: "low" | "medium" | "high";
   markupPct: number;
@@ -121,8 +125,12 @@ export function QuoteBuilderPage() {
   return (
     <div>
       <PageTitle
+        eyebrow={`Quote ${quoteRef(quote.id)}`}
         actions={
           <div className="flex items-center gap-2">
+            <Link to="/takeoffs/$takeoffId" params={{ takeoffId: quote.takeoffId }}>
+              <Button variant="quiet">Open the takeoff</Button>
+            </Link>
             <Button
               disabled={generatePdf.isPending}
               onClick={() => generatePdf.mutate()}
@@ -131,7 +139,7 @@ export function QuoteBuilderPage() {
             </Button>
             <a
               href={`mailto:?from=hank@cabinetnow.com&subject=${encodeURIComponent(
-                `CabinetNow quote #${quote.id.slice(0, 8).toUpperCase()}`
+                `CabinetNow quote — ${quote.sourceFilename ?? quoteRef(quote.id)}`
               )}&body=${encodeURIComponent(
                 "Quote attached. Please verify all measurements and quantities. Pricing valid 10 days.\n\n(Attach the generated PDF before sending.)"
               )}`}
@@ -158,7 +166,7 @@ export function QuoteBuilderPage() {
           </div>
         }
       >
-        Quote #{quote.id.slice(0, 8).toUpperCase()}{" "}
+        {quote.sourceFilename ?? "Untitled job"}{" "}
         <StatusPill status={quote.status} />
       </PageTitle>
 

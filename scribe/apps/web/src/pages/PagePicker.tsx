@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { pagePickerRoute } from "../main";
 import { apiGet, apiSend } from "../api";
 import { Badge, Button, Card, errorMessage, PageTitle, StatusPill, useToast } from "../ui";
+import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 
 interface PageClassification {
   page: number;
@@ -14,9 +15,12 @@ interface PageClassification {
 interface TakeoffDetail {
   id: string;
   sourceFilename: string | null;
+  sourceKind: string;
   status: string;
   pageCount: number | null;
   classifiedPages: PageClassification[] | null;
+  progress: Progress | null;
+  updatedAt: string;
   error: string | null;
 }
 
@@ -128,11 +132,13 @@ export function PagePickerPage() {
 
 
       {takeoff.status === "processing" ? (
-        <Card>
-          <p className="text-sm text-muted">
-            Preparing page thumbnails… this page refreshes automatically.
-          </p>
-        </Card>
+        <ReadingProgress
+          title="Preparing your pages"
+          progress={takeoff.progress}
+          sourceKind={takeoff.sourceKind}
+          pageCount={takeoff.pageCount}
+          fallbackStartedAt={takeoff.updatedAt}
+        />
       ) : (
         <>
           <p className="mb-3 text-sm text-muted">

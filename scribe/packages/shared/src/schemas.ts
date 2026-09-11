@@ -139,6 +139,30 @@ export type PageClassification = z.infer<typeof PageClassification>;
 // One user-picked page from the page-selection gate. `class` is set only when
 // the user overrode (or confirmed) the classifier's suggested type; absent
 // means "use the classifier's call".
+// Live progress of a takeoff while status = processing (takeoffs.progress).
+// Stages in pipeline order; the Reading screen renders them as a checklist.
+export const TAKEOFF_STAGES = [
+  "prepare",
+  "classify",
+  "locate",
+  "detect",
+  "measure",
+  "read",
+  "price",
+] as const;
+export const TakeoffStage = z.enum(TAKEOFF_STAGES);
+export type TakeoffStage = z.infer<typeof TakeoffStage>;
+
+export const TakeoffProgress = z.object({
+  stage: TakeoffStage,
+  done: z.number().int().nonnegative().nullable().default(null),
+  total: z.number().int().nonnegative().nullable().default(null),
+  message: z.string().nullable().default(null),
+  started_at: z.string(),
+  updated_at: z.string(),
+});
+export type TakeoffProgress = z.infer<typeof TakeoffProgress>;
+
 export const SelectedPage = z.object({
   page: z.number().int().positive(),
   class: PageClass.optional(),
