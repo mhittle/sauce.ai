@@ -13,6 +13,7 @@ import {
   selectRelevantPages,
 } from "@scribe/shared";
 import { TakeoffBudget } from "../lib/anthropic.js";
+import { setProgress } from "./progress.js";
 import { buildFromDetections, detectRegion } from "./detect.js";
 import { openPdf } from "./pdf.js";
 import { locateRegions, locateRooms } from "./regions.js";
@@ -79,8 +80,14 @@ export async function stagedExtractPdf(
     // show, and the 2026-08-05 attribution showed elevations are the better
     // count source (plan-only docs still keep their plan regions).
     const located: { page: number; kind: string; rect: RectPt }[] = [];
+    let locatedPages = 0;
     for (const pageInfo of relevant) {
       const page = pageInfo.page;
+      await setProgress(takeoffId, "locate", {
+        done: locatedPages++,
+        total: relevant.length,
+        message: `Finding the drawings on page ${page}`,
+      });
       if (
         pageInfo.class === "cabinet_schedule_table" ||
         pageInfo.class === "finish_schedule"
@@ -186,7 +193,14 @@ export async function stagedExtractPdf(
     )
     .orderBy(takeoffDetections.page, takeoffDetections.createdAt);
   if (queued.length === 0) throw new Error("no regions to scan");
+  let scanned = 0;
   for (const row of queued) {
+    await setProgress(takeoffId, "detect", {
+      done: scanned,
+      total: queued.length,
+      message: `Finding cabinets in drawing ${scanned + 1} of ${queued.length}`,
+    });
+    scanned++;
     await detectRegion(row.id, log);
     const [after] = await db
       .select()
@@ -205,6 +219,11 @@ export async function stagedExtractPdf(
 
   // Stage 4: measurements + lines + pricing + review (throws on failure so
   // extractTakeoff's failTakeoff handling applies).
+  await setProgress(takeoffId, "measure", {
+    done: queued.length,
+    total: queued.length,
+    message: "Measuring every cabinet against the printed dimensions",
+  });
   const merged = await buildFromDetections(takeoffId, "processing", log, {
     onError: "throw",
     evalFixture: true,

@@ -94,3 +94,9 @@ export function categoryDotClass(category: string): string {
       return "bg-cat-other";
   }
 }
+
+// Short human-readable reference for a quote (support/PDF footer). The job's
+// filename is the primary name everywhere on screen.
+export function quoteRef(id: string): string {
+  return `#${id.slice(0, 8).toUpperCase()}`;
+}

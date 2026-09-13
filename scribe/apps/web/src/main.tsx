@@ -80,6 +80,11 @@ export const betaDetectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/takeoffs/$takeoffId/detect",
   component: BetaDetectPage,
+  // ?pages=1,3,5 — the Pages step hands its selection over so the wizard
+  // opens straight on Draw with those pages.
+  validateSearch: (search: Record<string, unknown>): { pages?: string } => ({
+    pages: typeof search.pages === "string" && search.pages ? search.pages : undefined,
+  }),
 });
 
 export const quotesRoute = createRoute({
@@ -98,6 +103,9 @@ export const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin",
   component: AdminPage,
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
 });
 
 const routeTree = rootRoute.addChildren([

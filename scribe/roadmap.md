@@ -14,7 +14,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
-| Stage 1 UI rework — direction A design system, job stepper, admin ported (product-plan.md §3) | 9 | 8 | ui | in-progress |
+| Stage 1 UI rework — direction A design system, job stepper, admin ported (product-plan.md §3) | 9 | 8 | ui | done (PRs #254–#257, pending merge) |
 | Staged reads (segment→boxes→detect→measure) as DEFAULT pipeline + beta detect wizard + zero-API kit harness | 9 | 8 | takeoff | done |
 | Plan-only run→unit decomposition in the staged measure stage (plan-kind kits 0.13 → 0.32 F1) | 8 | 4 | takeoff | done |
 | Dedupe markers across overlapping staged regions (mirrored/duplicate plans double-count a run) | 6 | 3 | takeoff | backlog |
@@ -65,10 +65,19 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 - **Priority 9 / LOE 8 / ui / in-progress.** Spec: `product-plan.md` §3 (agreed
   2026-09-10, supersedes PRD §2/§3 per the owner). Four PRs: (1) tokens, fonts,
   component library, shell, human status labels, toasts — **shipped**
-  (`claude/scribe-ui-1-design-system`); (2) Jobs list + upload + `takeoffs.progress`
-  + Reading screen; (3) Pages step with the wizard folded in + Review rework +
-  live estimate + Flags panel slot; (4) Quote step + Done + Admin ported to the
-  new components. Stage V (verification layers) runs alongside; Stages 2–4
+  (`claude/scribe-ui-1-design-system`); (2) Jobs list + drop-zone upload +
+  `takeoffs.progress` (migration 0009) + Reading screen + quotes named by
+  their job's file — **shipped** (`claude/scribe-ui-2-jobs-progress`); (3) Pages step (pre-selected readable
+  pages, all-of-a-type shortcuts, type chips, "draw the regions yourself"
+  hand-off to the wizard) + Review rework (60/40 drawing/breakdown, rooms,
+  click-to-edit, flagged/unmatched filters, inline product picker, undo
+  delete, live Base estimate bar, one-call batch accept, notes-from-the-read
+  panel as the Flags slot) — **shipped**
+  (`claude/scribe-ui-3-pages-review`); (4) Quote step (tier cards, adjustments,
+  shipping confirmation, server-gated Send with listed blockers, Done state,
+  admin-only operator warnings) + Admin ported to the new components with a
+  sidebar (`?tab=`), crawler sources off the sidebar — **shipped**
+  (`claude/scribe-ui-4-quote-admin`). Stage 1 complete pending merge. Stage V (verification layers) runs alongside; Stages 2–4
   (accounts, credits, beta) follow — all in `product-plan.md`.
 
 ### Staged reads as DEFAULT pipeline + beta detect wizard + zero-API kit harness

@@ -86,7 +86,7 @@ export function Layout() {
               </Link>
             ))}
             {user.role === "admin" && (
-              <Link to="/admin" className={NAV_LINK}>
+              <Link to="/admin" search={{ tab: undefined }} className={NAV_LINK}>
                 Admin
               </Link>
             )}
@@ -239,6 +239,14 @@ function AccountMenu({ user }: { user: Me }) {
               </Link>
               <Link to="/prospects" className={item} onClick={() => setOpen(false)}>
                 Prospects
+              </Link>
+              <Link
+                to="/admin"
+                search={{ tab: "sources" }}
+                className={item}
+                onClick={() => setOpen(false)}
+              >
+                Crawler sources
               </Link>
             </>
           )}

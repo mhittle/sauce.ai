@@ -75,6 +75,147 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-13 (b) — Stage 1 UI PR 4: Quote step, Done state, Admin ported
+
+**Shipped (PR 4 of 4, stacked on PR 3). Stage 1 is code-complete.**
+- **Quote step** (`QuoteBuilder.tsx`, rewritten): three tier cards (radio
+  semantics; click PATCHes `pricing_tier`) with the boxes / doors&fronts /
+  drawer-box breakdown; line items as the itemized audit; Adjustments
+  (markup, handling) and Shipping (pallets, estimate, override, "I've
+  confirmed the shipping cost" checkbox) cards; Total card. Sticky bar with
+  the tier total, **the list of blockers** (shipping unconfirmed, unpriced
+  lines with a link back to the takeoff, placeholder rates), "Download PDF"
+  and "Send quote". Send PATCHes `status=sent` — the SERVER enforces the
+  gates — then opens the mailto draft (PDF attach stays manual until the
+  Stage 2 email provider). **Done state**: sent/won/lost/expired lock every
+  input and tier card, show a green banner with the sent time and "Start
+  another job"; More menu offers Mark won / Mark lost when sent, plus the
+  CSV exports. Operator-only: pricing-config version, product-line ids,
+  "placeholder rate" chips, and the real NEEDS-REVIEW wording render for
+  `admin`; everyone else sees "pricing isn't finalized — ask an admin".
+- **Admin** (`Admin.tsx`, rewritten on the component library): sidebar with
+  `?tab=` routing (`validateSearch` on `/admin`) — Pricing · Branding &
+  terms · Freight & reading · Export mappings · Users; Crawler sources
+  hidden from the sidebar but routable (account menu › Operator › Crawler
+  sources). Pricing editor: sticky save bar with the placeholder-rate count,
+  per-line cards, "placeholder" chips, test calculator on `Field`/`Select`.
+  Branding: logo upload now goes through `apiUpload` (**bug fix in
+  passing**: the old raw `fetch` sent no bearer header, so the upload 401'd
+  on the cross-site Railway deploy). Terms/footer save only when dirty.
+  Users: form submit, role hints, toasts. Every save toasts.
+- Layout: the Admin nav link clears `?tab`; Operator menu gains Crawler
+  sources.
+
+**Verified** on the mock API: quote draft (blockers listed, Send disabled),
+quote sent (locked Done state), admin pricing / branding / users, light +
+dark. `pnpm build` + `pnpm test` green. Not run against the real API.
+
+**Gotchas.** (1) The Send button is disabled purely from the client's
+`blockers` list, which mirrors the server gates in `quotes.ts` — if a gate
+is added server-side, add it to `blockers` too or the button will look
+enabled and the PATCH will 4xx (the toast shows the server's message).
+(2) Mark won/lost PATCH `status` with no other gates. (3) Roles still
+can't be edited in Users — Stage 2 replaces the allow-list anyway.
+
+---
+
+## 2026-09-13 — Stage 1 UI PR 3: Pages step + Review rework
+
+**Shipped (PR 3 of 4, stacked on PR 2).**
+- **API**: `GET /takeoffs/:id` now returns `quote_tiers` (same
+  `priceQuoteTiers` call the quote uses) so the review bar shows the number
+  the quote will open with. `POST /takeoffs/:id/accept-lines
+  {min_confidence?}` marks every line in `[threshold, 1)` as reviewed in one
+  UPDATE (replaces the UI's PATCH-per-line loop).
+- **Pages step** (`PagePicker.tsx`): readable pages (plan / elevation /
+  schedule per the classifier) are PRE-SELECTED — the common case is "looks
+  right, go"; "All plans / All elevations / Every page / Clear" shortcuts;
+  per-tile type chips (Plan · Elevation · Schedule · Finishes · Skip) replace
+  the `<select>`; the primary button counts readable pages only; a "Draw the
+  regions yourself" disclosure hands the selection to the wizard via
+  `/takeoffs/:id/detect?pages=1,3,5` (`validateSearch` on the route), which
+  opens straight on Draw. The wizard uses the shared `Stepper`; the "Detect
+  (beta)" buttons are gone from the picker and review headers (the review's
+  More menu keeps "Re-read with drawn regions…").
+- **Review** (`TakeoffReview.tsx`, rewritten): fixed-height two-pane layout
+  (drawing 3fr / breakdown 2fr, each scrolling internally; `SourceBoxPanel`
+  gained a `maxHeight` prop). Breakdown grouped by room with per-room qty;
+  every cell is a `Cell` (click/tab to edit, Enter or blur commits, Esc
+  restores — no more `e`-or-double-click); material/finish sit under the tag;
+  confidence is a button that accepts the line; unmatched lines carry an
+  inline product `Select` (same PATCH as the old bucket); derived door/front
+  faces hide behind "Show doors & fronts" and are summarized per cabinet
+  ("2 doors · 1 front"). Filter tabs All / Flagged / Unmatched with counts;
+  category legend with quantities; "notes from the read" collapsible = the
+  Stage V Flags slot (doc uncertainties + warnings today, per-line flags
+  later). **Delete is soft**: the row hides, a toast offers Undo for 8 s,
+  then the DELETE fires (pending deletes flush on unmount). Sticky bar: Base
+  estimate + Upgraded/Premium, cabinet count, "N to check", "Accept N
+  confident" (batch endpoint), and **"Looks right → Quote"** which approves
+  then creates the quote in one go ("Approve without quoting" lives in More).
+  Keyboard: ↑/↓ (j/k), Enter accept+advance, Del soft-delete, `e` focus the
+  row's first field, `?` shortcuts dialog. Materials is a one-line
+  `<details>` under the drawing. Failed takeoffs get a plain failure screen.
+- Toasts accept an `action` + `ttlMs` (used by Undo).
+
+**Verified** on the mock API (with read images + bboxes + derived faces):
+layout at 1440 light/dark, keyboard nav, soft delete + Undo, help dialog,
+Pages pre-selection and chips. `pnpm build` + `pnpm test` green. Not run
+against the real API.
+
+**Gotchas.** (1) `Cell` commits on blur — one PATCH per edited cell; fine
+for review volumes, but don't wire it to anything that re-renders the whole
+list per keystroke. (2) The right panel is width-budgeted for ~560 px; adding
+a column means removing one. (3) `BoxReviewSection` (legacy
+`awaiting_boxes`) is untouched and still uses the old table.
+
+---
+
+## 2026-09-11 — Stage 1 UI PR 2: Jobs list, live reading progress, quotes named by file
+
+**Shipped (PR 2 of 4, stacked on PR 1).**
+- **`takeoffs.progress` jsonb** (migration `0009`, applies at API boot):
+  `{stage, done, total, message, started_at, updated_at}`; shared
+  `TakeoffProgress` / `TAKEOFF_STAGES` (prepare · classify · locate · detect ·
+  measure · read · price). Workers write it through `takeoff/progress.ts`
+  `setProgress()` at every stage boundary — prepare (thumbnails every 5 pages,
+  then classify), staged reads (locate per page, detect per region, measure
+  before `buildFromDetections`), image reads, and `priceAndExpand` (so every
+  path reports "price"). `resetProgress()` at the start of prepare/extract
+  keeps `started_at` per run. Best-effort: a failed write never fails a job.
+- **`GET /jobs`**: takeoffs (by `updated_at`) joined to their latest quote
+  (`{id, status, totalCents}`) + `selectedPageCount` + `progress`. One call
+  for the list.
+- **Quotes ↔ filenames** (owner ask: "quote ids don't mean anything"):
+  `GET /quotes` rows carry `sourceFilename`; `GET /quotes/:id` carries
+  `sourceFilename` + `takeoff_status`. Quotes list and Quote Builder title
+  show the job's filename; the hex id survives only as a small mono
+  `quoteRef()` (#XXXXXXXX) for support and the PDF email subject.
+- **Web**: Jobs page (`Takeoffs.tsx`) — `UploadZone` (drag-drop + picker,
+  type/size validation, compact once jobs exist), filter tabs with counts
+  (All / Needs attention / In progress / Quoted), one row per job with step
+  pill + live progress message, quote total, relative time; row links to the
+  right step (pages / takeoff / quote); polls only while a job is processing.
+  `ReadingProgress` checklist (PDF: 6 stages; image/spreadsheet: read → price)
+  with done/now/next states, counts, elapsed timer — rendered by
+  `TakeoffReview` while `processing` and by `PagePicker` while preparing.
+  Quote Builder gets an "Open the takeoff" action.
+
+**Verified** in the browser against the mock API (Jobs populated with a live
+progress row, Reading screen, Quotes, Quote Builder); `pnpm build` and
+`pnpm test` green across the monorepo. NOT run against the real worker —
+the first prod job after deploy is the real test of the progress writes.
+
+**Gotchas.** (1) `setProgress` uses `jsonb_build_object(...) || ...` so
+`started_at` survives later writes; a plain `.set({progress})` would reset
+the timer at every stage. (2) The classic (`STAGED_READS=0`) PDF path only
+reports `read` at load and `price` at the end — per-page progress there was
+not wired (the path is a rollback knob, not the default). (3) Routes are
+still `/takeoffs/:id`; the plan's `/jobs/:id` naming is deferred to avoid
+churning deep links while PRs 3–4 land.
+
+---
+
 ## 2026-09-10 — product pivot agreed; Stage 1 UI PR 1: design system + shell
 
 **Context.** Owner (Mike) tasked Rida with turning Scribe into a self-serve,

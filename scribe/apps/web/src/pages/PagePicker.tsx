@@ -3,7 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { pagePickerRoute } from "../main";
 import { apiGet, apiSend } from "../api";
-import { Badge, Button, Card, errorMessage, PageTitle, StatusPill, useToast } from "../ui";
+import {
+  Button,
+  Card,
+  errorMessage,
+  PageTitle,
+  StatusPill,
+  useToast,
+} from "../ui";
+import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 
 interface PageClassification {
   page: number;
@@ -14,9 +22,12 @@ interface PageClassification {
 interface TakeoffDetail {
   id: string;
   sourceFilename: string | null;
+  sourceKind: string;
   status: string;
   pageCount: number | null;
   classifiedPages: PageClassification[] | null;
+  progress: Progress | null;
+  updatedAt: string;
   error: string | null;
 }
 
@@ -24,15 +35,16 @@ interface TakeoffDetail {
 // tag tells the extractor HOW to read a page — the diagnosis showed the
 // plan-vs-elevation call decides reading accuracy, so overriding it here is
 // high-leverage.
-const CLASS_OPTIONS: { value: string; label: string }[] = [
-  { value: "floor_plan", label: "Floor plan" },
-  { value: "kitchen_or_millwork_elevation", label: "Elevation / millwork" },
-  { value: "cabinet_schedule_table", label: "Cabinet schedule" },
-  { value: "finish_schedule", label: "Finish schedule" },
-  { value: "other", label: "Other (not read)" },
+const CLASS_OPTIONS: { value: string; label: string; short: string }[] = [
+  { value: "floor_plan", label: "Floor plan", short: "Plan" },
+  { value: "kitchen_or_millwork_elevation", label: "Elevation / millwork", short: "Elevation" },
+  { value: "cabinet_schedule_table", label: "Cabinet schedule", short: "Schedule" },
+  { value: "finish_schedule", label: "Finish schedule", short: "Finishes" },
+  { value: "other", label: "Other (not read)", short: "Skip" },
 ];
 
 const OPTION_VALUES = new Set(CLASS_OPTIONS.map((o) => o.value));
+const READABLE = ["floor_plan", "kitchen_or_millwork_elevation", "cabinet_schedule_table"];
 
 // Collapse classifier classes with no read path into "other" for the select.
 function toOption(cls: string | undefined): string {
@@ -47,9 +59,9 @@ export function PagePickerPage() {
   const { takeoffId } = pagePickerRoute.useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const toast = useToast();
   // page -> chosen class; presence in the map = selected.
   const [picked, setPicked] = useState<Record<number, string>>({});
-  const toast = useToast();
 
   const q = useQuery({
     queryKey: ["takeoff", takeoffId],
@@ -73,6 +85,27 @@ export function PagePickerPage() {
     return m;
   }, [q.data?.classifiedPages]);
 
+  const pageCount = q.data?.pageCount ?? 0;
+  const allPages = useMemo(
+    () => Array.from({ length: pageCount }, (_, i) => i + 1),
+    [pageCount]
+  );
+
+  // Pre-select what the classifier thinks is readable — the common case is
+  // "looks right, go", and the tiles are there to correct the exceptions.
+  useEffect(() => {
+    if (status !== "awaiting_pages" || pageCount === 0) return;
+    setPicked((prev) => {
+      if (Object.keys(prev).length > 0) return prev;
+      const next: Record<number, string> = {};
+      for (const p of allPages) {
+        const cls = toOption(classByPage.get(p)?.class);
+        if (READABLE.includes(cls)) next[p] = cls;
+      }
+      return next;
+    });
+  }, [status, pageCount, allPages, classByPage]);
+
   const submit = useMutation({
     mutationFn: () =>
       apiSend("POST", `/takeoffs/${takeoffId}/pages`, {
@@ -94,105 +127,169 @@ export function PagePickerPage() {
     },
   });
 
+  // Counts per suggested type, for the "all elevations" shortcuts.
+  const byType = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const p of allPages) {
+      const cls = toOption(classByPage.get(p)?.class);
+      m.set(cls, [...(m.get(cls) ?? []), p]);
+    }
+    return m;
+  }, [allPages, classByPage]);
+
+  function selectType(cls: string) {
+    setPicked((prev) => {
+      const next = { ...prev };
+      for (const p of byType.get(cls) ?? []) next[p] = cls;
+      return next;
+    });
+  }
+
   if (q.isLoading) return <div className="text-muted">Loading…</div>;
   if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
   const takeoff = q.data!;
-  const pageCount = takeoff.pageCount ?? 0;
-  const selectedCount = Object.keys(picked).length;
+  const selectedPages = Object.keys(picked)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const selectedCount = selectedPages.length;
+  const readableCount = selectedPages.filter((p) => READABLE.includes(picked[p])).length;
 
   return (
     <div>
       <PageTitle
+        eyebrow="Choose pages"
         actions={
           <div className="flex items-center gap-2">
-            <Link to="/takeoffs/$takeoffId/detect" params={{ takeoffId }}>
-              <Button>
-                Detect <Badge tone="blue">beta</Badge>
-              </Button>
-            </Link>
+            <StatusPill status={takeoff.status} />
             <Button
               variant="primary"
-              disabled={selectedCount === 0 || submit.isPending}
+              loading={submit.isPending}
+              disabled={readableCount === 0}
               onClick={() => submit.mutate()}
             >
-              {submit.isPending
-                ? "Starting…"
-                : `Process ${selectedCount} page${selectedCount === 1 ? "" : "s"} →`}
+              {`Read ${readableCount} page${readableCount === 1 ? "" : "s"} →`}
             </Button>
           </div>
         }
       >
-        Select pages: {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}{" "}
-        <StatusPill status={takeoff.status} />
+        {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}
       </PageTitle>
 
-
       {takeoff.status === "processing" ? (
-        <Card>
-          <p className="text-sm text-muted">
-            Preparing page thumbnails… this page refreshes automatically.
-          </p>
-        </Card>
+        <ReadingProgress
+          title="Preparing your pages"
+          progress={takeoff.progress}
+          sourceKind={takeoff.sourceKind}
+          pageCount={takeoff.pageCount}
+          fallbackStartedAt={takeoff.updatedAt}
+        />
       ) : (
         <>
-          <p className="mb-3 text-sm text-muted">
-            Click the pages the takeoff should read, and correct the suggested
-            page type where it's wrong — the type decides how a page is read.
-            Pages tagged “Other” are skipped.
+          <p className="mb-3 max-w-3xl text-sm text-muted">
+            The pages that look like cabinet drawings are already selected. Click
+            a page to add or remove it, and correct its type where the guess is
+            wrong — the type decides how a page is read. Pages marked “Skip” are
+            not read.
           </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {Array.from({ length: pageCount }, (_, i) => i + 1).map((page) => {
+
+          <div className="mb-4 flex flex-wrap items-center gap-1.5">
+            {READABLE.map((cls) => {
+              const n = byType.get(cls)?.length ?? 0;
+              if (n === 0) return null;
+              const o = CLASS_OPTIONS.find((x) => x.value === cls)!;
+              return (
+                <Button key={cls} size="sm" onClick={() => selectType(cls)}>
+                  All {o.short.toLowerCase()}s
+                  <span className="font-mono text-[11px] text-muted">{n}</span>
+                </Button>
+              );
+            })}
+            <Button size="sm" onClick={() => setPicked(Object.fromEntries(allPages.map((p) => [p, toOption(classByPage.get(p)?.class)])))}>
+              Every page
+            </Button>
+            <Button size="sm" variant="quiet" onClick={() => setPicked({})}>
+              Clear
+            </Button>
+            <span className="ml-auto font-mono text-xs tabular-nums text-muted">
+              {selectedCount} of {pageCount} selected
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            {allPages.map((page) => {
               const suggested = toOption(classByPage.get(page)?.class);
               const selected = page in picked;
+              const cls = selected ? picked[page] : suggested;
               return (
                 <div
                   key={page}
-                  className={`cursor-pointer rounded-lg border bg-paper p-2 transition-colors ${
- selected
- ?"border-accent ring-2 ring-accent-soft"
+                  className={`rounded-lg border bg-paper p-2 transition-colors ${
+                    selected
+                      ? "border-accent ring-2 ring-accent-soft"
                       : "border-rule hover:border-muted"
                   }`}
-                  onClick={() =>
-                    setPicked((prev) => {
-                      const next = { ...prev };
-                      if (page in next) delete next[page];
-                      else next[page] = suggested;
-                      return next;
-                    })
-                  }
                 >
-                  <div className="relative">
+                  <div
+                    role="checkbox"
+                    aria-checked={selected}
+                    aria-label={`Page ${page}, ${classLabel(cls)}`}
+                    tabIndex={0}
+                    className="relative cursor-pointer"
+                    onClick={() =>
+                      setPicked((prev) => {
+                        const next = { ...prev };
+                        if (page in next) delete next[page];
+                        else next[page] = suggested;
+                        return next;
+                      })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).click();
+                      }
+                    }}
+                  >
                     <PageThumb takeoffId={takeoffId} page={page} />
+                    <span className="absolute left-1 top-1 rounded bg-paper/90 px-1.5 font-mono text-[11px] text-ink">
+                      p{page}
+                    </span>
                     {selected && (
-                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-sm font-bold text-paper">
+                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
                         ✓
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-1">
-                    <span className="text-xs font-medium text-muted">
-                      p{page}
-                    </span>
-                    {selected ? (
-                      <select
-                        className="min-w-0 flex-1 rounded-md border border-rule px-1 py-0.5 text-xs"
-                        value={picked[page]}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          setPicked((prev) => ({ ...prev, [page]: e.target.value }))
-                        }
-                      >
-                        {CLASS_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="truncate text-xs text-faint">
-                        {classLabel(suggested)}
-                      </span>
-                    )}
+                  <div className="mt-1.5 flex flex-wrap gap-1" role="radiogroup" aria-label={`Page ${page} type`}>
+                    {CLASS_OPTIONS.map((o) => {
+                      const on = cls === o.value;
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          title={o.label}
+                          className={`rounded px-1.5 py-0.5 text-[11px] leading-tight ${
+                            on
+                              ? selected
+                                ? "bg-ink text-paper"
+                                : "bg-rule-soft text-ink"
+                              : "text-muted hover:bg-rule-soft"
+                          }`}
+                          onClick={() =>
+                            setPicked((prev) => {
+                              const next = { ...prev };
+                              if (o.value === "other") delete next[page];
+                              else next[page] = o.value;
+                              return next;
+                            })
+                          }
+                        >
+                          {o.short}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -203,6 +300,32 @@ export function PagePickerPage() {
               </Card>
             )}
           </div>
+
+          <details className="mt-6 max-w-3xl rounded-lg border border-rule bg-paper">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-ink">
+              Draw the regions yourself
+              <span className="ml-2 text-xs font-normal text-muted">
+                advanced — when the automatic read keeps missing a sheet
+              </span>
+            </summary>
+            <div className="border-t border-rule-soft px-4 py-3 text-sm text-muted">
+              <p className="mb-3">
+                Instead of letting Scribe find the drawings, you drag boxes over
+                every cabinet area on the selected pages. The model then labels
+                what's inside each box and one measuring pass sizes everything.
+                Slower, but you control exactly what gets read.
+              </p>
+              <Link
+                to="/takeoffs/$takeoffId/detect"
+                params={{ takeoffId }}
+                search={{ pages: selectedPages.join(",") || undefined }}
+              >
+                <Button disabled={selectedCount === 0}>
+                  Draw on {selectedCount} page{selectedCount === 1 ? "" : "s"} →
+                </Button>
+              </Link>
+            </div>
+          </details>
         </>
       )}
     </div>

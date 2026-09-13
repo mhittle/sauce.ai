@@ -2,10 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { apiGet, formatUsd } from "../api";
 import { Badge, Card, PageTitle, StatusPill } from "../ui";
+import { quoteRef } from "../labels";
 
 export interface QuoteRow {
   id: string;
   takeoffId: string;
+  sourceFilename: string | null;
   status: string;
   subtotalCents: number;
   totalCents: number;
@@ -29,7 +31,7 @@ export function QuotesPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
-              <th className="px-3 py-2">Quote</th>
+              <th className="px-3 py-2">Job</th>
               <th className="px-3 py-2">Total</th>
               <th className="px-3 py-2">Markup</th>
               <th className="px-3 py-2">Lead time</th>
@@ -45,10 +47,13 @@ export function QuotesPage() {
                   <Link
                     to="/quotes/$quoteId"
                     params={{ quoteId: quote.id }}
-                    className="font-medium text-blue hover:underline"
+                    className="font-medium text-ink hover:text-accent"
                   >
-                    #{quote.id.slice(0, 8).toUpperCase()}
+                    {quote.sourceFilename ?? "Untitled job"}
                   </Link>
+                  <span className="ml-2 font-mono text-[10px] text-faint">
+                    {quoteRef(quote.id)}
+                  </span>
                 </td>
                 <td className="px-3 py-2">{formatUsd(quote.totalCents)}</td>
                 <td className="px-3 py-2">{quote.markupPct}%</td>

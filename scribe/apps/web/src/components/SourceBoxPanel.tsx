@@ -55,6 +55,7 @@ export function SourceBoxPanel({
   onSelect,
   onPatchBbox,
   onCreate,
+  maxHeight = "70vh",
 }: {
   takeoffId: string;
   lines: PanelLine[];
@@ -64,6 +65,7 @@ export function SourceBoxPanel({
   onSelect: (id: string | null) => void;
   onPatchBbox: (id: string, bbox: BBox) => void;
   onCreate: (body: Record<string, unknown>) => void;
+  maxHeight?: string;
 }) {
   const [currentKey, setCurrentKey] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
@@ -150,8 +152,8 @@ export function SourceBoxPanel({
               <button
                 key={g.key}
                 className={`rounded-md border px-2 py-1 text-xs ${
- g.key === effectiveKey
- ?"border-accent bg-accent-soft text-blue"
+                  g.key === effectiveKey
+                    ? "border-accent bg-accent-soft text-ink"
                     : "border-rule bg-paper text-muted hover:bg-rule-soft"
                 }`}
                 onClick={() => setCurrentKey(g.key)}
@@ -173,7 +175,7 @@ export function SourceBoxPanel({
               setPendingBox(null);
             }}
           >
-            {drawMode ? "Drawing… (drag on image)" : "+ Draw new box"}
+            {drawMode ? "Drag on the drawing…" : "+ Draw a cabinet"}
           </Button>
         )}
       </div>
@@ -201,6 +203,7 @@ export function SourceBoxPanel({
           boxes={overlayBoxes}
           selectedId={selectedId}
           drawMode={editable && drawMode && pendingBox == null}
+          maxHeight={maxHeight}
           onSelect={onSelect}
           onChange={(id, bbox) => {
             if (editable) onPatchBbox(id, bbox);
