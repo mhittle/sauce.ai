@@ -196,6 +196,15 @@ export function TakeoffReviewPage() {
     onError: (e) => toast.error("Couldn't approve", errorMessage(e)),
   });
 
+  const remeasure = useMutation({
+    mutationFn: () => apiSend("POST", `/takeoffs/${takeoffId}/remeasure`),
+    onSuccess: () => {
+      invalidate();
+      toast.info("Measuring again — this takes a minute or two");
+    },
+    onError: (e) => toast.error("Couldn't start measuring", errorMessage(e)),
+  });
+
   const reopen = useMutation({
     mutationFn: () => apiSend("POST", `/takeoffs/${takeoffId}/reopen`),
     onSuccess: () => {
@@ -496,6 +505,19 @@ export function TakeoffReviewPage() {
                       Reopen for changes
                     </button>
                   </>
+                )}
+                {editable && takeoff.status === "review" && takeoff.sourceKind === "pdf" && (
+                  <button
+                    role="menuitem"
+                    className="block w-full rounded px-2 py-1.5 text-left text-sm text-ink hover:bg-rule-soft"
+                    title="Re-run the measuring and pricing pass on every scanned area. Replaces these cabinets' sizes; your edits on them are lost."
+                    onClick={() => {
+                      if (window.confirm("Measure every area again? Sizes and edits on these cabinets will be replaced."))
+                        remeasure.mutate();
+                    }}
+                  >
+                    Measure again…
+                  </button>
                 )}
                 {editable && takeoff.status === "review" && (
                   <>

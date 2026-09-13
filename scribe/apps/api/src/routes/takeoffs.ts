@@ -1070,6 +1070,57 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  // Measure again: every scanned area is rebuilt from its found cabinets
+  // (no rescan). For a takeoff whose sizes all defaulted after a bad
+  // measuring answer (2026-09-15).
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/remeasure",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db.select().from(takeoffs).where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const takeoff = rows[0];
+      if (!["review", "awaiting_boxes"].includes(takeoff.status)) {
+        return reply
+          .code(409)
+          .send({ error: `cannot re-measure a takeoff in status ${takeoff.status}` });
+      }
+      const reset = await db
+        .update(takeoffDetections)
+        .set({ builtAt: null })
+        .where(
+          and(eq(takeoffDetections.takeoffId, req.params.id), eq(takeoffDetections.status, "done"))
+        )
+        .returning({ id: takeoffDetections.id });
+      if (reset.length === 0) {
+        return reply.code(400).send({ error: "no scanned areas to measure" });
+      }
+      const [updated] = await db
+        .update(takeoffs)
+        .set({
+          status: "processing",
+          error: null,
+          progress: {
+            stage: "measure",
+            done: null,
+            total: null,
+            message: "Queued for measuring",
+            started_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(takeoffs.id, req.params.id))
+        .returning();
+      await getTakeoffQueue().add(
+        "beta_build",
+        { takeoff_id: req.params.id, prior_status: takeoff.status },
+        { attempts: 2, backoff: { type: "fixed", delay: 30_000 } }
+      );
+      return { ...updated, areas: reset.length };
+    }
+  );
+
   // Reopen an approved takeoff so its areas can be amended (Mark step PR 2).
   app.post<{ Params: { id: string } }>(
     "/takeoffs/:id/reopen",
