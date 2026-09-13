@@ -43,6 +43,7 @@ import {
   textOf,
   withSocketRetry,
 } from "../lib/anthropic.js";
+import { salvageArrayObjects } from "./extract.js";
 import { openPdf, OpenPdf } from "./pdf.js";
 import { setProgress } from "./progress.js";
 import {
@@ -599,9 +600,16 @@ export function parseMeasureResponse(text: string): {
       warnings: ["measurements response had no cabinets array — sizes defaulted"],
     };
   } catch {
+    // Not valid JSON (cut off, or prose around it): keep every cabinet
+    // object that IS complete instead of throwing the whole answer away.
+    const salvaged = salvageArrayObjects(text, "cabinets");
     return {
-      cabinets: [],
-      warnings: ["measurements response was not parseable JSON — sizes defaulted"],
+      cabinets: salvaged,
+      warnings: [
+        salvaged.length > 0
+          ? `measurements response was not valid JSON — ${salvaged.length} complete cabinet answers salvaged, the rest defaulted`
+          : "measurements response was not parseable JSON — sizes defaulted",
+      ],
     };
   }
 }
@@ -915,49 +923,77 @@ export async function buildFromDetections(
           ...(nearbyDims ? { nearbyDims } : {}),
         };
       });
-      const message = await withSocketRetry(() =>
-        client.messages
-          .stream({
-            model: DETECT_MODEL,
-            max_tokens: 16000,
-            ...(DETECT_MODEL.startsWith("claude-opus-4-8")
-              ? {}
-              : { temperature: 0 }),
-            system: MEASURE_SYSTEM,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  ...sentPages.map((p) => imageBlock(imageByPage.get(p)!)),
-                  ...cropImages.map((img) => imageBlock(img)),
-                  {
-                    type: "text" as const,
-                    text: measureUserText(
-                      markers,
-                      groundingByPage,
-                      sentPages.map((p) => ({
-                        page: p,
-                        hasMarkers: pages.includes(p),
-                      })),
-                      cropDescriptors
-                    ),
-                  },
-                ],
-              },
-            ],
-          })
-          .finalMessage()
-      );
-      tokens += message.usage.input_tokens + message.usage.output_tokens;
-      // Persist the raw response — when sizing goes wrong ("everything
-      // defaulted"), this is the evidence of what the model actually said.
-      const responseText = textOf(message);
-      await putObject(
-        `takeoffs/${takeoffId}/beta/measure/response-0.txt`,
-        Buffer.from(responseText, "utf-8"),
-        "text/plain"
-      );
-      const parsedResponse = parseMeasureResponse(responseText);
+      const measureContent = [
+        ...sentPages.map((p) => imageBlock(imageByPage.get(p)!)),
+        ...cropImages.map((img) => imageBlock(img)),
+        {
+          type: "text" as const,
+          text: measureUserText(
+            markers,
+            groundingByPage,
+            sentPages.map((p) => ({ page: p, hasMarkers: pages.includes(p) })),
+            cropDescriptors
+          ),
+        },
+      ];
+      const callMeasure = () =>
+        withSocketRetry(() =>
+          client.messages
+            .stream({
+              model: DETECT_MODEL,
+              // Same ceiling as the page reader: 24+ cabinets with unit
+              // decompositions overran 16k and came back cut off (2026-09-15).
+              max_tokens: 32000,
+              ...(DETECT_MODEL.startsWith("claude-opus-4-8")
+                ? {}
+                : { temperature: 0 }),
+              system: MEASURE_SYSTEM,
+              messages: [{ role: "user", content: measureContent }],
+            })
+            .finalMessage()
+        );
+      // One measuring answer, parsed leniently; a cut-off or malformed answer
+      // is salvaged object by object; an answer with NO usable cabinets gets
+      // one fresh retry; still nothing → the build fails (and rolls back)
+      // instead of silently defaulting every size to 30".
+      let parsedResponse: ReturnType<typeof parseMeasureResponse> | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const message = await callMeasure();
+        tokens += message.usage.input_tokens + message.usage.output_tokens;
+        // Persist the raw response — when sizing goes wrong ("everything
+        // defaulted"), this is the evidence of what the model actually said.
+        const responseText = textOf(message);
+        await putObject(
+          `takeoffs/${takeoffId}/beta/measure/response-${attempt}.txt`,
+          Buffer.from(responseText, "utf-8"),
+          "text/plain"
+        );
+        const parsed = parseMeasureResponse(responseText);
+        if (message.stop_reason === "max_tokens") {
+          parsed.warnings.push(
+            `measurements answer was cut off at the token limit (attempt ${attempt + 1}); ${parsed.cabinets.length} of ${entries.length} cabinets salvaged`
+          );
+        }
+        log.info(
+          {
+            takeoff: takeoffId,
+            attempt,
+            stop: message.stop_reason,
+            chars: responseText.length,
+            cabinets: parsed.cabinets.length,
+            markers: entries.length,
+          },
+          "measure response"
+        );
+        parsedResponse = parsed;
+        if (parsed.cabinets.length > 0) break;
+        log.warn({ takeoff: takeoffId, attempt }, "measure answer had no usable cabinets — retrying once");
+      }
+      if (!parsedResponse || parsedResponse.cabinets.length === 0) {
+        throw new Error(
+          "the measuring step returned no usable sizes twice — click Build again; if it keeps failing, the raw answers are in beta/measure/"
+        );
+      }
       cabinets.push(...parsedResponse.cabinets);
       parseWarnings.push(...parsedResponse.warnings);
 

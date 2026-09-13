@@ -43,7 +43,14 @@ const ESTIMATE_SYSTEM_PROMPT =
 // a string-aware brace scanner and JSON.parses each balanced {...}; an
 // incomplete trailing object is simply skipped. Returns [] if no lines array.
 export function salvageLineObjects(text: string): unknown[] {
-  const li = text.indexOf('"lines"');
+  return salvageArrayObjects(text, "lines");
+}
+
+// Same scanner for any `"<key>": [ {...}, ... ]` array (the measure pass's
+// `"cabinets"`). Nested arrays/objects inside an element are handled by
+// depth; only depth-0 objects are elements.
+export function salvageArrayObjects(text: string, key: string): unknown[] {
+  const li = text.indexOf(`"${key}"`);
   if (li === -1) return [];
   const arrStart = text.indexOf("[", li);
   if (arrStart === -1) return [];

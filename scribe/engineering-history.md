@@ -82,6 +82,43 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (d) — measuring answer unparseable → every size defaulted; salvage + retry + re-measure
+
+**Owner's live job (MOLLY_CHARLEY, 24 cabinets on 3 elevation areas):**
+Build ran ~2 min, then every cabinet came back 30" wide at 50% — the
+review's notes said "measurements response was not parseable JSON — sizes
+defaulted". The measure call had `max_tokens: 16000`, no `stop_reason`
+check and no salvage; the page-reading path has had 32k + salvage since
+June. Whether this answer was cut off or malformed is in
+`takeoffs/{id}/beta/measure/response-0.txt` (not pulled).
+
+**Fixed.**
+- `max_tokens: 32000` on the measure call; `stop_reason === "max_tokens"`
+  is logged and surfaces as a note ("cut off at the token limit; N of M
+  cabinets salvaged").
+- `parseMeasureResponse` salvages every COMPLETE cabinet object from an
+  unparseable answer (`salvageArrayObjects(text, "cabinets")`, the same
+  string-aware brace scanner as `salvageLineObjects`); note says how many.
+- An answer with zero usable cabinets gets ONE fresh model call; still
+  zero → the build throws ("the measuring step returned no usable sizes
+  twice — click Build again"), rolls back (2026-09-15 (c)), and the
+  wizard shows the error — instead of silently producing a takeoff of
+  defaults that LOOKS finished.
+- `POST /takeoffs/:id/remeasure` (review or awaiting_boxes): clears
+  `built_at` on every scanned area, keeps the found cabinets, queues a
+  build — "Measure again…" in the review's More menu (confirms; edits on
+  those cabinets are replaced). This is the recovery for the live job.
+
+**Gotchas.** (1) Each measuring attempt persists as `response-{attempt}.txt`.
+(2) Re-measure re-prices only the rebuilt lines like any area build; hand-
+drawn review lines (no area) are untouched. (3) The user's proposal
+("read the printed dimensions near each box across every page") is what
+the measure pass already does — `nearbyDims` per marker from the whole
+page's text layer + every page sent as context; the failure was purely
+the answer format.
+
+---
+
 ## 2026-09-15 (c) — build failed in prod: `= ANY($list)` bug; builds now roll back and report progress
 
 **Owner report (live, MOLLY_CHARLEY_KITCHEN):** Find found 8 cabinets;

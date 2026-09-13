@@ -310,3 +310,25 @@ describe("mergeMeasuredLines", () => {
     expect(line.height_in).toBe(84);
   });
 });
+
+
+describe("parseMeasureResponse (cut-off answers)", () => {
+  it("salvages the complete cabinet objects from an answer truncated mid-array", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    const text = `{"cabinets": [
+      {"marker": 1, "tag": "B24", "category": "casework_base", "width_in": 24, "height_in": 34.5, "depth_in": 24, "confidence": 0.9, "measured": true},
+      {"marker": 2, "tag": "W3030", "category": "casework_wall", "width_in": 30, "height_in": 30, "depth_in": 12, "confidence": 0.9, "measured": true, "units": []},
+      {"marker": 3, "tag": "SB36", "category": "casework_base", "width_in": 36, "hei`;
+    const r = parseMeasureResponse(text);
+    expect(r.cabinets.length).toBe(2);
+    expect((r.cabinets[1] as { marker: number }).marker).toBe(2);
+    expect(r.warnings[0]).toMatch(/2 complete cabinet answers salvaged/);
+  });
+
+  it("still reports nothing usable when no cabinet object is complete", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    const r = parseMeasureResponse("Sure! Here are the sizes:\n{\"cabinets\": [{\"marker\": 1, \"wid");
+    expect(r.cabinets.length).toBe(0);
+    expect(r.warnings[0]).toMatch(/not parseable/);
+  });
+});
