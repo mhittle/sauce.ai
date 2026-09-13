@@ -106,7 +106,7 @@ Mapping to the existing status machine (no new states needed):
 |---|---|---|
 | Upload | `processing` (prepare job) | Takeoffs page button |
 | Pages | `awaiting_pages` | `/takeoffs/$id/pages` |
-| Reading | `processing` (extract job: classify → locate → detect → measure → **verify** → price) | polling banner |
+| Reading | `processing` (extract job: classify → locate → scale → detect → snap → measure → **verify** → price) | polling banner |
 | Review | `review` | `/takeoffs/$id` |
 | Quote | `approved` + quote `draft` | approve → `/quotes/$id` |
 | Done | quote `sent` | quotes list |
@@ -226,7 +226,55 @@ the SCR-010 door swing and the Wantoch phantoms ($8.7k: a "TV cabinet" that
 was a wall gap, towers re-counted from a second view, 1.5" end panels priced
 as 24×84 cabinets) all survived to the review screen.
 
-Two layers, run after measure and before price:
+Three pieces. V0 comes first because V1's geometry checks and the
+draw-to-scale feature both depend on it.
+
+**V0 — Drawing scale + geometric measurement (LOE 6). Decided 2026-09-13
+(Rida): scale is a property of the DRAWING, not the cabinet; every size in
+a drawing converts through the same number, and the API returns it so new
+boxes are measured from a set truth.**
+
+- *What exists:* nothing stores a real-world scale. The only "dpi" values
+  are render resolution (pixels per inch of paper). The measure prompt asks
+  the model to use printed dims and scale and returns a `measured` flag, but
+  no number is computed or kept. A box drawn on the review screen opens with
+  empty inch fields and is a visual anchor only; model boxes are loose (July
+  spike), which is why the review draws dots. `dim-skeleton.ts` already
+  extracts every printed dimension string with its position, and the locate
+  step knows each drawing's rectangle in PDF points.
+- *Scale per located region* (a plan and an elevation on one sheet are often
+  at different scales), from three sources reconciled and stored on the
+  takeoff: (1) the title-block note ("1/4" = 1'-0"") from the text layer;
+  (2) dimension-chain calibration — a chain's length on the page over the
+  inches it prints; (3) a `scale` field added to the measure response, with
+  how the model got it. Disagreement between sources is itself a flag.
+  Scans/photos have no text layer: model-reported scale plus a manual
+  calibration step (drag a known length, type it) as the fallback.
+- *Tighter boxes:* for vector PDFs (most of the test set) cabinet outlines
+  are real line segments — snap the detector's loose box to the nearest
+  vector edges deterministically, zero API. Raster inputs keep the model's
+  box.
+- *Measure = geometry first, printed dims win:* box × scale gives every
+  cabinet a geometric W×H (elevations) or W×D (plans); a printed dimension
+  anchored to that cabinet overrides it when within tolerance; snap to
+  standard widths; a disagreement beyond tolerance becomes a flag with
+  evidence. Cabinets with no printed dim get the geometric size instead of
+  today's category default — the win is concentrated on plan-only inputs
+  (F1 0.32 today). Depth on elevations stays a category standard unless a
+  plan of the same run exists. Counting is NOT improved by this.
+- *Draw to scale:* on the review screen a new box auto-fills its inches from
+  the region's scale (fields stay editable); editing inches resizes the box.
+  Every line stores the scale it was measured against, so boxes stay
+  comparable across sessions and re-reads.
+- *Pipeline order:* locate → **scale** → detect → **snap** → measure
+  (geometry → printed override → standard snap → flag) → verify → price.
+- *Measured, not assumed:* on the 18-quote kit harness (labels v3) before
+  any prod flip; gated behind `DRAWING_SCALE=1`. Risk: vector snapping
+  grabbing the wrong line on busy sheets — visible in the harness, and a
+  printed dim still overrides a bad snap, so labeled cabinets can't get
+  worse than today.
+- *Sequencing:* right after the Stage 1 stack merges, before Stage 2 —
+  Stage 2 is plumbing, this is the product.
 
 **V1 — Deterministic checks (zero API, LOE 4).** Extends the roadmap item
 "Deterministic read checks" and absorbs "Dedupe markers across overlapping
@@ -235,10 +283,10 @@ regions". Whole-takeoff rules:
 - Run arithmetic: cabinet widths per run vs the printed run dimension (the
   dim-skeleton chains are already extracted); flag runs that over- or
   under-fill by more than one standard width.
-- Geometry: heavy bbox overlap on the same image → suspected duplicate; box
-  aspect wildly off the stated W×H → size misread; a located region with no
-  cabinet inside → possible miss; markers in overlapping regions → cross-region
-  duplicate.
+- Geometry (real measurements once V0 lands): heavy bbox overlap on the
+  same image → suspected duplicate; box × scale vs stated W×H beyond
+  tolerance → size misread; a located region with no cabinet inside →
+  possible miss; markers in overlapping regions → cross-region duplicate.
 - Plausibility: per-category ranges (base 34.5" h / 24" d, wall 12" d, tall
   84 or 96" keyed to the printed ceiling height, vanity 21" d), standard widths
   on 3" increments, count per room vs room size.
@@ -268,8 +316,8 @@ recall loss (the ROUTER_TOLERANT_MERGE bar). V2 adds one model call per
 takeoff, so it goes into the usage ledger (Stage 3a) and into the per-page
 credit price.
 
-**Sequencing:** V1 can start now (pure code + tests, no API); V2 after the
-ledger exists so its cost is visible from day one. Prod flags stay behind
+**Sequencing:** V0 first (after the Stage 1 merge); V1's geometry rules
+ride on it; V2 after the ledger exists so its cost is visible from day one. Prod flags stay behind
 `VERIFY_LAYERS=1` until measured, like every other reading lever.
 
 ---
