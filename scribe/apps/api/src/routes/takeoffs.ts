@@ -15,16 +15,20 @@ import {
   takeoffs,
 } from "@scribe/db";
 import {
+  BETA_DISPLAY_DPI,
   CabinetLineItem,
+  canTransitionTakeoff,
+  DrawingScale,
   ESTIMATED_NOTE_PREFIX,
+  expandToComponents,
   ExportTemplate,
-  LOW_CONFIDENCE_THRESHOLD,
   LineCategory,
+  LOW_CONFIDENCE_THRESHOLD,
   PricingSnapshot,
+  PT_PER_IN,
+  reconcileScale,
   SelectedPage,
   SourceKind,
-  canTransitionTakeoff,
-  expandToComponents,
   type TakeoffStatus,
 } from "@scribe/shared";
 import { matchLine, materialStats, priceQuoteTiers } from "@scribe/pricing";
@@ -651,6 +655,49 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       if (deleted.length === 0)
         return reply.code(404).send({ error: "not found" });
       return { ok: true };
+    }
+  );
+
+  // Manual scale calibration (v0-drawing-scale-plan.md §2.5): the reviewer
+  // dragged a known length on this region's display render and typed its
+  // real size. Overrides every other source; kept in the source list.
+  app.put<{ Params: { id: string; detectionId: string } }>(
+    "/takeoffs/:id/detections/:detectionId/scale",
+    async (req, reply) => {
+      const body = z
+        .object({
+          px_len: z.number().positive(),
+          inches: z.number().positive(),
+        })
+        .parse(req.body);
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffDetections)
+        .where(
+          and(
+            eq(takeoffDetections.id, req.params.detectionId),
+            eq(takeoffDetections.takeoffId, req.params.id)
+          )
+        );
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      const det = rows[0];
+      const dpi = det.displayDpi ?? BETA_DISPLAY_DPI;
+      const manualInPerPt = body.inches / ((body.px_len * PT_PER_IN) / dpi);
+      const prior = DrawingScale.safeParse(det.scale);
+      const kept = prior.success
+        ? prior.data.sources.filter((s) => s.kind !== "manual")
+        : [];
+      const scale = reconcileScale([
+        ...kept,
+        { kind: "manual", inPerPt: manualInPerPt, confidence: 1 },
+      ]);
+      const [updated] = await db
+        .update(takeoffDetections)
+        .set({ scale })
+        .where(eq(takeoffDetections.id, det.id))
+        .returning();
+      return updated;
     }
   );
 

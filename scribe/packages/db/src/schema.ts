@@ -139,6 +139,8 @@ export const takeoffLines = pgTable("takeoff_lines", {
   bbox: jsonb("bbox"),
   readImageKey: text("read_image_key"),
   readRect: jsonb("read_rect"),
+  // migrations/0010 — LineGeom: geometric size, snapped edges, size source.
+  geom: jsonb("geom"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -153,6 +155,8 @@ export const takeoffDetections = pgTable("takeoff_detections", {
   // "plan" | "elevation" (migrations/0008) — null for wizard-drawn regions.
   kind: text("kind"),
   displayDpi: real("display_dpi"),
+  // migrations/0010 — DrawingScale (@scribe/shared) for this region.
+  scale: jsonb("scale"),
   status: text("status").notNull().default("drawn"),
   items: jsonb("items"),
   cropImageKey: text("crop_image_key"),

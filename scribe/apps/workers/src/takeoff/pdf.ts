@@ -34,6 +34,9 @@ export interface TextFragment {
   x: number;
   y: number;
   text: string;
+  // Text line box size in points (upright-normalized), when known.
+  w?: number;
+  h?: number;
 }
 
 interface StextJson {
@@ -186,11 +189,15 @@ export function openPdf(data: Buffer): OpenPdf {
           if (!text) continue;
           const x = line.bbox?.x ?? 0;
           const y = line.bbox?.y ?? 0;
+          const w = line.bbox?.w;
+          const h = line.bbox?.h;
           // Same normalization as the renders, so row reconstruction
-          // (schedules) and dim grounding see upright coordinates.
-          if (rot === 90) out.push({ x: rawH - y, y: x, text });
-          else if (rot === 270) out.push({ x: y, y: rawW - x, text });
-          else out.push({ x, y, text });
+          // (schedules) and dim grounding see upright coordinates. The box
+          // size rides along (swapped when rotated) so callers can centre a
+          // dimension string on its segment (scale calibration).
+          if (rot === 90) out.push({ x: rawH - y - (h ?? 0), y: x, w: h, h: w, text });
+          else if (rot === 270) out.push({ x: y, y: rawW - x - (w ?? 0), w: h, h: w, text });
+          else out.push({ x, y, w, h, text });
         }
       }
       return out;

@@ -15,9 +15,13 @@ import { isNonBoxCasework } from "./regions.js";
 // free: the worker supplies the fragments (pdf.ts pageTextFragments).
 
 export interface TextFragment {
+  // Top-left of the text line in PDF points (upright-normalized).
   x: number;
   y: number;
   text: string;
+  // Line box size when the extractor provides it; lets callers use centres.
+  w?: number;
+  h?: number;
 }
 
 // Group positioned fragments into visual rows (fragments within `yTol` points
