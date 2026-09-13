@@ -142,6 +142,14 @@ export function BetaDetectPage() {
       setPage(pagesInPlay[0]);
   }, [pagesInPlay, page]);
 
+  // Drawing → panel: a selected cabinet scrolls its row into view.
+  useEffect(() => {
+    if (!selectedBoxId) return;
+    document
+      .querySelector(`[data-box-id="${CSS.escape(selectedBoxId)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [selectedBoxId]);
+
   // Land on the right step for the state of the boxes.
   useEffect(() => {
     if (detections.length === 0) return;
@@ -207,6 +215,13 @@ export function BetaDetectPage() {
       ),
     onSuccess: invalidate,
     onError: (e) => toast.error("Not removed", errorMessage(e)),
+  });
+
+  const setKind = useMutation({
+    mutationFn: ({ detectionId, kind }: { detectionId: string; kind: "plan" | "elevation" }) =>
+      apiSend("PATCH", `/takeoffs/${takeoffId}/detections/${detectionId}`, { kind }),
+    onSuccess: invalidate,
+    onError: (e) => toast.error("Not changed", errorMessage(e)),
   });
 
   const removeDetection = useMutation({
@@ -301,7 +316,7 @@ export function BetaDetectPage() {
       <div>
         <PageTitle eyebrow="Reading">{takeoff.sourceFilename ?? takeoffId.slice(0, 8)}</PageTitle>
         <ReadingProgress
-          title={building || build.isPending ? "Building your takeoff" : "Finding the drawings"}
+          title={building || build.isPending ? "Building your takeoff" : "Preparing the pages"}
           progress={takeoff.progress}
           sourceKind={takeoff.sourceKind}
           pageCount={takeoff.pageCount}
@@ -395,16 +410,14 @@ export function BetaDetectPage() {
 
       <p className="mb-3 text-sm text-muted">
         {step === 1 &&
-          (detections.length > 0
-            ? `Scribe found ${detections.length} drawing${detections.length === 1 ? "" : "s"} on your pages and marked them as the numbered areas. Everything inside an area gets scanned once — don't mark the same drawing twice. Drag to add an area over anything it missed; × removes one. Zoom with ⌘/ctrl + scroll; hold space to pan.`
-            : "Drag boxes over every area that contains cabinets. Each area is scanned once — don't mark the same drawing twice. Zoom with ⌘/ctrl + scroll; hold space to pan.")}
+          "Drag a box over each drawing that contains cabinets — one area per elevation or plan view. Each area is scanned once, so don't mark the same drawing twice. × removes an area; the plan / elevation toggle sets how it's read. Zoom with ⌘/ctrl + scroll; hold space to pan."}
         {step === 2 &&
           "Each cabinet the model found is a colored dot — hover one to see its label and box, ✕ removes a wrong one. Draw more boxes any time and find again."}
         {step === 3 &&
           "Check the counts, then build: one measuring pass sizes every cabinet from the printed dimensions where they exist, and you can fix anything on the review screen."}
       </p>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,1fr)_22rem]">
         {/* Page rail */}
         <div className="flex max-h-[80vh] flex-row gap-2 overflow-auto lg:flex-col">
           {pagesInPlay.map((p) => {
@@ -439,7 +452,7 @@ export function BetaDetectPage() {
           )}
         </div>
 
-        {/* Canvas + results */}
+        {/* Canvas */}
         <div className="min-w-0">
           <Card className="relative">
             {page != null && imageQ.data?.url ? (
@@ -472,76 +485,106 @@ export function BetaDetectPage() {
               </div>
             )}
           </Card>
+        </div>
 
-          <Card className="mt-4">
-            <div className="mb-2 flex items-center justify-between">
+        {/* Side panel: areas, then the cabinets found — scrolls on its own */}
+        <div className="min-w-0">
+          <Card className="flex max-h-[80vh] flex-col overflow-hidden p-0">
+            <div className="border-b border-rule px-3 py-2">
               <h2 className="text-sm font-semibold text-muted">
                 Page {page ?? "—"}: {areas.length} marked area{areas.length === 1 ? "" : "s"} · {rows.length} cabinet{rows.length === 1 ? "" : "s"} found
               </h2>
-              {pageDetections.length > 0 && (
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  className="text-bad"
-                  onClick={() => pageDetections.forEach((d) => removeDetection.mutate(d.id))}
-                >
-                  Clear page
-                </Button>
-              )}
             </div>
-            {areas.length > 0 && (
-              <ul className="mb-3 flex flex-wrap gap-1.5" aria-label="Marked areas">
-                {areas.map((a) => (
-                  <li
-                    key={a.id}
-                    onMouseEnter={() => setHoveredArea(a.id)}
-                    onMouseLeave={() => setHoveredArea(null)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs ${
-                      a.highlighted ? "border-accent bg-accent-soft text-ink" : "border-rule bg-paper text-muted"
-                    }`}
-                  >
-                    <span className="inline-block size-2 rounded-sm bg-accent" />
-                    <span className="font-medium text-ink">{a.label}</span>
-                    <span>{a.note}</span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${a.label}`}
-                      title="Remove this area"
-                      className="ml-0.5 rounded px-1 text-muted hover:bg-bad-soft hover:text-bad"
-                      onClick={() => removeDetection.mutate(a.id)}
+            <div className="min-h-0 flex-1 overflow-auto">
+              <div className="border-b border-rule-soft px-3 py-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Areas</span>
+                  {pageDetections.length > 0 && (
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      className="text-bad"
+                      onClick={() => {
+                        if (window.confirm(`Remove all ${pageDetections.length} area(s) on page ${page}?`))
+                          pageDetections.forEach((d) => removeDetection.mutate(d.id));
+                      }}
                     >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {rows.length === 0 ? (
-              <p className="text-sm text-faint">
-                {pageDetections.some((d) => d.status === "drawn")
-                  ? "Areas are ready — find the cabinets inside them (the button top right)."
-                  : "Drag over the drawing to mark a cabinet area."}
-              </p>
-            ) : (
+                      Clear page
+                    </Button>
+                  )}
+                </div>
+                {areas.length === 0 ? (
+                  <p className="text-xs text-faint">Drag over the drawing to mark a cabinet area.</p>
+                ) : (
+                  <ul className="space-y-1" aria-label="Marked areas">
+                    {areas.map((a) => {
+                      const d = pageDetections.find((x) => x.id === a.id);
+                      return (
+                        <li
+                          key={a.id}
+                          onMouseEnter={() => setHoveredArea(a.id)}
+                          onMouseLeave={() => setHoveredArea(null)}
+                          className={`flex items-center gap-2 rounded-md border px-2 py-1 text-xs ${
+                            a.highlighted ? "border-accent bg-accent-soft" : "border-rule bg-paper"
+                          }`}
+                        >
+                          <span className="inline-block size-2 shrink-0 rounded-sm bg-accent" />
+                          <span className="font-medium text-ink">{a.label}</span>
+                          <span className="text-muted">{a.note}</span>
+                          <select
+                            aria-label={`${a.label} kind`}
+                            title="How this area is read: an elevation is one cabinet per box, a plan is a run to split"
+                            className="ml-auto rounded border border-rule bg-paper px-1 py-0.5 text-[11px] text-muted"
+                            value={d?.kind === "plan" ? "plan" : "elevation"}
+                            onChange={(e) =>
+                              setKind.mutate({ detectionId: a.id, kind: e.target.value as "plan" | "elevation" })
+                            }
+                          >
+                            <option value="elevation">elevation</option>
+                            <option value="plan">plan</option>
+                          </select>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${a.label}`}
+                            title="Remove this area"
+                            className="rounded px-1 text-muted hover:bg-bad-soft hover:text-bad"
+                            onClick={() => removeDetection.mutate(a.id)}
+                          >
+                            ×
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {rows.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-faint">
+                  {pageDetections.some((d) => d.status === "drawn")
+                    ? "Areas are ready — find the cabinets inside them (the button top right)."
+                    : "No cabinets found on this page yet."}
+                </p>
+              ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
-                    <th className="py-1 pr-2">Label</th>
+                    <th className="px-3 py-1">Cabinet</th>
                     <th className="py-1 pr-2">Type</th>
                     <th className="py-1 pr-2">Conf</th>
-                    <th className="py-1" />
+                    <th className="py-1 pr-2" />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(({ boxId, detectionId, itemIndex, item }) => (
                     <tr
                       key={boxId ?? `${detectionId}-${itemIndex}`}
+                      data-box-id={boxId ?? undefined}
                       className={`cursor-pointer border-b border-rule-soft ${
                         boxId != null && boxId === selectedBoxId ? "bg-accent-soft" : "hover:bg-rule-soft"
                       }`}
                       onClick={() => setSelectedBoxId(boxId)}
                     >
-                      <td className="py-1 pr-2 font-medium">
+                      <td className="px-3 py-1 font-medium">
                         <span
                           className="mr-1.5 inline-block size-2.5 rounded-sm"
                           style={{ backgroundColor: categoryColor(item.category) }}
@@ -570,15 +613,16 @@ export function BetaDetectPage() {
                   ))}
                 </tbody>
               </table>
-            )}
-            {failedCount > 0 && (
-              <p className="mt-2 text-xs text-bad">
-                {pageDetections
-                  .filter((d) => d.status === "error")
-                  .map((d) => `A box couldn't be scanned: ${d.error ?? "unknown"}`)
-                  .join(" · ")}
-              </p>
-            )}
+              )}
+              {failedCount > 0 && (
+                <p className="px-3 py-2 text-xs text-bad">
+                  {pageDetections
+                    .filter((d) => d.status === "error")
+                    .map((d) => `An area couldn't be scanned: ${d.error ?? "unknown"}`)
+                    .join(" · ")}
+                </p>
+              )}
+            </div>
           </Card>
         </div>
       </div>

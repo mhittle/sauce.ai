@@ -106,7 +106,7 @@ Mapping to the existing status machine (no new states needed):
 |---|---|---|
 | Upload | `processing` (prepare job) | Takeoffs page button |
 | Pages | `awaiting_pages` | `/takeoffs/$id/pages` |
-| Mark | `awaiting_boxes` (decided 2026-09-14: the wizard is the ONE flow — Scribe locates the drawings and pre-boxes them; the human adjusts → Find → Build) | `/takeoffs/$id/detect` |
+| Mark | `awaiting_boxes` (decided 2026-09-14: the wizard is the ONE flow; **no pre-selection** — the human draws every area, Find → Build; areas own their cabinets so a correction rescans one area, PR 2) | `/takeoffs/$id/detect` |
 | Reading | `processing` (locate before Mark; detect → snap → measure → **verify** → price after Build) | polling banner |
 | Review | `review` | `/takeoffs/$id` |
 | Quote | `approved` + quote `draft` | approve → `/quotes/$id` |
