@@ -18,6 +18,7 @@ import {
   BoxOverlay,
   categoryColor,
   type BBox,
+  type OverlayArea,
   type OverlayBox,
 } from "../components/BoxOverlay";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
@@ -85,6 +86,7 @@ export function BetaDetectPage() {
   const [step, setStep] = useState(1);
   const [page, setPage] = useState<number | null>(null);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
+  const [hoveredArea, setHoveredArea] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
 
   const takeoffQ = useQuery({
@@ -164,8 +166,28 @@ export function BetaDetectPage() {
         rect,
       }),
     onSuccess: invalidate,
-    onError: (e) => toast.error("Box not added", errorMessage(e)),
+    onError: (e) => toast.error("Area not added", errorMessage(e)),
   });
+
+  // Marking the same drawing twice finds the same cabinets twice. A new box
+  // that mostly covers (or is mostly covered by) an existing area is refused
+  // with a pointer at the area, instead of silently doubling the count.
+  function tryDraw(rect: BBox) {
+    const existing = detections.filter((d) => d.page === page);
+    for (const [i, d] of existing.entries()) {
+      const frac = overlapFraction(rect, d.rect);
+      if (frac >= 0.5) {
+        toast.error(
+          `That overlaps Area ${areaNumber(d, existing, i)} by ${Math.round(frac * 100)}%`,
+          "The same cabinets would be found twice. Adjust the new box, or remove the existing area first (its × button)."
+        );
+        setHoveredArea(d.id);
+        window.setTimeout(() => setHoveredArea(null), 2500);
+        return;
+      }
+    }
+    draw.mutate(rect);
+  }
 
   const runDetect = useMutation({
     mutationFn: () =>
@@ -233,6 +255,26 @@ export function BetaDetectPage() {
     }
     return { boxes, rows };
   }, [pageDetections]);
+
+  // Marked areas on the current page, numbered in creation order.
+  const areas: OverlayArea[] = useMemo(
+    () =>
+      pageDetections.map((d, i) => ({
+        id: d.id,
+        bbox: d.rect,
+        label: `Area ${i + 1}`,
+        note:
+          d.status === "done"
+            ? `${d.items?.length ?? 0} found`
+            : d.status === "error"
+              ? "failed"
+              : d.status === "drawn"
+                ? "not scanned"
+                : "scanning…",
+        highlighted: d.id === hoveredArea,
+      })),
+    [pageDetections, hoveredArea]
+  );
 
   const drawnCount = detections.filter((d) => d.status === "drawn").length;
   const inFlight = detections.some((d) => d.status === "queued" || d.status === "running");
@@ -354,8 +396,8 @@ export function BetaDetectPage() {
       <p className="mb-3 text-sm text-muted">
         {step === 1 &&
           (detections.length > 0
-            ? `Scribe found ${detections.length} drawing${detections.length === 1 ? "" : "s"} on your pages and boxed them. Move or resize a box, drag to add one over anything it missed, or clear a page. Zoom with ⌘/ctrl + scroll; hold space to pan.`
-            : "Drag boxes over every area that contains cabinets. Zoom with ⌘/ctrl + scroll; hold space to pan.")}
+            ? `Scribe found ${detections.length} drawing${detections.length === 1 ? "" : "s"} on your pages and marked them as the numbered areas. Everything inside an area gets scanned once — don't mark the same drawing twice. Drag to add an area over anything it missed; × removes one. Zoom with ⌘/ctrl + scroll; hold space to pan.`
+            : "Drag boxes over every area that contains cabinets. Each area is scanned once — don't mark the same drawing twice. Zoom with ⌘/ctrl + scroll; hold space to pan.")}
         {step === 2 &&
           "Each cabinet the model found is a colored dot — hover one to see its label and box, ✕ removes a wrong one. Draw more boxes any time and find again."}
         {step === 3 &&
@@ -404,13 +446,15 @@ export function BetaDetectPage() {
               <BoxOverlay
                 src={imageQ.data.url}
                 boxes={boxes}
-                underlays={pageDetections.map((d) => d.rect)}
+                areas={areas}
                 selectedId={selectedBoxId}
                 drawMode
                 maxHeight="72vh"
                 onSelect={setSelectedBoxId}
                 onChange={() => {}}
-                onCreate={(bbox) => draw.mutate(bbox)}
+                onCreate={tryDraw}
+                onAreaHover={setHoveredArea}
+                onAreaRemove={(id) => removeDetection.mutate(id)}
               />
             ) : (
               <div className="flex h-96 items-center justify-center">
@@ -432,8 +476,7 @@ export function BetaDetectPage() {
           <Card className="mt-4">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-muted">
-                Page {page ?? "—"}: {pageDetections.filter((d) => d.status === "drawn").length} box
-                {pageDetections.filter((d) => d.status === "drawn").length === 1 ? "" : "es"} to scan · {rows.length} cabinet{rows.length === 1 ? "" : "s"} found
+                Page {page ?? "—"}: {areas.length} marked area{areas.length === 1 ? "" : "s"} · {rows.length} cabinet{rows.length === 1 ? "" : "s"} found
               </h2>
               {pageDetections.length > 0 && (
                 <Button
@@ -446,10 +489,37 @@ export function BetaDetectPage() {
                 </Button>
               )}
             </div>
+            {areas.length > 0 && (
+              <ul className="mb-3 flex flex-wrap gap-1.5" aria-label="Marked areas">
+                {areas.map((a) => (
+                  <li
+                    key={a.id}
+                    onMouseEnter={() => setHoveredArea(a.id)}
+                    onMouseLeave={() => setHoveredArea(null)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs ${
+                      a.highlighted ? "border-accent bg-accent-soft text-ink" : "border-rule bg-paper text-muted"
+                    }`}
+                  >
+                    <span className="inline-block size-2 rounded-sm bg-accent" />
+                    <span className="font-medium text-ink">{a.label}</span>
+                    <span>{a.note}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${a.label}`}
+                      title="Remove this area"
+                      className="ml-0.5 rounded px-1 text-muted hover:bg-bad-soft hover:text-bad"
+                      onClick={() => removeDetection.mutate(a.id)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {rows.length === 0 ? (
               <p className="text-sm text-faint">
                 {pageDetections.some((d) => d.status === "drawn")
-                  ? "Boxes are ready — find the cabinets inside them (the button top right)."
+                  ? "Areas are ready — find the cabinets inside them (the button top right)."
                   : "Drag over the drawing to mark a cabinet area."}
               </p>
             ) : (
@@ -514,6 +584,26 @@ export function BetaDetectPage() {
       </div>
     </div>
   );
+}
+
+// Fraction of the SMALLER box covered by the intersection (1 = one box sits
+// entirely inside the other).
+function overlapFraction(a: BBox, b: BBox): number {
+  const ax0 = Math.min(a[0], a[2]), ax1 = Math.max(a[0], a[2]);
+  const ay0 = Math.min(a[1], a[3]), ay1 = Math.max(a[1], a[3]);
+  const bx0 = Math.min(b[0], b[2]), bx1 = Math.max(b[0], b[2]);
+  const by0 = Math.min(b[1], b[3]), by1 = Math.max(b[1], b[3]);
+  const iw = Math.max(0, Math.min(ax1, bx1) - Math.max(ax0, bx0));
+  const ih = Math.max(0, Math.min(ay1, by1) - Math.max(ay0, by0));
+  const inter = iw * ih;
+  const smaller = Math.min((ax1 - ax0) * (ay1 - ay0), (bx1 - bx0) * (by1 - by0));
+  return smaller > 0 ? inter / smaller : 0;
+}
+
+// Areas are numbered per page in creation order — the number the chip shows.
+function areaNumber(d: { id: string }, pageDetections: { id: string }[], fallbackIndex: number): number {
+  const i = pageDetections.findIndex((x) => x.id === d.id);
+  return (i === -1 ? fallbackIndex : i) + 1;
 }
 
 function PageThumb({ takeoffId, page }: { takeoffId: string; page: number }) {

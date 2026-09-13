@@ -23,6 +23,17 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 
 export type BBox = [number, number, number, number];
 
+// A marked area (a wizard region): drawn as a solid, tinted, labeled box so
+// the reviewer can see what is already marked before drawing another.
+export interface OverlayArea {
+  id: string;
+  bbox: BBox;
+  label: string;
+  // Secondary text in the chip, e.g. "3 found" / "not scanned".
+  note?: string;
+  highlighted?: boolean;
+}
+
 export interface OverlayBox {
   id: string;
   bbox: BBox;
@@ -35,6 +46,10 @@ export interface OverlayBox {
 export function categoryColor(category: string): string {
   return categoryHex(category);
 }
+
+// Marked-area color: the redline accent, concrete because the sheet beneath
+// is always white.
+const AREA_COLOR = "#e0522b";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 10;
@@ -74,19 +89,24 @@ function centerOf(b: BBox): { cx: number; cy: number } {
 export function BoxOverlay({
   src,
   boxes,
-  underlays = [],
+  areas = [],
   selectedId,
   drawMode,
   maxHeight = "70vh",
   onSelect,
   onChange,
   onCreate,
+  onAreaHover,
+  onAreaRemove,
 }: {
   src: string;
   boxes: OverlayBox[];
-  // Non-interactive dashed context rects (e.g. already-scanned regions),
-  // drawn beneath the dots in the same natural-pixel space.
-  underlays?: BBox[];
+  // Marked areas (wizard regions), drawn beneath the dots in the same
+  // natural-pixel space: solid tinted rectangles with a label chip and a
+  // remove button, so what is already marked is unmistakable.
+  areas?: OverlayArea[];
+  onAreaHover?: (id: string | null) => void;
+  onAreaRemove?: (id: string) => void;
   selectedId: string | null;
   // When true, dragging on empty canvas draws a new box instead of panning.
   drawMode: boolean;
@@ -368,21 +388,84 @@ export function BoxOverlay({
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
             >
-              {underlays.map((u, i) => (
-                <rect
-                  key={`underlay-${i}`}
-                  x={Math.min(u[0], u[2])}
-                  y={Math.min(u[1], u[3])}
-                  width={Math.abs(u[2] - u[0])}
-                  height={Math.abs(u[3] - u[1])}
-                  fill="none"
-                  stroke="rgb(161,161,170)"
-                  strokeWidth={1}
-                  strokeDasharray="8 6"
-                  vectorEffect="non-scaling-stroke"
-                  className="pointer-events-none"
-                />
-              ))}
+              {areas.map((a) => {
+                const x = Math.min(a.bbox[0], a.bbox[2]);
+                const y = Math.min(a.bbox[1], a.bbox[3]);
+                const w = Math.abs(a.bbox[2] - a.bbox[0]);
+                const h = Math.abs(a.bbox[3] - a.bbox[1]);
+                const chipH = px(22);
+                const chipText = a.note ? `${a.label} · ${a.note}` : a.label;
+                const chipW = px(10) + chipText.length * px(7.2);
+                const closeR = px(10);
+                return (
+                  <g
+                    key={`area-${a.id}`}
+                    onPointerEnter={() => onAreaHover?.(a.id)}
+                    onPointerLeave={() => onAreaHover?.(null)}
+                  >
+                    <rect
+                      x={x}
+                      y={y}
+                      width={w}
+                      height={h}
+                      fill={AREA_COLOR}
+                      fillOpacity={a.highlighted ? 0.18 : 0.08}
+                      stroke={AREA_COLOR}
+                      strokeWidth={a.highlighted ? 3 : 2}
+                      vectorEffect="non-scaling-stroke"
+                      className="pointer-events-none"
+                    />
+                    {/* label chip, top-left, inside the box */}
+                    <rect
+                      x={x}
+                      y={y}
+                      width={chipW}
+                      height={chipH}
+                      fill={AREA_COLOR}
+                      className="pointer-events-none"
+                    />
+                    <text
+                      x={x + px(5)}
+                      y={y + chipH * 0.7}
+                      fontSize={px(12)}
+                      fontFamily="IBM Plex Mono, Menlo, monospace"
+                      fontWeight={600}
+                      fill="#fff"
+                      className="pointer-events-none select-none"
+                    >
+                      {chipText}
+                    </text>
+                    {/* remove button, top-right, inside the box */}
+                    {onAreaRemove && (
+                      <g
+                        className="cursor-pointer"
+                        style={{ pointerEvents: "auto" }}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAreaRemove(a.id);
+                        }}
+                      >
+                        <title>Remove {a.label}</title>
+                        <circle cx={x + w - closeR - px(4)} cy={y + closeR + px(4)} r={closeR} fill={AREA_COLOR} />
+                        <text
+                          x={x + w - closeR - px(4)}
+                          y={y + closeR + px(4) + px(4.5)}
+                          fontSize={px(13)}
+                          fontWeight={700}
+                          textAnchor="middle"
+                          fill="#fff"
+                          className="select-none"
+                        >
+                          ×
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
               {boxes.map((box) => {
                 const b =
                   draft && draft.id === box.id
