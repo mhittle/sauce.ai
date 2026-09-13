@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { quoteBuilderRoute } from "../main";
@@ -29,6 +29,7 @@ type TierName = "low" | "medium" | "high";
 interface QuoteDetail {
   id: string;
   takeoffId: string;
+  name: string | null;
   sourceFilename: string | null;
   status: string;
   pricingTier: TierName;
@@ -142,7 +143,7 @@ export function QuoteBuilderPage() {
       toast.success("Quote marked as sent", "Attach the PDF to the email that just opened.");
       const quote = q.data!;
       window.location.href = `mailto:?subject=${encodeURIComponent(
-        `CabinetNow quote — ${quote.sourceFilename ?? quoteRef(quote.id)}`
+        `CabinetNow quote — ${quote.name ?? quote.sourceFilename ?? quoteRef(quote.id)}`
       )}&body=${encodeURIComponent(
         "Quote attached. Please verify all measurements and quantities. Pricing valid 10 days."
       )}`;
@@ -253,7 +254,11 @@ export function QuoteBuilderPage() {
           </div>
         }
       >
-        {quote.sourceFilename ?? "Untitled job"}
+        <QuoteName
+          value={quote.name ?? quote.sourceFilename ?? "Untitled quote"}
+          locked={locked}
+          onCommit={(name) => patch.mutate({ name })}
+        />
       </PageTitle>
 
       {locked && (
@@ -528,6 +533,62 @@ export function QuoteBuilderPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// The quote's name, edited in place on the title (click, type, Enter or blur).
+function QuoteName({
+  value,
+  locked,
+  onCommit,
+}: {
+  value: string;
+  locked: boolean;
+  onCommit: (name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+  if (locked) return <span>{value}</span>;
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        title="Rename this quote"
+        className="rounded px-1 text-left hover:bg-rule-soft"
+        onClick={() => setEditing(true)}
+      >
+        {value}
+        <span className="ml-2 align-middle font-mono text-[10px] font-normal uppercase tracking-wider text-faint">
+          rename
+        </span>
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      aria-label="Quote name"
+      value={draft}
+      maxLength={120}
+      className="w-full min-w-64 rounded border border-accent bg-paper px-1 font-display text-2xl font-semibold outline-none"
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={(e) => e.currentTarget.select()}
+      onBlur={() => {
+        setEditing(false);
+        const v = draft.trim();
+        if (v && v !== value) onCommit(v);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+        if (e.key === "Escape") {
+          setDraft(value);
+          setEditing(false);
+        }
+      }}
+    />
   );
 }
 

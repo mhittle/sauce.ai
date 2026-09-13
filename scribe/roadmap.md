@@ -14,6 +14,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
+| One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
+| V0 drawing scale + geometry-first measuring (v0-drawing-scale-plan.md) — A sources shipped; B snap, C measure, D review next | 9 | 7 | takeoff | in-progress |
 | V0 drawing scale + geometry-first measuring (v0-drawing-scale-plan.md) — A sources + B vector snap shipped (gated DRAWING_SCALE=1); C measure, D review next | 9 | 7 | takeoff | in-progress |
 | Stage 1 UI rework — direction A design system, job stepper, admin ported (product-plan.md §3) | 9 | 8 | ui | done (PRs #254–#257, pending merge) |
 | Staged reads (segment→boxes→detect→measure) as DEFAULT pipeline + beta detect wizard + zero-API kit harness | 9 | 8 | takeoff | done |

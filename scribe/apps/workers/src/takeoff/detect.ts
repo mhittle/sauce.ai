@@ -942,7 +942,19 @@ export async function buildFromDetections(
 
       await replaceLines(takeoffId, lines, false);
       const estimatedCount = merged.filter((l) => l.estimated).length;
+      // Warnings recorded when the regions were seeded (no scale found, a
+      // page skipped) ride into the built takeoff's summary.
+      const [priorRow] = await db
+        .select({ docSummary: takeoffs.docSummary })
+        .from(takeoffs)
+        .where(eq(takeoffs.id, takeoffId));
+      const seededSummary = priorRow?.docSummary as
+        | { warnings?: string[]; seeded?: boolean }
+        | null
+        | undefined;
+      const seededWarnings = seededSummary?.seeded ? (seededSummary.warnings ?? []) : [];
       const warnings = [
+        ...seededWarnings,
         ...(opts.extraWarnings ?? []),
         ...parseWarnings,
         ...mergeWarnings,

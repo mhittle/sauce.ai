@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { pagePickerRoute } from "../main";
 import { apiGet, apiSend } from "../api";
 import {
@@ -123,7 +123,7 @@ export function PagePickerPage() {
     onError: (e) => toast.error("Couldn't start reading", errorMessage(e)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
-      navigate({ to: "/takeoffs/$takeoffId", params: { takeoffId } });
+      navigate({ to: "/takeoffs/$takeoffId/detect", params: { takeoffId }, search: { pages: undefined } });
     },
   });
 
@@ -167,7 +167,7 @@ export function PagePickerPage() {
               disabled={readableCount === 0}
               onClick={() => submit.mutate()}
             >
-              {`Read ${readableCount} page${readableCount === 1 ? "" : "s"} →`}
+              {`Find the drawings on ${readableCount} page${readableCount === 1 ? "" : "s"} →`}
             </Button>
           </div>
         }
@@ -188,8 +188,8 @@ export function PagePickerPage() {
           <p className="mb-3 max-w-3xl text-sm text-muted">
             The pages that look like cabinet drawings are already selected. Click
             a page to add or remove it, and correct its type where the guess is
-            wrong — the type decides how a page is read. Pages marked “Skip” are
-            not read.
+            wrong — the type decides how a page is read. Next, Scribe finds the
+            drawings on those pages and you mark the cabinet areas.
           </p>
 
           <div className="mb-4 flex flex-wrap items-center gap-1.5">
@@ -301,31 +301,6 @@ export function PagePickerPage() {
             )}
           </div>
 
-          <details className="mt-6 max-w-3xl rounded-lg border border-rule bg-paper">
-            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-ink">
-              Draw the regions yourself
-              <span className="ml-2 text-xs font-normal text-muted">
-                advanced — when the automatic read keeps missing a sheet
-              </span>
-            </summary>
-            <div className="border-t border-rule-soft px-4 py-3 text-sm text-muted">
-              <p className="mb-3">
-                Instead of letting Scribe find the drawings, you drag boxes over
-                every cabinet area on the selected pages. The model then labels
-                what's inside each box and one measuring pass sizes everything.
-                Slower, but you control exactly what gets read.
-              </p>
-              <Link
-                to="/takeoffs/$takeoffId/detect"
-                params={{ takeoffId }}
-                search={{ pages: selectedPages.join(",") || undefined }}
-              >
-                <Button disabled={selectedCount === 0}>
-                  Draw on {selectedCount} page{selectedCount === 1 ? "" : "s"} →
-                </Button>
-              </Link>
-            </div>
-          </details>
         </>
       )}
     </div>

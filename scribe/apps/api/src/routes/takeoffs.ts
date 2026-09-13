@@ -264,6 +264,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       .select({
         id: quotes.id,
         takeoffId: quotes.takeoffId,
+        name: quotes.name,
         status: quotes.status,
         totalCents: quotes.totalCents,
         createdAt: quotes.createdAt,
@@ -290,7 +291,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
         quote: q
-          ? { id: q.id, status: q.status, totalCents: q.totalCents, createdAt: q.createdAt }
+          ? { id: q.id, name: q.name, status: q.status, totalCents: q.totalCents, createdAt: q.createdAt }
           : null,
       };
     });
@@ -603,7 +604,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       if (takeoff.sourceKind !== "pdf") {
         return reply.code(400).send({ error: "detect view is PDF-only" });
       }
-      if (!["awaiting_pages", "review"].includes(takeoff.status)) {
+      if (!["awaiting_pages", "awaiting_boxes", "review"].includes(takeoff.status)) {
         return reply.code(409).send({
           error: `cannot build takeoff from detections in status ${takeoff.status}`,
         });

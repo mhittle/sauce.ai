@@ -29,6 +29,7 @@ export interface Job {
   updatedAt: string;
   quote: {
     id: string;
+    name: string | null;
     status: string;
     totalCents: number;
     createdAt: string;
@@ -79,6 +80,8 @@ function jobHref(j: Job): { to: string; params: Record<string, string> } {
   if (j.quote) return { to: "/quotes/$quoteId", params: { quoteId: j.quote.id } };
   if (j.status === "awaiting_pages")
     return { to: "/takeoffs/$takeoffId/pages", params: { takeoffId: j.id } };
+  if (j.status === "awaiting_boxes")
+    return { to: "/takeoffs/$takeoffId/detect", params: { takeoffId: j.id } };
   return { to: "/takeoffs/$takeoffId", params: { takeoffId: j.id } };
 }
 
@@ -214,7 +217,7 @@ export function TakeoffsPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">
+                  <td className="px-3 py-2 text-right font-mono tabular-nums" title={j.quote?.name ?? undefined}>
                     {j.quote ? formatUsd(j.quote.totalCents) : <span className="text-faint">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right text-muted" title={new Date(j.updatedAt).toLocaleString()}>

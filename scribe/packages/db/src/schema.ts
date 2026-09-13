@@ -187,6 +187,8 @@ export const quotes = pgTable("quotes", {
   id: uuid("id").primaryKey().defaultRandom(),
   takeoffId: uuid("takeoff_id").notNull(),
   customerId: uuid("customer_id"),
+  // migrations/0011 — human name; UI falls back to the job's filename.
+  name: text("name"),
   status: text("status").notNull().default("draft"),
   pricingConfigId: uuid("pricing_config_id").notNull(),
   pricingTier: text("pricing_tier").notNull().default("medium"),

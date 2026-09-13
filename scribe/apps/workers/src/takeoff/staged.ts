@@ -1,6 +1,6 @@
 import type { Logger } from "pino";
-import { and, eq } from "drizzle-orm";
-import { getDb, takeoffDetections } from "@scribe/db";
+import { eq, sql } from "drizzle-orm";
+import { getDb, takeoffDetections, takeoffs } from "@scribe/db";
 import {
   betaDisplayDpi,
   fitDpi,
@@ -16,13 +16,13 @@ import {
 import { TakeoffBudget } from "../lib/anthropic.js";
 import { setProgress } from "./progress.js";
 import type { TextFragment } from "./pdf.js";
-import { buildFromDetections, detectRegion } from "./detect.js";
+import { renderBetaPage } from "./detect.js";
 import { openPdf } from "./pdf.js";
 import { locateRegions, locateRooms } from "./regions.js";
 
 // ---------------------------------------------------------------------------
-// STAGED extraction (STAGED_READS=1): the automated pipeline restructured to
-// mirror the human-in-the-loop wizard —
+// STAGED extraction — the ONE flow (2026-09-14, owner: "I don't want 2
+// modes"): locate the drawings and hand the human the wizard —
 //   1 segment  locateRegions/locateRooms finds the distinct drawings/rooms
 //   2 boxes    each region becomes a takeoff_detections row (wizard step 2)
 //   3 read     detectRegion counts/labels cabinets per region, no dims
@@ -51,11 +51,14 @@ export async function stagedExtractPdf(
   const db = getDb();
   const warnings: string[] = [];
   const pdf = openPdf(file);
+  let relevantCount = 0;
+  let seeded: { page: number; kind: string; rect: RectPt; modelNote: string | null }[] = [];
   try {
     const { estimationMode, relevant } = selectRelevantPages(
       classified,
       selected
     );
+    relevantCount = relevant.length;
     if (relevant.length === 0) {
       throw new Error(
         "none of the selected pages has a readable type (schedule / elevation / floor plan)"
@@ -155,7 +158,7 @@ export async function stagedExtractPdf(
     // Stage 2: elevation-primary — drop plan regions when elevations exist,
     // then seed one detection row per surviving region.
     const hasElevation = located.some((r) => r.kind === "elevation");
-    const seeded = located.filter((r) => !(hasElevation && r.kind === "plan"));
+    seeded = located.filter((r) => !(hasElevation && r.kind === "plan"));
     const droppedPlans = located.length - seeded.length;
     if (droppedPlans > 0) {
       warnings.push(
@@ -198,67 +201,36 @@ export async function stagedExtractPdf(
           r.rect.x1 * ptToDisplay,
           r.rect.y1 * ptToDisplay,
         ],
-        status: "queued",
+        status: "drawn",
       });
     }
   } finally {
     pdf.close();
   }
 
-  // Stage 3: detect cabinets per region (small bounded calls). Token spend is
-  // folded into the budget after each call so the per-takeoff cap still binds.
-  const queued = await db
-    .select()
-    .from(takeoffDetections)
-    .where(
-      and(
-        eq(takeoffDetections.takeoffId, takeoffId),
-        eq(takeoffDetections.status, "queued")
-      )
-    )
-    .orderBy(takeoffDetections.page, takeoffDetections.createdAt);
-  if (queued.length === 0) throw new Error("no regions to scan");
-  let scanned = 0;
-  for (const row of queued) {
-    await setProgress(takeoffId, "detect", {
-      done: scanned,
-      total: queued.length,
-      message: `Finding cabinets in drawing ${scanned + 1} of ${queued.length}`,
-    });
-    scanned++;
-    await detectRegion(row.id, log);
-    const [after] = await db
-      .select()
-      .from(takeoffDetections)
-      .where(eq(takeoffDetections.id, row.id));
-    if (after?.status === "error") {
-      warnings.push(
-        `page ${after.page}: region scan failed (${after.error ?? "unknown"})`
-      );
-    }
-    budget.record({
-      input_tokens: after?.tokensUsed ?? 0,
-      output_tokens: 0,
-    });
+  // Hand-off (one flow, 2026-09-14): the located regions are the wizard's
+  // starting boxes. Render the wizard's page images now so Draw opens with
+  // no wait, keep the seeding warnings for the build to carry forward, and
+  // park at awaiting_boxes. The human adjusts boxes → Find cabinets → Build.
+  for (const page of [...new Set(seeded.map((r) => r.page))]) {
+    await renderBetaPage(takeoffId, page, log);
   }
-
-  // Stage 4: measurements + lines + pricing + review (throws on failure so
-  // extractTakeoff's failTakeoff handling applies).
-  await setProgress(takeoffId, "measure", {
-    done: queued.length,
-    total: queued.length,
-    message: "Measuring every cabinet against the printed dimensions",
+  await db
+    .update(takeoffs)
+    .set({
+      status: "awaiting_boxes",
+      docSummary: { warnings, seeded: true },
+      tokensUsed: sql`${takeoffs.tokensUsed} + ${budget.used}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(takeoffs.id, takeoffId));
+  await setProgress(takeoffId, "locate", {
+    done: relevantCount,
+    total: relevantCount,
+    message: "Drawings found — mark the cabinet areas",
   });
-  const merged = await buildFromDetections(takeoffId, "processing", log, {
-    onError: "throw",
-    evalFixture: true,
-    extraWarnings: warnings,
-  });
-  if (merged.length === 0) {
-    throw new Error("staged extraction found no cabinets");
-  }
   log.info(
-    { takeoffId, lines: merged.length, tokens: budget.used },
-    "staged extraction complete — in review"
+    { takeoffId, regions: seeded.length, tokens: budget.used },
+    "regions seeded — awaiting the wizard"
   );
 }

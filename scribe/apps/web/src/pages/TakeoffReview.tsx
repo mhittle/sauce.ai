@@ -7,6 +7,7 @@ import {
   Button,
   Dialog,
   errorMessage,
+  Input,
   Kbd,
   PageTitle,
   Select,
@@ -14,7 +15,6 @@ import {
   useToast,
 } from "../ui";
 import { categoryDotClass, categoryLabel } from "../labels";
-import { BoxReviewSection } from "./BoxReview";
 import { SourceBoxPanel } from "../components/SourceBoxPanel";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 
@@ -125,9 +125,13 @@ export function TakeoffReviewPage() {
   });
   const status = q.data?.status;
 
+  // One flow: pages → mark cabinets (wizard) → review. Each gate owns its
+  // own screen; this page forwards to whichever the status demands.
   useEffect(() => {
     if (status === "awaiting_pages") {
       navigate({ to: "/takeoffs/$takeoffId/pages", params: { takeoffId } });
+    } else if (status === "awaiting_boxes") {
+      navigate({ to: "/takeoffs/$takeoffId/detect", params: { takeoffId }, search: { pages: undefined } });
     }
   }, [status, navigate, takeoffId]);
 
@@ -193,21 +197,29 @@ export function TakeoffReviewPage() {
   });
 
   const createQuote = useMutation({
-    mutationFn: () =>
-      apiSend<{ id: string }>("POST", "/quotes", { takeoff_id: takeoffId }),
+    mutationFn: (name: string) =>
+      apiSend<{ id: string }>("POST", "/quotes", { takeoff_id: takeoffId, name }),
     onError: (e) => toast.error("Couldn't create the quote", errorMessage(e)),
   });
 
-  // "Looks right → Quote": approve (if needed), then open the quote.
+  // "Looks right → Quote": ask for a name, approve (if needed), open the quote.
   const [finishing, setFinishing] = useState(false);
-  async function finish() {
+  const [naming, setNaming] = useState(false);
+  const [quoteName, setQuoteName] = useState("");
+  function openNaming() {
+    const file = q.data?.sourceFilename ?? "";
+    setQuoteName(file.replace(/\.[a-z0-9]+$/i, "") || "Quote");
+    setNaming(true);
+  }
+  async function finish(name: string) {
+    setNaming(false);
     setFinishing(true);
     try {
       if (q.data?.status !== "approved") {
         await approve.mutateAsync();
         invalidate();
       }
-      const quote = await createQuote.mutateAsync();
+      const quote = await createQuote.mutateAsync(name.trim() || "Quote");
       navigate({ to: "/quotes/$quoteId", params: { quoteId: quote.id } });
     } catch {
       // toasts already shown by the mutations
@@ -383,10 +395,6 @@ export function TakeoffReviewPage() {
   if (q.isError) return <div className="text-bad">{String(q.error)}</div>;
   const takeoff = q.data!;
 
-  if (takeoff.status === "awaiting_boxes") {
-    return <BoxReviewSection takeoff={takeoff} />;
-  }
-
   if (takeoff.status === "processing") {
     return (
       <div>
@@ -464,7 +472,7 @@ export function TakeoffReviewPage() {
                       search={{ pages: undefined }}
                       className="block rounded px-2 py-1.5 text-sm text-ink hover:bg-rule-soft"
                     >
-                      Re-read with drawn regions…
+                      Mark the cabinets again…
                     </Link>
                   </>
                 )}
@@ -676,7 +684,7 @@ export function TakeoffReviewPage() {
             </Button>
           )}
           {takeoff.status === "approved" ? (
-            <Button variant="primary" loading={finishing} onClick={finish}>
+            <Button variant="primary" loading={finishing} onClick={openNaming}>
               Build quote →
             </Button>
           ) : (
@@ -684,7 +692,7 @@ export function TakeoffReviewPage() {
               variant="primary"
               loading={finishing}
               disabled={cabinets.length === 0 || takeoff.status !== "review"}
-              onClick={finish}
+              onClick={openNaming}
               title={unmatched.length > 0 ? `${unmatched.length} unmatched line(s) will be left off the quote` : undefined}
             >
               Looks right → Quote
@@ -692,6 +700,43 @@ export function TakeoffReviewPage() {
           )}
         </div>
       </div>
+
+      <Dialog
+        open={naming}
+        title="Name this quote"
+        onClose={() => setNaming(false)}
+        actions={
+          <>
+            <Button variant="quiet" onClick={() => setNaming(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={() => finish(quoteName)}>
+              Create quote →
+            </Button>
+          </>
+        }
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            finish(quoteName);
+          }}
+        >
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Quote name
+            <Input
+              autoFocus
+              value={quoteName}
+              maxLength={120}
+              onChange={(e) => setQuoteName(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+          </label>
+          <p className="mt-2 text-xs text-muted">
+            Shown on the Jobs and Quotes lists and in the email subject. You can rename it later on the quote.
+          </p>
+        </form>
+      </Dialog>
 
       <Dialog open={helpOpen} title="Keyboard shortcuts" onClose={() => setHelpOpen(false)}>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
