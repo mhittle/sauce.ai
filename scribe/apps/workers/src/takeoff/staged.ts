@@ -9,11 +9,13 @@ import {
   padRectToPage,
   PageClassification,
   RectPt,
+  scaleForRegion,
   SelectedPage,
   selectRelevantPages,
 } from "@scribe/shared";
 import { TakeoffBudget } from "../lib/anthropic.js";
 import { setProgress } from "./progress.js";
+import type { TextFragment } from "./pdf.js";
 import { buildFromDetections, detectRegion } from "./detect.js";
 import { openPdf } from "./pdf.js";
 import { locateRegions, locateRooms } from "./regions.js";
@@ -79,7 +81,7 @@ export async function stagedExtractPdf(
     // regions are dropped — a plan re-counts cabinets the elevations already
     // show, and the 2026-08-05 attribution showed elevations are the better
     // count source (plan-only docs still keep their plan regions).
-    const located: { page: number; kind: string; rect: RectPt }[] = [];
+    const located: { page: number; kind: string; rect: RectPt; modelNote: string | null }[] = [];
     let locatedPages = 0;
     for (const pageInfo of relevant) {
       const page = pageInfo.page;
@@ -107,8 +109,8 @@ export async function stagedExtractPdf(
       const wholeKind =
         pageInfo.class === "floor_plan" ? "plan" : "elevation";
 
-      let regions: { kind: string; rect: RectPt }[] = [
-        { kind: wholeKind, rect: wholePage },
+      let regions: { kind: string; rect: RectPt; modelNote: string | null }[] = [
+        { kind: wholeKind, rect: wholePage, modelNote: null },
       ];
       if (needsRegioning(dims)) {
         const dpi = fitDpi(dims.widthPt / PT_PER_IN, dims.heightPt / PT_PER_IN);
@@ -124,6 +126,7 @@ export async function stagedExtractPdf(
             .filter((r) => DETECTABLE_KINDS.has(r.kind))
             .map((r) => ({
               kind: r.kind,
+              modelNote: r.scale ?? null,
               rect: padRectToPage(
                 mapBoxToPagePoints(r.box, { widthPx: w, heightPx: h }, dims),
                 0.04,
@@ -159,14 +162,36 @@ export async function stagedExtractPdf(
         `${droppedPlans} plan region(s) skipped — elevations are the count source; the plan would re-count the same cabinets`
       );
     }
+    // Scale per region (v0-drawing-scale-plan.md §2): chain calibration from
+    // the page's dimension strings inside the rect, the printed note under
+    // the drawing, and the model's reported note — reconciled to one number.
+    const fragmentsByPage = new Map<number, TextFragment[]>();
     for (const r of seeded) {
       const dims = pdf.pageDimsPt(r.page - 1);
       const ptToDisplay = betaDisplayDpi(dims) / PT_PER_IN;
+      if (!fragmentsByPage.has(r.page)) {
+        fragmentsByPage.set(r.page, pdf.pageTextFragments(r.page - 1));
+      }
+      const scale = scaleForRegion({
+        fragments: fragmentsByPage.get(r.page)!,
+        rect: r.rect,
+        modelNote: r.modelNote,
+      });
+      if (scale.inPerPt == null && !scale.notToScale) {
+        warnings.push(
+          `page ${r.page}: no drawing scale found for the ${r.kind} region — sizes there come from printed dims or defaults only`
+        );
+      } else if (!scale.agreed) {
+        warnings.push(
+          `page ${r.page}: scale sources disagree for the ${r.kind} region (${scale.disagreement ?? "see sources"}) — check sizes there`
+        );
+      }
       await db.insert(takeoffDetections).values({
         takeoffId,
         page: r.page,
         // Carried into the measure stage: plan regions are RUNS to decompose.
         kind: r.kind,
+        scale,
         rect: [
           r.rect.x0 * ptToDisplay,
           r.rect.y0 * ptToDisplay,

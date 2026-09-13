@@ -34,6 +34,7 @@ import {
   needsRegioning,
   padRectToPage,
   parsePageRegionsLenient,
+  scaleForRegion,
 } from "@scribe/shared";
 import {
   DETECT_SYSTEM,
@@ -183,6 +184,7 @@ for (const { page, class: cls } of pages) {
     .filter((r) => DETECTABLE_KINDS.has(r.kind))
     .map((r) => ({
       kind: r.kind,
+      modelNote: r.scale ?? null,
       rect: padRectToPage(
         mapBoxToPagePoints(r.box, { widthPx: w, heightPx: h }, dims),
         0.04,
@@ -226,6 +228,22 @@ writeFileSync(
   join(STEPS, "regions.json"),
   JSON.stringify([...regionsByPage].map(([page, regions]) => ({ page, regions })), null, 2)
 );
+
+// ---- Stage 1b: scale per region (zero API; mirrors staged.ts) ---------------
+const scaleByRegion = [];
+for (const [page, regions] of regionsByPage) {
+  let fragments = [];
+  try {
+    fragments = pdf.pageTextFragments(page - 1);
+  } catch {
+    fragments = [];
+  }
+  regions.forEach((r, i) => {
+    r.scale = scaleForRegion({ fragments, rect: r.rect, modelNote: r.modelNote ?? null });
+    scaleByRegion.push({ page, region: i, kind: r.kind, rect: r.rect, scale: r.scale });
+  });
+}
+writeFileSync(join(STEPS, "scale.json"), JSON.stringify(scaleByRegion, null, 2));
 
 // ---- Stage 2: detect --------------------------------------------------------
 const pendingDetect = [];

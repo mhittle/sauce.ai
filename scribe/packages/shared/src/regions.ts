@@ -70,6 +70,8 @@ export const PageRegion = z.object({
   // [x0, y0, x1, y1] in pixels of the sent image.
   box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
   confidence: z.number().min(0).max(1).default(0.5),
+  // regions-v2: the printed scale note for this drawing, as the model read it.
+  scale: z.string().nullable().catch(null).default(null),
 });
 export type PageRegion = z.infer<typeof PageRegion>;
 

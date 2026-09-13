@@ -115,7 +115,12 @@ export function extractDimSkeleton(
     // Dimensions on drawings are 0.5..300 inches; single digits ≤ 3 are usually
     // fillers/reveals — keep them (they matter for run math).
     if (inches != null && inches > 0 && inches <= 300) {
-      tokens.push({ x: Math.round(f.x), y: Math.round(f.y), raw: t, inches });
+      // Centre of the printed string when the width is known — dimension
+      // strings sit centred on their segment, and chain calibration measures
+      // the distance between centres.
+      const cx = f.x + (f.w ?? 0) / 2;
+      const cy = f.y + (f.h ?? 0) / 2;
+      tokens.push({ x: Math.round(cx * 100) / 100, y: Math.round(cy * 100) / 100, raw: t, inches });
     } else if (LABEL_RE.test(t) && t.length <= 40) {
       labels.push({ x: Math.round(f.x), y: Math.round(f.y), text: t });
     }

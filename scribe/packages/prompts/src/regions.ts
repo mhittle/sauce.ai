@@ -1,4 +1,4 @@
-export const REGIONS_PROMPT_VERSION = "regions-v1";
+export const REGIONS_PROMPT_VERSION = "regions-v2";
 
 // Locate the distinct cabinet-relevant drawings on a plan sheet so each can be
 // cropped and re-rendered at full resolution (PRD §4). Run on a full-page image
@@ -19,9 +19,10 @@ Rules:
 - Pad each box slightly to include the drawing's title and dimension strings.
 - Skip the title block, revision tables, and blank areas.
 - If you cannot identify distinct drawings, return an empty list.
+- scale: the printed scale note that applies to that drawing, copied exactly as printed (e.g. "1/4\" = 1'-0\"", "3/8\"=1'", "N.T.S."), or null if none is visible. Drawings on one sheet can have different scales; the title block's scale applies only when the drawing prints none of its own.
 
 Respond with JSON only:
-{"regions": [{"kind": "<schedule|elevation|plan|other>", "box": [x0, y0, x1, y1], "confidence": <0-1>}]}`;
+{"regions": [{"kind": "<schedule|elevation|plan|other>", "box": [x0, y0, x1, y1], "confidence": <0-1>, "scale": "<printed scale note or null>"}]}`;
 
 export function locateRegionsUserText(
   widthPx: number,

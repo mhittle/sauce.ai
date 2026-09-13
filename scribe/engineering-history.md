@@ -67,11 +67,67 @@ deploys if a future session doesn't know it exists. Keep this current.
 - **`packages/db` copies `migrations/` into `dist/` at build** — the migrate
   runner resolves SQL files relative to its compiled location; a build step
   change that drops the copy breaks `pnpm db:migrate` in prod images.
+- **Stacked PRs: delete the base branch on merge, or the stack never reaches
+  main.** 2026-09-13: #255/#256/#257 were each based on the PR below them;
+  GitHub only retargets a stacked PR to `main` when its base branch is
+  DELETED, so each one merged into the feature branch below it and `main`
+  got PR 1 only while all four showed "merged". Fixed by #260 (the PR 3
+  branch, which contained all the merges, opened against `main`). Either
+  base every PR on `main`, or merge bottom-up and delete each branch.
 - **`ROUTER_TOLERANT_MERGE=1` is SET on `scribe-workers`** (owner, 2026-08-12)
   — the demoted-role re-admit merge is LIVE prod behavior (kit-measured 0.379
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-09-13 (c) — V0 PR A: drawing-scale sources, measured on the 18 kits
+
+**Context.** Stage V item 0 (`v0-drawing-scale-plan.md`): scale is a property
+of the drawing. PR A lands the sources and storage with zero API cost; B–D
+follow. Also found and fixed the stacked-PR merge problem (see load-bearing
+state): PRs 2–4 were not on `main`; #260 lands them.
+
+**Shipped.**
+- `@scribe/shared scale.ts` (37 tests): `parseScaleNote` (architect's
+  `1/4" = 1'-0"` incl. mixed numbers and curly quotes, `1:48`, `N.T.S.`),
+  `findScaleNotes`, `attachNotesToRegions` (a note belongs to the drawing it
+  sits under, sheet note as fallback), `chainCalibration`, `reconcileScale`
+  (manual > accepted chain > note > model; 8% agreement; −0.2 confidence on
+  disagreement; NTS beats all but manual), `scaleForRegion` (one call per
+  region), `inPerPx`. `DrawingScale`/`ScaleSource` zod.
+- `TextFragment` gains optional `w,h` (mupdf stext line box, rotation-
+  normalized); `extractDimSkeleton` now centres tokens when widths are
+  present — chain calibration measures centre-to-centre distances.
+- Migration `0010`: `takeoff_detections.scale`, `takeoff_lines.geom` (geom
+  is filled from PR C). `staged.ts` computes `scaleForRegion` for every
+  seeded region (page text + the model's note) and stores it, warning when
+  no scale is found or sources disagree. regions-v2 prompt asks for the
+  printed scale note per region (`PageRegion.scale`, tolerant parse).
+- `PUT /takeoffs/:id/detections/:detectionId/scale {px_len, inches}` —
+  manual calibration, overrides and is kept in the source list.
+- Harness: `prepare-staged.mjs` writes `steps/scale.json` per region.
+
+**Measured on the 18 kits (zero API), which changed the design.** First
+pass used the median of all adjacent-token samples with an IQR spread
+gate: only 2 regions accepted, spreads of 0.5–4.6. Diagnosis on q7/q21:
+the true scale is always a TIGHT CLUSTER of samples, contaminated by reveal
+labels (1 1/2", 2"), cabinet numbers ("1", "3") that parse as inches, and
+chains that jump across neighbouring drawings at the same y. Rule now:
+skip pairs with a token under 3" or a gap under 8 pt, then take the
+DENSEST ±10% cluster; accept at ≥3 members. Result: chain calibrations
+that agree with the printed note on every sheet that has one (q3, q7, q22,
+q23 at 1/2" and 1/4"), and accepted chains on note-less sheets (q21).
+Text-layer coverage is the ceiling: Piestewa (q8) and the duplex (q6)
+carry dimensions as drawn outlines, not text; q9 is an itemized list;
+q10/q11 are images — those get scale only from the model note (PR C) or
+manual calibration (PR D), as the plan said.
+
+**Gotchas.** (1) `chainCalibration.samples` is the cluster size, not the
+pair count. (2) A `note` attached at sheet level carries 0.7, under-the-
+drawing 0.8. (3) `PageRegion.scale` defaults to null so old kits and the
+classic path parse unchanged. (4) Nothing consumes `scale` yet — PR C.
 
 ---
 
