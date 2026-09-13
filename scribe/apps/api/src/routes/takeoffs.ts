@@ -68,7 +68,7 @@ async function deleteLinesForDetection(
     .where(
       and(
         eq(takeoffLines.takeoffId, takeoffId),
-        sql`${takeoffLines.rawModelOutput}->>'parent' = ANY(${ids})`
+        inArray(sql`${takeoffLines.rawModelOutput}->>'parent'`, ids)
       )
     );
   await db.delete(takeoffLines).where(inArray(takeoffLines.id, ids));
@@ -703,6 +703,27 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           error: `cannot build takeoff from detections in status ${takeoff.status}`,
         });
       }
+      // Self-repair: an area stamped as built whose lines were never priced
+      // (inserted, then the build died before pricing — 2026-09-15) counts as
+      // unbuilt again, so Build simply works. Never-priced = no product match
+      // AND no unmatched reason, which pricing always sets one of.
+      await db.execute(sql`
+        UPDATE takeoff_detections d
+        SET built_at = NULL
+        WHERE d.takeoff_id = ${req.params.id}
+          AND d.built_at IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM takeoff_lines l
+            WHERE l.detection_id = d.id
+              AND l.product_line_id IS NULL
+              AND l.unmatched_reason IS NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM takeoff_lines l
+            WHERE l.detection_id = d.id
+              AND (l.product_line_id IS NOT NULL OR l.unmatched_reason IS NOT NULL)
+          )
+      `);
       const detections = await db
         .select()
         .from(takeoffDetections)
@@ -724,13 +745,29 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       }
       const [updated] = await db
         .update(takeoffs)
-        .set({ status: "processing", error: null, updatedAt: new Date() })
+        .set({
+          status: "processing",
+          error: null,
+          // The Reading card reads this: a build shows Measuring → Pricing,
+          // not the stale hand-off line.
+          progress: {
+            stage: "measure",
+            done: null,
+            total: null,
+            message: "Queued for measuring",
+            started_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          updatedAt: new Date(),
+        })
         .where(eq(takeoffs.id, req.params.id))
         .returning();
-      await getTakeoffQueue().add("beta_build", {
-        takeoff_id: req.params.id,
-        prior_status: takeoff.status,
-      });
+      await getTakeoffQueue().add(
+        "beta_build",
+        { takeoff_id: req.params.id, prior_status: takeoff.status },
+        // A worker restart mid-build (a deploy) gets one automatic retry.
+        { attempts: 2, backoff: { type: "fixed", delay: 30_000 } }
+      );
       return updated;
     }
   );

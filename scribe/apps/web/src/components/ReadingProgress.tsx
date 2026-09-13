@@ -36,10 +36,42 @@ const SIMPLE_STAGES: StageDef[] = [
   { keys: ["price"], label: "Pricing", hint: "Matching products, doors and hardware" },
 ];
 
-function stagesFor(progress: Progress | null, sourceKind: string): StageDef[] {
-  if (sourceKind === "pdf" && progress?.stage !== "read") return PDF_STAGES;
-  return SIMPLE_STAGES;
+// After the human's Mark → Find, a build is just measure → price.
+const BUILD_STAGES: StageDef[] = [
+  { keys: ["measure"], label: "Measuring", hint: "Every cabinet against the printed dimensions" },
+  { keys: ["price"], label: "Pricing", hint: "Matching products, doors and hardware" },
+];
+
+// Before Mark, a PDF is only being rendered for the wizard.
+const PREPARE_STAGES: StageDef[] = [
+  { keys: ["prepare"], label: "Preparing pages", hint: "Rendering the pages you picked" },
+  { keys: ["classify"], label: "Sorting page types", hint: "Plans, elevations, schedules" },
+];
+
+type Phase = "prepare" | "build" | "read";
+
+function phaseOf(progress: Progress | null, sourceKind: string): Phase {
+  if (sourceKind !== "pdf" || progress?.stage === "read") return "read";
+  if (progress?.stage === "measure" || progress?.stage === "price") return "build";
+  return "prepare";
 }
+
+function stagesFor(progress: Progress | null, sourceKind: string): StageDef[] {
+  switch (phaseOf(progress, sourceKind)) {
+    case "build":
+      return BUILD_STAGES;
+    case "prepare":
+      return progress?.stage === "locate" || progress?.stage === "detect" ? PDF_STAGES : PREPARE_STAGES;
+    default:
+      return SIMPLE_STAGES;
+  }
+}
+
+const PHASE_TITLE: Record<Phase, string> = {
+  prepare: "Preparing your pages",
+  build: "Building your takeoff",
+  read: "Reading your drawings",
+};
 
 function elapsed(fromIso: string, now: number): string {
   const s = Math.max(0, Math.round((now - new Date(fromIso).getTime()) / 1000));
@@ -53,12 +85,13 @@ export function ReadingProgress({
   sourceKind,
   pageCount,
   fallbackStartedAt,
-  title = "Reading your drawings",
+  title,
 }: {
   progress: Progress | null;
   sourceKind: string;
   pageCount: number | null;
   fallbackStartedAt: string;
+  // Defaults to the phase the progress reports (preparing / building / reading).
   title?: string;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -76,7 +109,9 @@ export function ReadingProgress({
   return (
     <Card className="mx-auto max-w-xl">
       <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h2 className="wide font-display text-lg font-semibold text-ink">{title}</h2>
+        <h2 className="wide font-display text-lg font-semibold text-ink">
+          {title ?? PHASE_TITLE[phaseOf(progress, sourceKind)]}
+        </h2>
         <span className="font-mono text-xs tabular-nums text-muted" aria-live="off">
           {elapsed(startedAt, now)}
         </span>
