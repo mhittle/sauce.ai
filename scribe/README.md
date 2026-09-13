@@ -84,9 +84,14 @@ local admin) — never set that combination in production.
   screen — each detected cabinet is drawn as a bounding box on the exact image
   the model read (tabbed by page), boxes/lines are linked and editable
   (add/move/resize/delete; edits re-price and re-derive door/drawer faces) —
-  then approve. Status flow: `processing → awaiting_pages → processing →
-  review → approved`. Spreadsheets skip the page gate (nothing to pick);
-  text-layer schedule PDFs skip it too (no vision).
+  then approve. **One flow (2026-09-14):** `processing → awaiting_pages →
+  processing → awaiting_boxes → processing → review → approved`. After the
+  page pick the worker locates the drawings and parks at `awaiting_boxes`;
+  the wizard (`/takeoffs/:id/detect`) opens with those regions pre-boxed —
+  Mark → Find → Build — and the build lands on review. There is no separate
+  automatic path (`STAGED_READS=0` classic one-shot remains an emergency
+  knob only). Spreadsheets skip both gates (nothing to pick or draw);
+  text-layer schedule PDFs skip them too (no vision).
 - **Money is integer cents** everywhere internally.
 - **Quotes pin a pricing_config version** — same lines + same version → same
   total, always. Admin saves create a new immutable version.

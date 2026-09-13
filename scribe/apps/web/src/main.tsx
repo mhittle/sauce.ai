@@ -66,16 +66,16 @@ export const takeoffReviewRoute = createRoute({
   component: TakeoffReviewPage,
 });
 
-// Gate 1: page selection after upload (status awaiting_pages). Gate 2 (box
-// review) is not a route — the takeoff page renders it while awaiting_boxes.
+// Gate 1: page selection after upload (status awaiting_pages). Gate 2 is the
+// wizard below (status awaiting_boxes): mark the cabinet areas → find → build.
 export const pagePickerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/takeoffs/$takeoffId/pages",
   component: PagePickerPage,
 });
 
-// Beta drag-to-detect view: pick a page, drag over the drawing, get cabinet
-// bounding boxes. Separate from the takeoff pipeline.
+// The wizard: the located drawings arrive pre-boxed; the human adjusts,
+// finds the cabinets, builds the takeoff. The one reading flow for PDFs.
 export const betaDetectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/takeoffs/$takeoffId/detect",

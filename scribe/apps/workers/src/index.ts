@@ -40,7 +40,11 @@ const takeoffWorker = new Worker(
     else if (job.name === "detect")
       await detectRegion(job.data.detection_id, log);
     else if (job.name === "beta_build")
-      await buildFromDetections(id, job.data.prior_status ?? "review", log);
+      await buildFromDetections(id, job.data.prior_status ?? "review", log, {
+        // The wizard IS the pipeline now: every build snapshots the
+        // pre-correction lines for the eval corpus.
+        evalFixture: true,
+      });
     else await processTakeoff(id, log);
   },
   { connection, concurrency: 2 }

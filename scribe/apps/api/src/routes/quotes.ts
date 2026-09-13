@@ -20,6 +20,7 @@ import { runPricing, type DbLine } from "../lib/pricing-run.js";
 import { renderQuotePdf } from "../lib/quote-pdf.js";
 
 const QuotePatch = z.object({
+  name: z.string().trim().max(120).nullable().optional(),
   markup_pct: z.number().min(-100).max(500).optional(),
   handling_cents: z.number().int().nonnegative().optional(),
   freight_cents: z.number().int().nonnegative().optional(),
@@ -77,6 +78,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       .object({
         takeoff_id: z.string().uuid(),
         customer_id: z.string().uuid().optional(),
+        name: z.string().trim().max(120).nullable().optional(),
       })
       .parse(req.body);
 
@@ -121,6 +123,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       .values({
         takeoffId: body.takeoff_id,
         customerId: body.customer_id ?? null,
+        name: body.name || null,
         pricingConfigId: config.id,
         pricingTier: "medium",
         subtotalCents: tiered.subtotalCents,
@@ -256,6 +259,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     const [updated] = await db
       .update(quotes)
       .set({
+        name: patch.name === undefined ? quote.name : patch.name || null,
         markupPct,
         handlingCents,
         freightCents: freightOverride,

@@ -7,6 +7,7 @@ import { quoteRef } from "../labels";
 export interface QuoteRow {
   id: string;
   takeoffId: string;
+  name: string | null;
   sourceFilename: string | null;
   status: string;
   subtotalCents: number;
@@ -49,8 +50,11 @@ export function QuotesPage() {
                     params={{ quoteId: quote.id }}
                     className="font-medium text-ink hover:text-accent"
                   >
-                    {quote.sourceFilename ?? "Untitled job"}
+                    {quote.name ?? quote.sourceFilename ?? "Untitled quote"}
                   </Link>
+                  {quote.name && quote.sourceFilename && (
+                    <span className="ml-2 text-xs text-muted">{quote.sourceFilename}</span>
+                  )}
                   <span className="ml-2 font-mono text-[10px] text-faint">
                     {quoteRef(quote.id)}
                   </span>

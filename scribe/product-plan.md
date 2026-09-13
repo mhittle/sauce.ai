@@ -94,10 +94,10 @@ picker, markup %, handling, freight override + verify checkbox, "Generate PDF",
 One object ("Job"), one stepper, one screen per step:
 
 ```
-Sign in ─▶ Jobs ─▶ Upload ─▶ Pages ─▶ Reading ─▶ Review ─▶ Quote ─▶ Done
-                    (drop)   (pick +  (live      (edit     (tier,    (PDF,
-                             confirm  progress)  break-    markup,   email,
-                             types)              down)     freight)  export)
+Sign in ─▶ Jobs ─▶ Upload ─▶ Pages ─▶ Mark ─▶ Reading ─▶ Review ─▶ Quote ─▶ Done
+                    (drop)   (pick +  (regions  (live      (edit     (tier,    (PDF,
+                             confirm  pre-boxed; progress)  break-    markup,   email,
+                             types)   find→build)          down)     freight)  export)
 ```
 
 Mapping to the existing status machine (no new states needed):
@@ -106,14 +106,16 @@ Mapping to the existing status machine (no new states needed):
 |---|---|---|
 | Upload | `processing` (prepare job) | Takeoffs page button |
 | Pages | `awaiting_pages` | `/takeoffs/$id/pages` |
-| Reading | `processing` (extract job: classify → locate → scale → detect → snap → measure → **verify** → price) | polling banner |
+| Mark | `awaiting_boxes` (decided 2026-09-14: the wizard is the ONE flow — Scribe locates the drawings and pre-boxes them; the human adjusts → Find → Build) | `/takeoffs/$id/detect` |
+| Reading | `processing` (locate before Mark; detect → snap → measure → **verify** → price after Build) | polling banner |
 | Review | `review` | `/takeoffs/$id` |
 | Quote | `approved` + quote `draft` | approve → `/quotes/$id` |
 | Done | quote `sent` | quotes list |
 
-Spreadsheets and single images skip Pages (they already do). The beta wizard's
-"Draw" step survives as an advanced action inside Pages ("Draw the regions
-yourself") rather than a separate route.
+Spreadsheets and single images skip Pages and Mark (they already do). The
+wizard is not an advanced option — it is the flow (owner, 2026-09-14: "I
+don't want 2 modes"); the automatic path only does the part a human
+shouldn't have to (finding the drawings on the page).
 
 ---
 

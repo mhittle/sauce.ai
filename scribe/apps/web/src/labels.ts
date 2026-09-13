@@ -13,7 +13,7 @@ const STATUS: Record<string, StatusMeta> = {
   // takeoffs
   processing: { label: "Reading", tone: "blue" },
   awaiting_pages: { label: "Choose pages", tone: "warn" },
-  awaiting_boxes: { label: "Check boxes", tone: "warn" },
+  awaiting_boxes: { label: "Mark cabinets", tone: "warn" },
   extracted: { label: "Needs review", tone: "warn" },
   review: { label: "Needs review", tone: "warn" },
   approved: { label: "Approved", tone: "good" },
