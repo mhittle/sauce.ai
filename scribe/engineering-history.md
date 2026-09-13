@@ -82,6 +82,40 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-14 (d) — V0 PR C measured and DROPPED: printed sizes beat geometry
+
+**Owner:** "test a bit, if it is better continue" → it was not; "forget it".
+Code discarded (never committed). The evidence, so nobody re-runs this blind:
+
+- **Free A/B on the 18 kits** (saved measure responses replayed through a
+  geometry-first merge: box×scale as baseline, printed dims override when they
+  agree, geometry replaces defaults when nothing is printed): **F1 0.465 →
+  0.465 on every kit; size error 1.64" → 1.66"**. Two reasons: (1) the
+  measure-v6 responses mark almost every cabinet `measured: true`, so
+  "printed wins" leaves geometry nothing to do (q21 33/33, q22 22/22, q9
+  26/26); (2) on plan-only kits the geometry sits on the RUN while the lines
+  are the model's UNITS, so it never touches them.
+- **Printed vs geometry against the labels** (66 matched cabinets, 7 kits
+  with a trusted scale): mean |printed − gold| **0.64"** vs |geometry − gold|
+  **1.16"**; printed closer 21×, geometry closer 5×, tie 40. Geometry is a
+  decent fallback (inside one standard width), not a better answer. (Caveat:
+  the matching used printed widths, so this is biased toward printed.)
+- **The size-mismatch flag cannot catch what it was meant to.** Of 48
+  confirmed-correct printed sizes, 12 sit >1.5" from their box (false
+  alarms at the planned tolerance); of the 18 WRONG printed sizes, the
+  median distance to the box is 0.41" — when the model mis-sizes a cabinet
+  its box is usually wrong the same way. At max(3", 12%): 3 false alarms,
+  3 of 18 caught.
+
+**What survives of V0.** PR A (scale sources) and PR B (vector snap) are on
+main, gated off, harmless. Geometry-from-scale remains the right tool for
+the ORIGINAL ask — a box the reviewer draws gets its inches (~1.2" accuracy)
+instead of empty fields — that is PR D, if wanted, and needs only PR A/B.
+Whether telling the model the geometric size improves its own answers is
+untested (needs fresh reads, ~$5). Not pursued.
+
+---
+
 ## 2026-09-14 (c) — Mark step: marked areas are unmistakable; overlap guard
 
 **Owner:** in Mark they double-marked a drawing because the existing region

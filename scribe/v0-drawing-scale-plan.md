@@ -1,6 +1,9 @@
 # V0 — Drawing scale + geometry-first measuring: build plan
 
-**Status:** build-ready (2026-09-13). Stage V item 0 in `product-plan.md`.
+**Status:** A + B shipped (gated); **C measured and dropped 2026-09-14** — see
+engineering-history 2026-09-14 (d): printed sizes beat geometry on the labeled
+kits (0.64" vs 1.16"), F1 unchanged, the mismatch flag can't catch wrong
+printed sizes. D (draw-to-scale on Review) remains possible on A + B.
 **Decision (Rida, 2026-09-13):** scale is a property of the drawing, not the
 cabinet. Establish it first, convert every box through it, return it in the
 API so a newly drawn box has a set truth to measure against.
