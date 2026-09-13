@@ -50,7 +50,9 @@ import {
 import { openPdf } from "../dist/takeoff/pdf.js";
 import {
   annotatePage,
+  drawingScaleEnabled,
   processDetectionResponse,
+  snapDisplayBox,
 } from "../dist/takeoff/detect.js";
 
 const PT_PER_IN = 72;
@@ -303,6 +305,27 @@ const allPages = Array.from({ length: pdf.pageCount }, (_, i) => i + 1);
 const sentPages = [...markerPages, ...allPages.filter((p) => !markerPages.includes(p))]
   .slice(0, MEASURE_MAX_PAGES)
   .sort((a, b) => a - b);
+
+// ---- Stage 2b: vector snap (DRAWING_SCALE=1; mirrors buildFromDetections) ---
+const snapLog = [];
+if (drawingScaleEnabled()) {
+  const segsByPage = new Map();
+  for (const d of detections) {
+    if (!segsByPage.has(d.page)) segsByPage.set(d.page, pdf.pageSegments(d.page - 1));
+    const dims = pageDims.get(d.page);
+    const displayDpi = betaDisplayDpi(dims);
+    for (const item of d.items) {
+      if (!item.bbox_2d) continue;
+      const before = item.bbox_2d;
+      const r = snapDisplayBox(before, displayDpi, segsByPage.get(d.page));
+      item.bbox_2d = r.bbox;
+      item.geom = r.geom;
+      snapLog.push({ page: d.page, label: item.label, before: before.map((v) => Math.round(v)), after: r.bbox.map((v) => Math.round(v)), ...r.geom });
+    }
+  }
+  const segStats = [...segsByPage].map(([page, s]) => ({ page, h: s.h.length, v: s.v.length }));
+  writeFileSync(join(STEPS, "snap.json"), JSON.stringify({ segments: segStats, boxes: snapLog }, null, 2));
+}
 
 let nextMarker = 1;
 const entries = [];

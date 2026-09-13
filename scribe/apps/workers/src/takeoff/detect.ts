@@ -7,16 +7,19 @@ import {
   BETA_DEFAULT_DIMS,
   betaDisplayDpi,
   buildDimGrounding,
-  dimsNearRect,
   CabinetLineItem,
   clampRectToPage,
   DetectionItem,
+  dimsNearRect,
   fitDpi,
   LineCategory,
+  type LineGeom,
   markEstimated,
   padRectToPage,
+  type PageSegments,
   RectPt,
   sliceRunBbox,
+  snapBox,
   stripDoorCallout,
   TextFragment,
 } from "@scribe/shared";
@@ -280,6 +283,35 @@ export interface MarkerEntry {
   kind?: string | null;
   // bbox in the reads-image pixels of that page's render (null = not locatable)
   bboxReadPx: [number, number, number, number] | null;
+  // Vector snap result for this box (DRAWING_SCALE=1, vector PDFs only).
+  geom?: LineGeom | null;
+}
+
+// Snap gate (v0-drawing-scale-plan.md): off by default until the kit A/B.
+export function drawingScaleEnabled(): boolean {
+  return process.env.DRAWING_SCALE === "1";
+}
+
+// Snap one display-px box against the page's segments (page points) and
+// return it in display px again, plus the geom provenance for the line.
+export function snapDisplayBox(
+  bbox: [number, number, number, number],
+  displayDpi: number,
+  segments: PageSegments
+): { bbox: [number, number, number, number]; geom: LineGeom } {
+  const toPt = PT_PER_IN / displayDpi;
+  const boxPt = {
+    x0: Math.min(bbox[0], bbox[2]) * toPt,
+    y0: Math.min(bbox[1], bbox[3]) * toPt,
+    x1: Math.max(bbox[0], bbox[2]) * toPt,
+    y1: Math.max(bbox[1], bbox[3]) * toPt,
+  };
+  const r = snapBox(boxPt, segments);
+  const toPx = displayDpi / PT_PER_IN;
+  return {
+    bbox: [r.box.x0 * toPx, r.box.y0 * toPx, r.box.x1 * toPx, r.box.y1 * toPx],
+    geom: { snapped: r.snapped, snap_moved: Math.round(r.moved * 1000) / 1000 },
+  };
 }
 
 // A plan run that decomposes into more units than this is a runaway answer,
@@ -424,6 +456,7 @@ export function mergeMeasuredLines(
       confidence: Math.min(entry.confidence, sized?.confidence ?? 0.5),
       estimated: false,
       bbox_2d: bbox,
+      geom: entry.geom ?? null,
     };
     return sized?.measured && !defaulted ? line : markEstimated(line);
   };
@@ -606,8 +639,19 @@ export async function buildFromDetections(
         }[];
       }[] = [];
       for (const page of pages) perPage.set(page, []);
+      // Vector snap (PR B): move each detector box's edges onto the drawn
+      // lines before anything downstream sees the box — the annotated
+      // marker images, the plan crops and the persisted line bboxes all
+      // derive from these display-px boxes.
+      const snapEnabled = drawingScaleEnabled();
+      const segmentsByPage = new Map<number, PageSegments>();
       for (const d of detections) {
         const items = z.array(DetectionItem).catch([]).parse(d.items ?? []);
+        const dimsForSnap = pdf.pageDimsPt(d.page - 1);
+        const snapDpi = d.displayDpi ?? betaDisplayDpi(dimsForSnap);
+        if (snapEnabled && !segmentsByPage.has(d.page)) {
+          segmentsByPage.set(d.page, pdf.pageSegments(d.page - 1));
+        }
         const group: {
           entry: MarkerEntry;
           displayBbox: [number, number, number, number] | null;
@@ -622,9 +666,19 @@ export async function buildFromDetections(
             kind: d.kind,
             bboxReadPx: null, // filled after the page render DPI is known
           };
+          let displayBbox = item.bbox_2d;
+          if (snapEnabled && displayBbox) {
+            const snapped = snapDisplayBox(
+              displayBbox,
+              snapDpi,
+              segmentsByPage.get(d.page) ?? { h: [], v: [] }
+            );
+            displayBbox = snapped.bbox;
+            entry.geom = snapped.geom;
+          }
           entries.push(entry);
-          group.push({ entry, displayBbox: item.bbox_2d });
-          perPage.get(d.page)!.push({ entry, displayBbox: item.bbox_2d });
+          group.push({ entry, displayBbox });
+          perPage.get(d.page)!.push({ entry, displayBbox });
         }
         if (d.kind === "plan" && group.length > 0)
           planDetections.push({ detection: d, boxes: group });
