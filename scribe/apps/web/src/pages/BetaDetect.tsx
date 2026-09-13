@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { betaDetectRoute } from "../main";
@@ -150,6 +150,17 @@ export function BetaDetectPage() {
       .querySelector(`[data-box-id="${CSS.escape(selectedBoxId)}"]`)
       ?.scrollIntoView({ block: "nearest" });
   }, [selectedBoxId]);
+
+  // A build this screen started has finished (processing → review): hand off
+  // to the review. Also covers a build that had bounced here after a rollback.
+  const sawProcessing = useRef(false);
+  useEffect(() => {
+    if (status === "processing") sawProcessing.current = true;
+    if (status === "review" && sawProcessing.current) {
+      sawProcessing.current = false;
+      navigate({ to: "/takeoffs/$takeoffId", params: { takeoffId } });
+    }
+  }, [status, navigate, takeoffId]);
 
   // Land on the right step for the state of the boxes.
   useEffect(() => {
@@ -389,6 +400,13 @@ export function BetaDetectPage() {
           </div>
         );
       default:
+        if (unbuilt.length === 0 && (hasLines || takeoff.status === "review") && !inFlight) {
+          return (
+            <Link to="/takeoffs/$takeoffId" params={{ takeoffId }}>
+              <Button variant="primary">Open the review →</Button>
+            </Link>
+          );
+        }
         return (
           <Button
             variant="primary"
