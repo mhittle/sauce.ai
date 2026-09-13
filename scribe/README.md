@@ -86,9 +86,11 @@ local admin) — never set that combination in production.
   (add/move/resize/delete; edits re-price and re-derive door/drawer faces) —
   then approve. **One flow (2026-09-14):** `processing → awaiting_pages →
   processing → awaiting_boxes → processing → review → approved`. After the
-  page pick the worker locates the drawings and parks at `awaiting_boxes`;
-  the wizard (`/takeoffs/:id/detect`) opens with those regions pre-boxed —
-  Mark → Find → Build — and the build lands on review. There is no separate
+  page pick the worker renders the pages and parks at `awaiting_boxes`;
+  the wizard (`/takeoffs/:id/detect`) opens on a blank sheet — the human
+  marks every area (no pre-selection, owner 2026-09-14), Find → Build —
+  and the build lands on review. Each area carries its plan/elevation kind
+  (from the page type, overridable) and its drawing scale (computed at scan). There is no separate
   automatic path (`STAGED_READS=0` classic one-shot remains an emergency
   knob only). Spreadsheets skip both gates (nothing to pick or draw);
   text-layer schedule PDFs skip them too (no vision).

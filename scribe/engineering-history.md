@@ -82,6 +82,44 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 — Mark step PR 1: side panel, no pre-selection, kind + scale on the area
+
+**Owner (approved plan):** (1) the cabinet table beside the drawing, not
+under it; (2) no pre-selected areas — the whole-page fallback boxed an
+entire letter-size sheet as "Area 1"; (3) selection synced both ways
+between drawing and table. PR 2 (areas own their cabinets; a correction
+rescans one area) follows.
+
+**Shipped.**
+- `staged.ts` — the extract stage no longer locates or seeds anything: it
+  renders the wizard's page images for the selected pages (progress
+  "Rendering page N for marking"), stores the estimation/schedule notes in
+  `docSummary {warnings, seeded: true}`, parks at `awaiting_boxes`. One
+  fewer vision call per page in prod. The harness (`prepare-staged.mjs`)
+  still runs locate as the stand-in for the human's boxes.
+- Area **kind** (plan | elevation): `POST /detections` derives it from the
+  page type chosen at Pages (`selectedPages[].class`, else the classifier's
+  call) — `areaKindForPage`; optional `kind` in the body; new
+  `PATCH /takeoffs/:id/detections/:id {kind}` (clears found cabinets, back
+  to `drawn`). The chip in the wizard has a plan/elevation select.
+- Area **scale** (PR A) now computed in `detectRegion` at scan time from
+  the page's dimension strings inside the rect + the printed note, stored
+  on the detection as before.
+- Wizard layout: `[9rem rail][drawing][22rem panel]`; the panel holds the
+  Areas list (kind select, ×, "Clear page" with confirm) and the cabinets
+  table, and scrolls on its own. Two-way selection: clicking a dot scrolls
+  its row into view (`data-box-id` + `scrollIntoView`); clicking a row
+  selects and scrolls the drawing (BoxOverlay already did that).
+
+**Gotchas.** (1) Old takeoffs parked at `awaiting_boxes` with seeded
+`queued`/`drawn` regions still work — the wizard shows whatever
+detections exist. (2) `DrawingScale` on a detection is now written by the
+scan, so an area edited after scanning keeps the old scale until rescanned
+(PR 2 resets status on edit). (3) `locateRegions`/`locateRooms` are
+unused in prod now; kept for the harness.
+
+---
+
 ## 2026-09-14 (d) — V0 PR C measured and DROPPED: printed sizes beat geometry
 
 **Owner:** "test a bit, if it is better continue" → it was not; "forget it".

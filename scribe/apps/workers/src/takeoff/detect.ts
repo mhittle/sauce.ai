@@ -11,6 +11,7 @@ import {
   clampRectToPage,
   DetectionItem,
   dimsNearRect,
+  type DrawingScale,
   fitDpi,
   LineCategory,
   type LineGeom,
@@ -18,6 +19,7 @@ import {
   padRectToPage,
   type PageSegments,
   RectPt,
+  scaleForRegion,
   sliceRunBbox,
   snapBox,
   stripDoorCallout,
@@ -176,6 +178,15 @@ export async function detectRegion(
         },
         dims
       );
+      // Drawing scale for this area (v0-drawing-scale-plan.md §2), from the
+      // page's dimension strings inside the rect and the printed note under
+      // it. Computed here, at scan time, because areas are human-drawn.
+      let scale: DrawingScale | null = null;
+      try {
+        scale = scaleForRegion({ fragments: pdf.pageTextFragments(page - 1), rect: dragPt });
+      } catch {
+        scale = null;
+      }
       const cropPt = padRectToPage(dragPt, DETECT_PAD_FRAC, dims);
       const cropWIn = (cropPt.x1 - cropPt.x0) / PT_PER_IN;
       const cropHIn = (cropPt.y1 - cropPt.y0) / PT_PER_IN;
@@ -223,6 +234,7 @@ export async function detectRegion(
           status: "done",
           items,
           displayDpi,
+          ...(scale ? { scale } : {}),
           cropImageKey: cropKey,
           model: DETECT_MODEL,
           tokensUsed: tokens,

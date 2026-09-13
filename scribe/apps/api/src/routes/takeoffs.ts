@@ -49,6 +49,25 @@ const EXT_TO_KIND: Record<string, SourceKind> = {
 
 const BBox = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 
+// The page type chosen at the Pages step (or the classifier's guess) decides
+// how a human-drawn area is read: a floor plan's areas are RUNS to decompose,
+// anything else is one cabinet per box.
+function areaKindForPage(
+  takeoff: { selectedPages: unknown; classifiedPages: unknown },
+  page: number
+): "plan" | "elevation" {
+  const selected = Array.isArray(takeoff.selectedPages)
+    ? (takeoff.selectedPages as { page: number; class?: string }[])
+    : [];
+  const classified = Array.isArray(takeoff.classifiedPages)
+    ? (takeoff.classifiedPages as { page: number; class?: string }[])
+    : [];
+  const cls =
+    selected.find((p) => p.page === page)?.class ??
+    classified.find((p) => p.page === page)?.class;
+  return cls === "floor_plan" ? "plan" : "elevation";
+}
+
 const LinePatch = z.object({
   tag: z.string().nullable().optional(),
   room: z.string().nullable().optional(),
@@ -473,6 +492,9 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         .object({
           page: z.number().int().positive(),
           rect: BBox,
+          // plan | elevation — defaults from the page type chosen at the
+          // Pages step (a plan area's cabinets are decomposed as runs).
+          kind: z.enum(["plan", "elevation"]).optional(),
         })
         .parse(req.body);
       const db = getDb();
@@ -496,6 +518,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           takeoffId: req.params.id,
           page: body.page,
           rect: body.rect,
+          kind: body.kind ?? areaKindForPage(rows[0], body.page),
           status: "drawn",
         })
         .returning();
@@ -528,6 +551,30 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         });
       }
       return { queued: drawn.length };
+    }
+  );
+
+  // Change an area's kind (plan | elevation) — the chip toggle in the wizard.
+  // Clears found cabinets: a plan area is read as runs, an elevation as units.
+  app.patch<{ Params: { id: string; detectionId: string } }>(
+    "/takeoffs/:id/detections/:detectionId",
+    async (req, reply) => {
+      const body = z
+        .object({ kind: z.enum(["plan", "elevation"]) })
+        .parse(req.body);
+      const db = getDb();
+      const [updated] = await db
+        .update(takeoffDetections)
+        .set({ kind: body.kind, status: "drawn", items: null, error: null })
+        .where(
+          and(
+            eq(takeoffDetections.id, req.params.detectionId),
+            eq(takeoffDetections.takeoffId, req.params.id)
+          )
+        )
+        .returning();
+      if (!updated) return reply.code(404).send({ error: "not found" });
+      return updated;
     }
   );
 
