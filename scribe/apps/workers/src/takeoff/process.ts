@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   evalFixtures,
   getDb,
@@ -80,6 +80,7 @@ interface ReadMeta {
 export type ReadLine = CabinetLineItem & {
   read_image_key?: string | null;
   read_rect?: ReadRect | null;
+  detection_id?: string | null;
 };
 
 // Optional secondary-model validation state, accumulated across pages.
@@ -183,8 +184,75 @@ export async function replaceLines(
       readImageKey: line.read_image_key ?? null,
       readRect: line.read_rect ?? null,
       geom: line.geom ?? null,
+      detectionId: line.detection_id ?? null,
     });
   }
+}
+
+// Area-scoped replace (Mark step PR 2): drop the lines the given areas
+// produced last time (and the door/front faces derived from them), keep
+// everything else — the reviewer's edits on untouched areas survive — and
+// insert the new lines. Returns the inserted line ids for scoped pricing.
+export async function replaceLinesForDetections(
+  takeoffId: string,
+  detectionIds: string[],
+  lines: ReadLine[]
+): Promise<string[]> {
+  const db = getDb();
+  if (detectionIds.length > 0) {
+    const old = await db
+      .select({ id: takeoffLines.id })
+      .from(takeoffLines)
+      .where(
+        and(
+          eq(takeoffLines.takeoffId, takeoffId),
+          inArray(takeoffLines.detectionId, detectionIds)
+        )
+      );
+    if (old.length > 0) {
+      const oldIds = old.map((o) => o.id);
+      await db
+        .delete(takeoffLines)
+        .where(
+          and(
+            eq(takeoffLines.takeoffId, takeoffId),
+            sql`${takeoffLines.rawModelOutput}->>'parent' = ANY(${oldIds})`
+          )
+        );
+      await db.delete(takeoffLines).where(inArray(takeoffLines.id, oldIds));
+    }
+  }
+  const inserted: string[] = [];
+  for (const line of lines) {
+    const [row] = await db
+      .insert(takeoffLines)
+      .values({
+        takeoffId,
+        sourcePage: line.source_page,
+        tag: line.tag,
+        room: line.room,
+        qty: line.qty,
+        category: line.category,
+        widthIn: line.width_in,
+        heightIn: line.height_in,
+        depthIn: line.depth_in,
+        doorStyle: line.door_style,
+        material: line.material,
+        finish: line.finish,
+        assembled: line.assembled,
+        notes: line.notes,
+        confidence: line.confidence,
+        rawModelOutput: null,
+        bbox: line.bbox_2d ?? null,
+        readImageKey: line.read_image_key ?? null,
+        readRect: line.read_rect ?? null,
+        geom: line.geom ?? null,
+        detectionId: line.detection_id ?? null,
+      })
+      .returning({ id: takeoffLines.id });
+    inserted.push(row.id);
+  }
+  return inserted;
 }
 
 // Pre-correction snapshot → self-building eval corpus (PRD §10). Delete-then-
@@ -582,26 +650,38 @@ export async function extractTakeoff(
 
 export async function priceAndExpand(
   takeoffId: string,
-  log: Logger
+  log: Logger,
+  // Scope (Mark step PR 2): only these lines are matched and expanded; the
+  // rest keep their product picks, faces and confidence untouched.
+  opts: { lineIds?: string[] } = {}
 ): Promise<void> {
   const db = getDb();
   await setProgress(takeoffId, "price", {
     message: "Matching products and pricing",
   });
-  // Re-run safety: drop previously derived faces before re-deriving them.
+  const scoped = opts.lineIds != null;
+  // Re-run safety: drop previously derived faces before re-deriving them —
+  // all of them for a full pass, only the scoped cabinets' for a partial one.
   await db
     .delete(takeoffLines)
     .where(
       and(
         eq(takeoffLines.takeoffId, takeoffId),
-        sql`${takeoffLines.rawModelOutput}->>'expanded' = 'true'`
+        sql`${takeoffLines.rawModelOutput}->>'expanded' = 'true'`,
+        ...(scoped
+          ? [sql`${takeoffLines.rawModelOutput}->>'parent' = ANY(${opts.lineIds!})`]
+          : [])
       )
     );
 
   const rows = await db
     .select()
     .from(takeoffLines)
-    .where(eq(takeoffLines.takeoffId, takeoffId))
+    .where(
+      scoped
+        ? and(eq(takeoffLines.takeoffId, takeoffId), inArray(takeoffLines.id, opts.lineIds!))
+        : eq(takeoffLines.takeoffId, takeoffId)
+    )
     .orderBy(takeoffLines.sourcePage, takeoffLines.createdAt);
   const snapshot = await loadPricingSnapshot();
 
@@ -659,17 +739,21 @@ export async function priceAndExpand(
     }
   }
 
+  // Doc confidence over ALL lines (a scoped pass only re-priced some).
+  const allRows = scoped
+    ? await db.select().from(takeoffLines).where(eq(takeoffLines.takeoffId, takeoffId))
+    : null;
   await db
     .update(takeoffs)
     .set({
       status: "review",
-      docConfidence: avgConfidence(confidences),
+      docConfidence: avgConfidence(allRows ? allRows.map(rowToLine) : confidences),
       updatedAt: new Date(),
     })
     .where(eq(takeoffs.id, takeoffId));
 
   log.info(
-    { takeoffId, boxes: rows.length, faces: faceCount },
+    { takeoffId, boxes: rows.length, faces: faceCount, scoped },
     "takeoff priced — in review"
   );
 }
@@ -690,7 +774,7 @@ export async function finalizeTakeoff(
 }
 
 // Reviewer-edited DB row → the pure line shape pricing + expansion work on.
-function rowToLine(row: typeof takeoffLines.$inferSelect): CabinetLineItem {
+export function rowToLine(row: typeof takeoffLines.$inferSelect): CabinetLineItem {
   return {
     source_page: row.sourcePage,
     tag: row.tag,

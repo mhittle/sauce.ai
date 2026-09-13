@@ -1,8 +1,8 @@
 import type { Logger } from "pino";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
-import { evalFixtures, getDb, takeoffDetections, takeoffs } from "@scribe/db";
+import { evalFixtures, getDb, takeoffDetections, takeoffLines, takeoffs } from "@scribe/db";
 import {
   BETA_DEFAULT_DIMS,
   betaDisplayDpi,
@@ -44,7 +44,13 @@ import {
   withSocketRetry,
 } from "../lib/anthropic.js";
 import { openPdf, OpenPdf } from "./pdf.js";
-import { priceAndExpand, ReadLine, replaceLines } from "./process.js";
+import {
+  priceAndExpand,
+  ReadLine,
+  replaceLines,
+  replaceLinesForDetections,
+  rowToLine,
+} from "./process.js";
 
 // ---------------------------------------------------------------------------
 // Beta drag-to-detect: on-demand cabinet detection over a user-dragged region
@@ -297,6 +303,8 @@ export interface MarkerEntry {
   bboxReadPx: [number, number, number, number] | null;
   // Vector snap result for this box (DRAWING_SCALE=1, vector PDFs only).
   geom?: LineGeom | null;
+  // The marked area this marker came from (lines inherit it).
+  detectionId?: string | null;
 }
 
 // Snap gate (v0-drawing-scale-plan.md): off by default until the kit A/B.
@@ -469,6 +477,7 @@ export function mergeMeasuredLines(
       estimated: false,
       bbox_2d: bbox,
       geom: entry.geom ?? null,
+      detection_id: entry.detectionId ?? null,
     };
     return sized?.measured && !defaulted ? line : markEstimated(line);
   };
@@ -617,17 +626,21 @@ export async function buildFromDetections(
 ): Promise<CabinetLineItem[]> {
   const db = getDb();
   try {
+    // Areas own their cabinets (Mark step PR 2): a build measures only the
+    // areas scanned since their last build (built_at null) and replaces
+    // only their lines. Everything else in the breakdown is untouched.
     const detections = await db
       .select()
       .from(takeoffDetections)
       .where(
         and(
           eq(takeoffDetections.takeoffId, takeoffId),
-          eq(takeoffDetections.status, "done")
+          eq(takeoffDetections.status, "done"),
+          isNull(takeoffDetections.builtAt)
         )
       )
       .orderBy(takeoffDetections.page, takeoffDetections.createdAt);
-    if (detections.length === 0) throw new Error("no completed detections");
+    if (detections.length === 0) throw new Error("nothing new to build — every scanned area is already in the takeoff");
 
     const pdf = await openTakeoffPdf(takeoffId);
     try {
@@ -676,6 +689,7 @@ export async function buildFromDetections(
             category: item.category,
             confidence: item.confidence,
             kind: d.kind,
+            detectionId: d.id,
             bboxReadPx: null, // filled after the page render DPI is known
           };
           let displayBbox = item.bbox_2d;
@@ -952,7 +966,12 @@ export async function buildFromDetections(
         read_rect: readRectByPage.get(line.source_page ?? pages[0]) ?? null,
       }));
 
-      await replaceLines(takeoffId, lines, false);
+      const builtIds = detections.map((d) => d.id);
+      const insertedIds = await replaceLinesForDetections(takeoffId, builtIds, lines);
+      await db
+        .update(takeoffDetections)
+        .set({ builtAt: new Date() })
+        .where(inArray(takeoffDetections.id, builtIds));
       const estimatedCount = merged.filter((l) => l.estimated).length;
       // Warnings recorded when the regions were seeded (no scale found, a
       // page skipped) ride into the built takeoff's summary.
@@ -991,18 +1010,27 @@ export async function buildFromDetections(
         })
         .where(eq(takeoffs.id, takeoffId));
       if (opts.evalFixture) {
-        // Staged-pipeline parity with extractTakeoff: snapshot the
-        // pre-correction lines so the eval corpus keeps building.
+        // Snapshot EVERY area-built cabinet (not just this build's) as the
+        // pre-correction extraction, so the eval corpus keeps building.
+        const allBuilt = await db
+          .select()
+          .from(takeoffLines)
+          .where(
+            and(
+              eq(takeoffLines.takeoffId, takeoffId),
+              sql`${takeoffLines.detectionId} IS NOT NULL`
+            )
+          );
         await db
           .delete(evalFixtures)
           .where(eq(evalFixtures.takeoffId, takeoffId));
         await db.insert(evalFixtures).values({
           takeoffId,
-          extractedLines: merged,
+          extractedLines: allBuilt.map(rowToLine),
           promptVersion: MEASURE_PROMPT_VERSION,
         });
       }
-      await priceAndExpand(takeoffId, log);
+      await priceAndExpand(takeoffId, log, { lineIds: insertedIds });
       log.info(
         { takeoff: takeoffId, cabinets: merged.length, estimatedCount, tokens },
         "beta build done"

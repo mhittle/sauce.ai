@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   evalFixtures,
   exportTemplates,
@@ -48,6 +48,32 @@ const EXT_TO_KIND: Record<string, SourceKind> = {
 };
 
 const BBox = z.tuple([z.number(), z.number(), z.number(), z.number()]);
+
+// Lines an area produced, plus the door/front faces derived from them.
+async function deleteLinesForDetection(
+  takeoffId: string,
+  detectionId: string
+): Promise<number> {
+  const db = getDb();
+  const old = await db
+    .select({ id: takeoffLines.id })
+    .from(takeoffLines)
+    .where(
+      and(eq(takeoffLines.takeoffId, takeoffId), eq(takeoffLines.detectionId, detectionId))
+    );
+  if (old.length === 0) return 0;
+  const ids = old.map((o) => o.id);
+  await db
+    .delete(takeoffLines)
+    .where(
+      and(
+        eq(takeoffLines.takeoffId, takeoffId),
+        sql`${takeoffLines.rawModelOutput}->>'parent' = ANY(${ids})`
+      )
+    );
+  await db.delete(takeoffLines).where(inArray(takeoffLines.id, ids));
+  return ids.length;
+}
 
 // The page type chosen at the Pages step (or the classifier's guess) decides
 // how a human-drawn area is read: a floor plan's areas are RUNS to decompose,
@@ -554,18 +580,33 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // Change an area's kind (plan | elevation) — the chip toggle in the wizard.
-  // Clears found cabinets: a plan area is read as runs, an elevation as units.
+  // Change an area: its kind (plan | elevation) or its box (move/resize).
+  // Either change discards what the area found — its cabinets in the
+  // breakdown included (approved decision, 2026-09-15) — and it needs a
+  // fresh scan and build.
   app.patch<{ Params: { id: string; detectionId: string } }>(
     "/takeoffs/:id/detections/:detectionId",
     async (req, reply) => {
       const body = z
-        .object({ kind: z.enum(["plan", "elevation"]) })
+        .object({
+          kind: z.enum(["plan", "elevation"]).optional(),
+          rect: BBox.optional(),
+        })
         .parse(req.body);
+      if (body.kind === undefined && body.rect === undefined) {
+        return reply.code(400).send({ error: "nothing to change" });
+      }
       const db = getDb();
       const [updated] = await db
         .update(takeoffDetections)
-        .set({ kind: body.kind, status: "drawn", items: null, error: null })
+        .set({
+          ...(body.kind !== undefined ? { kind: body.kind } : {}),
+          ...(body.rect !== undefined ? { rect: body.rect } : {}),
+          status: "drawn",
+          items: null,
+          error: null,
+          builtAt: null,
+        })
         .where(
           and(
             eq(takeoffDetections.id, req.params.detectionId),
@@ -574,7 +615,8 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         )
         .returning();
       if (!updated) return reply.code(404).send({ error: "not found" });
-      return updated;
+      const removed = await deleteLinesForDetection(req.params.id, updated.id);
+      return { ...updated, removed_lines: removed };
     }
   );
 
@@ -651,6 +693,11 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       if (takeoff.sourceKind !== "pdf") {
         return reply.code(400).send({ error: "detect view is PDF-only" });
       }
+      if (takeoff.status === "approved") {
+        return reply.code(409).send({
+          error: "this takeoff is approved — reopen it for changes first",
+        });
+      }
       if (!["awaiting_pages", "awaiting_boxes", "review"].includes(takeoff.status)) {
         return reply.code(409).send({
           error: `cannot build takeoff from detections in status ${takeoff.status}`,
@@ -662,7 +709,8 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         .where(
           and(
             eq(takeoffDetections.takeoffId, req.params.id),
-            eq(takeoffDetections.status, "done")
+            eq(takeoffDetections.status, "done"),
+            isNull(takeoffDetections.builtAt)
           )
         );
       const itemCount = detections.reduce(
@@ -672,7 +720,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       if (itemCount === 0) {
         return reply
           .code(400)
-          .send({ error: "no detected cabinets — run detection first" });
+          .send({ error: "nothing new to build — scan a new or changed area first" });
       }
       const [updated] = await db
         .update(takeoffs)
@@ -702,7 +750,9 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         .returning();
       if (deleted.length === 0)
         return reply.code(404).send({ error: "not found" });
-      return { ok: true };
+      // Removing an area removes the cabinets it found (approved decision).
+      const removed = await deleteLinesForDetection(req.params.id, deleted[0].id);
+      return { ok: true, removed_lines: removed };
     }
   );
 
@@ -980,6 +1030,30 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           )
         );
       return { ok: true };
+    }
+  );
+
+  // Reopen an approved takeoff so its areas can be amended (Mark step PR 2).
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/reopen",
+    async (req, reply) => {
+      const db = getDb();
+      const rows = await db
+        .select()
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      if (!canTransitionTakeoff(rows[0].status as TakeoffStatus, "review")) {
+        return reply
+          .code(409)
+          .send({ error: `cannot reopen a takeoff in status ${rows[0].status}` });
+      }
+      const [updated] = await db
+        .update(takeoffs)
+        .set({ status: "review", updatedAt: new Date() })
+        .where(eq(takeoffs.id, req.params.id))
+        .returning();
+      return updated;
     }
   );
 

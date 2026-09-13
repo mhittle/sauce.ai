@@ -98,6 +98,7 @@ export function BoxOverlay({
   onCreate,
   onAreaHover,
   onAreaRemove,
+  onAreaChange,
 }: {
   src: string;
   boxes: OverlayBox[];
@@ -107,6 +108,9 @@ export function BoxOverlay({
   areas?: OverlayArea[];
   onAreaHover?: (id: string | null) => void;
   onAreaRemove?: (id: string) => void;
+  // When given, the label chip drags the whole area and its corners resize
+  // it; the change arrives through onChange(areaId, bbox) like a box edit.
+  onAreaChange?: (id: string, bbox: BBox) => void;
   selectedId: string | null;
   // When true, dragging on empty canvas draws a new box instead of panning.
   drawMode: boolean;
@@ -330,7 +334,8 @@ export function BoxOverlay({
     if (drag.kind === "draw") {
       if (b[2] - b[0] >= minSide && b[3] - b[1] >= minSide) onCreate(b);
     } else if (draft.id != null) {
-      onChange(draft.id, b);
+      if (areas.some((a) => a.id === draft.id)) onAreaChange?.(draft.id, b);
+      else onChange(draft.id, b);
     }
   };
 
@@ -389,10 +394,13 @@ export function BoxOverlay({
               onPointerUp={onPointerUp}
             >
               {areas.map((a) => {
-                const x = Math.min(a.bbox[0], a.bbox[2]);
-                const y = Math.min(a.bbox[1], a.bbox[3]);
-                const w = Math.abs(a.bbox[2] - a.bbox[0]);
-                const h = Math.abs(a.bbox[3] - a.bbox[1]);
+                const live = draft && draft.id === a.id ? normalize(draft.bbox) : a.bbox;
+                const x = Math.min(live[0], live[2]);
+                const y = Math.min(live[1], live[3]);
+                const w = Math.abs(live[2] - live[0]);
+                const h = Math.abs(live[3] - live[1]);
+                const editable = !!onAreaChange;
+                const hs = px(7);
                 const chipH = px(22);
                 const chipText = a.note ? `${a.label} · ${a.note}` : a.label;
                 const chipW = px(10) + chipText.length * px(7.2);
@@ -415,15 +423,21 @@ export function BoxOverlay({
                       vectorEffect="non-scaling-stroke"
                       className="pointer-events-none"
                     />
-                    {/* label chip, top-left, inside the box */}
+                    {/* label chip, top-left, inside the box — drag it to move the area */}
                     <rect
                       x={x}
                       y={y}
                       width={chipW}
                       height={chipH}
                       fill={AREA_COLOR}
-                      className="pointer-events-none"
-                    />
+                      style={{ pointerEvents: editable ? "auto" : "none", cursor: editable ? "move" : "default" }}
+                      onPointerDown={(e) => {
+                        if (!editable || e.button !== 0) return;
+                        beginDrag(e, { kind: "move", id: a.id, orig: [...a.bbox] as BBox, start: toImage(e) });
+                      }}
+                    >
+                      {editable && <title>Drag to move {a.label}</title>}
+                    </rect>
                     <text
                       x={x + px(5)}
                       y={y + chipH * 0.7}
@@ -435,6 +449,33 @@ export function BoxOverlay({
                     >
                       {chipText}
                     </text>
+                    {/* corner handles: resize */}
+                    {editable &&
+                      (
+                        [
+                          ["nw", x, y],
+                          ["ne", x + w, y],
+                          ["sw", x, y + h],
+                          ["se", x + w, y + h],
+                        ] as const
+                      ).map(([corner, cx, cy]) => (
+                        <rect
+                          key={corner}
+                          x={cx - hs / 2}
+                          y={cy - hs / 2}
+                          width={hs}
+                          height={hs}
+                          fill="#fff"
+                          stroke={AREA_COLOR}
+                          strokeWidth={2}
+                          vectorEffect="non-scaling-stroke"
+                          style={{ pointerEvents: "auto", cursor: `${corner}-resize` }}
+                          onPointerDown={(e) => {
+                            if (e.button !== 0) return;
+                            beginDrag(e, { kind: "resize", id: a.id, corner, orig: [...a.bbox] as BBox });
+                          }}
+                        />
+                      ))}
                     {/* remove button, top-right, inside the box */}
                     {onAreaRemove && (
                       <g

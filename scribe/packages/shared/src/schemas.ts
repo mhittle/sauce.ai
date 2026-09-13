@@ -53,6 +53,8 @@ export const CabinetLineItem = z.object({
     .default(null),
   // Geometry provenance from the drawing scale / vector snap (PR B/C).
   geom: z.unknown().nullable().optional(),
+  // The marked area (takeoff_detections.id) this line was built from.
+  detection_id: z.string().nullable().optional(),
 });
 export type CabinetLineItem = z.infer<typeof CabinetLineItem>;
 
@@ -389,7 +391,9 @@ export const TAKEOFF_STATUS_TRANSITIONS: Record<TakeoffStatus, TakeoffStatus[]> 
     // review → processing: the beta detect wizard rebuilds a reviewed
     // takeoff's lines from detections (replace-all, user-confirmed).
     review: ["processing", "approved"],
-    approved: [],
+    // Reopen for changes (Mark step PR 2): an approved takeoff must be
+    // reopened before its areas can be amended.
+    approved: ["review"],
     failed: [],
   };
 
