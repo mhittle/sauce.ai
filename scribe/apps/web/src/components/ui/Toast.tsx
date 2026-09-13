@@ -15,10 +15,13 @@ interface ToastItem {
   title: string;
   description?: string;
   tone: ToastTone;
+  action?: { label: string; onClick: () => void };
+  ttlMs?: number;
 }
 
 interface ToastApi {
-  push: (t: Omit<ToastItem, "id">) => void;
+  push: (t: Omit<ToastItem, "id">) => number;
+  dismiss: (id: number) => void;
   success: (title: string, description?: string) => void;
   error: (title: string, description?: string) => void;
   info: (title: string, description?: string) => void;
@@ -39,7 +42,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (t: Omit<ToastItem, "id">) => {
       const id = ++seq.current;
       setItems((prev) => [...prev.slice(-3), { ...t, id }]);
-      window.setTimeout(() => dismiss(id), TTL_MS);
+      window.setTimeout(() => dismiss(id), t.ttlMs ?? TTL_MS);
+      return id;
     },
     [dismiss]
   );
@@ -47,11 +51,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ToastApi>(
     () => ({
       push,
+      dismiss,
       success: (title, description) => push({ title, description, tone: "good" }),
       error: (title, description) => push({ title, description, tone: "bad" }),
       info: (title, description) => push({ title, description, tone: "neutral" }),
     }),
-    [push]
+    [push, dismiss]
   );
 
   return (
@@ -83,6 +88,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   </div>
                 )}
               </div>
+              {t.action && (
+                <button
+                  type="button"
+                  className="shrink-0 rounded border border-rule px-2 py-0.5 text-xs font-medium text-ink hover:bg-rule-soft"
+                  onClick={() => {
+                    t.action!.onClick();
+                    dismiss(t.id);
+                  }}
+                >
+                  {t.action.label}
+                </button>
+              )}
               <button
                 aria-label="Dismiss"
                 className="-mr-1 -mt-0.5 rounded px-1 text-muted hover:bg-rule-soft hover:text-ink"

@@ -16,17 +16,18 @@ import {
 } from "@scribe/db";
 import {
   CabinetLineItem,
-  canTransitionTakeoff,
   ESTIMATED_NOTE_PREFIX,
-  expandToComponents,
   ExportTemplate,
+  LOW_CONFIDENCE_THRESHOLD,
   LineCategory,
   PricingSnapshot,
   SelectedPage,
   SourceKind,
+  canTransitionTakeoff,
+  expandToComponents,
   type TakeoffStatus,
 } from "@scribe/shared";
-import { matchLine, materialStats } from "@scribe/pricing";
+import { matchLine, materialStats, priceQuoteTiers } from "@scribe/pricing";
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { objectExists, putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
@@ -316,8 +317,53 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         depth_in: l.depthIn,
       }))
     );
-    return { ...rows[0], lines, material_stats };
+    // Live estimate for the review screen's sticky bar — the same tier
+    // engine the quote uses, so the number the reviewer watches while editing
+    // is the number the quote will open with.
+    const quote_tiers = priceQuoteTiers(
+      lines.map((l) => ({
+        category: l.category,
+        width_in: l.widthIn,
+        height_in: l.heightIn,
+        depth_in: l.depthIn,
+        qty: l.qty,
+      }))
+    );
+    return { ...rows[0], lines, material_stats, quote_tiers };
   });
+
+  // Batch-accept: one call marks every line at or above the threshold (and
+  // below 1) as reviewed. Replaces the UI firing one PATCH per line.
+  app.post<{ Params: { id: string } }>(
+    "/takeoffs/:id/accept-lines",
+    async (req, reply) => {
+      const body = z
+        .object({ min_confidence: z.number().min(0).max(1).default(LOW_CONFIDENCE_THRESHOLD) })
+        .parse(req.body ?? {});
+      const db = getDb();
+      const rows = await db
+        .select({ status: takeoffs.status })
+        .from(takeoffs)
+        .where(eq(takeoffs.id, req.params.id));
+      if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+      if (!["review", "extracted", "awaiting_boxes"].includes(rows[0].status)) {
+        return reply.code(409).send({
+          error: `cannot accept lines on takeoff in status ${rows[0].status}`,
+        });
+      }
+      const accepted = await db
+        .update(takeoffLines)
+        .set({ confidence: 1, reviewerEdited: true, updatedAt: new Date() })
+        .where(
+          and(
+            eq(takeoffLines.takeoffId, req.params.id),
+            sql`${takeoffLines.confidence} >= ${body.min_confidence} AND ${takeoffLines.confidence} < 1`
+          )
+        )
+        .returning({ id: takeoffLines.id });
+      return { accepted: accepted.length };
+    }
+  );
 
   // Signed URL for a rasterized page image (review-screen provenance).
   app.get<{ Params: { id: string; page: string } }>(

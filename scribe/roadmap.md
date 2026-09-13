@@ -67,8 +67,12 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   component library, shell, human status labels, toasts — **shipped**
   (`claude/scribe-ui-1-design-system`); (2) Jobs list + drop-zone upload +
   `takeoffs.progress` (migration 0009) + Reading screen + quotes named by
-  their job's file — **shipped** (`claude/scribe-ui-2-jobs-progress`); (3) Pages step with the wizard folded in + Review rework +
-  live estimate + Flags panel slot; (4) Quote step + Done + Admin ported to the
+  their job's file — **shipped** (`claude/scribe-ui-2-jobs-progress`); (3) Pages step (pre-selected readable
+  pages, all-of-a-type shortcuts, type chips, "draw the regions yourself"
+  hand-off to the wizard) + Review rework (60/40 drawing/breakdown, rooms,
+  click-to-edit, flagged/unmatched filters, inline product picker, undo
+  delete, live Base estimate bar, one-call batch accept, notes-from-the-read
+  panel as the Flags slot) — **shipped** (`claude/scribe-ui-3-pages-review`); (4) Quote step + Done + Admin ported to the
   new components. Stage V (verification layers) runs alongside; Stages 2–4
   (accounts, credits, beta) follow — all in `product-plan.md`.
 

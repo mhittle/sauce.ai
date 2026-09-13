@@ -75,6 +75,58 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-13 — Stage 1 UI PR 3: Pages step + Review rework
+
+**Shipped (PR 3 of 4, stacked on PR 2).**
+- **API**: `GET /takeoffs/:id` now returns `quote_tiers` (same
+  `priceQuoteTiers` call the quote uses) so the review bar shows the number
+  the quote will open with. `POST /takeoffs/:id/accept-lines
+  {min_confidence?}` marks every line in `[threshold, 1)` as reviewed in one
+  UPDATE (replaces the UI's PATCH-per-line loop).
+- **Pages step** (`PagePicker.tsx`): readable pages (plan / elevation /
+  schedule per the classifier) are PRE-SELECTED — the common case is "looks
+  right, go"; "All plans / All elevations / Every page / Clear" shortcuts;
+  per-tile type chips (Plan · Elevation · Schedule · Finishes · Skip) replace
+  the `<select>`; the primary button counts readable pages only; a "Draw the
+  regions yourself" disclosure hands the selection to the wizard via
+  `/takeoffs/:id/detect?pages=1,3,5` (`validateSearch` on the route), which
+  opens straight on Draw. The wizard uses the shared `Stepper`; the "Detect
+  (beta)" buttons are gone from the picker and review headers (the review's
+  More menu keeps "Re-read with drawn regions…").
+- **Review** (`TakeoffReview.tsx`, rewritten): fixed-height two-pane layout
+  (drawing 3fr / breakdown 2fr, each scrolling internally; `SourceBoxPanel`
+  gained a `maxHeight` prop). Breakdown grouped by room with per-room qty;
+  every cell is a `Cell` (click/tab to edit, Enter or blur commits, Esc
+  restores — no more `e`-or-double-click); material/finish sit under the tag;
+  confidence is a button that accepts the line; unmatched lines carry an
+  inline product `Select` (same PATCH as the old bucket); derived door/front
+  faces hide behind "Show doors & fronts" and are summarized per cabinet
+  ("2 doors · 1 front"). Filter tabs All / Flagged / Unmatched with counts;
+  category legend with quantities; "notes from the read" collapsible = the
+  Stage V Flags slot (doc uncertainties + warnings today, per-line flags
+  later). **Delete is soft**: the row hides, a toast offers Undo for 8 s,
+  then the DELETE fires (pending deletes flush on unmount). Sticky bar: Base
+  estimate + Upgraded/Premium, cabinet count, "N to check", "Accept N
+  confident" (batch endpoint), and **"Looks right → Quote"** which approves
+  then creates the quote in one go ("Approve without quoting" lives in More).
+  Keyboard: ↑/↓ (j/k), Enter accept+advance, Del soft-delete, `e` focus the
+  row's first field, `?` shortcuts dialog. Materials is a one-line
+  `<details>` under the drawing. Failed takeoffs get a plain failure screen.
+- Toasts accept an `action` + `ttlMs` (used by Undo).
+
+**Verified** on the mock API (with read images + bboxes + derived faces):
+layout at 1440 light/dark, keyboard nav, soft delete + Undo, help dialog,
+Pages pre-selection and chips. `pnpm build` + `pnpm test` green. Not run
+against the real API.
+
+**Gotchas.** (1) `Cell` commits on blur — one PATCH per edited cell; fine
+for review volumes, but don't wire it to anything that re-renders the whole
+list per keystroke. (2) The right panel is width-budgeted for ~560 px; adding
+a column means removing one. (3) `BoxReviewSection` (legacy
+`awaiting_boxes`) is untouched and still uses the old table.
+
+---
+
 ## 2026-09-11 — Stage 1 UI PR 2: Jobs list, live reading progress, quotes named by file
 
 **Shipped (PR 2 of 4, stacked on PR 1).**

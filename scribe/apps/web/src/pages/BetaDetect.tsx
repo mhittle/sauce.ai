@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { betaDetectRoute } from "../main";
 import { apiGet, apiSend } from "../api";
-import { Badge, Button, Card, PageTitle } from "../ui";
+import { Badge, Button, Card, PageTitle, Stepper } from "../ui";
 import {
   BoxOverlay,
   categoryColor,
@@ -67,13 +67,29 @@ const CLASS_SHORT: Record<string, string> = {
 };
 
 const STEPS = ["Pages", "Draw", "Detect", "Build"] as const;
+const STEP_HINTS = [
+  "Choose the sheets",
+  "Drag boxes over cabinet areas",
+  "The model labels what's inside",
+  "One measuring pass, then price",
+];
 
 export function BetaDetectPage() {
   const { takeoffId } = betaDetectRoute.useParams();
+  const { pages: pagesParam } = betaDetectRoute.useSearch();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [selectedPages, setSelectedPages] = useState<number[]>([]);
+  // Arriving from the Pages step with a selection skips straight to Draw.
+  const handed = useMemo(
+    () =>
+      (pagesParam ?? "")
+        .split(",")
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n > 0),
+    [pagesParam]
+  );
+  const [step, setStep] = useState(handed.length > 0 ? 2 : 1);
+  const [selectedPages, setSelectedPages] = useState<number[]>(handed);
   const [page, setPage] = useState<number | null>(null);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
@@ -311,42 +327,29 @@ export function BetaDetectPage() {
   return (
     <div>
       <PageTitle
+        eyebrow={
+          <span>
+            Draw the regions yourself <Badge tone="blue">beta</Badge>
+          </span>
+        }
         actions={
-          <Link to="/takeoffs/$takeoffId" params={{ takeoffId }}>
-            <Button>← Back to takeoff</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link to="/takeoffs/$takeoffId" params={{ takeoffId }}>
+              <Button variant="quiet">← Back to the job</Button>
+            </Link>
+            {stepAction}
+          </div>
         }
       >
-        Detect: {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}{" "}
-        <Badge tone="blue">beta</Badge>
+        {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}
       </PageTitle>
 
-      {/* Stepper */}
-      <div className="mb-4 flex items-center gap-1">
-        {STEPS.map((label, i) => {
-          const n = i + 1;
-          return (
-            <button
-              key={label}
-              onClick={() => setStep(n)}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
- step === n
- ?"bg-ink text-paper"
-                  : "text-muted hover:bg-rule-soft"
-              }`}
-            >
-              <span
-                className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
- step === n ?"bg-paper text-ink" : "bg-rule"
-                }`}
-              >
-                {n}
-              </span>
-              {label}
-            </button>
-          );
-        })}
-        <div className="ml-auto">{stepAction}</div>
+      <div className="mb-4">
+        <Stepper
+          steps={STEPS.map((label, i) => ({ key: label, label, hint: STEP_HINTS[i] }))}
+          current={step - 1}
+          onSelect={(i) => setStep(i + 1)}
+        />
       </div>
 
       {anyError && (
