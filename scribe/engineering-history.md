@@ -75,6 +75,50 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-13 (b) — Stage 1 UI PR 4: Quote step, Done state, Admin ported
+
+**Shipped (PR 4 of 4, stacked on PR 3). Stage 1 is code-complete.**
+- **Quote step** (`QuoteBuilder.tsx`, rewritten): three tier cards (radio
+  semantics; click PATCHes `pricing_tier`) with the boxes / doors&fronts /
+  drawer-box breakdown; line items as the itemized audit; Adjustments
+  (markup, handling) and Shipping (pallets, estimate, override, "I've
+  confirmed the shipping cost" checkbox) cards; Total card. Sticky bar with
+  the tier total, **the list of blockers** (shipping unconfirmed, unpriced
+  lines with a link back to the takeoff, placeholder rates), "Download PDF"
+  and "Send quote". Send PATCHes `status=sent` — the SERVER enforces the
+  gates — then opens the mailto draft (PDF attach stays manual until the
+  Stage 2 email provider). **Done state**: sent/won/lost/expired lock every
+  input and tier card, show a green banner with the sent time and "Start
+  another job"; More menu offers Mark won / Mark lost when sent, plus the
+  CSV exports. Operator-only: pricing-config version, product-line ids,
+  "placeholder rate" chips, and the real NEEDS-REVIEW wording render for
+  `admin`; everyone else sees "pricing isn't finalized — ask an admin".
+- **Admin** (`Admin.tsx`, rewritten on the component library): sidebar with
+  `?tab=` routing (`validateSearch` on `/admin`) — Pricing · Branding &
+  terms · Freight & reading · Export mappings · Users; Crawler sources
+  hidden from the sidebar but routable (account menu › Operator › Crawler
+  sources). Pricing editor: sticky save bar with the placeholder-rate count,
+  per-line cards, "placeholder" chips, test calculator on `Field`/`Select`.
+  Branding: logo upload now goes through `apiUpload` (**bug fix in
+  passing**: the old raw `fetch` sent no bearer header, so the upload 401'd
+  on the cross-site Railway deploy). Terms/footer save only when dirty.
+  Users: form submit, role hints, toasts. Every save toasts.
+- Layout: the Admin nav link clears `?tab`; Operator menu gains Crawler
+  sources.
+
+**Verified** on the mock API: quote draft (blockers listed, Send disabled),
+quote sent (locked Done state), admin pricing / branding / users, light +
+dark. `pnpm build` + `pnpm test` green. Not run against the real API.
+
+**Gotchas.** (1) The Send button is disabled purely from the client's
+`blockers` list, which mirrors the server gates in `quotes.ts` — if a gate
+is added server-side, add it to `blockers` too or the button will look
+enabled and the PATCH will 4xx (the toast shows the server's message).
+(2) Mark won/lost PATCH `status` with no other gates. (3) Roles still
+can't be edited in Users — Stage 2 replaces the allow-list anyway.
+
+---
+
 ## 2026-09-13 — Stage 1 UI PR 3: Pages step + Review rework
 
 **Shipped (PR 3 of 4, stacked on PR 2).**

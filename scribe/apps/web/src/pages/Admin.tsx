@@ -1,39 +1,78 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_URL, apiGet, apiSend, formatUsd } from "../api";
-import { Badge, Button, Card, Input, PageTitle } from "../ui";
+import { Link } from "@tanstack/react-router";
+import { adminRoute } from "../main";
+import { apiGet, apiSend, apiUpload, formatUsd } from "../api";
+import {
+  Badge,
+  Button,
+  Card,
+  errorMessage,
+  Field,
+  Input,
+  NumberInput,
+  PageTitle,
+  SectionLabel,
+  Select,
+  SkeletonRows,
+  StatusPill,
+  Textarea,
+  useToast,
+} from "../ui";
 
-type Tab = "pricing" | "org" | "templates" | "sources" | "users";
+// The admin control panel (product-plan.md §3.3): pricing, branding and
+// terms, freight and extraction settings, export mappings, users. Crawler
+// sources stay routable (?tab=sources) but off the sidebar with the
+// prospector. Stages 2–3 add orgs, invites, usage and credits here.
+
+type Tab = "pricing" | "branding" | "freight" | "templates" | "users" | "sources";
+
+const TABS: { key: Tab; label: string; hint: string; hidden?: boolean }[] = [
+  { key: "pricing", label: "Pricing", hint: "Rates, adders, lead times" },
+  { key: "branding", label: "Branding & terms", hint: "Logo, quote terms, footer" },
+  { key: "freight", label: "Freight & reading", hint: "Pallet rate, handling, cross-check" },
+  { key: "templates", label: "Export mappings", hint: "Mozaik / KCD columns" },
+  { key: "users", label: "Users", hint: "Who can sign in" },
+  { key: "sources", label: "Crawler sources", hint: "Prospector (hidden)", hidden: true },
+];
 
 export function AdminPage() {
-  const [tab, setTab] = useState<Tab>("pricing");
+  const { tab: tabParam } = adminRoute.useSearch();
+  const tab: Tab = TABS.some((t) => t.key === tabParam) ? (tabParam as Tab) : "pricing";
+  const current = TABS.find((t) => t.key === tab)!;
   return (
     <div>
-      <PageTitle>Admin</PageTitle>
-      <div className="mb-4 flex gap-1">
-        {(
-          [
-            ["pricing", "Pricing Editor"],
-            ["org", "Branding & Freight"],
-            ["templates", "CSV Export Mappings"],
-            ["sources", "Crawler Sources"],
-            ["users", "Users"],
-          ] as [Tab, string][]
-        ).map(([t, label]) => (
-          <Button
-            key={t}
-            variant={tab === t ? "primary" : "default"}
-            onClick={() => setTab(t)}
-          >
-            {label}
-          </Button>
-        ))}
+      <PageTitle eyebrow="Admin">{current.label}</PageTitle>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[13rem_minmax(0,1fr)]">
+        <nav aria-label="Admin sections" className="md:sticky md:top-16 md:self-start">
+          <ul className="flex gap-1 overflow-x-auto md:flex-col">
+            {TABS.filter((t) => !t.hidden || t.key === tab).map((t) => (
+              <li key={t.key}>
+                <Link
+                  to="/admin"
+                  search={{ tab: t.key }}
+                  className={`block rounded-md px-3 py-2 ${
+                    t.key === tab ? "bg-ink text-paper" : "text-ink hover:bg-rule-soft"
+                  }`}
+                >
+                  <div className="text-sm font-medium">{t.label}</div>
+                  <div className={`text-[11px] ${t.key === tab ? "text-paper/70" : "text-muted"}`}>
+                    {t.hint}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className="min-w-0">
+          {tab === "pricing" && <PricingEditor />}
+          {tab === "branding" && <Branding />}
+          {tab === "freight" && <FreightAndReading />}
+          {tab === "templates" && <ExportTemplates />}
+          {tab === "users" && <Users />}
+          {tab === "sources" && <Sources />}
+        </div>
       </div>
-      {tab === "pricing" && <PricingEditor />}
-      {tab === "org" && <OrgSettings />}
-      {tab === "templates" && <ExportTemplates />}
-      {tab === "sources" && <Sources />}
-      {tab === "users" && <Users />}
     </div>
   );
 }
@@ -77,8 +116,15 @@ interface PricingResponse {
   versions: { version: number; createdAt: string }[];
 }
 
+const MEASURE_LABEL: Record<ProductLine["size_measure"], string> = {
+  lf: "per linear foot",
+  sqft: "per square foot",
+  unit: "per unit",
+};
+
 function PricingEditor() {
   const qc = useQueryClient();
+  const toast = useToast();
   const q = useQuery({
     queryKey: ["admin-pricing"],
     queryFn: () => apiGet<PricingResponse>("/admin/pricing"),
@@ -105,56 +151,57 @@ function PricingEditor() {
   }, [q.data, draft]);
 
   const save = useMutation({
-    mutationFn: () =>
-      apiSend("PUT", "/admin/pricing", { product_lines: draft }),
+    mutationFn: () => apiSend("PUT", "/admin/pricing", { product_lines: draft }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing"] });
       setDraft(null);
+      toast.success("Pricing saved as a new version");
     },
+    onError: (e) => toast.error("Pricing not saved", errorMessage(e)),
   });
 
-  if (q.isLoading || !draft) return <div className="text-muted">Loading…</div>;
+  if (q.isLoading || !draft) return <SkeletonRows rows={6} />;
 
   const update = (i: number, patch: Partial<ProductLine>) => {
     setDraft(draft.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   };
+  const placeholders = draft.reduce(
+    (n, pl) => n + Object.values(pl.material_rates).filter((r) => r.needs_review).length,
+    0
+  );
 
   return (
     <div className="space-y-4">
-      <Card className="flex items-center justify-between">
-        <span className="text-sm text-muted">
-          Latest config: v{q.data!.versions[0]?.version ?? "—"}. Saving creates
-          a new immutable version; existing quotes keep their pinned version.
-        </span>
-        <Button
-          variant="primary"
-          disabled={save.isPending}
-          onClick={() => save.mutate()}
-        >
-          Save all (new version)
+      <div className="sticky top-14 z-20 flex flex-wrap items-center gap-3 rounded-lg border border-rule bg-paper px-4 py-2">
+        <div className="text-sm text-muted">
+          Latest config <span className="font-mono text-ink">v{q.data!.versions[0]?.version ?? "—"}</span>.
+          Saving creates a new version; existing quotes keep theirs.
+        </div>
+        {placeholders > 0 && (
+          <span className="rounded bg-bad-soft px-2 py-0.5 text-xs text-bad">
+            {placeholders} placeholder rate{placeholders === 1 ? "" : "s"} block sending
+          </span>
+        )}
+        <Button className="ml-auto" variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
+          Save as new version
         </Button>
-      </Card>
-      {save.isError && (
-        <p className="text-sm text-bad">{String(save.error)}</p>
-      )}
+      </div>
 
       {draft.map((pl, i) => (
         <Card key={pl.id}>
-          <div className="mb-2 flex items-center gap-3">
-            <h2 className="font-semibold">{pl.name}</h2>
-            <Badge>{pl.size_measure}</Badge>
-            <label className="ml-auto flex items-center gap-1 text-sm">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <h2 className="wide font-display text-base font-semibold text-ink">{pl.name}</h2>
+            <Badge>{MEASURE_LABEL[pl.size_measure]}</Badge>
+            <span className="text-xs text-muted">{pl.categories.map((c) => c.replace(/_/g, " ")).join(", ")}</span>
+            <label className="ml-auto flex items-center gap-2 text-xs text-muted">
               Lead time (days)
-              <Input
-                type="number"
+              <NumberInput
                 className="w-16"
                 value={pl.lead_time_days}
-                onChange={(e) =>
-                  update(i, { lead_time_days: Number(e.target.value) })
-                }
+                onChange={(e) => update(i, { lead_time_days: Number(e.target.value) })}
               />
             </label>
-            <label className="flex items-center gap-1 text-sm">
+            <label className="flex items-center gap-1.5 text-sm">
               <input
                 type="checkbox"
                 checked={pl.active}
@@ -164,93 +211,90 @@ function PricingEditor() {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase text-faint">
-                Material rates ($/{pl.size_measure})
-              </h3>
-              {Object.entries(pl.material_rates).map(([mat, rate]) => (
-                <div key={mat} className="flex items-center gap-2 py-0.5 text-sm">
-                  <span className="w-28">{mat}</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    className="w-24"
-                    value={rate.rate_cents / 100}
-                    onChange={(e) =>
-                      update(i, {
-                        material_rates: {
-                          ...pl.material_rates,
-                          [mat]: {
-                            ...rate,
-                            rate_cents: Math.round(Number(e.target.value) * 100),
-                            needs_review: false,
+              <SectionLabel>Material rates ($ {MEASURE_LABEL[pl.size_measure]})</SectionLabel>
+              <div className="space-y-1">
+                {Object.entries(pl.material_rates).map(([mat, rate]) => (
+                  <div key={mat} className="flex items-center gap-2 text-sm">
+                    <span className="w-32 truncate text-ink" title={mat}>{mat}</span>
+                    <NumberInput
+                      step="0.01"
+                      className={`w-28 ${rate.needs_review ? "border-bad" : ""}`}
+                      value={rate.rate_cents / 100}
+                      onChange={(e) =>
+                        update(i, {
+                          material_rates: {
+                            ...pl.material_rates,
+                            [mat]: {
+                              ...rate,
+                              rate_cents: Math.round(Number(e.target.value) * 100),
+                              needs_review: false,
+                            },
                           },
-                        },
-                      })
-                    }
-                  />
-                  {rate.needs_review && <Badge tone="red">NEEDS REVIEW</Badge>}
-                </div>
-              ))}
+                        })
+                      }
+                    />
+                    {rate.needs_review && (
+                      <span className="rounded bg-bad-soft px-1.5 font-mono text-[10px] uppercase text-bad">
+                        placeholder
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase text-faint">
-                Finish adders
-              </h3>
-              {Object.entries(pl.finish_adders).map(([finish, adder]) => (
-                <div key={finish} className="flex items-center gap-2 py-0.5 text-sm">
-                  <span className="w-28">{finish}</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    className="w-24"
-                    value={adder.kind === "flat" ? (adder.cents ?? 0) / 100 : adder.pct}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      update(i, {
-                        finish_adders: {
-                          ...pl.finish_adders,
-                          [finish]:
-                            adder.kind === "flat"
+              <SectionLabel>Finish adders</SectionLabel>
+              <div className="space-y-1">
+                {Object.entries(pl.finish_adders).map(([finish, adder]) => (
+                  <div key={finish} className="flex items-center gap-2 text-sm">
+                    <span className="w-32 truncate text-ink" title={finish}>{finish}</span>
+                    <NumberInput
+                      step="0.01"
+                      className="w-28"
+                      value={adder.kind === "flat" ? (adder.cents ?? 0) / 100 : adder.pct}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        update(i, {
+                          finish_adders: {
+                            ...pl.finish_adders,
+                            [finish]:
+                              adder.kind === "flat"
+                                ? { kind: "flat", cents: Math.round(v * 100) }
+                                : { kind: "pct", pct: v },
+                          },
+                        });
+                      }}
+                    />
+                    <span className="font-mono text-xs text-faint">{adder.kind === "flat" ? "$" : "%"}</span>
+                  </div>
+                ))}
+                {pl.assembly_adder && (
+                  <div className="mt-2 flex items-center gap-2 border-t border-rule-soft pt-2 text-sm">
+                    <span className="w-32 font-medium text-ink">Assembled</span>
+                    <NumberInput
+                      step="0.01"
+                      className="w-28"
+                      value={
+                        pl.assembly_adder.kind === "flat"
+                          ? (pl.assembly_adder.cents ?? 0) / 100
+                          : pl.assembly_adder.pct
+                      }
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        update(i, {
+                          assembly_adder:
+                            pl.assembly_adder!.kind === "flat"
                               ? { kind: "flat", cents: Math.round(v * 100) }
                               : { kind: "pct", pct: v },
-                        },
-                      });
-                    }}
-                  />
-                  <span className="text-faint">
-                    {adder.kind === "flat" ? "$" : "%"}
-                  </span>
-                </div>
-              ))}
-              {pl.assembly_adder && (
-                <div className="mt-2 flex items-center gap-2 text-sm">
-                  <span className="w-28 font-medium">assembly</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    className="w-24"
-                    value={
-                      pl.assembly_adder.kind === "flat"
-                        ? (pl.assembly_adder.cents ?? 0) / 100
-                        : pl.assembly_adder.pct
-                    }
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      update(i, {
-                        assembly_adder:
-                          pl.assembly_adder!.kind === "flat"
-                            ? { kind: "flat", cents: Math.round(v * 100) }
-                            : { kind: "pct", pct: v },
-                      });
-                    }}
-                  />
-                  <span className="text-faint">
-                    {pl.assembly_adder.kind === "flat" ? "$" : "%"}
-                  </span>
-                </div>
-              )}
+                        });
+                      }}
+                    />
+                    <span className="font-mono text-xs text-faint">{pl.assembly_adder.kind === "flat" ? "$" : "%"}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Card>
@@ -262,6 +306,7 @@ function PricingEditor() {
 }
 
 function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
+  const toast = useToast();
   const [plId, setPlId] = useState(productLines[0]?.id ?? "");
   const [form, setForm] = useState({
     qty: "1",
@@ -291,65 +336,49 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
         },
       }),
     onSuccess: setResult,
+    onError: (e) => toast.error("Calculation failed", errorMessage(e)),
   });
 
   return (
     <Card className="border-blue">
-      <h2 className="mb-2 text-sm font-semibold text-blue">
-        Test calculator — prices against the DRAFT config above (before saving)
-      </h2>
-      <div className="flex flex-wrap items-end gap-3 text-sm">
-        <label>
-          Line
-          <select
-            className="ml-1 rounded-md border border-rule px-2 py-1"
-            value={plId}
-            onChange={(e) => setPlId(e.target.value)}
-          >
+      <SectionLabel className="text-blue">Test calculator — prices against the draft above, before saving</SectionLabel>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Product line">
+          <Select value={plId} onChange={(e) => setPlId(e.target.value)}>
             {productLines.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
-        </label>
-        {(["qty", "width_in", "height_in", "depth_in"] as const).map((f) => (
-          <label key={f}>
-            {f.replace("_in", '"')}
-            <Input
-              className="ml-1 w-16"
-              value={form[f]}
-              onChange={(e) => setForm({ ...form, [f]: e.target.value })}
-            />
-          </label>
+          </Select>
+        </Field>
+        {(
+          [
+            ["qty", "Qty"],
+            ["width_in", "W (in)"],
+            ["height_in", "H (in)"],
+            ["depth_in", "D (in)"],
+          ] as const
+        ).map(([f, label]) => (
+          <Field key={f} label={label}>
+            <NumberInput className="w-20" value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
+          </Field>
         ))}
-        <label>
-          Material
-          <select
-            className="ml-1 rounded-md border border-rule px-2 py-1"
-            value={form.material}
-            onChange={(e) => setForm({ ...form, material: e.target.value })}
-          >
+        <Field label="Material">
+          <Select value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })}>
             <option value="">(first)</option>
             {Object.keys(pl?.material_rates ?? {}).map((m) => (
               <option key={m}>{m}</option>
             ))}
-          </select>
-        </label>
-        <label>
-          Finish
-          <select
-            className="ml-1 rounded-md border border-rule px-2 py-1"
-            value={form.finish}
-            onChange={(e) => setForm({ ...form, finish: e.target.value })}
-          >
+          </Select>
+        </Field>
+        <Field label="Finish">
+          <Select value={form.finish} onChange={(e) => setForm({ ...form, finish: e.target.value })}>
             <option value="">(none)</option>
             {Object.keys(pl?.finish_adders ?? {}).map((f) => (
               <option key={f}>{f}</option>
             ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1">
+          </Select>
+        </Field>
+        <label className="flex items-center gap-1.5 pb-1.5 text-sm">
           <input
             type="checkbox"
             checked={form.assembled}
@@ -357,19 +386,18 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
           />
           Assembled
         </label>
-        <Button variant="primary" onClick={() => calc.mutate()}>
+        <Button variant="primary" loading={calc.isPending} onClick={() => calc.mutate()}>
           Calculate
         </Button>
       </div>
       {result && (
-        <div className="mt-3 rounded-md bg-bg p-2 text-sm">
+        <div className="mt-3 rounded-md bg-bg px-3 py-2 font-mono text-sm tabular-nums">
           {result.ok ? (
             <span>
               Unit {formatUsd(result.unit_cents as number)} · Total{" "}
-              <strong>{formatUsd(result.total_cents as number)}</strong> · lead{" "}
-              {String(result.lead_time_days)}d
+              <strong>{formatUsd(result.total_cents as number)}</strong> · lead {String(result.lead_time_days)}d
               {Boolean(result.needs_review) && (
-                <Badge tone="red">NEEDS REVIEW rate</Badge>
+                <span className="ml-2 rounded bg-bad-soft px-1.5 text-[10px] uppercase text-bad">placeholder rate</span>
               )}
             </span>
           ) : (
@@ -382,7 +410,7 @@ function TestCalculator({ productLines }: { productLines: ProductLine[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Org settings: branding, terms, freight (PRD §7.1, §6.5)
+// Branding & terms · Freight & reading (org_settings, PRD §7.1 / §6.5)
 // ---------------------------------------------------------------------------
 
 interface OrgSettingsData {
@@ -395,134 +423,150 @@ interface OrgSettingsData {
   logo_url: string | null;
 }
 
-function OrgSettings() {
+function useOrgSettings() {
   const qc = useQueryClient();
+  const toast = useToast();
   const q = useQuery({
     queryKey: ["org-settings"],
     queryFn: () => apiGet<OrgSettingsData>("/admin/org-settings"),
   });
+  const save = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiSend("PUT", "/admin/org-settings", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-settings"] });
+      toast.success("Saved");
+    },
+    onError: (e) => toast.error("Not saved", errorMessage(e)),
+  });
+  return { q, save, qc, toast };
+}
+
+function Branding() {
+  const { q, save, qc, toast } = useOrgSettings();
   const [terms, setTerms] = useState<string | null>(null);
   const [footer, setFooter] = useState<string | null>(null);
-
-  const save = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      apiSend("PUT", "/admin/org-settings", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["org-settings"] }),
+  const upload = useMutation({
+    mutationFn: (f: File) => apiUpload("/admin/org-settings/logo", f),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-settings"] });
+      toast.success("Logo updated");
+    },
+    onError: (e) => toast.error("Logo not uploaded", errorMessage(e)),
   });
 
-  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isLoading) return <SkeletonRows rows={4} />;
   const s = q.data!;
+  const dirty = (terms != null && terms !== s.quoteTermsMd) || (footer != null && footer !== s.quoteFooterMd);
 
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-muted">Logo</h2>
-        {s.logo_url && (
-          <img src={s.logo_url} alt="logo" className="mb-2 h-16" />
-        )}
-        <input
-          type="file"
-          accept=".png,.svg,.jpg,.jpeg"
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (!f) return;
-            const form = new FormData();
-            form.append("file", f);
-            await fetch(`${API_URL}/admin/org-settings/logo`, {
-              method: "POST",
-              credentials: "include",
-              body: form,
-            });
-            qc.invalidateQueries({ queryKey: ["org-settings"] });
-          }}
-        />
+        <SectionLabel>Logo on the quote PDF</SectionLabel>
+        <div className="flex items-center gap-4">
+          {s.logo_url ? (
+            <img src={s.logo_url} alt="Current logo" className="h-14 rounded border border-rule bg-white p-1" />
+          ) : (
+            <div className="flex h-14 w-28 items-center justify-center rounded border border-dashed border-rule text-xs text-faint">
+              no logo
+            </div>
+          )}
+          <label className="text-sm">
+            <span className="sr-only">Upload logo</span>
+            <input
+              type="file"
+              accept=".png,.svg,.jpg,.jpeg"
+              className="text-xs text-muted file:mr-3 file:rounded-md file:border file:border-rule file:bg-paper file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-rule-soft"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) upload.mutate(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
       </Card>
 
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-muted">
-          Quote terms (markdown)
-        </h2>
-        <textarea
-          className="h-32 w-full rounded-md border border-rule p-2 text-sm"
+        <SectionLabel>Quote terms (markdown)</SectionLabel>
+        <Textarea
+          className="h-36 w-full"
           value={terms ?? s.quoteTermsMd}
           onChange={(e) => setTerms(e.target.value)}
         />
-        <h2 className="mb-2 mt-3 text-sm font-semibold text-muted">
-          Quote footer (markdown)
-        </h2>
-        <textarea
-          className="h-16 w-full rounded-md border border-rule p-2 text-sm"
+        <SectionLabel className="mt-4">Quote footer (markdown)</SectionLabel>
+        <Textarea
+          className="h-20 w-full"
           value={footer ?? s.quoteFooterMd}
           onChange={(e) => setFooter(e.target.value)}
         />
-        <Button
-          variant="primary"
-          className="mt-2"
-          onClick={() =>
-            save.mutate({
-              quote_terms_md: terms ?? s.quoteTermsMd,
-              quote_footer_md: footer ?? s.quoteFooterMd,
-            })
-          }
-        >
-          Save terms
-        </Button>
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 text-sm font-semibold text-muted">Freight</h2>
-        <label className="block py-1 text-sm">
-          Pallet rate $
-          <Input
-            type="number"
-            className="ml-2 w-28"
-            defaultValue={s.palletRateCents / 100}
-            onBlur={(e) =>
+        <div className="mt-3 flex justify-end">
+          <Button
+            variant="primary"
+            disabled={!dirty}
+            loading={save.isPending}
+            onClick={() =>
               save.mutate({
-                pallet_rate_cents: Math.round(Number(e.target.value) * 100),
+                quote_terms_md: terms ?? s.quoteTermsMd,
+                quote_footer_md: footer ?? s.quoteFooterMd,
               })
             }
-          />
-          <span className="ml-2 text-faint">
-            flat per pallet ({s.freightProvider} provider; Uber Freight in v1.1)
-          </span>
-        </label>
-        <label className="block py-1 text-sm">
-          Default handling $
-          <Input
-            type="number"
-            className="ml-2 w-28"
-            defaultValue={s.defaultHandlingCents / 100}
-            onBlur={(e) =>
-              save.mutate({
-                default_handling_cents: Math.round(Number(e.target.value) * 100),
-              })
-            }
-          />
-        </label>
+          >
+            Save terms
+          </Button>
+        </div>
       </Card>
+    </div>
+  );
+}
 
+function FreightAndReading() {
+  const { q, save } = useOrgSettings();
+  if (q.isLoading) return <SkeletonRows rows={4} />;
+  const s = q.data!;
+  return (
+    <div className="space-y-4">
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-muted">
-          Extraction
-        </h2>
-        <label className="flex items-center gap-2 py-1 text-sm">
+        <SectionLabel>Freight</SectionLabel>
+        <div className="grid max-w-md grid-cols-2 gap-3">
+          <Field label="Pallet rate $" hint={`Flat per pallet · ${s.freightProvider} provider`}>
+            <NumberInput
+              defaultValue={s.palletRateCents / 100}
+              onBlur={(e) => {
+                const c = Math.round(Number(e.target.value) * 100);
+                if (c !== s.palletRateCents) save.mutate({ pallet_rate_cents: c });
+              }}
+            />
+          </Field>
+          <Field label="Default handling $" hint="Applied to every new quote">
+            <NumberInput
+              defaultValue={s.defaultHandlingCents / 100}
+              onBlur={(e) => {
+                const c = Math.round(Number(e.target.value) * 100);
+                if (c !== s.defaultHandlingCents) save.mutate({ default_handling_cents: c });
+              }}
+            />
+          </Field>
+        </div>
+      </Card>
+      <Card>
+        <SectionLabel>Reading</SectionLabel>
+        <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
+            className="mt-0.5"
             checked={s.crossValidationEnabled}
             disabled={save.isPending}
-            onChange={(e) =>
-              save.mutate({ cross_validation_enabled: e.target.checked })
-            }
+            onChange={(e) => save.mutate({ cross_validation_enabled: e.target.checked })}
           />
-          <span className="font-medium">AI Cross Validation</span>
+          <span>
+            <span className="font-medium text-ink">Second-opinion cross-check</span>
+            <span className="block text-xs text-muted">
+              Every page is also read by a second vision model; lines the two models
+              disagree on drop below the review threshold so they surface as flagged.
+              Needs OPENAI_API_KEY on the workers service.
+            </span>
+          </span>
         </label>
-        <p className="text-xs text-faint">
-          Always extracts with Anthropic. When on, each page is also sent to a
-          secondary OpenAI vision model; lines where the two models disagree
-          have their confidence lowered so they surface for review. Requires
-          OPENAI_API_KEY on the workers service.
-        </p>
       </Card>
     </div>
   );
@@ -542,6 +586,7 @@ interface TemplateRow {
 
 function ExportTemplates() {
   const qc = useQueryClient();
+  const toast = useToast();
   const q = useQuery({
     queryKey: ["export-templates"],
     queryFn: () => apiGet<TemplateRow[]>("/admin/export-templates"),
@@ -561,50 +606,48 @@ function ExportTemplates() {
           },
         ],
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["export-templates"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["export-templates"] });
+      toast.success("Mapping saved");
+    },
+    onError: (e) => toast.error("Mapping not saved", errorMessage(e)),
   });
 
-  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isLoading) return <SkeletonRows rows={4} />;
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted">
-        Columns map takeoff-line fields → CSV headers. Edit the JSON to match
-        your Mozaik/KCD import dialog (fields: tag, room, qty, category,
-        width_in, height_in, depth_in, door_style, material, finish, assembled,
-        notes, source_page, or literal:&lt;value&gt;).
+      <p className="max-w-2xl text-sm text-muted">
+        Columns map takeoff-line fields to CSV headers. Edit the JSON to match your
+        Mozaik or KCD import dialog. Fields: <code>tag</code>, <code>room</code>,{" "}
+        <code>qty</code>, <code>category</code>, <code>width_in</code>,{" "}
+        <code>height_in</code>, <code>depth_in</code>, <code>door_style</code>,{" "}
+        <code>material</code>, <code>finish</code>, <code>assembled</code>,{" "}
+        <code>notes</code>, <code>source_page</code>, or <code>literal:&lt;value&gt;</code>.
       </p>
       {(q.data ?? []).map((t) => (
         <Card key={t.name}>
           <div className="mb-2 flex items-center gap-2">
-            <h2 className="font-semibold">{t.name}</h2>
+            <h2 className="wide font-display text-base font-semibold text-ink">{t.name}</h2>
             <Badge>{t.target}</Badge>
-            <Button
-              className="ml-auto"
-              variant="primary"
-              onClick={() => save.mutate(t)}
-            >
+            <span className="font-mono text-xs text-faint">delimiter "{t.delimiter}" · {t.unitFormat}</span>
+            <Button className="ml-auto" variant="primary" loading={save.isPending} onClick={() => save.mutate(t)}>
               Save mapping
             </Button>
           </div>
-          <textarea
-            className="h-40 w-full rounded-md border border-rule p-2 font-mono text-xs"
+          <Textarea
+            className="h-40 w-full font-mono text-xs"
             value={drafts[t.name] ?? JSON.stringify(t.columns, null, 2)}
-            onChange={(e) =>
-              setDrafts({ ...drafts, [t.name]: e.target.value })
-            }
+            onChange={(e) => setDrafts({ ...drafts, [t.name]: e.target.value })}
           />
         </Card>
       ))}
-      {save.isError && (
-        <p className="text-sm text-bad">{String(save.error)}</p>
-      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Crawler sources (PRD §5)
+// Crawler sources (PRD §5) — hidden with the prospector, still routable
 // ---------------------------------------------------------------------------
 
 interface SourceRow {
@@ -619,59 +662,60 @@ interface SourceRow {
 
 function Sources() {
   const qc = useQueryClient();
+  const toast = useToast();
   const q = useQuery({
     queryKey: ["sources"],
     queryFn: () => apiGet<SourceRow[]>("/admin/sources"),
   });
   const run = useMutation({
     mutationFn: (id: string) => apiSend("POST", `/admin/sources/${id}/run`),
+    onSuccess: () => toast.success("Crawl queued"),
+    onError: (e) => toast.error("Crawl not queued", errorMessage(e)),
   });
   const patch = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiSend("PATCH", `/admin/sources/${id}`, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
+    onError: (e) => toast.error("Not updated", errorMessage(e)),
   });
 
-  if (q.isLoading) return <div className="text-muted">Loading…</div>;
+  if (q.isLoading) return <SkeletonRows rows={3} />;
 
   return (
     <Card className="p-0">
+      <p className="border-b border-rule px-4 py-2 text-xs text-muted">
+        The prospector is parked (product-plan.md §7). Sources stay here so nothing is lost.
+      </p>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
-            <th className="px-3 py-2">Source</th>
+            <th className="px-4 py-2">Source</th>
             <th className="px-3 py-2">Type</th>
             <th className="px-3 py-2">Status</th>
             <th className="px-3 py-2">Last run</th>
             <th className="px-3 py-2">Last error</th>
-            <th className="px-3 py-2"></th>
+            <th className="px-3 py-2" />
           </tr>
         </thead>
         <tbody>
           {(q.data ?? []).map((s) => (
             <tr key={s.id} className="border-b border-rule-soft">
-              <td className="px-3 py-2 font-medium">{s.name}</td>
-              <td className="px-3 py-2">{s.type}</td>
-              <td className="px-3 py-2">
-                <Badge tone={s.status === "active" ? "green" : "amber"}>
-                  {s.status}
-                </Badge>
-              </td>
+              <td className="px-4 py-2 font-medium">{s.name}</td>
+              <td className="px-3 py-2 text-muted">{s.type}</td>
+              <td className="px-3 py-2"><StatusPill status={s.status} /></td>
               <td className="px-3 py-2 text-muted">
                 {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString() : "never"}
               </td>
               <td className="max-w-xs truncate px-3 py-2 text-bad" title={s.lastError ?? ""}>
                 {s.lastError ?? ""}
               </td>
-              <td className="space-x-1 whitespace-nowrap px-3 py-2">
-                <Button onClick={() => run.mutate(s.id)}>Run now</Button>
+              <td className="space-x-1 whitespace-nowrap px-3 py-2 text-right">
+                <Button size="sm" onClick={() => run.mutate(s.id)}>Run now</Button>
                 <Button
-                  variant="ghost"
+                  size="sm"
+                  variant="quiet"
                   onClick={() =>
-                    patch.mutate({
-                      id: s.id,
-                      status: s.status === "active" ? "paused" : "active",
-                    })
+                    patch.mutate({ id: s.id, status: s.status === "active" ? "paused" : "active" })
                   }
                 >
                   {s.status === "active" ? "Pause" : "Resume"}
@@ -679,6 +723,9 @@ function Sources() {
               </td>
             </tr>
           ))}
+          {(q.data ?? []).length === 0 && (
+            <tr><td colSpan={6} className="px-4 py-6 text-center text-faint">No sources configured.</td></tr>
+          )}
         </tbody>
       </table>
     </Card>
@@ -686,7 +733,7 @@ function Sources() {
 }
 
 // ---------------------------------------------------------------------------
-// Users (no self-signup)
+// Users (allow-list until self-signup lands in Stage 2)
 // ---------------------------------------------------------------------------
 
 interface UserRow {
@@ -696,8 +743,15 @@ interface UserRow {
   role: string;
 }
 
+const ROLE_HINT: Record<string, string> = {
+  estimator: "Runs takeoffs and quotes",
+  sales: "Same, plus margin visibility",
+  admin: "Everything, including this panel",
+};
+
 function Users() {
   const qc = useQueryClient();
+  const toast = useToast();
   const q = useQuery({
     queryKey: ["users"],
     queryFn: () => apiGet<UserRow[]>("/admin/users"),
@@ -705,55 +759,77 @@ function Users() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("estimator");
   const add = useMutation({
-    mutationFn: () => apiSend("POST", "/admin/users", { email, role }),
-    onSuccess: () => {
+    mutationFn: () => apiSend<UserRow | { error: string }>("POST", "/admin/users", { email, role }),
+    onSuccess: (r) => {
+      if ("error" in r) {
+        toast.info(r.error);
+        return;
+      }
       setEmail("");
       qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success(`${r.email} can now sign in`);
     },
+    onError: (e) => toast.error("User not added", errorMessage(e)),
   });
 
   return (
     <div className="space-y-4">
-      <Card className="flex items-end gap-3">
-        <label className="text-sm">
-          Email
-          <Input
-            className="ml-2 w-64"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="rep@cabinetnow.com"
-          />
-        </label>
-        <label className="text-sm">
-          Role
-          <select
-            className="ml-2 rounded-md border border-rule px-2 py-1 text-sm"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-          >
-            <option value="estimator">estimator</option>
-            <option value="sales">sales</option>
-            <option value="admin">admin</option>
-          </select>
-        </label>
-        <Button variant="primary" disabled={!email} onClick={() => add.mutate()}>
-          Add user
-        </Button>
+      <Card>
+        <SectionLabel>Allow someone to sign in</SectionLabel>
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (email) add.mutate();
+          }}
+        >
+          <Field label="Google account email" className="min-w-64 flex-1">
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@company.com"
+            />
+          </Field>
+          <Field label="Role" hint={ROLE_HINT[role]}>
+            <Select value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="estimator">Estimator</option>
+              <option value="sales">Sales</option>
+              <option value="admin">Admin</option>
+            </Select>
+          </Field>
+          <Button type="submit" variant="primary" disabled={!email} loading={add.isPending} className="mb-4">
+            Add user
+          </Button>
+        </form>
+        <p className="text-xs text-faint">
+          Until self-signup lands, only listed Google accounts can sign in. Roles can't be
+          changed here yet.
+        </p>
       </Card>
       <Card className="p-0">
-        <table className="w-full text-sm">
-          <tbody>
-            {(q.data ?? []).map((u) => (
-              <tr key={u.id} className="border-b border-rule-soft">
-                <td className="px-3 py-2 font-medium">{u.email}</td>
-                <td className="px-3 py-2">{u.name}</td>
-                <td className="px-3 py-2">
-                  <Badge>{u.role}</Badge>
-                </td>
+        {q.isLoading ? (
+          <SkeletonRows rows={3} />
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
+                <th className="px-4 py-2">Email</th>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Role</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(q.data ?? []).map((u) => (
+                <tr key={u.id} className="border-b border-rule-soft">
+                  <td className="px-4 py-2 font-medium">{u.email}</td>
+                  <td className="px-3 py-2 text-muted">{u.name ?? "—"}</td>
+                  <td className="px-3 py-2"><Badge>{u.role}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
     </div>
   );
