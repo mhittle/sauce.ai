@@ -343,7 +343,6 @@ export function BetaDetectPage() {
       <div>
         <PageTitle eyebrow="Reading">{takeoff.sourceFilename ?? takeoffId.slice(0, 8)}</PageTitle>
         <ReadingProgress
-          title={building || build.isPending ? "Building your takeoff" : "Preparing the pages"}
           progress={takeoff.progress}
           sourceKind={takeoff.sourceKind}
           pageCount={takeoff.pageCount}

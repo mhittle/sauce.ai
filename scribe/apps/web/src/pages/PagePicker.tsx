@@ -177,7 +177,6 @@ export function PagePickerPage() {
 
       {takeoff.status === "processing" ? (
         <ReadingProgress
-          title="Preparing your pages"
           progress={takeoff.progress}
           sourceKind={takeoff.sourceKind}
           pageCount={takeoff.pageCount}

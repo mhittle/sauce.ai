@@ -44,6 +44,7 @@ import {
   withSocketRetry,
 } from "../lib/anthropic.js";
 import { openPdf, OpenPdf } from "./pdf.js";
+import { setProgress } from "./progress.js";
 import {
   priceAndExpand,
   ReadLine,
@@ -625,6 +626,7 @@ export async function buildFromDetections(
   opts: BuildOpts = {}
 ): Promise<CabinetLineItem[]> {
   const db = getDb();
+  let rollback: { builtIds: string[]; insertedIds: string[] } | null = null;
   try {
     // Areas own their cabinets (Mark step PR 2): a build measures only the
     // areas scanned since their last build (built_at null) and replaces
@@ -777,6 +779,11 @@ export async function buildFromDetections(
         imageByPage.set(page, annotated);
       }
 
+      await setProgress(takeoffId, "measure", {
+        done: 0,
+        total: entries.length,
+        message: `Measuring ${entries.length} cabinet${entries.length === 1 ? "" : "s"} against the printed dimensions`,
+      });
       // Measurements pass: ONE call with the whole (capped) set.
       const client = getAnthropic();
       let tokens = 0;
@@ -968,10 +975,7 @@ export async function buildFromDetections(
 
       const builtIds = detections.map((d) => d.id);
       const insertedIds = await replaceLinesForDetections(takeoffId, builtIds, lines);
-      await db
-        .update(takeoffDetections)
-        .set({ builtAt: new Date() })
-        .where(inArray(takeoffDetections.id, builtIds));
+      rollback = { builtIds, insertedIds };
       const estimatedCount = merged.filter((l) => l.estimated).length;
       // Warnings recorded when the regions were seeded (no scale found, a
       // page skipped) ride into the built takeoff's summary.
@@ -1031,6 +1035,13 @@ export async function buildFromDetections(
         });
       }
       await priceAndExpand(takeoffId, log, { lineIds: insertedIds });
+      // Only now are these areas "in the takeoff": a failure above rolls the
+      // inserted lines back so Build can simply be clicked again.
+      await db
+        .update(takeoffDetections)
+        .set({ builtAt: new Date() })
+        .where(inArray(takeoffDetections.id, builtIds));
+      rollback = null;
       log.info(
         { takeoff: takeoffId, cabinets: merged.length, estimatedCount, tokens },
         "beta build done"
@@ -1040,6 +1051,24 @@ export async function buildFromDetections(
       pdf.close();
     }
   } catch (err) {
+    if (rollback) {
+      // Lines were inserted but pricing (or stamping) failed: take them back
+      // out so the areas read as scanned-but-unbuilt and Build works again.
+      try {
+        if (rollback.insertedIds.length > 0) {
+          await db
+            .delete(takeoffLines)
+            .where(inArray(sql`${takeoffLines.rawModelOutput}->>'parent'`, rollback.insertedIds));
+          await db.delete(takeoffLines).where(inArray(takeoffLines.id, rollback.insertedIds));
+        }
+        await db
+          .update(takeoffDetections)
+          .set({ builtAt: null })
+          .where(inArray(takeoffDetections.id, rollback.builtIds));
+      } catch (rbErr) {
+        log.error({ takeoff: takeoffId, err: String(rbErr) }, "build rollback failed");
+      }
+    }
     if (opts.onError === "throw") throw err;
     const msg = err instanceof Error ? err.message : String(err);
     // Never fail the takeoff outright — restore where the user was.

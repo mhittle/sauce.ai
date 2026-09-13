@@ -216,7 +216,7 @@ export async function replaceLinesForDetections(
         .where(
           and(
             eq(takeoffLines.takeoffId, takeoffId),
-            sql`${takeoffLines.rawModelOutput}->>'parent' = ANY(${oldIds})`
+            inArray(sql`${takeoffLines.rawModelOutput}->>'parent'`, oldIds)
           )
         );
       await db.delete(takeoffLines).where(inArray(takeoffLines.id, oldIds));
@@ -669,7 +669,7 @@ export async function priceAndExpand(
         eq(takeoffLines.takeoffId, takeoffId),
         sql`${takeoffLines.rawModelOutput}->>'expanded' = 'true'`,
         ...(scoped
-          ? [sql`${takeoffLines.rawModelOutput}->>'parent' = ANY(${opts.lineIds!})`]
+          ? [inArray(sql`${takeoffLines.rawModelOutput}->>'parent'`, opts.lineIds!)]
           : [])
       )
     );
