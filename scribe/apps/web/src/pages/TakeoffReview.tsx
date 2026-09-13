@@ -196,6 +196,15 @@ export function TakeoffReviewPage() {
     onError: (e) => toast.error("Couldn't approve", errorMessage(e)),
   });
 
+  const reopen = useMutation({
+    mutationFn: () => apiSend("POST", `/takeoffs/${takeoffId}/reopen`),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Reopened — you can change areas and lines again");
+    },
+    onError: (e) => toast.error("Couldn't reopen", errorMessage(e)),
+  });
+
   const createQuote = useMutation({
     mutationFn: (name: string) =>
       apiSend<{ id: string }>("POST", "/quotes", { takeoff_id: takeoffId, name }),
@@ -462,7 +471,7 @@ export function TakeoffReviewPage() {
                 >
                   Export for KCD (CSV)
                 </a>
-                {takeoff.sourceKind === "pdf" && (
+                {takeoff.sourceKind === "pdf" && takeoff.status === "review" && (
                   <>
                     <div className="my-1 border-t border-rule-soft" />
                     <Link
@@ -472,8 +481,20 @@ export function TakeoffReviewPage() {
                       search={{ pages: undefined }}
                       className="block rounded px-2 py-1.5 text-sm text-ink hover:bg-rule-soft"
                     >
-                      Mark the cabinets again…
+                      Add or change areas…
                     </Link>
+                  </>
+                )}
+                {takeoff.status === "approved" && (
+                  <>
+                    <div className="my-1 border-t border-rule-soft" />
+                    <button
+                      role="menuitem"
+                      className="block w-full rounded px-2 py-1.5 text-left text-sm text-ink hover:bg-rule-soft"
+                      onClick={() => reopen.mutate()}
+                    >
+                      Reopen for changes
+                    </button>
                   </>
                 )}
                 {editable && takeoff.status === "review" && (

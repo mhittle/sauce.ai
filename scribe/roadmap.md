@@ -14,6 +14,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
+| Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
 | V0 drawing scale + geometry-first measuring (v0-drawing-scale-plan.md) — A sources shipped; B snap, C measure, D review next | 9 | 7 | takeoff | in-progress |
 | V0 drawing scale — A sources + B vector snap shipped (gated); **C geometry-first measuring DROPPED 2026-09-14** (printed sizes beat geometry 0.64" vs 1.16", F1 unchanged); D draw-to-scale on Review still possible on A+B | 5 | 2 | takeoff | parked |

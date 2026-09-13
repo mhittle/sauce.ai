@@ -61,6 +61,7 @@ interface Detection {
   page: number;
   rect: BBox;
   kind: string | null;
+  builtAt: string | null;
   status: "drawn" | "queued" | "running" | "done" | "error";
   items: DetectionItem[] | null;
   error: string | null;
@@ -217,12 +218,36 @@ export function BetaDetectPage() {
     onError: (e) => toast.error("Not removed", errorMessage(e)),
   });
 
+  const moveArea = useMutation({
+    mutationFn: ({ detectionId, rect }: { detectionId: string; rect: BBox }) =>
+      apiSend<{ removed_lines: number }>("PATCH", `/takeoffs/${takeoffId}/detections/${detectionId}`, { rect }),
+    onSuccess: (r) => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
+      if (r.removed_lines > 0)
+        toast.info(`Area changed — its ${r.removed_lines} cabinet${r.removed_lines === 1 ? "" : "s"} were removed from the takeoff. Find and build it again.`);
+    },
+    onError: (e) => toast.error("Area not changed", errorMessage(e)),
+  });
+
   const setKind = useMutation({
     mutationFn: ({ detectionId, kind }: { detectionId: string; kind: "plan" | "elevation" }) =>
       apiSend("PATCH", `/takeoffs/${takeoffId}/detections/${detectionId}`, { kind }),
     onSuccess: invalidate,
     onError: (e) => toast.error("Not changed", errorMessage(e)),
   });
+
+  // Removing an area removes the cabinets it found (approved decision).
+  function confirmRemove(id: string) {
+    const d = detections.find((x) => x.id === id);
+    const n = d?.status === "done" ? (d.items?.length ?? 0) : 0;
+    if (
+      d?.builtAt &&
+      !window.confirm(`Remove this area and the ${n} cabinet${n === 1 ? "" : "s"} it put in the takeoff?`)
+    )
+      return;
+    removeDetection.mutate(id);
+  }
 
   const removeDetection = useMutation({
     mutationFn: (detectionId: string) =>
@@ -280,7 +305,7 @@ export function BetaDetectPage() {
         label: `Area ${i + 1}`,
         note:
           d.status === "done"
-            ? `${d.items?.length ?? 0} found`
+            ? `${d.items?.length ?? 0} found${d.builtAt ? " · in takeoff" : ""}`
             : d.status === "error"
               ? "failed"
               : d.status === "drawn"
@@ -291,6 +316,8 @@ export function BetaDetectPage() {
     [pageDetections, hoveredArea]
   );
 
+  const unbuilt = detections.filter((d) => d.status === "done" && !d.builtAt);
+  const unbuiltCabinets = unbuilt.reduce((n, d) => n + (d.items?.length ?? 0), 0);
   const drawnCount = detections.filter((d) => d.status === "drawn").length;
   const inFlight = detections.some((d) => d.status === "queued" || d.status === "running");
   const detectedCount = detections.reduce(
@@ -327,6 +354,7 @@ export function BetaDetectPage() {
   }
 
   const hasLines = (takeoff.lines?.length ?? 0) > 0 && takeoff.status !== "awaiting_boxes";
+  const locked = takeoff.status === "approved";
 
   const stepAction = (() => {
     switch (step) {
@@ -365,21 +393,21 @@ export function BetaDetectPage() {
         return (
           <Button
             variant="primary"
-            disabled={detectedCount === 0 || inFlight || build.isPending || building}
+            disabled={unbuilt.length === 0 || inFlight || build.isPending || building || locked}
             loading={building || build.isPending}
+            title={
+              unbuilt.length === 0
+                ? "Every scanned area is already in the takeoff — change or add an area first"
+                : undefined
+            }
             onClick={() => {
-              if (
-                hasLines &&
-                !window.confirm(
-                  `Build the takeoff from ${detectedCount} cabinets? This replaces the current breakdown.`
-                )
-              )
-                return;
               setBuilding(true);
               build.mutate();
             }}
           >
-            Build takeoff ({detectedCount} cabinets)
+            {hasLines
+              ? `Update ${unbuilt.length} area${unbuilt.length === 1 ? "" : "s"} (${unbuiltCabinets} cabinets)`
+              : `Build takeoff (${unbuiltCabinets} cabinets)`}
           </Button>
         );
     }
@@ -407,6 +435,14 @@ export function BetaDetectPage() {
       </div>
 
       {takeoff.error && <p className="mb-2 text-sm text-bad">{takeoff.error}</p>}
+      {locked && (
+        <div className="mb-3 flex items-center gap-3 rounded-lg border border-warn bg-warn-soft px-4 py-2 text-sm text-warn">
+          This takeoff is approved, so its areas are locked. Reopen it from the review screen to make changes.
+          <Link to="/takeoffs/$takeoffId" params={{ takeoffId }} className="ml-auto underline">
+            Open the review
+          </Link>
+        </div>
+      )}
 
       <p className="mb-3 text-sm text-muted">
         {step === 1 &&
@@ -414,7 +450,9 @@ export function BetaDetectPage() {
         {step === 2 &&
           "Each cabinet the model found is a colored dot — hover one to see its label and box, ✕ removes a wrong one. Draw more boxes any time and find again."}
         {step === 3 &&
-          "Check the counts, then build: one measuring pass sizes every cabinet from the printed dimensions where they exist, and you can fix anything on the review screen."}
+          (hasLines
+            ? "Only new or changed areas are rebuilt — cabinets from untouched areas keep every edit you made on the review screen."
+            : "Check the counts, then build: one measuring pass sizes every cabinet from the printed dimensions where they exist, and you can fix anything on the review screen.")}
       </p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,1fr)_22rem]">
@@ -467,7 +505,18 @@ export function BetaDetectPage() {
                 onChange={() => {}}
                 onCreate={tryDraw}
                 onAreaHover={setHoveredArea}
-                onAreaRemove={(id) => removeDetection.mutate(id)}
+                onAreaRemove={(id) => confirmRemove(id)}
+                onAreaChange={(id, rect) => {
+                  const d = detections.find((x) => x.id === id);
+                  if (
+                    d?.builtAt &&
+                    !window.confirm("Changing this area removes the cabinets it found from the takeoff until you find and build it again. Continue?")
+                  ) {
+                    invalidate();
+                    return;
+                  }
+                  moveArea.mutate({ detectionId: id, rect });
+                }}
               />
             ) : (
               <div className="flex h-96 items-center justify-center">
@@ -548,7 +597,7 @@ export function BetaDetectPage() {
                             aria-label={`Remove ${a.label}`}
                             title="Remove this area"
                             className="rounded px-1 text-muted hover:bg-bad-soft hover:text-bad"
-                            onClick={() => removeDetection.mutate(a.id)}
+                            onClick={() => confirmRemove(a.id)}
                           >
                             ×
                           </button>

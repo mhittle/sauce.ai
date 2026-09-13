@@ -141,6 +141,9 @@ export const takeoffLines = pgTable("takeoff_lines", {
   readRect: jsonb("read_rect"),
   // migrations/0010 — LineGeom: geometric size, snapped edges, size source.
   geom: jsonb("geom"),
+  // migrations/0012 — the marked area this cabinet was built from (null =
+  // reviewer-drawn or legacy).
+  detectionId: uuid("detection_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -157,6 +160,8 @@ export const takeoffDetections = pgTable("takeoff_detections", {
   displayDpi: real("display_dpi"),
   // migrations/0010 — DrawingScale (@scribe/shared) for this region.
   scale: jsonb("scale"),
+  // migrations/0012 — when this area's cabinets were last built into lines.
+  builtAt: timestamp("built_at", { withTimezone: true }),
   status: text("status").notNull().default("drawn"),
   items: jsonb("items"),
   cropImageKey: text("crop_image_key"),

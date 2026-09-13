@@ -82,6 +82,52 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (b) — Mark step PR 2: areas own their cabinets; corrections rebuild one area
+
+**Owner-approved decisions (2026-09-15):** removing an area deletes its
+cabinets; resizing/moving (or changing plan↔elevation) discards its
+cabinets until rescanned; an approved takeoff must be reopened before
+amending; kind comes from the page type with a per-area override.
+
+**Shipped.**
+- Migration `0012`: `takeoff_lines.detection_id` (+ index) — the area a
+  cabinet came from; `takeoff_detections.built_at` — when the area's
+  cabinets were last built (NULL = new or changed → the next build takes
+  exactly these). `CabinetLineItem.detection_id`; `ReadLine.detection_id`.
+- `buildFromDetections` is now **scoped**: it measures only `done` areas
+  with `built_at IS NULL`, `replaceLinesForDetections` deletes those areas'
+  previous lines (+ derived faces) and inserts the new ones, stamps
+  `built_at`, and `priceAndExpand(takeoffId, log, {lineIds})` matches and
+  expands ONLY the inserted lines — manual product picks, edited inches and
+  accepted confidence on untouched areas survive. Eval fixture = every
+  area-built cabinet. Error when nothing is unbuilt.
+- API: `build-takeoff` needs unbuilt scanned areas (409 on approved);
+  `PATCH /detections/:id {kind?, rect?}` resets the area (drawn, items
+  null, built_at null) and deletes its lines (`removed_lines` in the
+  response); `DELETE /detections/:id` deletes its lines too;
+  `POST /takeoffs/:id/reopen` (approved → review; transition added to
+  `TAKEOFF_STATUS_TRANSITIONS`).
+- Web: areas are **movable** (drag the label chip) and **resizable**
+  (corner handles) in `BoxOverlay` (`onAreaChange`), reusing the box
+  drag machinery; the interior stays pass-through for drawing. The wizard
+  PATCHes the rect, confirms when the area is already in the takeoff, and
+  tells you how many cabinets were removed. Build button: "Update N areas
+  (M cabinets)" on a reviewed takeoff, disabled with a hint when nothing
+  is unbuilt; area notes say "in takeoff". Approved takeoffs lock the
+  wizard with a banner; Review's More menu gains "Reopen for changes" and
+  "Add or change areas…" (review only).
+
+**Gotchas.** (1) Lines drawn by hand on the review screen have
+`detection_id NULL` and are never touched by area builds. (2) Legacy
+takeoffs built before 0012 have lines with NULL `detection_id` and areas
+with NULL `built_at` — a "rebuild" there would ADD a second copy of every
+cabinet; the wizard shows those areas as unbuilt. To re-do a legacy
+takeoff, clear its areas (which deletes nothing, since nothing links) and
+delete the old lines by hand, or start a new job. (3) `priceAndExpand`
+without `lineIds` keeps the old full-pass behaviour (classic path).
+
+---
+
 ## 2026-09-15 — Mark step PR 1: side panel, no pre-selection, kind + scale on the area
 
 **Owner (approved plan):** (1) the cabinet table beside the drawing, not
