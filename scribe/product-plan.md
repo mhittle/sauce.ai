@@ -229,7 +229,9 @@ as 24×84 cabinets) all survived to the review screen.
 Three pieces. V0 comes first because V1's geometry checks and the
 draw-to-scale feature both depend on it.
 
-**V0 — Drawing scale + geometric measurement (LOE 6). Decided 2026-09-13
+**V0 — Drawing scale + geometric measurement (LOE ~7.5; build plan with
+hook points, PR split and ship gate in `v0-drawing-scale-plan.md`).
+Decided 2026-09-13
 (Rida): scale is a property of the DRAWING, not the cabinet; every size in
 a drawing converts through the same number, and the API returns it so new
 boxes are measured from a set truth.**
