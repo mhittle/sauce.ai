@@ -182,6 +182,7 @@ export async function replaceLines(
       bbox: line.bbox_2d ?? null,
       readImageKey: line.read_image_key ?? null,
       readRect: line.read_rect ?? null,
+      geom: line.geom ?? null,
     });
   }
 }

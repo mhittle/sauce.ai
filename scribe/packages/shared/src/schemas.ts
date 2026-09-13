@@ -51,6 +51,8 @@ export const CabinetLineItem = z.object({
     .nullable()
     .catch(null)
     .default(null),
+  // Geometry provenance from the drawing scale / vector snap (PR B/C).
+  geom: z.unknown().nullable().optional(),
 });
 export type CabinetLineItem = z.infer<typeof CabinetLineItem>;
 

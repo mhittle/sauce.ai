@@ -134,6 +134,52 @@ so the user lands back in the wizard with their boxes. (2) The wizard's
 Build step confirms only when the takeoff already has lines (re-marking a
 reviewed takeoff); a first build just builds. (3) `docSummary.seeded` is
 how the build knows which warnings to carry — don't drop the flag.
+## 2026-09-14 — V0 PR B: vector segments + box snapping (gated, measured on the kits)
+
+**Shipped (zero API).**
+- `pdf.ts: pageSegments(pageIndex, {rect?, minLenPt?})` — runs the page
+  through a callback `mupdf.Device` (`strokePath` + `fillPath`, so CAD
+  exports that draw lines as thin filled rectangles count), walks each
+  path (`moveTo`/`lineTo`/`closePath`; curves skipped), transforms by the
+  op's ctm, keeps segments axis-aligned within ~1.5°, ≥4 pt, normalizes
+  upright with the same rotation as the text layer, merges collinear
+  pieces (`mergeSegments`). Cached per page. Raster pages → `{h:[],v:[]}`.
+  **Convention pinned by test:** mupdf's device space for a page is the
+  same top-left-origin point space as the stext bboxes (a PDF rect at
+  y=100..250 on a 792 pt page lands at 542..692).
+- `@scribe/shared snap.ts`: `snapBox(box, segments, opts)` — per edge, the
+  nearest parallel segment within `max(6 pt, 10% of the perpendicular
+  side)` that overlaps ≥50% of the side wins (longer overlap breaks ties);
+  an edge never moves more than 15% of its side; reports which edges
+  snapped and the largest relative move. `LineGeom` zod
+  (`takeoff_lines.geom`; PR B fills `snapped` + `snap_moved`).
+  `CabinetLineItem.geom` (optional) carries it through the merge.
+- `detect.ts buildFromDetections`: behind **`DRAWING_SCALE=1`**, every
+  detector box is snapped in display px BEFORE the annotated marker images,
+  plan crops and persisted bboxes derive from it (`snapDisplayBox`);
+  `MarkerEntry.geom` → line `geom`. `replaceLines` persists it.
+- Harness: `DRAWING_SCALE=1 prepare-staged.mjs` writes `steps/snap.json`
+  (segment counts per page, before/after per box, edges, move).
+
+**Design change from the plan:** search window 10% of the side, not 3% —
+the July spike's "loose boxes" are looser than 3%, and the 15% move cap
+plus the overlap rule already bound the risk.
+
+**Measured on the 18 kits (zero API):** 246 detector boxes, 204 touched
+(83%), 144 snapped on all four edges; mean move of a touched box 4.3%,
+median 4.0%. Image kits (q2, q10, q11) untouched, as designed. Plan-only
+sets whose dimensions are drawn outlines (q1, q6, q8) still carry
+thousands of vector segments, so snapping works there even though text-
+layer calibration (PR A) did not. q24 has segments but no box within the
+window — worth a look in PR C's A/B. Nothing consumes the snapped boxes
+for SIZE yet (PR C); with the flag off prod is unchanged.
+
+**Gotchas.** (1) `page.run(device, Matrix.identity)` — the ctm the
+callbacks receive already includes the page's base transform; do not
+pre-multiply. (2) `mupdf.PDFDocument.addPage()` returns an unattached page
+object — tests must `insertPage(-1, obj)` or `loadPage(0)` throws "invalid
+page number: 1". (3) Wizard-drawn detections (kind null) snap too; a
+human-drawn box on a raster page is untouched.
 
 ---
 
