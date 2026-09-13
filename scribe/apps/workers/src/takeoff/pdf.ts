@@ -13,7 +13,7 @@
 // (upright) page space. Callers never see the raw sideways space.
 
 import * as mupdf from "mupdf";
-import type { RectPt } from "@scribe/shared";
+import { mergeSegments, type PageSegments, type RectPt, type Segment } from "@scribe/shared";
 
 export interface OpenPdf {
   pageCount: number;
@@ -27,6 +27,11 @@ export interface OpenPdf {
   // caller can reconstruct column-aligned rows (schedule/BOM tables) that a flat
   // text dump collapses. See @scribe/shared reconstructRows.
   pageTextFragments(pageIndex: number): TextFragment[];
+  // Axis-aligned vector line segments of a page (stroked paths and thin
+  // filled rectangles), in the same upright top-left-origin point space as
+  // pageTextFragments. Empty for scanned/image-only pages. Optional rect
+  // (page points) keeps only segments that touch it. Cached per page.
+  pageSegments(pageIndex: number, opts?: { rect?: RectPt; minLenPt?: number }): PageSegments;
   close(): void;
 }
 
@@ -129,6 +134,74 @@ export function openPdf(data: Buffer): OpenPdf {
           mupdf.Matrix.scale(scale, scale)
         );
 
+  // Vector segments: run the page through a callback device, walk every
+  // stroked/filled path, keep axis-aligned pieces, normalize upright like
+  // the text layer. Raster-only pages simply produce no callbacks.
+  const segmentsCache = new Map<number, PageSegments>();
+  const extractSegments = (pageIndex: number): PageSegments => {
+    const rot = rotation(pageIndex);
+    const { w: rawW, h: rawH } = rawDims(pageIndex);
+    const norm = (x: number, y: number): [number, number] =>
+      rot === 90 ? [rawH - y, x] : rot === 270 ? [y, rawW - x] : [x, y];
+    const h: Segment[] = [];
+    const v: Segment[] = [];
+    const push = (a: [number, number], b: [number, number]) => {
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const len = Math.hypot(dx, dy);
+      if (len < 0.5) return;
+      if (Math.abs(dy) <= AXIS_TAN * len) {
+        h.push({ at: (a[1] + b[1]) / 2, from: Math.min(a[0], b[0]), to: Math.max(a[0], b[0]) });
+      } else if (Math.abs(dx) <= AXIS_TAN * len) {
+        v.push({ at: (a[0] + b[0]) / 2, from: Math.min(a[1], b[1]), to: Math.max(a[1], b[1]) });
+      }
+    };
+    const collect = (path: mupdf.Path, ctm: mupdf.Matrix) => {
+      const tp = (x: number, y: number): [number, number] =>
+        norm(ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]);
+      let start: [number, number] | null = null;
+      let cur: [number, number] | null = null;
+      path.walk({
+        moveTo(x, y) {
+          start = cur = tp(x, y);
+        },
+        lineTo(x, y) {
+          const p = tp(x, y);
+          if (cur) push(cur, p);
+          cur = p;
+        },
+        curveTo(_x1, _y1, _x2, _y2, x3, y3) {
+          cur = tp(x3, y3);
+        },
+        closePath() {
+          if (cur && start) push(cur, start);
+          cur = start;
+        },
+      });
+    };
+    const page = doc.loadPage(pageIndex);
+    try {
+      const device = new mupdf.Device({
+        fillPath(path, _evenOdd, ctm) {
+          collect(path, ctm);
+        },
+        strokePath(path, _stroke, ctm) {
+          collect(path, ctm);
+        },
+      });
+      try {
+        page.run(device, mupdf.Matrix.identity);
+      } finally {
+        device.destroy();
+      }
+    } catch {
+      return { h: [], v: [] };
+    } finally {
+      page.destroy();
+    }
+    return mergeSegments({ h, v });
+  };
+
   return {
     pageCount: doc.countPages(),
     renderPage(pageIndex: number, dpi: number): Uint8Array {
@@ -178,6 +251,27 @@ export function openPdf(data: Buffer): OpenPdf {
         ? { widthPt: w, heightPt: h }
         : { widthPt: h, heightPt: w };
     },
+    pageSegments(pageIndex: number, opts: { rect?: RectPt; minLenPt?: number } = {}): PageSegments {
+      let all = segmentsCache.get(pageIndex);
+      if (!all) {
+        all = extractSegments(pageIndex);
+        segmentsCache.set(pageIndex, all);
+      }
+      const minLen = opts.minLenPt ?? MIN_SEGMENT_PT;
+      const r = opts.rect;
+      const keep = (s: Segment, alongIsX: boolean): boolean => {
+        if (s.to - s.from < minLen) return false;
+        if (!r) return true;
+        const pad = 0.02 * Math.max(r.x1 - r.x0, r.y1 - r.y0);
+        // alongIsX: horizontal segment (at = y, from..to = x)
+        const x0 = alongIsX ? s.from : s.at;
+        const x1 = alongIsX ? s.to : s.at;
+        const y0 = alongIsX ? s.at : s.from;
+        const y1 = alongIsX ? s.at : s.to;
+        return x1 >= r.x0 - pad && x0 <= r.x1 + pad && y1 >= r.y0 - pad && y0 <= r.y1 + pad;
+      };
+      return { h: all.h.filter((s) => keep(s, true)), v: all.v.filter((s) => keep(s, false)) };
+    },
     pageTextFragments(pageIndex: number): TextFragment[] {
       const json = stextJson(pageIndex);
       const rot = rotation(pageIndex);
@@ -207,6 +301,11 @@ export function openPdf(data: Buffer): OpenPdf {
     },
   };
 }
+
+// Segments shorter than this are handles, hatch marks and text strokes.
+const MIN_SEGMENT_PT = 4;
+// Axis-aligned within ~1.5° (tan).
+const AXIS_TAN = 0.026;
 
 export const THUMBNAIL_DPI = 50;
 export const EXTRACTION_DPI = 200;

@@ -10,3 +10,4 @@ export * from "./dim-skeleton.js";
 export * from "./select-pages.js";
 export * from "./reading-score.js";
 export * from "./scale.js";
+export * from "./snap.js";
