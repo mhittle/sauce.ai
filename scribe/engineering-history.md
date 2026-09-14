@@ -118,6 +118,23 @@ render as the generic line for customers (admins still see the raw text).
 
 ---
 
+## 2026-09-15 (g) — measurement-accuracy plan written (no code)
+
+`measurement-accuracy-plan.md`, from the 18 kits (zero API) + the prod
+Charley builds. Findings: F1 0.47 is a COUNT problem (158/382 gold matched;
+sizes on matched are 62% exact width, 53% within 1"); fixing Find's count
+after the fact costs about as many touches as marking each cabinet
+(elevation sets ~15 vs 17.6 gold per kit); the text-layer `nearbyDims`
+hold the gold width for 26% of matched cabinets and for 2 of the 60 the
+model got wrong — the printed-dim shortlist is not the missing information,
+legibility is (elevation areas get no high-res crop; plan areas do). Owner
+batch-accepted 16/24 lines on prod and typed no size. Options A (areas +
+Find count gate + per-area measuring, recommended, LOE 7 in 3 PRs + an
+optional reviewer PR), B (mark every cabinet), C (reviewer pass). Step 0 =
+a ~$4 live per-area A/B on the kits before PR 2. Awaiting the owner.
+
+---
+
 ## 2026-09-15 (f) — SCR-013 evidence: no build failed after #270; prose-wrapped answers now parse; failed re-measure visible
 
 **Context.** Owner report (via the wrap-up): Build and "Measure again…"
@@ -164,44 +181,6 @@ MOLLY_CHARLEY_KITCHEN job → review; Measure again from the review's More
 menu → review). If a non-clean answer recurs, the warn line has the edges.
 Strict JSON via structured outputs needs an SDK bump (0.70.1 has no
 `output_config`) — in the measurement-accuracy plan, not this PR.
-
----
-
-## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
-
-**Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI
-#254–#260), one flow (#265), V0 scale A+B (#262/#264, gated; C dropped), the
-Mark-step rework (#266/#268), and three prod fixes on the owner's live job
-MOLLY_CHARLEY_KITCHEN: ANY-list build failure (#270), wizard not forwarding
-to the review (#271), measuring answer unparseable → all sizes defaulted
-(#272). All merged to `main` and deploy-verified (bundle hash + unique
-string; API `/health/db` 200).
-
-**Open (owner report after #272 deployed, NOT diagnosed — logged SCR-013):**
-Build and "Measure again…" STILL error on the measuring step and the owner
-lands back on the wizard, not the review. No logs, wizard error text, or the
-persisted `beta/measure/response-{0,1}.txt` were pulled this session — the
-next session must start from that evidence, not from code reading. A failed
-build goes `processing → awaiting_boxes` (wizard, error shown, Build
-clickable) BY DESIGN, so "not taken to the review" may be the error, not a
-routing bug; confirm before touching routing (`BetaDetect.tsx` ~156/275).
-
-**Next session also owes a plan (not code) on measurement accuracy:** marking
-granularity (areas vs individual cabinets vs runs), measuring scope (one call
-over all pages vs per area vs per cabinet crop + `nearbyDims`), a check pass
-(product-plan §3V), what to do with printed dims / drawing scale (A+B) / a
-schedule when present, and the cheapest correction UX when a size is wrong.
-Options must carry kit numbers (`replay-staged.mjs`, 18 kits, F1 0.47
-baseline). Geometry-as-size-override was measured and dropped — don't
-re-propose it (2026-09-14 (d)).
-
-**Housekeeping this entry:** archived 2026-08-05 → 2026-09-13 (b) verbatim
-(file was 65 KB vs the 34 KB budget); condensed summaries below. Nothing new
-in Load-bearing state — every prod change this session is in the repo
-(migrations 0009–0012 apply at API boot).
-
----
-
 ## 2026-09-15 (d) — measuring answer unparseable → every size defaulted; salvage + retry + re-measure
 
 **Owner's live job (MOLLY_CHARLEY, 24 cabinets on 3 elevation areas):**
@@ -476,21 +455,19 @@ how the build knows which warnings to carry — don't drop the flag.
 
 ## Condensed history
 
-### 2026-09-13 (c) → 2026-09-14 — V0 PR A (scale sources) + PR B (vector snap), gated (archived verbatim)
-PR A: `@scribe/shared scale.ts` (`parseScaleNote`, `chainCalibration` = densest
-±10% cluster of adjacent-token samples, ≥3 members, tokens <3" and gaps <8 pt
-skipped; `reconcileScale` manual > chain > note > model), migration `0010`
-(`takeoff_detections.scale`, `takeoff_lines.geom`), `PUT …/detections/:id/scale`.
-Text-layer coverage is the ceiling (q6/q8 dims are drawn outlines, q9 a list,
-q10/q11 images). PR B: `pdf.ts pageSegments` (mupdf Device callbacks, axis-
-aligned ≥4 pt, collinear merge), `snap.ts snapBox` (window max(6 pt, 10% of
-side), ≥50% overlap, 15% move cap), `DRAWING_SCALE=1` snaps detector boxes
-before annotation/crops/bboxes; 204/246 kit boxes touched, mean move 4.3%.
-Gotchas: `page.run(device, Matrix.identity)` (ctm already includes the page
-transform); `addPage()` returns an unattached page — `insertPage` first.
-Nothing consumes scale/snap for SIZE (PR C dropped 2026-09-14 (d)). Full text
-in the archive.
+### 2026-09-15 (e) — session wrap-up after #272 (archived verbatim)
+Session 2026-09-10→15 recap: Stage 1 UI, one flow, V0 A+B, Mark step, three
+prod fixes on MOLLY_CHARLEY (#270–#272). Logged SCR-013 for the next session
+with "evidence first"; owed the measurement-accuracy plan. Both done in (f)–(h).
 
+### 2026-09-13 (c) → 2026-09-14 — V0 PR A (scale sources) + PR B (vector snap), gated (archived verbatim)
+PR A: `scale.ts` (`parseScaleNote`, `chainCalibration` = densest ±10% cluster,
+≥3 members; `reconcileScale` manual > chain > note > model), migration `0010`,
+`PUT …/detections/:id/scale`; text-layer coverage is the ceiling. PR B:
+`pdf.ts pageSegments` + `snap.ts snapBox` (window max(6 pt, 10%), ≥50%
+overlap, 15% cap) under `DRAWING_SCALE=1`; 204/246 kit boxes touched, mean
+move 4.3%. Gotchas: `page.run(device, Matrix.identity)`; `addPage()` needs
+`insertPage`. Nothing consumes scale/snap for SIZE (PR C dropped). Archive.
 
 ### 2026-09-10 → 2026-09-13 (b) — Stage 1 UI rework, PRs 1–4 (archived verbatim)
 Product pivot agreed (product-plan.md, #253). PR 1 design system (tokens via
