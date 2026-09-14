@@ -399,3 +399,22 @@ describe("extractJson", () => {
     expect(extractJson('[{"a": "}"}] and more')).toEqual([{ a: "}" }]);
   });
 });
+
+describe("extractJson (prod 2026-09-14: markdown work-through before the JSON)", () => {
+  it("skips every bracket in a long preamble and returns the answer object", async () => {
+    const { extractJson } = await import("../src/lib/anthropic.js");
+    const preamble = Array.from({ length: 22 }, (_, i) =>
+      `**Marker ${i + 1}:** wall cabinet - width 14" (from chain [y≈${149 + i}]: 14), height 53" {see note}`
+    ).join("\n");
+    const text = `I'll analyze each elevation carefully.\n${preamble}\n\n{"cabinets": [{"marker": 1, "width_in": 14}, {"marker": 2, "width_in": 30}]}`;
+    expect(extractJson(text)).toEqual({ cabinets: [{ marker: 1, width_in: 14 }, { marker: 2, width_in: 30 }] });
+  });
+
+  it("parseMeasureResponse takes the json path on that answer", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    const text = `Notes [y≈1] [y≈2] [y≈3] [y≈4] [y≈5] [y≈6] [y≈7] [y≈8] [y≈9] [y≈10]\n{"cabinets": [{"marker": 1, "width_in": 14}]}`;
+    const r = parseMeasureResponse(text, 1);
+    expect(r.parse).toBe("json");
+    expect(r.warnings).toEqual([]);
+  });
+});

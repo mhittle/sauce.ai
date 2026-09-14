@@ -121,16 +121,18 @@ function jsonValueEnd(text: string, start: number): number {
 }
 
 // Tolerant JSON extraction from a model text response. The answer may wrap
-// the JSON in prose or code fences before AND after it (a 2026-09-13 prod
-// measuring answer had every cabinet object intact yet failed a whole-text
-// parse), so the outermost value is located by a balanced scan and anything
-// around it is ignored; trailing commas are forgiven. A value that never
-// closes (cut off at max_tokens) still throws so callers salvage.
+// the JSON in prose or code fences before AND after it — the 2026-09-14
+// prod measuring answer opened with a markdown work-through of every marker
+// ("from chain [y≈149]: 14") before the JSON object, so every bracket in
+// that preamble is a candidate that must be tried and rejected; the first
+// balanced value that parses wins, anything around it is ignored, trailing
+// commas are forgiven. A value that never closes (cut off at max_tokens)
+// still throws so callers salvage.
 export function extractJson(text: string): unknown {
   const stripped = text.replace(/```(?:json)?/g, "").trim();
   let lastErr: unknown = null;
   let from = 0;
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (;;) {
     const rel = stripped.slice(from).search(/[[{]/);
     if (rel === -1) break;
     const start = from + rel;

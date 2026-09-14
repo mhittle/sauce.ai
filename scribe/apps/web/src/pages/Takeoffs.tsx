@@ -12,6 +12,8 @@ import {
   useToast,
 } from "../ui";
 import { UploadZone } from "../components/UploadZone";
+import { TechnicalDetail } from "../components/TechnicalDetail";
+import { friendlyError } from "../messages";
 import type { Progress } from "../components/ReadingProgress";
 
 // One row per job: the takeoff plus its latest quote (GET /jobs).
@@ -200,7 +202,10 @@ export function TakeoffsPage() {
                       {j.sourceKind}
                     </span>
                     {j.error && (
-                      <div className="mt-0.5 text-xs text-bad">{j.error}</div>
+                      <div className="mt-0.5 text-xs text-bad">
+                        {friendlyError(j.error).text}
+                        <TechnicalDetail details={j.error} />
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-2 font-mono tabular-nums text-muted">
