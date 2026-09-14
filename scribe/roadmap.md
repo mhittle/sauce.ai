@@ -14,11 +14,12 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
+| Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
+| Measurement accuracy study — marking granularity (areas / cabinets / runs), measuring scope (all pages / per area / per cabinet crop), check pass; plan with kit numbers, owner approves before build | 9 | 5 | takeoff | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
-| V0 drawing scale + geometry-first measuring (v0-drawing-scale-plan.md) — A sources shipped; B snap, C measure, D review next | 9 | 7 | takeoff | in-progress |
 | V0 drawing scale — A sources + B vector snap shipped (gated); **C geometry-first measuring DROPPED 2026-09-14** (printed sizes beat geometry 0.64" vs 1.16", F1 unchanged); D draw-to-scale on Review still possible on A+B | 5 | 2 | takeoff | parked |
-| Stage 1 UI rework — direction A design system, job stepper, admin ported (product-plan.md §3) | 9 | 8 | ui | done (PRs #254–#257, pending merge) |
+| Stage 1 UI rework — direction A design system, job stepper, admin ported (product-plan.md §3) | 9 | 8 | ui | done (#254–#257, merged via #260, 2026-09-13) |
 | Staged reads (segment→boxes→detect→measure) as DEFAULT pipeline + beta detect wizard + zero-API kit harness | 9 | 8 | takeoff | done |
 | Plan-only run→unit decomposition in the staged measure stage (plan-kind kits 0.13 → 0.32 F1) | 8 | 4 | takeoff | done |
 | Dedupe markers across overlapping staged regions (mirrored/duplicate plans double-count a run) | 6 | 3 | takeoff | backlog |
@@ -64,9 +65,32 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 ## Items in detail
 
+### Measuring step fails in prod after #272 (SCR-013)
+
+- **Priority 10 / LOE 3 / takeoff / backlog.** Owner: Build and "Measure
+  again…" still error on the measuring step on MOLLY_CHARLEY_KITCHEN after
+  #272 deployed; they land on the wizard, not the review. Evidence first
+  (wizard error, `scribe workers` logs, `beta/measure/response-N.txt`), then
+  the real fix. If the answer is genuinely unusable, shrink the pass (per
+  area/page calls, strict JSON contract) and measure on the 18 kits before
+  shipping. Success must forward to the review; failure stays on the wizard
+  with the error visible (by design).
+
+### Measurement accuracy study — how should the tool get the most accurate sizes?
+
+- **Priority 9 / LOE 5 / takeoff / backlog.** A PLAN, approved by the owner
+  before any build. Compare, with kit numbers (`replay-staged.mjs`, F1 0.47
+  baseline): marking whole areas (today) vs individual cabinets vs runs;
+  one measuring call over all pages (today) vs per area vs per cabinet crop
+  + `nearbyDims`; a second check pass (product-plan §3V reviewer); use of
+  printed dims, drawing scale (A+B, `DRAWING_SCALE=1`) and schedules; and the
+  cheapest correction UX when a size is wrong (per-cabinet re-measure,
+  draw-to-scale on Review, type it). Geometry as a size OVERRIDE was measured
+  and dropped 2026-09-14 — fallback only.
+
 ### Stage 1 UI rework — direction A design system, job stepper, admin ported
 
-- **Priority 9 / LOE 8 / ui / in-progress.** Spec: `product-plan.md` §3 (agreed
+- **Priority 9 / LOE 8 / ui / done (2026-09-13).** Spec: `product-plan.md` §3 (agreed
   2026-09-10, supersedes PRD §2/§3 per the owner). Four PRs: (1) tokens, fonts,
   component library, shell, human status labels, toasts — **shipped**
   (`claude/scribe-ui-1-design-system`); (2) Jobs list + drop-zone upload +
@@ -81,7 +105,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   shipping confirmation, server-gated Send with listed blockers, Done state,
   admin-only operator warnings) + Admin ported to the new components with a
   sidebar (`?tab=`), crawler sources off the sidebar — **shipped**
-  (`claude/scribe-ui-4-quote-admin`). Stage 1 complete pending merge. Stage V (verification layers) runs alongside; Stages 2–4
+  (`claude/scribe-ui-4-quote-admin`). Merged 2026-09-13 (#254–#257; #260 carried the stack to main — stacked PRs, see history). Stage V (verification layers) runs alongside; Stages 2–4
   (accounts, credits, beta) follow — all in `product-plan.md`.
 
 ### Staged reads as DEFAULT pipeline + beta detect wizard + zero-API kit harness
