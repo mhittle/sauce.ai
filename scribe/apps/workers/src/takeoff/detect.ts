@@ -587,29 +587,56 @@ export function betaReadKey(takeoffId: string, page: number): string {
 }
 
 // Pure measure-response parse (harness-replayable): the cabinets array plus
-// human-visible warnings when the response is unusable.
-export function parseMeasureResponse(text: string): {
+// human-visible warnings when the response is unusable. `parse` says which
+// path produced the cabinets so the worker can log the evidence when the
+// answer was not clean JSON. `markerCount` (when known) makes the warning
+// say how many cabinets actually default instead of "the rest".
+export function parseMeasureResponse(
+  text: string,
+  markerCount?: number
+): {
   cabinets: unknown[];
   warnings: string[];
+  parse: "json" | "salvage" | "none";
 } {
+  let obj: { cabinets?: unknown } | null = null;
   try {
-    const obj = (extractJson(text) ?? {}) as { cabinets?: unknown };
-    if (Array.isArray(obj.cabinets)) return { cabinets: obj.cabinets, warnings: [] };
+    obj = (extractJson(text) ?? {}) as { cabinets?: unknown };
+  } catch {
+    obj = null;
+  }
+  if (obj && Array.isArray(obj.cabinets))
+    return { cabinets: obj.cabinets, warnings: [], parse: "json" };
+  // Not valid JSON (cut off, or prose around it), or the first complete
+  // value was an inner object: keep every cabinet object that IS complete
+  // instead of throwing the whole answer away.
+  const salvaged = salvageArrayObjects(text, "cabinets");
+  if (salvaged.length === 0) {
     return {
       cabinets: [],
-      warnings: ["measurements response had no cabinets array — sizes defaulted"],
+      warnings: [
+        obj
+          ? "measurements response had no cabinets array — sizes defaulted"
+          : "measurements response was not parseable JSON — sizes defaulted",
+      ],
+      parse: "none",
     };
-  } catch {
-    // Not valid JSON (cut off, or prose around it): keep every cabinet
-    // object that IS complete instead of throwing the whole answer away.
-    const salvaged = salvageArrayObjects(text, "cabinets");
+  }
+  {
+    const defaulted =
+      markerCount != null ? Math.max(0, markerCount - salvaged.length) : null;
+    const tail =
+      defaulted == null
+        ? "the rest defaulted"
+        : defaulted === 0
+          ? "nothing defaulted"
+          : `${defaulted} of ${markerCount} defaulted`;
     return {
       cabinets: salvaged,
       warnings: [
-        salvaged.length > 0
-          ? `measurements response was not valid JSON — ${salvaged.length} complete cabinet answers salvaged, the rest defaulted`
-          : "measurements response was not parseable JSON — sizes defaulted",
+        `measurements response was not valid JSON — ${salvaged.length} complete cabinet answers salvaged, ${tail}`,
       ],
+      parse: "salvage",
     };
   }
 }
@@ -968,7 +995,7 @@ export async function buildFromDetections(
           Buffer.from(responseText, "utf-8"),
           "text/plain"
         );
-        const parsed = parseMeasureResponse(responseText);
+        const parsed = parseMeasureResponse(responseText, entries.length);
         if (message.stop_reason === "max_tokens") {
           parsed.warnings.push(
             `measurements answer was cut off at the token limit (attempt ${attempt + 1}); ${parsed.cabinets.length} of ${entries.length} cabinets salvaged`
@@ -980,11 +1007,26 @@ export async function buildFromDetections(
             attempt,
             stop: message.stop_reason,
             chars: responseText.length,
+            parse: parsed.parse,
             cabinets: parsed.cabinets.length,
             markers: entries.length,
           },
           "measure response"
         );
+        if (parsed.parse !== "json") {
+          // What wrapped or broke the JSON is the evidence for the next
+          // parser fix — the full text sits in storage, the edges go to
+          // the worker log where they can be read without MinIO access.
+          log.warn(
+            {
+              takeoff: takeoffId,
+              attempt,
+              head: responseText.slice(0, 400),
+              tail: responseText.slice(-400),
+            },
+            "measure answer was not clean JSON"
+          );
+        }
         parsedResponse = parsed;
         if (parsed.cabinets.length > 0) break;
         log.warn({ takeoff: takeoffId, attempt }, "measure answer had no usable cabinets — retrying once");

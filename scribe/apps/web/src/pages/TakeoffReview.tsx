@@ -61,6 +61,7 @@ interface TakeoffDetail {
   status: string;
   pageCount: number | null;
   progress: Progress | null;
+  error: string | null;
   createdAt: string;
   updatedAt: string;
   docSummary: {
@@ -546,6 +547,30 @@ export function TakeoffReviewPage() {
       >
         {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}
       </PageTitle>
+
+      {/* A failed "Measure again" or area update lands back here with the
+          previous breakdown intact; the failure used to be invisible. */}
+      {takeoff.status === "review" && takeoff.error && (
+        <div
+          role="alert"
+          className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-bad bg-bad-soft px-3 py-2 text-sm text-bad"
+        >
+          <span className="min-w-0 flex-1">
+            The last measuring run failed, so this breakdown is unchanged:{" "}
+            {takeoff.error.replace(/^build takeoff failed: /, "")}
+          </span>
+          {takeoff.sourceKind === "pdf" && (
+            <Button
+              variant="default"
+              size="sm"
+              loading={remeasure.isPending}
+              onClick={() => remeasure.mutate()}
+            >
+              Measure again
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {/* Drawing */}
