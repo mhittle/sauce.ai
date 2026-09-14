@@ -332,3 +332,70 @@ describe("parseMeasureResponse (cut-off answers)", () => {
     expect(r.warnings[0]).toMatch(/not parseable/);
   });
 });
+
+describe("parseMeasureResponse (prose around a complete answer — prod 2026-09-13)", () => {
+  const body =
+    '{"cabinets": [{"marker": 1, "tag": "B24", "category": "casework_base", "width_in": 24, "height_in": 34.5, "depth_in": 24, "confidence": 0.9, "measured": true}, {"marker": 2, "tag": "W3030", "category": "casework_wall", "width_in": 30, "height_in": 30, "depth_in": 12, "confidence": 0.9, "measured": true}]}';
+
+  it("parses cleanly when prose follows the JSON", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    const r = parseMeasureResponse(`${body}\n\nNotes: marker 2 was read from the W3030 tag; marker {1} is a base.`, 2);
+    expect(r.parse).toBe("json");
+    expect(r.cabinets.length).toBe(2);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it("parses cleanly when prose with braces precedes a fenced answer and text follows the fence", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    const r = parseMeasureResponse(
+      `Looking at run [A] and the {kitchen} elevation first.\n\`\`\`json\n${body}\n\`\`\`\nLet me know if you need the schedule cross-checked.`,
+      2
+    );
+    expect(r.parse).toBe("json");
+    expect(r.cabinets.length).toBe(2);
+  });
+
+  it("forgives a trailing comma before the closing bracket", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    const r = parseMeasureResponse(body.replace("}]}", "},]}"), 2);
+    expect(r.parse).toBe("json");
+    expect(r.cabinets.length).toBe(2);
+  });
+
+  it("says nothing defaulted when every marker was salvaged", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    // A stray unquoted token between objects breaks the whole-text parse
+    // and the lenient pass, but every cabinet object is complete.
+    const broken = body.replace("}, {", "} oops {");
+    const r = parseMeasureResponse(broken, 2);
+    expect(r.parse).toBe("salvage");
+    expect(r.cabinets.length).toBe(2);
+    expect(r.warnings[0]).toMatch(/2 complete cabinet answers salvaged, nothing defaulted/);
+  });
+
+  it("counts the defaulted markers when the salvage is partial", async () => {
+    const { parseMeasureResponse } = await import("../src/takeoff/detect.js");
+    const r = parseMeasureResponse(body.slice(0, -40), 5);
+    expect(r.parse).toBe("salvage");
+    expect(r.cabinets.length).toBe(1);
+    expect(r.warnings[0]).toMatch(/1 complete cabinet answers salvaged, 4 of 5 defaulted/);
+  });
+});
+
+describe("extractJson", () => {
+  it("still throws on text with no JSON value", async () => {
+    const { extractJson } = await import("../src/lib/anthropic.js");
+    expect(() => extractJson("no json here")).toThrow();
+  });
+
+  it("still throws on a value that never closes", async () => {
+    const { extractJson } = await import("../src/lib/anthropic.js");
+    expect(() => extractJson('{"items": [{"a": 1}, {"b": ')).toThrow();
+  });
+
+  it("returns the first complete value and ignores what follows", async () => {
+    const { extractJson } = await import("../src/lib/anthropic.js");
+    expect(extractJson('```json\n{"items": [1, 2]}\n```\ntrailing {"not": "this"}')).toEqual({ items: [1, 2] });
+    expect(extractJson('[{"a": "}"}] and more')).toEqual([{ a: "}" }]);
+  });
+});

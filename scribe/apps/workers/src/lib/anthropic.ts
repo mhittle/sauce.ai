@@ -96,16 +96,61 @@ export async function crawlerBudgetRemaining(): Promise<number> {
   return cap - (rows[0]?.tokens ?? 0);
 }
 
-// Tolerant JSON extraction from a model text response (strips code fences,
-// finds the outermost JSON value).
+// End index (exclusive) of the JSON value that opens at `start`, found by a
+// string-aware bracket scan; -1 when the value never closes (cut off).
+function jsonValueEnd(text: string, start: number): number {
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return -1;
+}
+
+// Tolerant JSON extraction from a model text response. The answer may wrap
+// the JSON in prose or code fences before AND after it (a 2026-09-13 prod
+// measuring answer had every cabinet object intact yet failed a whole-text
+// parse), so the outermost value is located by a balanced scan and anything
+// around it is ignored; trailing commas are forgiven. A value that never
+// closes (cut off at max_tokens) still throws so callers salvage.
 export function extractJson(text: string): unknown {
-  const stripped = text
-    .replace(/^```(?:json)?\s*/m, "")
-    .replace(/```\s*$/m, "")
-    .trim();
-  const start = stripped.search(/[[{]/);
-  if (start === -1) throw new Error("no JSON found in model response");
-  return JSON.parse(stripped.slice(start));
+  const stripped = text.replace(/```(?:json)?/g, "").trim();
+  let lastErr: unknown = null;
+  let from = 0;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const rel = stripped.slice(from).search(/[[{]/);
+    if (rel === -1) break;
+    const start = from + rel;
+    const end = jsonValueEnd(stripped, start);
+    const candidate = end === -1 ? stripped.slice(start) : stripped.slice(start, end);
+    try {
+      return JSON.parse(candidate);
+    } catch (err) {
+      lastErr = err;
+      try {
+        return JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1"));
+      } catch {
+        // fall through to the next candidate start
+      }
+    }
+    if (end === -1) break;
+    from = start + 1;
+  }
+  if (lastErr) throw lastErr;
+  throw new Error("no JSON found in model response");
 }
 
 export function textOf(message: Anthropic.Message): string {
