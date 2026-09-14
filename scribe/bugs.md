@@ -19,6 +19,26 @@ Format:
 
 ## Open
 
+### SCR-013 — Measuring step fails in prod; wizard does not land on the review
+- **Status:** attempted
+- **Reported:** 2026-09-15 by owner (MOLLY_CHARLEY_KITCHEN, 24 cabinets / 3 elevation areas)
+- **Description:** First report: Build ran ~2 min, then every cabinet came
+  back 30" @ 50% with the note "measurements response was not parseable JSON
+  — sizes defaulted". After #272 deployed the owner reports Build and
+  "Measure again…" STILL error on the measuring step and they end up back on
+  the wizard, not the review page.
+- **Notes / fix:** #272 raised the measure call to 32k tokens, checks
+  `stop_reason`, salvages complete cabinet objects from an unparseable
+  answer, retries once, and throws (with rollback) when no usable sizes come
+  back twice; raw answers persist as `takeoffs/{id}/beta/measure/response-N.txt`.
+  The post-deploy failure is UNDIAGNOSED — next session: pull the wizard
+  error text, `scribe workers` Railway logs (`{attempt, stop, chars,
+  cabinets, markers}` line) and the stored answers BEFORE changing code.
+  Landing on the wizard after a failed build is by design (`processing →
+  awaiting_boxes`); only a SUCCESSFUL build that doesn't forward is a routing
+  bug.
+- **PR:** #272 (partial)
+
 ### SCR-010 — Door swings priced as cabinets on plan reads
 - **Status:** resolved (prompt fix; existing takeoffs need a re-run)
 - **Reported:** 2026-08-18 by owner (takeoff a6e317a3, Piestewa floor plan)
@@ -103,6 +123,28 @@ _None._
 _None._
 
 ## Resolved
+
+### SCR-011 — Build fails in prod with `… = ANY(($2, $3, …))`
+- **Status:** resolved
+- **Reported:** 2026-09-15 by owner (MOLLY_CHARLEY_KITCHEN; Find found 8 cabinets, Build errored)
+- **Description:** Scoped deletes used `sql\`… = ANY(${ids})\``; drizzle
+  expands a JS array into a parameter LIST, which Postgres rejects. It failed
+  AFTER lines were inserted and `built_at` stamped, so the area read "in
+  takeoff" with unpriced lines and Build had nothing to do.
+- **Notes / fix:** `inArray()` at all three sites; `built_at` stamped only
+  after pricing; rollback of inserted lines/faces on failure; self-repair of
+  never-priced lines in build-takeoff; live progress during builds; jobs
+  `attempts: 2`.
+- **PR:** #270
+
+### SCR-012 — Wizard parks on "Update 0 areas" after a successful build
+- **Status:** resolved
+- **Reported:** 2026-09-15 by owner
+- **Description:** After Build finished the wizard stayed on the Build step
+  instead of opening the review.
+- **Notes / fix:** wizard forwards to `/takeoffs/:id` when status goes
+  `processing → review`; "Open the review →" when nothing is unbuilt.
+- **PR:** #271
 
 ### SCR-007 — Router under-reads elevation-authoritative plans
 - **Status:** resolved (via `ROUTER_TOLERANT_MERGE=1`, LIVE on scribe-workers
