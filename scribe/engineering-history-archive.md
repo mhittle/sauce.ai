@@ -6,6 +6,41 @@ not read during onboarding.
 
 ---
 
+## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
+
+**Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI
+#254–#260), one flow (#265), V0 scale A+B (#262/#264, gated; C dropped), the
+Mark-step rework (#266/#268), and three prod fixes on the owner's live job
+MOLLY_CHARLEY_KITCHEN: ANY-list build failure (#270), wizard not forwarding
+to the review (#271), measuring answer unparseable → all sizes defaulted
+(#272). All merged to `main` and deploy-verified (bundle hash + unique
+string; API `/health/db` 200).
+
+**Open (owner report after #272 deployed, NOT diagnosed — logged SCR-013):**
+Build and "Measure again…" STILL error on the measuring step and the owner
+lands back on the wizard, not the review. No logs, wizard error text, or the
+persisted `beta/measure/response-{0,1}.txt` were pulled this session — the
+next session must start from that evidence, not from code reading. A failed
+build goes `processing → awaiting_boxes` (wizard, error shown, Build
+clickable) BY DESIGN, so "not taken to the review" may be the error, not a
+routing bug; confirm before touching routing (`BetaDetect.tsx` ~156/275).
+
+**Next session also owes a plan (not code) on measurement accuracy:** marking
+granularity (areas vs individual cabinets vs runs), measuring scope (one call
+over all pages vs per area vs per cabinet crop + `nearbyDims`), a check pass
+(product-plan §3V), what to do with printed dims / drawing scale (A+B) / a
+schedule when present, and the cheapest correction UX when a size is wrong.
+Options must carry kit numbers (`replay-staged.mjs`, 18 kits, F1 0.47
+baseline). Geometry-as-size-override was measured and dropped — don't
+re-propose it (2026-09-14 (d)).
+
+**Housekeeping this entry:** archived 2026-08-05 → 2026-09-13 (b) verbatim
+(file was 65 KB vs the 34 KB budget); condensed summaries below. Nothing new
+in Load-bearing state — every prod change this session is in the repo
+(migrations 0009–0012 apply at API boot).
+
+---
+
 ## 2026-09-14 — V0 PR B: vector segments + box snapping (gated, measured on the kits)
 
 **Shipped (zero API).**

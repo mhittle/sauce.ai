@@ -15,7 +15,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
-| Measurement accuracy study — marking granularity (areas / cabinets / runs), measuring scope (all pages / per area / per cabinet crop), check pass; plan with kit numbers, owner approves before build | 9 | 5 | takeoff | backlog |
+| Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
+| Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
 | V0 drawing scale — A sources + B vector snap shipped (gated); **C geometry-first measuring DROPPED 2026-09-14** (printed sizes beat geometry 0.64" vs 1.16", F1 unchanged); D draw-to-scale on Review still possible on A+B | 5 | 2 | takeoff | parked |
@@ -82,8 +83,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 ### Measurement accuracy study — how should the tool get the most accurate sizes?
 
-- **Priority 9 / LOE 5 / takeoff / backlog.** A PLAN, approved by the owner
-  before any build. Compare, with kit numbers (`replay-staged.mjs`, F1 0.47
+- **Priority 9 / LOE 5 / takeoff / in-progress (plan written 2026-09-15,
+  `measurement-accuracy-plan.md`; owner decides A/B/C + Step 0 go).** A PLAN,
+  approved by the owner before any build. Compare, with kit numbers (`replay-staged.mjs`, F1 0.47
   baseline): marking whole areas (today) vs individual cabinets vs runs;
   one measuring call over all pages (today) vs per area vs per cabinet crop
   + `nearbyDims`; a second check pass (product-plan §3V reviewer); use of
