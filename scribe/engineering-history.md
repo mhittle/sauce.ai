@@ -82,6 +82,55 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (f) — SCR-013 evidence: no build failed after #270; prose-wrapped answers now parse; failed re-measure visible
+
+**Context.** Owner report (via the wrap-up): Build and "Measure again…"
+still error on the measuring step after #272 and land on the wizard.
+Evidence pulled before any code: prod DB through the API (`/jobs`,
+`/takeoffs/:id`, `/detections`) and the Railway `scribe workers` log
+(7-day window, filters `"measure response"`, `"beta build"`, `"job failed"`).
+
+**What the data says.** All beta builds 09-13 UTC: 247913a4 done (20);
+f876cac2 + 9018debb FAILED 18:41 with the pre-#270 `= ANY((…))` query —
+still on the Jobs list as "build takeoff failed", parked at `awaiting_boxes`
+by design; 8a8e3914 done 18:49 pre-#272 (24/24 defaulted at 0.5 — the first
+report); 40f9cb79 done 19:07 (`end_turn`, 16.6k chars, 24/24 clean JSON);
+0a26eb66 done 19:12 (`end_turn`, 7.4k chars, **25/25 via salvage**, 3
+estimated) → `review`, lines carry `reviewerEdited` at 19:13. No
+`beta build failed` after #270, no BullMQ `job failed`, no `remeasure` ever
+queued. So: the measuring step does not fail post-#272, and the wizard did
+forward. What IS real: 2 of the last 3 prod answers were not parseable as a
+whole though every cabinet object was complete (all 18 kits parse), and the
+review said "25 salvaged, the rest defaulted" when nothing defaulted. The
+stored `response-0.txt` were not pulled (no API route; MinIO console only).
+
+**Shipped (#274).**
+- `extractJson`: outermost JSON value by a balanced string-aware scan,
+  prose/fences before and after ignored, trailing commas forgiven, a value
+  that never closes still throws (salvage path). Tried candidates in order,
+  so `{kitchen}` in a preamble no longer poisons the parse.
+- `parseMeasureResponse(text, markerCount)` → `parse: json|salvage|none`;
+  warning counts the defaulted markers ("nothing defaulted" / "4 of 5
+  defaulted"); salvages when the first complete value was an inner object.
+- Worker: `parse` on the `measure response` log line; a `measure answer was
+  not clean JSON` warn with 400-char head/tail — the next occurrence is
+  diagnosable from Railway without MinIO.
+- Review page: `takeoffs.error` banner + **Measure again** button in
+  `review` (a failed re-measure or a failed area update on a reviewed
+  takeoff restores `review`; the error was invisible there).
+- 9 tests; 18-kit zero-API replay identical to `summary.csv` per kit.
+
+**Not changed.** Routing (`BetaDetect.tsx` forward, review forward) — the
+evidence says both work. Measure prompt (measure-v6) and call shape.
+
+**Open.** Owner verifies on prod after deploy (Build on a fresh
+MOLLY_CHARLEY_KITCHEN job → review; Measure again from the review's More
+menu → review). If a non-clean answer recurs, the warn line has the edges.
+Strict JSON via structured outputs needs an SDK bump (0.70.1 has no
+`output_config`) — in the measurement-accuracy plan, not this PR.
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI
@@ -387,105 +436,25 @@ so the user lands back in the wizard with their boxes. (2) The wizard's
 Build step confirms only when the takeoff already has lines (re-marking a
 reviewed takeoff); a first build just builds. (3) `docSummary.seeded` is
 how the build knows which warnings to carry — don't drop the flag.
-## 2026-09-14 — V0 PR B: vector segments + box snapping (gated, measured on the kits)
-
-**Shipped (zero API).**
-- `pdf.ts: pageSegments(pageIndex, {rect?, minLenPt?})` — runs the page
-  through a callback `mupdf.Device` (`strokePath` + `fillPath`, so CAD
-  exports that draw lines as thin filled rectangles count), walks each
-  path (`moveTo`/`lineTo`/`closePath`; curves skipped), transforms by the
-  op's ctm, keeps segments axis-aligned within ~1.5°, ≥4 pt, normalizes
-  upright with the same rotation as the text layer, merges collinear
-  pieces (`mergeSegments`). Cached per page. Raster pages → `{h:[],v:[]}`.
-  **Convention pinned by test:** mupdf's device space for a page is the
-  same top-left-origin point space as the stext bboxes (a PDF rect at
-  y=100..250 on a 792 pt page lands at 542..692).
-- `@scribe/shared snap.ts`: `snapBox(box, segments, opts)` — per edge, the
-  nearest parallel segment within `max(6 pt, 10% of the perpendicular
-  side)` that overlaps ≥50% of the side wins (longer overlap breaks ties);
-  an edge never moves more than 15% of its side; reports which edges
-  snapped and the largest relative move. `LineGeom` zod
-  (`takeoff_lines.geom`; PR B fills `snapped` + `snap_moved`).
-  `CabinetLineItem.geom` (optional) carries it through the merge.
-- `detect.ts buildFromDetections`: behind **`DRAWING_SCALE=1`**, every
-  detector box is snapped in display px BEFORE the annotated marker images,
-  plan crops and persisted bboxes derive from it (`snapDisplayBox`);
-  `MarkerEntry.geom` → line `geom`. `replaceLines` persists it.
-- Harness: `DRAWING_SCALE=1 prepare-staged.mjs` writes `steps/snap.json`
-  (segment counts per page, before/after per box, edges, move).
-
-**Design change from the plan:** search window 10% of the side, not 3% —
-the July spike's "loose boxes" are looser than 3%, and the 15% move cap
-plus the overlap rule already bound the risk.
-
-**Measured on the 18 kits (zero API):** 246 detector boxes, 204 touched
-(83%), 144 snapped on all four edges; mean move of a touched box 4.3%,
-median 4.0%. Image kits (q2, q10, q11) untouched, as designed. Plan-only
-sets whose dimensions are drawn outlines (q1, q6, q8) still carry
-thousands of vector segments, so snapping works there even though text-
-layer calibration (PR A) did not. q24 has segments but no box within the
-window — worth a look in PR C's A/B. Nothing consumes the snapped boxes
-for SIZE yet (PR C); with the flag off prod is unchanged.
-
-**Gotchas.** (1) `page.run(device, Matrix.identity)` — the ctm the
-callbacks receive already includes the page's base transform; do not
-pre-multiply. (2) `mupdf.PDFDocument.addPage()` returns an unattached page
-object — tests must `insertPage(-1, obj)` or `loadPage(0)` throws "invalid
-page number: 1". (3) Wizard-drawn detections (kind null) snap too; a
-human-drawn box on a raster page is untouched.
-
----
-
-## 2026-09-13 (c) — V0 PR A: drawing-scale sources, measured on the 18 kits
-
-**Context.** Stage V item 0 (`v0-drawing-scale-plan.md`): scale is a property
-of the drawing. PR A lands the sources and storage with zero API cost; B–D
-follow. Also found and fixed the stacked-PR merge problem (see load-bearing
-state): PRs 2–4 were not on `main`; #260 lands them.
-
-**Shipped.**
-- `@scribe/shared scale.ts` (37 tests): `parseScaleNote` (architect's
-  `1/4" = 1'-0"` incl. mixed numbers and curly quotes, `1:48`, `N.T.S.`),
-  `findScaleNotes`, `attachNotesToRegions` (a note belongs to the drawing it
-  sits under, sheet note as fallback), `chainCalibration`, `reconcileScale`
-  (manual > accepted chain > note > model; 8% agreement; −0.2 confidence on
-  disagreement; NTS beats all but manual), `scaleForRegion` (one call per
-  region), `inPerPx`. `DrawingScale`/`ScaleSource` zod.
-- `TextFragment` gains optional `w,h` (mupdf stext line box, rotation-
-  normalized); `extractDimSkeleton` now centres tokens when widths are
-  present — chain calibration measures centre-to-centre distances.
-- Migration `0010`: `takeoff_detections.scale`, `takeoff_lines.geom` (geom
-  is filled from PR C). `staged.ts` computes `scaleForRegion` for every
-  seeded region (page text + the model's note) and stores it, warning when
-  no scale is found or sources disagree. regions-v2 prompt asks for the
-  printed scale note per region (`PageRegion.scale`, tolerant parse).
-- `PUT /takeoffs/:id/detections/:detectionId/scale {px_len, inches}` —
-  manual calibration, overrides and is kept in the source list.
-- Harness: `prepare-staged.mjs` writes `steps/scale.json` per region.
-
-**Measured on the 18 kits (zero API), which changed the design.** First
-pass used the median of all adjacent-token samples with an IQR spread
-gate: only 2 regions accepted, spreads of 0.5–4.6. Diagnosis on q7/q21:
-the true scale is always a TIGHT CLUSTER of samples, contaminated by reveal
-labels (1 1/2", 2"), cabinet numbers ("1", "3") that parse as inches, and
-chains that jump across neighbouring drawings at the same y. Rule now:
-skip pairs with a token under 3" or a gap under 8 pt, then take the
-DENSEST ±10% cluster; accept at ≥3 members. Result: chain calibrations
-that agree with the printed note on every sheet that has one (q3, q7, q22,
-q23 at 1/2" and 1/4"), and accepted chains on note-less sheets (q21).
-Text-layer coverage is the ceiling: Piestewa (q8) and the duplex (q6)
-carry dimensions as drawn outlines, not text; q9 is an itemized list;
-q10/q11 are images — those get scale only from the model note (PR C) or
-manual calibration (PR D), as the plan said.
-
-**Gotchas.** (1) `chainCalibration.samples` is the cluster size, not the
-pair count. (2) A `note` attached at sheet level carries 0.7, under-the-
-drawing 0.8. (3) `PageRegion.scale` defaults to null so old kits and the
-classic path parse unchanged. (4) Nothing consumes `scale` yet — PR C.
-
 ---
 
 ## Condensed history
+
+### 2026-09-13 (c) → 2026-09-14 — V0 PR A (scale sources) + PR B (vector snap), gated (archived verbatim)
+PR A: `@scribe/shared scale.ts` (`parseScaleNote`, `chainCalibration` = densest
+±10% cluster of adjacent-token samples, ≥3 members, tokens <3" and gaps <8 pt
+skipped; `reconcileScale` manual > chain > note > model), migration `0010`
+(`takeoff_detections.scale`, `takeoff_lines.geom`), `PUT …/detections/:id/scale`.
+Text-layer coverage is the ceiling (q6/q8 dims are drawn outlines, q9 a list,
+q10/q11 images). PR B: `pdf.ts pageSegments` (mupdf Device callbacks, axis-
+aligned ≥4 pt, collinear merge), `snap.ts snapBox` (window max(6 pt, 10% of
+side), ≥50% overlap, 15% move cap), `DRAWING_SCALE=1` snaps detector boxes
+before annotation/crops/bboxes; 204/246 kit boxes touched, mean move 4.3%.
+Gotchas: `page.run(device, Matrix.identity)` (ctm already includes the page
+transform); `addPage()` returns an unattached page — `insertPage` first.
+Nothing consumes scale/snap for SIZE (PR C dropped 2026-09-14 (d)). Full text
+in the archive.
+
 
 ### 2026-09-10 → 2026-09-13 (b) — Stage 1 UI rework, PRs 1–4 (archived verbatim)
 Product pivot agreed (product-plan.md, #253). PR 1 design system (tokens via

@@ -14,7 +14,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
-| Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
+| Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measurement accuracy study — marking granularity (areas / cabinets / runs), measuring scope (all pages / per area / per cabinet crop), check pass; plan with kit numbers, owner approves before build | 9 | 5 | takeoff | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
@@ -67,14 +67,18 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 ### Measuring step fails in prod after #272 (SCR-013)
 
-- **Priority 10 / LOE 3 / takeoff / backlog.** Owner: Build and "Measure
-  again…" still error on the measuring step on MOLLY_CHARLEY_KITCHEN after
-  #272 deployed; they land on the wizard, not the review. Evidence first
-  (wizard error, `scribe workers` logs, `beta/measure/response-N.txt`), then
-  the real fix. If the answer is genuinely unusable, shrink the pass (per
-  area/page calls, strict JSON contract) and measure on the 18 kits before
-  shipping. Success must forward to the review; failure stays on the wizard
-  with the error visible (by design).
+- **Priority 10 / LOE 3 / takeoff / in-progress (#274, 2026-09-15 —
+  prod verification pending).** Owner: Build and "Measure again…" still
+  error on the measuring step on MOLLY_CHARLEY_KITCHEN after #272 deployed;
+  they land on the wizard, not the review. Evidence pulled (prod DB via the
+  API, Railway `scribe workers` logs): no build has failed since #270; the
+  two failures on the Jobs list are the pre-#270 ANY-list bug; both post-#272
+  builds landed on `review` (one via salvage, 25/25 cabinets recovered) and
+  the owner edited lines there; no re-measure was ever queued. #274 makes
+  a prose-wrapped answer parse as JSON, counts what actually defaulted,
+  logs the head/tail of any non-clean answer, and shows a failed re-measure
+  on the review. Left: owner re-verifies on prod; if it recurs, the
+  `measure answer was not clean JSON` warn line carries the evidence.
 
 ### Measurement accuracy study — how should the tool get the most accurate sizes?
 

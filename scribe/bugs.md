@@ -20,7 +20,7 @@ Format:
 ## Open
 
 ### SCR-013 — Measuring step fails in prod; wizard does not land on the review
-- **Status:** attempted
+- **Status:** in-progress (#274 merged → owner verifies on prod, then resolved)
 - **Reported:** 2026-09-15 by owner (MOLLY_CHARLEY_KITCHEN, 24 cabinets / 3 elevation areas)
 - **Description:** First report: Build ran ~2 min, then every cabinet came
   back 30" @ 50% with the note "measurements response was not parseable JSON
@@ -31,13 +31,26 @@ Format:
   `stop_reason`, salvages complete cabinet objects from an unparseable
   answer, retries once, and throws (with rollback) when no usable sizes come
   back twice; raw answers persist as `takeoffs/{id}/beta/measure/response-N.txt`.
-  The post-deploy failure is UNDIAGNOSED — next session: pull the wizard
-  error text, `scribe workers` Railway logs (`{attempt, stop, chars,
-  cabinets, markers}` line) and the stored answers BEFORE changing code.
-  Landing on the wizard after a failed build is by design (`processing →
-  awaiting_boxes`); only a SUCCESSFUL build that doesn't forward is a routing
-  bug.
-- **PR:** #272 (partial)
+  **Evidence (2026-09-15, prod DB via the API + Railway worker logs, 7-day
+  window):** no `beta build failed` after #270 (18:45 UTC 09-13) and no
+  BullMQ `job failed` at all; the two rows on the Jobs list still showing
+  `build takeoff failed: … = ANY((…))` are the pre-#270 jobs (18:41 UTC),
+  parked at `awaiting_boxes` by design. Post-#272 builds: 40f9cb79
+  (end_turn, 16.6k chars, 24/24, clean JSON) and 0a26eb66 (end_turn, 7.4k
+  chars, 25/25 recovered by salvage, 3 estimated) — both reached `review`,
+  and lines on 0a26eb66 carry `reviewerEdited` at 19:13 UTC, so the wizard
+  did forward. No `remeasure` was ever queued. The reported symptom is not
+  reproducible from the data; what is real is that 2 of the last 3 prod
+  answers were not parseable as a whole (all 18 kits are), and the review
+  said "the rest defaulted" when nothing had. #274: balanced-scan
+  `extractJson` (prose/fences before and after, trailing commas), parse
+  path + defaulted count in the warning, head/tail of any non-clean answer
+  in the worker log, and a failed re-measure now shows on the review with
+  a Measure again button. Routing untouched (evidence says it works).
+  The stored `response-0.txt` for 0a26eb66 and 8a8e3914 were NOT pulled
+  (no API route exposes them) — owner can read them from the MinIO console
+  if the exact wrapper matters.
+- **PR:** #272 (partial), #274 (parse + visibility; prod verify pending)
 
 ### SCR-010 — Door swings priced as cabinets on plan reads
 - **Status:** resolved (prompt fix; existing takeoffs need a re-run)

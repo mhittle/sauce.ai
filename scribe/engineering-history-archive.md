@@ -6,6 +6,104 @@ not read during onboarding.
 
 ---
 
+## 2026-09-14 — V0 PR B: vector segments + box snapping (gated, measured on the kits)
+
+**Shipped (zero API).**
+- `pdf.ts: pageSegments(pageIndex, {rect?, minLenPt?})` — runs the page
+  through a callback `mupdf.Device` (`strokePath` + `fillPath`, so CAD
+  exports that draw lines as thin filled rectangles count), walks each
+  path (`moveTo`/`lineTo`/`closePath`; curves skipped), transforms by the
+  op's ctm, keeps segments axis-aligned within ~1.5°, ≥4 pt, normalizes
+  upright with the same rotation as the text layer, merges collinear
+  pieces (`mergeSegments`). Cached per page. Raster pages → `{h:[],v:[]}`.
+  **Convention pinned by test:** mupdf's device space for a page is the
+  same top-left-origin point space as the stext bboxes (a PDF rect at
+  y=100..250 on a 792 pt page lands at 542..692).
+- `@scribe/shared snap.ts`: `snapBox(box, segments, opts)` — per edge, the
+  nearest parallel segment within `max(6 pt, 10% of the perpendicular
+  side)` that overlaps ≥50% of the side wins (longer overlap breaks ties);
+  an edge never moves more than 15% of its side; reports which edges
+  snapped and the largest relative move. `LineGeom` zod
+  (`takeoff_lines.geom`; PR B fills `snapped` + `snap_moved`).
+  `CabinetLineItem.geom` (optional) carries it through the merge.
+- `detect.ts buildFromDetections`: behind **`DRAWING_SCALE=1`**, every
+  detector box is snapped in display px BEFORE the annotated marker images,
+  plan crops and persisted bboxes derive from it (`snapDisplayBox`);
+  `MarkerEntry.geom` → line `geom`. `replaceLines` persists it.
+- Harness: `DRAWING_SCALE=1 prepare-staged.mjs` writes `steps/snap.json`
+  (segment counts per page, before/after per box, edges, move).
+
+**Design change from the plan:** search window 10% of the side, not 3% —
+the July spike's "loose boxes" are looser than 3%, and the 15% move cap
+plus the overlap rule already bound the risk.
+
+**Measured on the 18 kits (zero API):** 246 detector boxes, 204 touched
+(83%), 144 snapped on all four edges; mean move of a touched box 4.3%,
+median 4.0%. Image kits (q2, q10, q11) untouched, as designed. Plan-only
+sets whose dimensions are drawn outlines (q1, q6, q8) still carry
+thousands of vector segments, so snapping works there even though text-
+layer calibration (PR A) did not. q24 has segments but no box within the
+window — worth a look in PR C's A/B. Nothing consumes the snapped boxes
+for SIZE yet (PR C); with the flag off prod is unchanged.
+
+**Gotchas.** (1) `page.run(device, Matrix.identity)` — the ctm the
+callbacks receive already includes the page's base transform; do not
+pre-multiply. (2) `mupdf.PDFDocument.addPage()` returns an unattached page
+object — tests must `insertPage(-1, obj)` or `loadPage(0)` throws "invalid
+page number: 1". (3) Wizard-drawn detections (kind null) snap too; a
+human-drawn box on a raster page is untouched.
+
+---
+
+## 2026-09-13 (c) — V0 PR A: drawing-scale sources, measured on the 18 kits
+
+**Context.** Stage V item 0 (`v0-drawing-scale-plan.md`): scale is a property
+of the drawing. PR A lands the sources and storage with zero API cost; B–D
+follow. Also found and fixed the stacked-PR merge problem (see load-bearing
+state): PRs 2–4 were not on `main`; #260 lands them.
+
+**Shipped.**
+- `@scribe/shared scale.ts` (37 tests): `parseScaleNote` (architect's
+  `1/4" = 1'-0"` incl. mixed numbers and curly quotes, `1:48`, `N.T.S.`),
+  `findScaleNotes`, `attachNotesToRegions` (a note belongs to the drawing it
+  sits under, sheet note as fallback), `chainCalibration`, `reconcileScale`
+  (manual > accepted chain > note > model; 8% agreement; −0.2 confidence on
+  disagreement; NTS beats all but manual), `scaleForRegion` (one call per
+  region), `inPerPx`. `DrawingScale`/`ScaleSource` zod.
+- `TextFragment` gains optional `w,h` (mupdf stext line box, rotation-
+  normalized); `extractDimSkeleton` now centres tokens when widths are
+  present — chain calibration measures centre-to-centre distances.
+- Migration `0010`: `takeoff_detections.scale`, `takeoff_lines.geom` (geom
+  is filled from PR C). `staged.ts` computes `scaleForRegion` for every
+  seeded region (page text + the model's note) and stores it, warning when
+  no scale is found or sources disagree. regions-v2 prompt asks for the
+  printed scale note per region (`PageRegion.scale`, tolerant parse).
+- `PUT /takeoffs/:id/detections/:detectionId/scale {px_len, inches}` —
+  manual calibration, overrides and is kept in the source list.
+- Harness: `prepare-staged.mjs` writes `steps/scale.json` per region.
+
+**Measured on the 18 kits (zero API), which changed the design.** First
+pass used the median of all adjacent-token samples with an IQR spread
+gate: only 2 regions accepted, spreads of 0.5–4.6. Diagnosis on q7/q21:
+the true scale is always a TIGHT CLUSTER of samples, contaminated by reveal
+labels (1 1/2", 2"), cabinet numbers ("1", "3") that parse as inches, and
+chains that jump across neighbouring drawings at the same y. Rule now:
+skip pairs with a token under 3" or a gap under 8 pt, then take the
+DENSEST ±10% cluster; accept at ≥3 members. Result: chain calibrations
+that agree with the printed note on every sheet that has one (q3, q7, q22,
+q23 at 1/2" and 1/4"), and accepted chains on note-less sheets (q21).
+Text-layer coverage is the ceiling: Piestewa (q8) and the duplex (q6)
+carry dimensions as drawn outlines, not text; q9 is an itemized list;
+q10/q11 are images — those get scale only from the model note (PR C) or
+manual calibration (PR D), as the plan said.
+
+**Gotchas.** (1) `chainCalibration.samples` is the cluster size, not the
+pair count. (2) A `note` attached at sheet level carries 0.7, under-the-
+drawing 0.8. (3) `PageRegion.scale` defaults to null so old kits and the
+classic path parse unchanged. (4) Nothing consumes `scale` yet — PR C.
+
+---
+
 ## 2026-09-13 (b) — Stage 1 UI PR 4: Quote step, Done state, Admin ported
 
 **Shipped (PR 4 of 4, stacked on PR 3). Stage 1 is code-complete.**
