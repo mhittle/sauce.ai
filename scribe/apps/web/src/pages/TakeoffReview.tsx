@@ -17,6 +17,8 @@ import {
 import { categoryDotClass, categoryLabel } from "../labels";
 import { SourceBoxPanel } from "../components/SourceBoxPanel";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
+import { TechnicalDetail, useIsAdmin } from "../components/TechnicalDetail";
+import { friendlyError, friendlyNotes } from "../messages";
 
 // The review screen is the product (PRD §7.2): the drawing on the left with
 // one dot per cabinet, the breakdown on the right grouped by room, every cell
@@ -296,12 +298,19 @@ export function TakeoffReviewPage() {
     for (const l of cabinets) m.set(l.category, (m.get(l.category) ?? 0) + l.qty);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [cabinets]);
+  // Customer-facing notes; developer-only notes show for admins with the
+  // raw text behind a toggle (messages.ts).
+  const isAdmin = useIsAdmin();
   const docFlags = useMemo(
-    () => [
-      ...(q.data?.docSummary?.uncertainties ?? []),
-      ...(q.data?.docSummary?.warnings ?? []),
-    ],
-    [q.data?.docSummary]
+    () =>
+      friendlyNotes(
+        [
+          ...(q.data?.docSummary?.uncertainties ?? []),
+          ...(q.data?.docSummary?.warnings ?? []),
+        ],
+        isAdmin
+      ),
+    [q.data?.docSummary, isAdmin]
   );
 
   const selectedLine = cabinets.find((l) => l.id === selectedId) ?? null;
@@ -437,8 +446,14 @@ export function TakeoffReviewPage() {
           {takeoff.sourceFilename ?? takeoffId.slice(0, 8)}
         </PageTitle>
         <div className="max-w-xl rounded-lg border border-bad bg-bad-soft p-4 text-sm text-bad">
-          {takeoff.docSummary?.warnings?.[0] ??
-            "The read failed. Upload the file again, or pick different pages."}
+          {takeoff.error
+            ? friendlyError(takeoff.error).text
+            : "The read failed. Upload the file again, or pick different pages."}
+          <TechnicalDetail
+            details={[takeoff.error, ...(takeoff.docSummary?.warnings ?? [])].filter(
+              (d): d is string => !!d
+            )}
+          />
         </div>
       </div>
     );
@@ -556,8 +571,9 @@ export function TakeoffReviewPage() {
           className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-bad bg-bad-soft px-3 py-2 text-sm text-bad"
         >
           <span className="min-w-0 flex-1">
-            The last measuring run failed, so this breakdown is unchanged:{" "}
-            {takeoff.error.replace(/^build takeoff failed: /, "")}
+            The last measuring run didn't finish, so this breakdown is unchanged.{" "}
+            {friendlyError(takeoff.error).text}
+            <TechnicalDetail details={takeoff.error} />
           </span>
           {takeoff.sourceKind === "pdf" && (
             <Button
@@ -661,7 +677,10 @@ export function TakeoffReviewPage() {
               </summary>
               <ul className="mt-1 list-inside list-disc text-xs text-warn">
                 {docFlags.map((u, i) => (
-                  <li key={i}>{u}</li>
+                  <li key={i}>
+                    {u.text}
+                    <TechnicalDetail details={u.details} />
+                  </li>
                 ))}
               </ul>
             </details>

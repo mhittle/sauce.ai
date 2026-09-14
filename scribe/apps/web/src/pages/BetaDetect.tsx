@@ -22,6 +22,8 @@ import {
   type OverlayBox,
 } from "../components/BoxOverlay";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
+import { TechnicalDetail } from "../components/TechnicalDetail";
+import { friendlyAreaError, friendlyError } from "../messages";
 
 // The wizard — the one reading flow for PDFs (2026-09-14):
 //   1 Draw   — the drawings Scribe located arrive as boxes; adjust, add, remove
@@ -451,7 +453,12 @@ export function BetaDetectPage() {
         <Stepper steps={STEPS} current={step - 1} onSelect={(i) => setStep(i + 1)} />
       </div>
 
-      {takeoff.error && <p className="mb-2 text-sm text-bad">{takeoff.error}</p>}
+      {takeoff.error && (
+        <div className="mb-2 text-sm text-bad">
+          {friendlyError(takeoff.error).text}
+          <TechnicalDetail details={takeoff.error} />
+        </div>
+      )}
       {locked && (
         <div className="mb-3 flex items-center gap-3 rounded-lg border border-warn bg-warn-soft px-4 py-2 text-sm text-warn">
           This takeoff is approved, so its areas are locked. Reopen it from the review screen to make changes.
@@ -681,12 +688,16 @@ export function BetaDetectPage() {
               </table>
               )}
               {failedCount > 0 && (
-                <p className="px-3 py-2 text-xs text-bad">
-                  {pageDetections
-                    .filter((d) => d.status === "error")
-                    .map((d) => `An area couldn't be scanned: ${d.error ?? "unknown"}`)
-                    .join(" · ")}
-                </p>
+                <div className="px-3 py-2 text-xs text-bad">
+                  {failedCount === 1
+                    ? friendlyAreaError(null).text
+                    : `${failedCount} areas couldn't be scanned. Try Find again, or redraw them.`}
+                  <TechnicalDetail
+                    details={pageDetections
+                      .filter((d) => d.status === "error")
+                      .map((d) => friendlyAreaError(d.error).detail)}
+                  />
+                </div>
               )}
             </div>
           </Card>

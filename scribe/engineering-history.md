@@ -82,6 +82,42 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (h) — customer-facing copy for pipeline errors and read notes; the "not clean JSON" cause
+
+**Owner:** the Jobs list showed the SCR-011 SQL in red and the review's
+notes said "measurements response was not valid JSON — 22 complete cabinet
+answers salvaged, nothing defaulted". Customer-facing app: calm plain copy
+for the customer, the technical text for the developer only (SCR-014).
+
+**Cause of the salvage, from #274's new warn line** (takeoff 99656b83,
+2026-09-14 01:45 PDT, 22/22 salvaged): the model answers with a markdown
+work-through of every marker before the JSON ("**Marker 1:** … (from chain
+[y≈149]: 14)"), then the object. `extractJson` capped candidate brackets at
+8; the preamble has one `[y≈…]` per marker, so the real `{"cabinets"` was
+never reached. Now every candidate is tried (test with 22 bracketed
+markers). The preamble itself is harmless — arguably useful reasoning — the
+parser has to accept it. A strict output contract (structured outputs, SDK
+bump) is in `measurement-accuracy-plan.md`.
+
+**Shipped.** `apps/web/src/messages.ts`: `friendlyError` (build failed →
+"We couldn't finish building this takeoff. Please try Build again."; billing
+/ 429 / 529 → "The reading service isn't available right now…"; media type →
+"upload as PNG or JPEG"; default generic), `friendlyNote` / `friendlyNotes`
+(schedule missing, N defaulted, N estimated, cut off, page cap, plan-run
+arithmetic, unread page type, failed page part; developer-only notes —
+salvage with nothing defaulted, cross-validation — hidden from customers;
+unknown → one generic line; duplicates merged), `friendlyAreaError`.
+`components/TechnicalDetail.tsx`: raw text under "Technical details (admin)"
+for `role === "admin"` (same `["me"]` query as the shell). Wired into the
+Jobs list, the wizard (takeoff error + failed areas), the review banner,
+the review notes panel and the failed screen. The worker's strings are
+unchanged — they are the evidence.
+
+**Gotcha.** New pipeline warning strings need a `NOTE_RULES` entry or they
+render as the generic line for customers (admins still see the raw text).
+
+---
+
 ## 2026-09-15 (f) — SCR-013 evidence: no build failed after #270; prose-wrapped answers now parse; failed re-measure visible
 
 **Context.** Owner report (via the wrap-up): Build and "Measure again…"

@@ -19,6 +19,13 @@ Format:
 
 ## Open
 
+### SCR-014 — Raw pipeline errors and read notes shown to customers
+- **Status:** resolved (this PR; prod verify after deploy)
+- **Reported:** 2026-09-15 by owner (Jobs list showing the SQL of the SCR-011 failure in red; review notes showing "measurements response was not valid JSON — 22 complete cabinet answers salvaged, nothing defaulted")
+- **Description:** `takeoffs.error`, `docSummary.warnings` and `takeoff_detections.error` are written by the worker in developer language (SQL, model-answer diagnostics) and rendered verbatim on the Jobs list, the wizard, the review's "notes from the read" panel and the failed screen. This is a customer-facing app: the copy must be short and calm for the customer, while the developer still needs to see what happened.
+- **Notes / fix:** `apps/web/src/messages.ts` maps every known error/note pattern to one plain sentence (`friendlyError`, `friendlyNote`, `friendlyNotes`; unknown notes get a generic line, developer-only notes such as a salvage that changed nothing or a cross-validation skip are hidden from customers). `TechnicalDetail` shows the raw text under a "Technical details (admin)" toggle for `role === "admin"` only. The worker keeps writing the technical sentence — it is the evidence. 11 web tests.
+- **PR:** this PR
+
 ### SCR-013 — Measuring step fails in prod; wizard does not land on the review
 - **Status:** in-progress (#274 merged → owner verifies on prod, then resolved)
 - **Reported:** 2026-09-15 by owner (MOLLY_CHARLEY_KITCHEN, 24 cabinets / 3 elevation areas)
@@ -50,7 +57,18 @@ Format:
   The stored `response-0.txt` for 0a26eb66 and 8a8e3914 were NOT pulled
   (no API route exposes them) — owner can read them from the MinIO console
   if the exact wrapper matters.
-- **PR:** #272 (partial), #274 (parse + visibility; prod verify pending)
+  **2026-09-15, cause found (Railway `measure answer was not clean JSON`
+  warn line from #274, takeoff 99656b83, 22/22 cabinets salvaged):** the model
+  wrote a markdown work-through of every marker BEFORE the JSON ("**Marker
+  1:** … width 14" (from chain [y≈149]: 14) …") and the JSON object at the
+  end. `extractJson` tried at most 8 candidate brackets, and the preamble
+  had more than 8 `[y≈…]` brackets, so it gave up before reaching
+  `{"cabinets"` and the salvage path ran. Fixed: every candidate is tried
+  (this PR); the answer now takes the `json` path. The model reasoning out
+  loud is not itself a fault — "JSON only" is a request the model ignores on
+  a hard 4-page task — the parser has to accept it. Structured outputs (SDK
+  bump) would make it moot; in the measurement plan.
+- **PR:** #272 (partial), #274 (parse + visibility), this PR (preamble with >8 brackets)
 
 ### SCR-010 — Door swings priced as cabinets on plan reads
 - **Status:** resolved (prompt fix; existing takeoffs need a re-run)
