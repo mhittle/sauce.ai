@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_URL, apiGet, apiSend, ApiError, clearSession } from "../api";
-import { Button } from "../components/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { API_URL, apiGet, apiPublic, apiSend, ApiError, clearSession } from "../api";
+import { Button, Input } from "../components/ui";
 import {
   applyTheme,
   nextThemePref,
@@ -43,6 +43,9 @@ export function Layout() {
     retry: false,
   });
   const path = useRouterState({ select: (s) => s.location.pathname });
+
+  // Public screens render without a session.
+  if (path === "/signup") return <Outlet />;
 
   if (me.isLoading) {
     return (
@@ -111,12 +114,20 @@ export function Layout() {
 }
 
 function SignIn({ denied }: { denied: string | null }) {
+  const [email, setEmail] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const magic = useMutation({
+    mutationFn: () => apiPublic<{ ok: boolean }>("POST", "/auth/magic-link", { email }),
+    onSuccess: () => setSentTo(email),
+  });
   const reason =
     denied === "not_allowed"
-      ? "That Google account isn't on the allowed list yet. Ask an admin to add it."
-      : denied
-        ? `Sign-in failed (${denied}). Try again.`
-        : null;
+      ? "There's no Scribe account for that Google email yet. Sign-ups are by invitation — ask us for one, or sign in with the email you were invited at."
+      : denied === "link_expired"
+        ? "That sign-in link has expired or was already used. Request a new one below."
+        : denied
+          ? `Sign-in failed (${denied}). Try again.`
+          : null;
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-rule bg-paper p-8">
@@ -139,6 +150,40 @@ function SignIn({ denied }: { denied: string | null }) {
             Continue with Google
           </Button>
         </a>
+        <div className="my-4 flex items-center gap-3 text-xs text-faint">
+          <span className="h-px flex-1 bg-rule" />
+          or
+          <span className="h-px flex-1 bg-rule" />
+        </div>
+        {sentTo ? (
+          <p className="rounded-md border border-rule bg-rule-soft px-3 py-2 text-sm text-muted">
+            If <span className="font-medium text-ink">{sentTo}</span> has an account, a sign-in link
+            is on its way. It works once and expires in 15 minutes.
+          </p>
+        ) : (
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (email) magic.mutate();
+            }}
+          >
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              aria-label="Email"
+              autoComplete="email"
+            />
+            <Button type="submit" className="w-full" disabled={!email} loading={magic.isPending}>
+              Email me a sign-in link
+            </Button>
+            {magic.isError && (
+              <p className="text-xs text-bad">Couldn't request a link. Try again.</p>
+            )}
+          </form>
+        )}
         <p className="mt-4 font-mono text-[11px] text-faint">sauce.ai / scribe</p>
       </div>
     </div>

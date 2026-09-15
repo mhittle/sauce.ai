@@ -10,6 +10,22 @@ real secret *values* here — document var names only.
 
 ## Open
 
+### MA-015 — Google OAuth consent screen → External + published; Terms/Privacy URLs (PR B, sign-up)
+Invited users sign in with Google (matching email) or an email link. In
+Google Cloud → APIs & Services → OAuth consent screen:
+1. User type **External**; fill app name "Scribe", support email, developer
+   contact, homepage, **Privacy policy URL** and **Terms of service URL**
+   (these pages must exist first — decision 4 in `accounts-plan.md` §5), and
+   the authorized domain those URLs live on.
+2. Scopes stay `openid`, `email`, `profile` (non-sensitive) → click
+   **Publish app**. No verification review is needed for these scopes; do
+   NOT add other scopes. Until published, Google caps sign-in at 100 listed
+   test users.
+3. Railway → `scribe-api` → Variables: `TERMS_URL`, `PRIVACY_URL` (the same
+   two pages), `TERMS_VERSION` (e.g. `2026-09`; bump when the terms change).
+   Redeploy the api. The sign-up form links them; without the vars the words
+   render as plain text.
+
 ### MA-014 — Make ridadarwish12@gmail.com a platform admin (PR C, tenancy)
 Migration 0014 promotes only users with `role = 'admin'` (mhittle@gmail.com).
 After the api deploys: sign in as Mike → Admin → Users → tick **Platform

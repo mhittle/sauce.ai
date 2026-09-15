@@ -3,15 +3,15 @@ import { eq } from "drizzle-orm";
 import { getDb, orgs, users } from "@scribe/db";
 import { SESSION_COOKIE, signSession } from "../auth.js";
 
-function apiUrl(): string {
+export function apiUrl(): string {
   return process.env.API_PUBLIC_URL ?? "http://localhost:3001";
 }
 
-function webUrl(): string {
+export function webUrl(): string {
   return (process.env.WEB_PUBLIC_URL ?? "http://localhost:5173").split(",")[0];
 }
 
-const cookieOpts = {
+export const cookieOpts = {
   path: "/",
   httpOnly: true,
   sameSite: "lax" as const,

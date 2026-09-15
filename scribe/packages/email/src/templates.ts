@@ -53,3 +53,31 @@ export function inviteEmail(input: InviteEmailInput): {
 </body></html>`;
   return { to: input.to, subject, html, text };
 }
+
+export function magicLinkEmail(input: { to: string; name: string | null; link: string }): {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const subject = "Your Scribe sign-in link";
+  const text = [
+    greeting,
+    "",
+    "Click to sign in to Scribe:",
+    input.link,
+    "",
+    "The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.",
+    "",
+    "— Scribe by sauce.ai",
+  ].join("\n");
+  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;max-width:520px;margin:0 auto;padding:24px">
+<p>${escapeHtml(greeting)}</p>
+<p style="margin:28px 0"><a href="${escapeHtml(input.link)}" style="background:#1a1a1a;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block">Sign in to Scribe</a></p>
+<p style="font-size:13px;color:#666">Or paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#666">${escapeHtml(input.link)}</a></p>
+<p style="font-size:13px;color:#666">The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.</p>
+<p style="font-size:13px;color:#666">— Scribe by sauce.ai</p>
+</body></html>`;
+  return { to: input.to, subject, html, text };
+}
