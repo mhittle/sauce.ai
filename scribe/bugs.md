@@ -19,6 +19,13 @@ Format:
 
 ## Open
 
+### SCR-015 — Door and drawer-front counts are wrong on the review/quote
+- **Status:** open
+- **Reported:** 2026-09-15 by owner ("fixing the door and drawer front count")
+- **Description:** The faces derived per cabinet ("Show doors & fronts" on the review; the doors/fronts lines on the quote) do not match what the drawing shows. Derivation is `packages/shared/src/expand.ts expandToComponents`: door/drawer counts from the line's notes (`parseConfig`), else tag heuristics (sink → 2 doors, "drawer" → 3 drawers, surrounds/panels/fillers → none, else 1 door under 24" / 2 doors at 24"+); the reader does not report faces per cabinet. Evidence needed first: which cabinets on MOLLY_CHARLEY (or the kits with numbered packets, q5 Wantoch) carry the wrong face count, and whether the fix is a per-cabinet `doors`/`drawers` field from the measure pass, elevation-only face reading, or the heuristics.
+- **Notes / fix:** —
+- **PR:** —
+
 ### SCR-014 — Raw pipeline errors and read notes shown to customers
 - **Status:** resolved (this PR; prod verify after deploy)
 - **Reported:** 2026-09-15 by owner (Jobs list showing the SQL of the SCR-011 failure in red; review notes showing "measurements response was not valid JSON — 22 complete cabinet answers salvaged, nothing defaulted")
