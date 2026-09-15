@@ -17,9 +17,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
-| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | backlog (next session) |
-| Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | backlog |
-| Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog |
+| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | in-progress (plan in `accounts-plan.md`, awaiting owner decisions) |
+| Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | in-progress (schema + pricing proposal in `accounts-plan.md` §3, awaiting decision) |
+| Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
@@ -110,6 +110,12 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   `routes/auth.ts`), an `invites` table (single-use token, email, expiry,
   grant), and the account screens from product-plan §4. Prompt for the
   session: `scribe/next-session-prompt.md`.
+- **2026-09-15 plan written** (`accounts-plan.md` §1–2): state diagram,
+  `invites` + `users` columns, form = email + name + phone only (owner), sign-in = Google OAuth or email magic link
+  (no password), Google consent-screen steps, Resend DNS steps, tenancy
+  route audit, PR split A (email + invites, LOE 3) → C (tenancy, 5) → B
+  (sign-up page, 3) → D (account screens, 3); tutorial = seeded sample job
+  + `Coachmark` callouts, LOE 4, after B. Six decisions listed in §5.
 
 ### Credits: usage ledger → per-page credits
 
@@ -124,12 +130,21 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   $1/page is a 20–50× markup on cost; the risk is not margin but that small
   jobs look free (a 4-page kitchen = $4) — pair it with a per-job minimum or
   packs (25 pages / $20).
+- **2026-09-15 plan written** (`accounts-plan.md` §3): `model_rates`,
+  `usage_events` (cost in microcents), `credit_ledger` with hold/settle/
+  release, `platform_settings` (grant, minimum, enforcement flag);
+  `TakeoffBudget.record` gains stage/model context; proposal $1/page, 5-page
+  minimum, 20-page grant, re-runs included, packs 25/100/500 — or $10 per
+  job up to 10 pages. Awaiting owner decision.
 
 ### Stripe payments
 
 - **Priority 7 / LOE 4 / backend / backlog.** Stripe Checkout for credit
   packs; webhook → `credit_ledger`; receipts by email. After the ledger and
   credits exist (invite-only beta grants credits without Stripe).
+- **2026-09-15:** dependencies confirmed in `accounts-plan.md` §4 — ledger
+  → Checkout for packs → signature-verified idempotent webhook → `purchase`
+  ledger row → receipt via Resend. Not built.
 
 ### Fix door and drawer-front counts (SCR-015)
 
