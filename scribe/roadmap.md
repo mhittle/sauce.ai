@@ -17,6 +17,10 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
+| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | backlog (next session) |
+| Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | backlog |
+| Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog |
+| Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
 | V0 drawing scale — A sources + B vector snap shipped (gated); **C geometry-first measuring DROPPED 2026-09-14** (printed sizes beat geometry 0.64" vs 1.16", F1 unchanged); D draw-to-scale on Review still possible on A+B | 5 | 2 | takeoff | parked |
@@ -93,6 +97,47 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   cheapest correction UX when a size is wrong (per-cabinet re-measure,
   draw-to-scale on Review, type it). Geometry as a size OVERRIDE was measured
   and dropped 2026-09-14 — fallback only.
+
+### Sign-up flow + onboarding tutorial
+
+- **Priority 9 / LOE 6 / backend / backlog (next session).** Owner flow:
+  we email an invite with a sign-up link; the link opens a details form
+  (name, company, phone, terms); submitting creates the user (+ org, once
+  tenancy lands) and signs them in; a first-run tutorial walks the Jobs →
+  Pages → Mark → Review → Quote path. Needs an email provider (Resend) with
+  domain DNS, the Google OAuth consent screen moved to external/published
+  (today: allow-list only, `AUTH_ALLOWED_EMAILS`, "No self-signup" in
+  `routes/auth.ts`), an `invites` table (single-use token, email, expiry,
+  grant), and the account screens from product-plan §4. Prompt for the
+  session: `scribe/next-session-prompt.md`.
+
+### Credits: usage ledger → per-page credits
+
+- **Priority 8 / LOE 5 / backend / backlog.** Data needed (product-plan §5):
+  `usage_events` (org, takeoff, stage, model, input/output/cache tokens,
+  images, cost_cents from a versioned `model_rates`), `credit_ledger` (org,
+  delta, reason, takeoff, balance_after), org balance, signup grant setting;
+  hold on Pages submit, settle on completion, refund on failure. Measured
+  cost today (prod `takeoffs.tokens_used`, 2026-08/09): a 4-page kitchen
+  set is 13k–23k tokens end to end, a 4-page office set 66k, a 1-page plan
+  6k–34k → roughly $0.05–0.20 per set at Sonnet rates, i.e. 1–5¢ per page.
+  $1/page is a 20–50× markup on cost; the risk is not margin but that small
+  jobs look free (a 4-page kitchen = $4) — pair it with a per-job minimum or
+  packs (25 pages / $20).
+
+### Stripe payments
+
+- **Priority 7 / LOE 4 / backend / backlog.** Stripe Checkout for credit
+  packs; webhook → `credit_ledger`; receipts by email. After the ledger and
+  credits exist (invite-only beta grants credits without Stripe).
+
+### Fix door and drawer-front counts (SCR-015)
+
+- **Priority 8 / LOE 3 / pricing / backlog.** See bugs.md SCR-015. The
+  reader never reports faces; `expandToComponents` guesses from notes/tag.
+  Options: a `doors`/`drawers` field per cabinet in the measure answer
+  (elevations show them), or a face-reading pass over elevation crops;
+  measure on q5 Wantoch (numbered packet) before shipping.
 
 ### Stage 1 UI rework — direction A design system, job stepper, admin ported
 
