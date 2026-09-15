@@ -8,12 +8,13 @@ import { getDb } from "@scribe/db";
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.requireUser);
 
-  app.get("/dashboard", async () => {
+  app.get("/dashboard", async (req) => {
     const db = getDb();
+    const org = req.orgId;
 
     const byStatus = await db.execute(sql`
       SELECT status, count(*)::int AS count, COALESCE(sum(total_cents),0)::bigint AS total_cents
-      FROM quotes GROUP BY status
+      FROM quotes WHERE org_id = ${org} GROUP BY status
     `);
 
     const weekly = await db.execute(sql`
@@ -21,14 +22,14 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
              count(*)::int AS quotes,
              COALESCE(sum(total_cents),0)::bigint AS quoted_cents,
              COALESCE(sum(total_cents) FILTER (WHERE status = 'won'),0)::bigint AS won_cents
-      FROM quotes
+      FROM quotes WHERE org_id = ${org}
       GROUP BY 1 ORDER BY 1 DESC LIMIT 12
     `);
 
     const turnaround = await db.execute(sql`
       SELECT avg(EXTRACT(EPOCH FROM (q.sent_at - t.created_at)) / 60)::numeric(10,1) AS avg_minutes
       FROM quotes q JOIN takeoffs t ON t.id = q.takeoff_id
-      WHERE q.sent_at IS NOT NULL
+      WHERE q.sent_at IS NOT NULL AND q.org_id = ${org}
     `);
 
     const freight = await db.execute(sql`
@@ -36,12 +37,15 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
              COALESCE(avg(freight_cents),0)::bigint AS avg_estimated_cents,
              COALESCE(avg(actual_freight_cents),0)::bigint AS avg_actual_cents
       FROM quotes
-      WHERE actual_freight_cents IS NOT NULL
+      WHERE actual_freight_cents IS NOT NULL AND org_id = ${org}
     `);
 
-    const prospects = await db.execute(sql`
-      SELECT status, count(*)::int AS count FROM projects GROUP BY status
-    `);
+    // The prospector is platform-internal.
+    const prospects = req.user!.isPlatformAdmin
+      ? await db.execute(sql`
+          SELECT status, count(*)::int AS count FROM projects GROUP BY status
+        `)
+      : { rows: [] };
 
     return {
       quotes_by_status: byStatus.rows,

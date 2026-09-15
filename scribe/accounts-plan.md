@@ -185,6 +185,12 @@ ALTER TABLE org_settings DROP CONSTRAINT org_settings_id_check;  -- singleton â†
 ALTER TABLE org_settings ADD COLUMN org_id uuid UNIQUE REFERENCES orgs(id);
 ```
 
+**As built (PR C, 2026-09-15):** `org_settings` was left as the single
+platform-wide row (freight, handling, quote terms/logo, cross-validation);
+per-org branding (`orgs.logo_s3_key`, terms) is wired in PR D. `orgs` got
+an `is_platform` flag so machine users and allow-list adds land in the
+CabinetNow org.
+
 Platform-level (no org): `pricing_configs`, `product_lines`,
 `export_templates`, `sources`, `projects`, `project_documents`,
 `token_spend`. Pricing is CabinetNow's price book â€” every org quotes

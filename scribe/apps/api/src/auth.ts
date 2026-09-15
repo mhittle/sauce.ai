@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { eq } from "drizzle-orm";
 import { getDb, users } from "@scribe/db";
 import type { UserRole } from "@scribe/shared";
+import { getPlatformOrgId, resolveOrgId } from "./lib/orgs.js";
 
 // Google OAuth (PRD §3: no self-signup — only emails already in users may log
 // in). Sessions are HMAC-signed cookies. When GOOGLE_CLIENT_ID is unset and
@@ -14,11 +15,39 @@ export interface SessionUser {
   email: string;
   role: UserRole;
   name: string | null;
+  orgId: string;
+  orgRole: "owner" | "member";
+  isPlatformAdmin: boolean;
+}
+
+type UserRow = {
+  id: string;
+  email: string;
+  role: string;
+  name: string | null;
+  orgId: string;
+  orgRole: string;
+  isPlatformAdmin: boolean;
+};
+
+function toSessionUser(u: UserRow): SessionUser {
+  return {
+    id: u.id,
+    email: u.email,
+    role: u.role as UserRole,
+    name: u.name,
+    orgId: u.orgId,
+    orgRole: u.orgRole === "owner" ? "owner" : "member",
+    isPlatformAdmin: u.isPlatformAdmin,
+  };
 }
 
 declare module "fastify" {
   interface FastifyRequest {
     user: SessionUser | null;
+    // The org this request acts in (accounts-plan.md §1.7); set whenever
+    // user is. Platform admins may pick another org with X-Org-Id.
+    orgId: string;
   }
   interface FastifyInstance {
     requireUser: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -77,15 +106,17 @@ async function serviceUser(): Promise<SessionUser> {
     .select()
     .from(users)
     .where(eq(users.email, SERVICE_EMAIL));
-  if (existing.length > 0) {
-    const u = existing[0];
-    return { id: u.id, email: u.email, role: u.role as UserRole, name: u.name };
-  }
+  if (existing.length > 0) return toSessionUser(existing[0]);
   const [u] = await db
     .insert(users)
-    .values({ email: SERVICE_EMAIL, name: "Signal Connector", role: "estimator" })
+    .values({
+      email: SERVICE_EMAIL,
+      name: "Signal Connector",
+      role: "estimator",
+      orgId: await getPlatformOrgId(),
+    })
     .returning();
-  return { id: u.id, email: u.email, role: u.role as UserRole, name: u.name };
+  return toSessionUser(u);
 }
 
 async function devUser(): Promise<SessionUser> {
@@ -94,20 +125,19 @@ async function devUser(): Promise<SessionUser> {
     .select()
     .from(users)
     .where(eq(users.email, "dev@scribe.local"));
-  if (existing.length > 0) {
-    const u = existing[0];
-    return {
-      id: u.id,
-      email: u.email,
-      role: u.role as UserRole,
-      name: u.name,
-    };
-  }
+  if (existing.length > 0) return toSessionUser(existing[0]);
   const [u] = await db
     .insert(users)
-    .values({ email: "dev@scribe.local", name: "Dev User", role: "admin" })
+    .values({
+      email: "dev@scribe.local",
+      name: "Dev User",
+      role: "admin",
+      orgId: await getPlatformOrgId(),
+      orgRole: "owner",
+      isPlatformAdmin: true,
+    })
     .returning();
-  return { id: u.id, email: u.email, role: u.role as UserRole, name: u.name };
+  return toSessionUser(u);
 }
 
 // The session travels as an HMAC-signed token, either in a cookie (same-site
@@ -122,8 +152,14 @@ function sessionTokenFrom(req: FastifyRequest): string | null {
 
 export const authPlugin = fp(async (app) => {
   app.decorateRequest("user", null);
+  app.decorateRequest("orgId", "");
 
   app.addHook("onRequest", async (req) => {
+    await authenticate(req);
+    if (req.user) req.orgId = resolveOrgId(req.user, req.headers["x-org-id"]);
+  });
+
+  async function authenticate(req: FastifyRequest): Promise<void> {
     const token = sessionTokenFrom(req);
     if (token) {
       const userId = verifySession(token);
@@ -131,13 +167,7 @@ export const authPlugin = fp(async (app) => {
         const db = getDb();
         const rows = await db.select().from(users).where(eq(users.id, userId));
         if (rows.length > 0) {
-          const u = rows[0];
-          req.user = {
-            id: u.id,
-            email: u.email,
-            role: u.role as UserRole,
-            name: u.name,
-          };
+          req.user = toSessionUser(rows[0]);
           return;
         }
       }
@@ -159,7 +189,7 @@ export const authPlugin = fp(async (app) => {
         req.user = null;
       }
     }
-  });
+  }
 
   app.decorate(
     "requireUser",
@@ -170,6 +200,8 @@ export const authPlugin = fp(async (app) => {
     }
   );
 
+  // Platform admins (Mike, Rida) run pricing, sources, invites and see across
+  // orgs; org owners get their own member screens with the account pages.
   app.decorate(
     "requireAdmin",
     async (req: FastifyRequest, reply: FastifyReply) => {
@@ -177,8 +209,8 @@ export const authPlugin = fp(async (app) => {
         await reply.code(401).send({ error: "authentication required" });
         return;
       }
-      if (req.user.role !== "admin") {
-        await reply.code(403).send({ error: "admin role required" });
+      if (!req.user.isPlatformAdmin) {
+        await reply.code(403).send({ error: "platform admin required" });
       }
     }
   );

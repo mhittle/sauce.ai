@@ -10,6 +10,14 @@ real secret *values* here — document var names only.
 
 ## Open
 
+### MA-014 — Make ridadarwish12@gmail.com a platform admin (PR C, tenancy)
+Migration 0014 promotes only users with `role = 'admin'` (mhittle@gmail.com).
+After the api deploys: sign in as Mike → Admin → Users → tick **Platform
+admin** on ridadarwish12@gmail.com (also set Role = Admin). Verify with
+`GET /auth/me` → `"isPlatformAdmin": true` for both accounts. Until then
+Rida sees only the CabinetNow org's jobs (which is everything today) and no
+Admin tab.
+
 ### MA-013 — Resend account, sending domain, DNS, `RESEND_API_KEY` on `scribe-api` (PR A, invites)
 Until done, Admin → Users → "Send invite" creates the invite and shows the
 link to copy; nothing is emailed (the API logs `email not configured`).

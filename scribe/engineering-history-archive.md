@@ -84,6 +84,82 @@ build green. The guard's geometry is `overlapFraction` in `BetaDetect.tsx`.
 
 ---
 
+## 2026-09-14 (d) — V0 PR C measured and DROPPED: printed sizes beat geometry
+
+**Owner:** "test a bit, if it is better continue" → it was not; "forget it".
+Code discarded (never committed). The evidence, so nobody re-runs this blind:
+
+- **Free A/B on the 18 kits** (saved measure responses replayed through a
+  geometry-first merge: box×scale as baseline, printed dims override when they
+  agree, geometry replaces defaults when nothing is printed): **F1 0.465 →
+  0.465 on every kit; size error 1.64" → 1.66"**. Two reasons: (1) the
+  measure-v6 responses mark almost every cabinet `measured: true`, so
+  "printed wins" leaves geometry nothing to do (q21 33/33, q22 22/22, q9
+  26/26); (2) on plan-only kits the geometry sits on the RUN while the lines
+  are the model's UNITS, so it never touches them.
+- **Printed vs geometry against the labels** (66 matched cabinets, 7 kits
+  with a trusted scale): mean |printed − gold| **0.64"** vs |geometry − gold|
+  **1.16"**; printed closer 21×, geometry closer 5×, tie 40. Geometry is a
+  decent fallback (inside one standard width), not a better answer. (Caveat:
+  the matching used printed widths, so this is biased toward printed.)
+- **The size-mismatch flag cannot catch what it was meant to.** Of 48
+  confirmed-correct printed sizes, 12 sit >1.5" from their box (false
+  alarms at the planned tolerance); of the 18 WRONG printed sizes, the
+  median distance to the box is 0.41" — when the model mis-sizes a cabinet
+  its box is usually wrong the same way. At max(3", 12%): 3 false alarms,
+  3 of 18 caught.
+
+**What survives of V0.** PR A (scale sources) and PR B (vector snap) are on
+main, gated off, harmless. Geometry-from-scale remains the right tool for
+the ORIGINAL ask — a box the reviewer draws gets its inches (~1.2" accuracy)
+instead of empty fields — that is PR D, if wanted, and needs only PR A/B.
+Whether telling the model the geometric size improves its own answers is
+untested (needs fresh reads, ~$5). Not pursued.
+
+---
+
+---
+
+## 2026-09-15 — Mark step PR 1: side panel, no pre-selection, kind + scale on the area
+
+**Owner (approved plan):** (1) the cabinet table beside the drawing, not
+under it; (2) no pre-selected areas — the whole-page fallback boxed an
+entire letter-size sheet as "Area 1"; (3) selection synced both ways
+between drawing and table. PR 2 (areas own their cabinets; a correction
+rescans one area) follows.
+
+**Shipped.**
+- `staged.ts` — the extract stage no longer locates or seeds anything: it
+  renders the wizard's page images for the selected pages (progress
+  "Rendering page N for marking"), stores the estimation/schedule notes in
+  `docSummary {warnings, seeded: true}`, parks at `awaiting_boxes`. One
+  fewer vision call per page in prod. The harness (`prepare-staged.mjs`)
+  still runs locate as the stand-in for the human's boxes.
+- Area **kind** (plan | elevation): `POST /detections` derives it from the
+  page type chosen at Pages (`selectedPages[].class`, else the classifier's
+  call) — `areaKindForPage`; optional `kind` in the body; new
+  `PATCH /takeoffs/:id/detections/:id {kind}` (clears found cabinets, back
+  to `drawn`). The chip in the wizard has a plan/elevation select.
+- Area **scale** (PR A) now computed in `detectRegion` at scan time from
+  the page's dimension strings inside the rect + the printed note, stored
+  on the detection as before.
+- Wizard layout: `[9rem rail][drawing][22rem panel]`; the panel holds the
+  Areas list (kind select, ×, "Clear page" with confirm) and the cabinets
+  table, and scrolls on its own. Two-way selection: clicking a dot scrolls
+  its row into view (`data-box-id` + `scrollIntoView`); clicking a row
+  selects and scrolls the drawing (BoxOverlay already did that).
+
+**Gotchas.** (1) Old takeoffs parked at `awaiting_boxes` with seeded
+`queued`/`drawn` regions still work — the wizard shows whatever
+detections exist. (2) `DrawingScale` on a detection is now written by the
+scan, so an area edited after scanning keeps the old scale until rescanned
+(PR 2 resets status on edit). (3) `locateRegions`/`locateRooms` are
+unused in prod now; kept for the harness.
+
+---
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI

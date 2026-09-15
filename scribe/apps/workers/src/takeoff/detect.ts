@@ -1103,11 +1103,16 @@ export async function buildFromDetections(
               sql`${takeoffLines.detectionId} IS NOT NULL`
             )
           );
+        const [owner] = await db
+          .select({ orgId: takeoffs.orgId })
+          .from(takeoffs)
+          .where(eq(takeoffs.id, takeoffId));
         await db
           .delete(evalFixtures)
           .where(eq(evalFixtures.takeoffId, takeoffId));
         await db.insert(evalFixtures).values({
           takeoffId,
+          orgId: owner.orgId,
           extractedLines: allBuilt.map(rowToLine),
           promptVersion: MEASURE_PROMPT_VERSION,
         });
