@@ -10,6 +10,16 @@ real secret *values* here — document var names only.
 
 ## Open
 
+### MA-016 — Pick the tutorial's sample job (tutorial PR)
+New sign-ups get a copy of one finished takeoff on their Jobs list. Until
+set, they start empty (the tour skips that step). Decision 5 in
+`accounts-plan.md` §5: the sample must be a plan set we may show to
+strangers (the test kits are customers' drawings). Steps: run a normal job
+on that plan set through Review (or Approve) → copy the takeoff id from the
+review URL → Admin → Users → "Sample job for new accounts" → paste → Use as
+sample. Verify: Admin → Users → invite yourself at a second email → the
+sign-up lands on Jobs with "Sample — <file>" and the first coachmark.
+
 ### MA-015 — Google OAuth consent screen → External + published; Terms/Privacy URLs (PR B, sign-up)
 Invited users sign in with Google (matching email) or an email link. In
 Google Cloud → APIs & Services → OAuth consent screen:

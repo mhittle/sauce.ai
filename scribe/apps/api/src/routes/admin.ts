@@ -10,6 +10,7 @@ import {
   pricingConfigs,
   productLines,
   sources,
+  takeoffs,
   users,
 } from "@scribe/db";
 import {
@@ -190,6 +191,37 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       .set({ logoS3Key: key, updatedBy: req.user!.id, updatedAt: new Date() })
       .where(eq(orgSettings.id, 1));
     return { logo_s3_key: key, url: await signedGetUrl(key) };
+  });
+
+  // --- Tutorial sample job: cloned into every new org at sign-up ---
+
+  app.get("/admin/sample-takeoff", async () => {
+    const db = getDb();
+    const [row] = await db.select({ id: orgSettings.sampleTakeoffId }).from(orgSettings).where(eq(orgSettings.id, 1));
+    if (!row?.id) return { takeoff: null };
+    const [t] = await db
+      .select({ id: takeoffs.id, sourceFilename: takeoffs.sourceFilename, status: takeoffs.status, orgId: takeoffs.orgId })
+      .from(takeoffs)
+      .where(eq(takeoffs.id, row.id));
+    return { takeoff: t ?? null };
+  });
+
+  app.put("/admin/sample-takeoff", async (req, reply) => {
+    const body = z.object({ takeoff_id: z.string().uuid().nullable() }).parse(req.body);
+    const db = getDb();
+    if (body.takeoff_id) {
+      const [t] = await db.select({ status: takeoffs.status, isSample: takeoffs.isSample }).from(takeoffs).where(eq(takeoffs.id, body.takeoff_id));
+      if (!t) return reply.code(404).send({ error: "takeoff not found" });
+      if (!["review", "approved"].includes(t.status)) {
+        return reply.code(409).send({ error: "the sample must be a finished takeoff (review or approved)" });
+      }
+      if (t.isSample) return reply.code(409).send({ error: "pick the original, not a cloned sample" });
+    }
+    await db
+      .update(orgSettings)
+      .set({ sampleTakeoffId: body.takeoff_id, updatedBy: req.user!.id, updatedAt: new Date() })
+      .where(eq(orgSettings.id, 1));
+    return { takeoff_id: body.takeoff_id };
   });
 
   // --- Export template mapping editor (PRD §7.3) ---

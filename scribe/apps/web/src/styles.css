@@ -115,3 +115,10 @@
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
 }
+
+/* Tutorial coachmark target (components/ui/Coachmark.tsx) */
+.tour-target {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}

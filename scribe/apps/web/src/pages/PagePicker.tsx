@@ -11,6 +11,7 @@ import {
   StatusPill,
   useToast,
 } from "../ui";
+import { Tour } from "../components/Tour";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 
 interface PageClassification {
@@ -156,10 +157,11 @@ export function PagePickerPage() {
 
   return (
     <div>
+      <Tour screen="pages" />
       <PageTitle
         eyebrow="Choose pages"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" data-tour="pages-continue">
             <StatusPill status={takeoff.status} />
             <Button
               variant="primary"
