@@ -5,8 +5,10 @@ import { getDb, projectDocuments, projects } from "@scribe/db";
 import { ProjectStatus } from "@scribe/shared";
 import { signedGetUrl } from "@scribe/storage";
 
+// The prospector (public plan crawl) is platform-internal — CabinetNow's
+// pipeline, not a tenant feature.
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", app.requireUser);
+  app.addHook("preHandler", app.requireAdmin);
 
   app.get<{
     Querystring: { status?: string; min_score?: string; assigned_to?: string };

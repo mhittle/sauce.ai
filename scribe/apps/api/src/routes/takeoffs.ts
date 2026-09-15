@@ -35,6 +35,7 @@ import { matchLine, materialStats, priceQuoteTiers } from "@scribe/pricing";
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { objectExists, putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
+import { orgTakeoffIds, requireTakeoffInOrg, takeoffInOrg } from "../lib/scope.js";
 
 const EXT_TO_KIND: Record<string, SourceKind> = {
   pdf: "pdf",
@@ -221,6 +222,11 @@ async function refreshDerivedFaces(
 
 export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.requireUser);
+  app.addHook("preHandler", async (req, reply) => {
+    if (req.routeOptions.url?.startsWith("/takeoffs/:id")) {
+      await requireTakeoffInOrg(req, reply);
+    }
+  });
 
   // Read-only product-line list for the review screen's unmatched bucket.
   app.get("/product-lines", async () => {
@@ -272,6 +278,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     const [takeoff] = await db
       .insert(takeoffs)
       .values({
+        orgId: req.orgId,
         projectId,
         uploadedBy: req.user!.id,
         sourceFileS3Key: s3Key,
@@ -290,18 +297,24 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send(takeoff);
   });
 
-  app.get("/takeoffs", async () => {
+  app.get("/takeoffs", async (req) => {
     const db = getDb();
-    return db.select().from(takeoffs).orderBy(desc(takeoffs.createdAt)).limit(200);
+    return db
+      .select()
+      .from(takeoffs)
+      .where(eq(takeoffs.orgId, req.orgId))
+      .orderBy(desc(takeoffs.createdAt))
+      .limit(200);
   });
 
   // Jobs list (product-plan.md §3.3): every takeoff with its latest quote, so
   // the list shows one row per job with its step and quote total.
-  app.get("/jobs", async () => {
+  app.get("/jobs", async (req) => {
     const db = getDb();
     const rows = await db
       .select()
       .from(takeoffs)
+      .where(eq(takeoffs.orgId, req.orgId))
       .orderBy(desc(takeoffs.updatedAt))
       .limit(200);
     if (rows.length === 0) return [];
@@ -347,7 +360,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     const rows = await db
       .select()
       .from(takeoffs)
-      .where(eq(takeoffs.id, req.params.id));
+      .where(takeoffInOrg(req.orgId, req.params.id));
     if (rows.length === 0) return reply.code(404).send({ error: "not found" });
     const lines = await db
       .select()
@@ -394,7 +407,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select({ status: takeoffs.status })
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       if (!["review", "extracted", "awaiting_boxes"].includes(rows[0].status)) {
         return reply.code(409).send({
@@ -432,7 +445,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const page = Number(req.params.page);
       const pageCount = rows[0].pageCount;
@@ -458,7 +471,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       if (!/^[A-Za-z0-9._-]+$/.test(req.params.readId)) {
         return reply.code(400).send({ error: "invalid read id" });
@@ -483,7 +496,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const page = Number(req.params.page);
       const pageCount = rows[0].pageCount;
@@ -527,7 +540,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       if (rows[0].sourceKind !== "pdf") {
         return reply.code(400).send({ error: "detect view is PDF-only" });
@@ -687,7 +700,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const takeoff = rows[0];
       if (takeoff.sourceKind !== "pdf") {
@@ -760,7 +773,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           },
           updatedAt: new Date(),
         })
-        .where(eq(takeoffs.id, req.params.id))
+        .where(takeoffInOrg(req.orgId, req.params.id))
         .returning();
       await getTakeoffQueue().add(
         "beta_build",
@@ -848,7 +861,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const takeoff = rows[0];
       if (
@@ -874,7 +887,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           error: null,
           updatedAt: new Date(),
         })
-        .where(eq(takeoffs.id, req.params.id))
+        .where(takeoffInOrg(req.orgId, req.params.id))
         .returning();
       await getTakeoffQueue().add("extract", { takeoff_id: req.params.id });
       return updated;
@@ -889,7 +902,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const takeoff = rows[0];
       if (
@@ -904,7 +917,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const [updated] = await db
         .update(takeoffs)
         .set({ status: "processing", error: null, updatedAt: new Date() })
-        .where(eq(takeoffs.id, req.params.id))
+        .where(takeoffInOrg(req.orgId, req.params.id))
         .returning();
       await getTakeoffQueue().add("finalize", { takeoff_id: req.params.id });
       return updated;
@@ -920,7 +933,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     const rows = await db
       .select()
       .from(takeoffs)
-      .where(eq(takeoffs.id, body.takeoff_id));
+      .where(takeoffInOrg(req.orgId, body.takeoff_id));
     if (rows.length === 0) {
       return reply.code(404).send({ error: "takeoff not found" });
     }
@@ -994,7 +1007,12 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .update(takeoffLines)
         .set(set)
-        .where(eq(takeoffLines.id, req.params.id))
+        .where(
+          and(
+            eq(takeoffLines.id, req.params.id),
+            inArray(takeoffLines.takeoffId, orgTakeoffIds(req.orgId))
+          )
+        )
         .returning();
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const row = rows[0];
@@ -1027,7 +1045,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const tk = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, row.takeoffId));
+        .where(takeoffInOrg(req.orgId, row.takeoffId));
       // Only priced flows: extraction-stage rows (legacy awaiting_boxes) get
       // matched by the finalize job instead.
       if (tk.length === 0 || !["review", "extracted"].includes(tk[0].status)) {
@@ -1054,7 +1072,12 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const db = getDb();
       const rows = await db
         .delete(takeoffLines)
-        .where(eq(takeoffLines.id, req.params.id))
+        .where(
+          and(
+            eq(takeoffLines.id, req.params.id),
+            inArray(takeoffLines.takeoffId, orgTakeoffIds(req.orgId))
+          )
+        )
         .returning();
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       // Deleting a cabinet also removes the door/drawer faces derived from it.
@@ -1077,7 +1100,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     "/takeoffs/:id/remeasure",
     async (req, reply) => {
       const db = getDb();
-      const rows = await db.select().from(takeoffs).where(eq(takeoffs.id, req.params.id));
+      const rows = await db.select().from(takeoffs).where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const takeoff = rows[0];
       if (!["review", "awaiting_boxes"].includes(takeoff.status)) {
@@ -1110,7 +1133,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           },
           updatedAt: new Date(),
         })
-        .where(eq(takeoffs.id, req.params.id))
+        .where(takeoffInOrg(req.orgId, req.params.id))
         .returning();
       await getTakeoffQueue().add(
         "beta_build",
@@ -1129,7 +1152,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       if (!canTransitionTakeoff(rows[0].status as TakeoffStatus, "review")) {
         return reply
@@ -1139,7 +1162,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const [updated] = await db
         .update(takeoffs)
         .set({ status: "review", updatedAt: new Date() })
-        .where(eq(takeoffs.id, req.params.id))
+        .where(takeoffInOrg(req.orgId, req.params.id))
         .returning();
       return updated;
     }
@@ -1154,7 +1177,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(takeoffs)
-        .where(eq(takeoffs.id, req.params.id));
+        .where(takeoffInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       if (!["extracted", "review"].includes(rows[0].status)) {
         return reply
@@ -1170,7 +1193,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const [updated] = await db
         .update(takeoffs)
         .set({ status: "approved", updatedAt: new Date() })
-        .where(eq(takeoffs.id, req.params.id))
+        .where(takeoffInOrg(req.orgId, req.params.id))
         .returning();
 
       const fixtures = await db

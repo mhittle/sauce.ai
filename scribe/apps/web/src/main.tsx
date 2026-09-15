@@ -25,6 +25,8 @@ import { BetaDetectPage } from "./pages/BetaDetect";
 import { QuotesPage } from "./pages/Quotes";
 import { QuoteBuilderPage } from "./pages/QuoteBuilder";
 import { AdminPage } from "./pages/Admin";
+import { SignupPage } from "./pages/Signup";
+import { AccountPage } from "./pages/Account";
 
 const rootRoute = createRootRoute({ component: Layout });
 
@@ -108,7 +110,25 @@ export const adminRoute = createRoute({
   }),
 });
 
+// Public: the invite link lands here (accounts-plan.md §1.2).
+export const signupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/signup",
+  component: SignupPage,
+  validateSearch: (search: Record<string, unknown>): { token?: string } => ({
+    token: typeof search.token === "string" && search.token ? search.token : undefined,
+  }),
+});
+
+export const accountRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/account",
+  component: AccountPage,
+});
+
 const routeTree = rootRoute.addChildren([
+  signupRoute,
+  accountRoute,
   jobsRoute,
   dashboardRoute,
   prospectsRoute,
