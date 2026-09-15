@@ -12,3 +12,4 @@ export { Stepper } from "./Stepper";
 export type { Step } from "./Stepper";
 export { Dialog } from "./Dialog";
 export { Kbd } from "./Kbd";
+export { Coachmark } from "./Coachmark";

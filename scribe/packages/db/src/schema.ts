@@ -16,11 +16,55 @@ import {
 // Drizzle table definitions mirroring migrations/0001_init.sql. The SQL file
 // is the source of truth for DDL; keep both in sync when migrating.
 
+export const orgs = pgTable("orgs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  isPlatform: boolean("is_platform").notNull().default(false),
+  logoS3Key: text("logo_s3_key"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name"),
   role: text("role").notNull().default("estimator"),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
+  orgRole: text("org_role").notNull().default("member"),
+  isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+  phone: text("phone"),
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  termsVersion: text("terms_version"),
+  termsIp: text("terms_ip"),
+  lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+  onboarding: jsonb("onboarding").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const loginTokens = pgTable("login_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tokenHash: text("token_hash").notNull().unique(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const invites = pgTable("invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tokenHash: text("token_hash").notNull().unique(),
+  email: text("email").notNull(),
+  name: text("name"),
+  orgName: text("org_name"),
+  orgId: uuid("org_id").references(() => orgs.id),
+  creditsGranted: integer("credits_granted").notNull().default(0),
+  invitedBy: uuid("invited_by").notNull().references(() => users.id),
+  note: text("note"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  usedBy: uuid("used_by").references(() => users.id),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -93,6 +137,7 @@ export const pricingConfigs = pgTable("pricing_configs", {
 
 export const takeoffs = pgTable("takeoffs", {
   id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
   projectId: uuid("project_id"),
   uploadedBy: uuid("uploaded_by"),
   sourceFileS3Key: text("source_file_s3_key").notNull(),
@@ -108,6 +153,10 @@ export const takeoffs = pgTable("takeoffs", {
   tokensUsed: bigint("tokens_used", { mode: "number" }).notNull().default(0),
   progress: jsonb("progress"),
   error: text("error"),
+  // migrations/0016 — the tutorial's cloned sample job; storage_id is the
+  // takeoff whose objects (pages, reads) this row displays.
+  isSample: boolean("is_sample").notNull().default(false),
+  storageId: uuid("storage_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -173,6 +222,7 @@ export const takeoffDetections = pgTable("takeoff_detections", {
 
 export const evalFixtures = pgTable("eval_fixtures", {
   id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
   takeoffId: uuid("takeoff_id").notNull(),
   extractedLines: jsonb("extracted_lines").notNull(),
   approvedLines: jsonb("approved_lines"),
@@ -182,6 +232,7 @@ export const evalFixtures = pgTable("eval_fixtures", {
 
 export const customers = pgTable("customers", {
   id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
   company: text("company").notNull(),
   contact: jsonb("contact"),
   bigcommerceCustomerId: text("bigcommerce_customer_id"),
@@ -190,6 +241,7 @@ export const customers = pgTable("customers", {
 
 export const quotes = pgTable("quotes", {
   id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
   takeoffId: uuid("takeoff_id").notNull(),
   customerId: uuid("customer_id"),
   // migrations/0011 — human name; UI falls back to the job's filename.
@@ -226,6 +278,7 @@ export const orgSettings = pgTable("org_settings", {
   palletConfig: jsonb("pallet_config").notNull().default({}),
   freightProvider: text("freight_provider").notNull().default("flat_pallet"),
   crossValidationEnabled: boolean("cross_validation_enabled").notNull().default(false),
+  sampleTakeoffId: uuid("sample_takeoff_id"),
   updatedBy: uuid("updated_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

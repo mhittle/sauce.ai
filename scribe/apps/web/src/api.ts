@@ -14,6 +14,11 @@ export function captureSessionFromUrl(): void {
   }
 }
 
+// Sign-up hands the session back in the response body (no redirect hop).
+export function setSession(token: string): void {
+  localStorage.setItem(SESSION_KEY, token);
+}
+
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
@@ -44,6 +49,17 @@ async function handle<T>(res: Response): Promise<T> {
     throw new ApiError(res.status, message);
   }
   return res.json() as Promise<T>;
+}
+
+// Public endpoints (sign-up, magic link): no session header.
+export async function apiPublic<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    credentials: "include",
+    headers: body !== undefined ? { "content-type": "application/json" } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return handle<T>(res);
 }
 
 export async function apiGet<T>(path: string): Promise<T> {

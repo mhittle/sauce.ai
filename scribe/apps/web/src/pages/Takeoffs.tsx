@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { apiUpload, apiGet, formatUsd } from "../api";
 import {
+  Badge,
   Card,
   EmptyState,
   errorMessage,
@@ -12,6 +13,7 @@ import {
   useToast,
 } from "../ui";
 import { UploadZone } from "../components/UploadZone";
+import { Tour } from "../components/Tour";
 import { TechnicalDetail } from "../components/TechnicalDetail";
 import { friendlyError } from "../messages";
 import type { Progress } from "../components/ReadingProgress";
@@ -27,6 +29,7 @@ export interface Job {
   docConfidence: number | null;
   progress: Progress | null;
   error: string | null;
+  isSample?: boolean;
   createdAt: string;
   updatedAt: string;
   quote: {
@@ -138,8 +141,9 @@ export function TakeoffsPage() {
   return (
     <div>
       <PageTitle>Jobs</PageTitle>
+      <Tour screen="jobs" ready={!q.isLoading} />
 
-      <div className="mb-5">
+      <div className="mb-5" data-tour="jobs-upload">
         <UploadZone
           onFile={(f) => upload.mutate(f)}
           busy={upload.isPending}
@@ -189,6 +193,7 @@ export function TakeoffsPage() {
                 <tr
                   key={j.id}
                   className="border-b border-rule-soft hover:bg-rule-soft"
+                  data-tour={j.isSample ? "jobs-sample" : undefined}
                 >
                   <td className="px-3 py-2">
                     <Link
@@ -201,6 +206,7 @@ export function TakeoffsPage() {
                     <span className="ml-2 font-mono text-[10px] uppercase tracking-wider text-faint">
                       {j.sourceKind}
                     </span>
+                    {j.isSample && <Badge tone="blue" className="ml-2">sample</Badge>}
                     {j.error && (
                       <div className="mt-0.5 text-xs text-bad">
                         {friendlyError(j.error).text}

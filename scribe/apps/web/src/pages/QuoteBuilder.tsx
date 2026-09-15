@@ -13,6 +13,7 @@ import {
   StatusPill,
   useToast,
 } from "../ui";
+import { Tour } from "../components/Tour";
 import { categoryLabel, quoteRef } from "../labels";
 
 // The quote step (product-plan.md §3.3): pick a tier, set markup and
@@ -189,6 +190,7 @@ export function QuoteBuilderPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <Tour screen="quote" />
       <PageTitle
         eyebrow={
           <span>
@@ -288,7 +290,7 @@ export function QuoteBuilderPage() {
           {/* Tier cards */}
           <div>
             <SectionLabel>Pick a price level</SectionLabel>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Price level">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Price level" data-tour="quote-tiers">
               {(["low", "medium", "high"] as const).map((t) => {
                 const qt = quote.quote_tiers[t];
                 const on = tier === t;
@@ -515,7 +517,7 @@ export function QuoteBuilderPage() {
             ))}
           </ul>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2" data-tour="quote-send">
           <Button loading={generatePdf.isPending} onClick={() => generatePdf.mutate()}>
             Download PDF
           </Button>

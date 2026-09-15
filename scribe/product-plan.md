@@ -391,7 +391,9 @@ Not needed for the invite-only beta (credits are granted).
 
 - Waitlist page (public, no auth) → invites sent in batches from the admin.
 - Onboarding: first-run job with a sample plan set already read, so the
-  review screen is the first thing a new user sees.
+  review screen is the first thing a new user sees. **Built 2026-09-15**
+  (sample clone + coachmarks, `accounts-plan.md` §2); the sample plan set
+  itself is still to be chosen (MA-016).
 - Sentry + bull-board (roadmap, Pri 5) before external traffic.
 - Reading-accuracy copy: "AI draft — check every line" on Review; never
   "quote". Send gates stay.

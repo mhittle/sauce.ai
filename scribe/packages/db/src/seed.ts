@@ -162,11 +162,13 @@ export async function seed(): Promise<void> {
     .split(",")
     .map((e) => e.trim())
     .filter(Boolean);
+  // Allow-listed users live in the platform org; the first is a platform admin.
   for (const [i, email] of allowed.entries()) {
     await pool.query(
-      `INSERT INTO users (email, role) VALUES ($1, $2)
+      `INSERT INTO users (email, role, org_id, org_role, is_platform_admin)
+       SELECT $1, $2, id, $3, $4 FROM orgs WHERE is_platform
        ON CONFLICT (email) DO NOTHING`,
-      [email, i === 0 ? "admin" : "estimator"]
+      [email, i === 0 ? "admin" : "estimator", i === 0 ? "owner" : "member", i === 0]
     );
   }
 }

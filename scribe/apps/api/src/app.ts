@@ -10,6 +10,9 @@ import { quoteRoutes } from "./routes/quotes.js";
 import { projectRoutes } from "./routes/projects.js";
 import { adminRoutes } from "./routes/admin.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
+import { inviteRoutes } from "./routes/invites.js";
+import { signupRoutes } from "./routes/signup.js";
+import { accountRoutes } from "./routes/account.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -38,6 +41,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(projectRoutes);
   await app.register(adminRoutes);
   await app.register(dashboardRoutes);
+  await app.register(inviteRoutes);
+  await app.register(signupRoutes);
+  await app.register(accountRoutes);
 
   return app;
 }

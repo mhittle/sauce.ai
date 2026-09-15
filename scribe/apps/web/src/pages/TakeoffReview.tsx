@@ -14,6 +14,7 @@ import {
   StatusPill,
   useToast,
 } from "../ui";
+import { Tour } from "../components/Tour";
 import { categoryDotClass, categoryLabel } from "../labels";
 import { SourceBoxPanel } from "../components/SourceBoxPanel";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
@@ -467,6 +468,7 @@ export function TakeoffReviewPage() {
 
   return (
     <div className="flex h-[calc(100vh-5.5rem)] min-h-[32rem] flex-col">
+      <Tour screen="review" />
       <PageTitle
         eyebrow={editable ? "Review the breakdown" : "Approved"}
         actions={
@@ -733,7 +735,10 @@ export function TakeoffReviewPage() {
       </div>
 
       {/* Sticky bar: the number, and the way out. */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-rule bg-paper px-4 py-2">
+      <div
+        className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-rule bg-paper px-4 py-2"
+        data-tour="review-bar"
+      >
         <div>
           <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
             Base estimate
@@ -763,6 +768,7 @@ export function TakeoffReviewPage() {
         <div className="ml-auto flex items-center gap-2">
           {editable && acceptable.length > 0 && (
             <Button
+              data-tour="review-accept"
               loading={acceptAll.isPending}
               onClick={() => acceptAll.mutate()}
               title={`Mark the ${acceptable.length} lines at or above ${Math.round(LOW_CONFIDENCE * 100)}% as checked`}

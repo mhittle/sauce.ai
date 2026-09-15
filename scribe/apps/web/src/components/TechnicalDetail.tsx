@@ -7,10 +7,10 @@ import { apiGet } from "../api";
 export function useIsAdmin(): boolean {
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: () => apiGet<{ role: string }>("/auth/me"),
+    queryFn: () => apiGet<{ role: string; isPlatformAdmin: boolean }>("/auth/me"),
     staleTime: 10 * 60 * 1000,
   });
-  return me.data?.role === "admin";
+  return me.data?.isPlatformAdmin === true;
 }
 
 export function TechnicalDetail({

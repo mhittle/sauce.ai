@@ -6,6 +6,291 @@ not read during onboarding.
 
 ---
 
+## 2026-09-14 (b) — one flow: the wizard is the pipeline
+
+**Owner:** "make the beta flow the default, I don't want 2 modes." Until now
+PDFs had two paths: the automatic staged read (locate → detect → measure →
+price, no human between pages and review) and the wizard (draw → detect →
+build) as an advanced hand-off. Now there is one: after the page pick the
+worker locates the drawings, seeds them as `drawn` boxes, renders the
+wizard's page images, and parks at **`awaiting_boxes`**; the wizard opens on
+Mark with the regions pre-boxed; the human adjusts, Finds, Builds; the build
+lands on review. Status flow: `processing → awaiting_pages → processing →
+awaiting_boxes → processing → review → approved`.
+
+**Shipped.**
+- `staged.ts` — stages 3–4 (auto detect + build) removed; seeding writes
+  `status: "drawn"`, pre-renders `beta/pages/{n}.png` for every seeded page,
+  stores the seeding warnings in `docSummary {warnings, seeded: true}`, sets
+  `awaiting_boxes`, final progress "Drawings found — mark the cabinet areas".
+- `detect.ts buildFromDetections` prepends the seeded warnings to the built
+  summary (no-scale / disagreement / skipped-page notes survive the build).
+  `index.ts` beta_build now passes `evalFixture: true` — every build
+  snapshots pre-correction lines for the eval corpus, as the auto path did.
+- API `build-takeoff` accepts `awaiting_boxes`.
+- Web: `BetaDetect` rewritten as the three-step wizard (Mark · Find · Build)
+  — pages come from `takeoff.selectedPages`, Reading screen while
+  `processing`, no page step, no "beta" badge; `PagePicker` submits into
+  the wizard and the "draw the regions yourself" disclosure is gone;
+  `TakeoffReview` forwards `awaiting_boxes` to the wizard; `BoxReview.tsx`
+  (the 2026-08-10 legacy box gate) deleted; Jobs rows link `awaiting_boxes`
+  to the wizard; label "Mark cabinets".
+
+**Also (owner ask, same day): quotes have a name.** Migration `0011`
+`quotes.name`; `POST /quotes {name?}` and `PATCH /quotes/:id {name}`;
+`GET /jobs` carries `quote.name`. Review's "Looks right → Quote" opens a
+"Name this quote" dialog prefilled with the filename minus extension; the
+Quote screen's title is the name, renamed in place (click → type → Enter);
+the Quotes list shows the name with the filename beside it. Null name falls
+back to the job's filename everywhere, so old quotes need nothing.
+
+**Why the owner saw the old UI:** their checkout at
+`/Users/rd/Documents/Homize/sauce.ai` was on `scribe/estimate-reading-accuracy`
+(June, 105 commits behind) and the deployed/local build had PR 1 only —
+PRs 2–4 reached `main` via #260 on 2026-09-13. Pull `main`, rebuild.
+
+**Not changed.** `STAGED_READS=0` still selects the classic one-shot reader
+(emergency knob, not a mode); the harness still replays locate → detect →
+measure end to end; images and spreadsheets keep their gate-less paths.
+
+**Gotchas.** (1) A build failure restores `awaiting_boxes` (prior status),
+so the user lands back in the wizard with their boxes. (2) The wizard's
+Build step confirms only when the takeoff already has lines (re-marking a
+reviewed takeoff); a first build just builds. (3) `docSummary.seeded` is
+how the build knows which warnings to carry — don't drop the flag.
+
+---
+
+## 2026-09-14 (c) — Mark step: marked areas are unmistakable; overlap guard
+
+**Owner:** in Mark they double-marked a drawing because the existing region
+was a faint dashed outline, then saw the cabinets twice after Find.
+
+- `BoxOverlay` `underlays` → `areas: OverlayArea[]` — each marked area is a
+  solid redline rectangle with a tinted fill, a label chip ("Area 2 · 3
+  found" / "not scanned" / "scanning…" / "failed") and its own × button
+  (`onAreaRemove`), highlighted on hover (`onAreaHover`).
+- Wizard: chip list of the page's areas under the drawing (hover highlights
+  the box, × removes); areas numbered per page in creation order.
+- **Overlap guard:** a new box whose intersection covers ≥50% of the smaller
+  of it and an existing area is refused with a toast naming the area and
+  flashing it — the same cabinets must not be scanned twice. Partial overlaps
+  under 50% (padding) still draw.
+
+Verified on the mock (chips + SVG labels present, console clean); web
+build green. The guard's geometry is `overlapFraction` in `BetaDetect.tsx`.
+
+---
+
+---
+
+## 2026-09-14 (d) — V0 PR C measured and DROPPED: printed sizes beat geometry
+
+**Owner:** "test a bit, if it is better continue" → it was not; "forget it".
+Code discarded (never committed). The evidence, so nobody re-runs this blind:
+
+- **Free A/B on the 18 kits** (saved measure responses replayed through a
+  geometry-first merge: box×scale as baseline, printed dims override when they
+  agree, geometry replaces defaults when nothing is printed): **F1 0.465 →
+  0.465 on every kit; size error 1.64" → 1.66"**. Two reasons: (1) the
+  measure-v6 responses mark almost every cabinet `measured: true`, so
+  "printed wins" leaves geometry nothing to do (q21 33/33, q22 22/22, q9
+  26/26); (2) on plan-only kits the geometry sits on the RUN while the lines
+  are the model's UNITS, so it never touches them.
+- **Printed vs geometry against the labels** (66 matched cabinets, 7 kits
+  with a trusted scale): mean |printed − gold| **0.64"** vs |geometry − gold|
+  **1.16"**; printed closer 21×, geometry closer 5×, tie 40. Geometry is a
+  decent fallback (inside one standard width), not a better answer. (Caveat:
+  the matching used printed widths, so this is biased toward printed.)
+- **The size-mismatch flag cannot catch what it was meant to.** Of 48
+  confirmed-correct printed sizes, 12 sit >1.5" from their box (false
+  alarms at the planned tolerance); of the 18 WRONG printed sizes, the
+  median distance to the box is 0.41" — when the model mis-sizes a cabinet
+  its box is usually wrong the same way. At max(3", 12%): 3 false alarms,
+  3 of 18 caught.
+
+**What survives of V0.** PR A (scale sources) and PR B (vector snap) are on
+main, gated off, harmless. Geometry-from-scale remains the right tool for
+the ORIGINAL ask — a box the reviewer draws gets its inches (~1.2" accuracy)
+instead of empty fields — that is PR D, if wanted, and needs only PR A/B.
+Whether telling the model the geometric size improves its own answers is
+untested (needs fresh reads, ~$5). Not pursued.
+
+---
+
+---
+
+## 2026-09-15 — Mark step PR 1: side panel, no pre-selection, kind + scale on the area
+
+**Owner (approved plan):** (1) the cabinet table beside the drawing, not
+under it; (2) no pre-selected areas — the whole-page fallback boxed an
+entire letter-size sheet as "Area 1"; (3) selection synced both ways
+between drawing and table. PR 2 (areas own their cabinets; a correction
+rescans one area) follows.
+
+**Shipped.**
+- `staged.ts` — the extract stage no longer locates or seeds anything: it
+  renders the wizard's page images for the selected pages (progress
+  "Rendering page N for marking"), stores the estimation/schedule notes in
+  `docSummary {warnings, seeded: true}`, parks at `awaiting_boxes`. One
+  fewer vision call per page in prod. The harness (`prepare-staged.mjs`)
+  still runs locate as the stand-in for the human's boxes.
+- Area **kind** (plan | elevation): `POST /detections` derives it from the
+  page type chosen at Pages (`selectedPages[].class`, else the classifier's
+  call) — `areaKindForPage`; optional `kind` in the body; new
+  `PATCH /takeoffs/:id/detections/:id {kind}` (clears found cabinets, back
+  to `drawn`). The chip in the wizard has a plan/elevation select.
+- Area **scale** (PR A) now computed in `detectRegion` at scan time from
+  the page's dimension strings inside the rect + the printed note, stored
+  on the detection as before.
+- Wizard layout: `[9rem rail][drawing][22rem panel]`; the panel holds the
+  Areas list (kind select, ×, "Clear page" with confirm) and the cabinets
+  table, and scrolls on its own. Two-way selection: clicking a dot scrolls
+  its row into view (`data-box-id` + `scrollIntoView`); clicking a row
+  selects and scrolls the drawing (BoxOverlay already did that).
+
+**Gotchas.** (1) Old takeoffs parked at `awaiting_boxes` with seeded
+`queued`/`drawn` regions still work — the wizard shows whatever
+detections exist. (2) `DrawingScale` on a detection is now written by the
+scan, so an area edited after scanning keeps the old scale until rescanned
+(PR 2 resets status on edit). (3) `locateRegions`/`locateRooms` are
+unused in prod now; kept for the harness.
+
+---
+
+---
+
+## 2026-09-15 (b) — Mark step PR 2: areas own their cabinets; corrections rebuild one area
+
+**Owner-approved decisions (2026-09-15):** removing an area deletes its
+cabinets; resizing/moving (or changing plan↔elevation) discards its
+cabinets until rescanned; an approved takeoff must be reopened before
+amending; kind comes from the page type with a per-area override.
+
+**Shipped.**
+- Migration `0012`: `takeoff_lines.detection_id` (+ index) — the area a
+  cabinet came from; `takeoff_detections.built_at` — when the area's
+  cabinets were last built (NULL = new or changed → the next build takes
+  exactly these). `CabinetLineItem.detection_id`; `ReadLine.detection_id`.
+- `buildFromDetections` is now **scoped**: it measures only `done` areas
+  with `built_at IS NULL`, `replaceLinesForDetections` deletes those areas'
+  previous lines (+ derived faces) and inserts the new ones, stamps
+  `built_at`, and `priceAndExpand(takeoffId, log, {lineIds})` matches and
+  expands ONLY the inserted lines — manual product picks, edited inches and
+  accepted confidence on untouched areas survive. Eval fixture = every
+  area-built cabinet. Error when nothing is unbuilt.
+- API: `build-takeoff` needs unbuilt scanned areas (409 on approved);
+  `PATCH /detections/:id {kind?, rect?}` resets the area (drawn, items
+  null, built_at null) and deletes its lines (`removed_lines` in the
+  response); `DELETE /detections/:id` deletes its lines too;
+  `POST /takeoffs/:id/reopen` (approved → review; transition added to
+  `TAKEOFF_STATUS_TRANSITIONS`).
+- Web: areas are **movable** (drag the label chip) and **resizable**
+  (corner handles) in `BoxOverlay` (`onAreaChange`), reusing the box
+  drag machinery; the interior stays pass-through for drawing. The wizard
+  PATCHes the rect, confirms when the area is already in the takeoff, and
+  tells you how many cabinets were removed. Build button: "Update N areas
+  (M cabinets)" on a reviewed takeoff, disabled with a hint when nothing
+  is unbuilt; area notes say "in takeoff". Approved takeoffs lock the
+  wizard with a banner; Review's More menu gains "Reopen for changes" and
+  "Add or change areas…" (review only).
+
+**Gotchas.** (1) Lines drawn by hand on the review screen have
+`detection_id NULL` and are never touched by area builds. (2) Legacy
+takeoffs built before 0012 have lines with NULL `detection_id` and areas
+with NULL `built_at` — a "rebuild" there would ADD a second copy of every
+cabinet; the wizard shows those areas as unbuilt. To re-do a legacy
+takeoff, clear its areas (which deletes nothing, since nothing links) and
+delete the old lines by hand, or start a new job. (3) `priceAndExpand`
+without `lineIds` keeps the old full-pass behaviour (classic path).
+
+---
+
+---
+
+## 2026-09-15 (c) — build failed in prod: `= ANY($list)` bug; builds now roll back and report progress
+
+**Owner report (live, MOLLY_CHARLEY_KITCHEN):** Find found 8 cabinets;
+Build errored `delete from takeoff_lines where … raw_model_output->>'parent'
+= ANY(($2, $3, …))`. Root cause: PR 2's scoped deletes used
+`sql\`… = ANY(${ids})\`` — drizzle expands a JS array into a parameter
+LIST, so Postgres got `ANY((…,…))`, which is invalid (ANY wants an array).
+It failed at the scoped pricing step, AFTER the lines had been inserted and
+`built_at` stamped: the area read "in takeoff" with 8 unpriced lines and
+Build then had "nothing new to build".
+
+**Fixed.**
+- All three sites (`replaceLinesForDetections`, scoped `priceAndExpand`,
+  API `deleteLinesForDetection`) use `inArray(sql\`…->>'parent'\`, ids)`
+  → `IN ($2, $3, …)`.
+- `buildFromDetections` stamps `built_at` only AFTER pricing succeeds; on
+  any failure after insert it deletes the inserted lines (+ faces) and
+  clears `built_at`, so the areas read as scanned-but-unbuilt and Build is
+  simply clickable again.
+- `build-takeoff` self-repairs the state this bug left behind: an area
+  stamped built whose lines were never priced (`product_line_id IS NULL AND
+  unmatched_reason IS NULL` on every line) is reset to unbuilt.
+- Progress during a build: the API writes `{stage: "measure", "Queued for
+  measuring"}` when Build is clicked; the worker writes "Measuring N
+  cabinets" before the model call; pricing writes "price". The Reading card
+  picks its title and stage list from the real stage (Preparing your pages /
+  Building your takeoff / Reading your drawings) instead of a client flag —
+  the "went back to Preparing" confusion.
+- `beta_build` jobs get `attempts: 2` (30 s fixed backoff) so a worker
+  restart mid-build (a deploy) recovers on its own.
+
+**Second live symptom, same day:** a job sat 25 min in `processing` showing
+the stale hand-off line — consistent with the PR 1/PR 2 deploys restarting
+the workers mid-build (unverified without the Railway log). The retry +
+progress changes cover it; if it recurs, the worker log for that job is the
+evidence to pull.
+
+**Gotcha.** Never write `= ANY(${jsArray})` in drizzle `sql` — use
+`inArray()`. Grep `= ANY(` in a review.
+
+---
+
+---
+
+## 2026-09-15 (d) — measuring answer unparseable → every size defaulted; salvage + retry + re-measure
+
+**Owner's live job (MOLLY_CHARLEY, 24 cabinets on 3 elevation areas):**
+Build ran ~2 min, then every cabinet came back 30" wide at 50% — the
+review's notes said "measurements response was not parseable JSON — sizes
+defaulted". The measure call had `max_tokens: 16000`, no `stop_reason`
+check and no salvage; the page-reading path has had 32k + salvage since
+June. Whether this answer was cut off or malformed is in
+`takeoffs/{id}/beta/measure/response-0.txt` (not pulled).
+
+**Fixed.**
+- `max_tokens: 32000` on the measure call; `stop_reason === "max_tokens"`
+  is logged and surfaces as a note ("cut off at the token limit; N of M
+  cabinets salvaged").
+- `parseMeasureResponse` salvages every COMPLETE cabinet object from an
+  unparseable answer (`salvageArrayObjects(text, "cabinets")`, the same
+  string-aware brace scanner as `salvageLineObjects`); note says how many.
+- An answer with zero usable cabinets gets ONE fresh model call; still
+  zero → the build throws ("the measuring step returned no usable sizes
+  twice — click Build again"), rolls back (2026-09-15 (c)), and the
+  wizard shows the error — instead of silently producing a takeoff of
+  defaults that LOOKS finished.
+- `POST /takeoffs/:id/remeasure` (review or awaiting_boxes): clears
+  `built_at` on every scanned area, keeps the found cabinets, queues a
+  build — "Measure again…" in the review's More menu (confirms; edits on
+  those cabinets are replaced). This is the recovery for the live job.
+
+**Gotchas.** (1) Each measuring attempt persists as `response-{attempt}.txt`.
+(2) Re-measure re-prices only the rebuilt lines like any area build; hand-
+drawn review lines (no area) are untouched. (3) The user's proposal
+("read the printed dimensions near each box across every page") is what
+the measure pass already does — `nearbyDims` per marker from the whole
+page's text layer + every page sent as context; the failure was purely
+the answer format.
+
+---
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI

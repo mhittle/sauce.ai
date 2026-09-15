@@ -5,10 +5,12 @@ import { desc, eq } from "drizzle-orm";
 import {
   exportTemplates,
   getDb,
+  orgs,
   orgSettings,
   pricingConfigs,
   productLines,
   sources,
+  takeoffs,
   users,
 } from "@scribe/db";
 import {
@@ -21,6 +23,7 @@ import {
 import { priceLine } from "@scribe/pricing";
 import { putObject, signedGetUrl } from "@scribe/storage";
 import { getCrawlerQueue } from "../lib/queue.js";
+import { getPlatformOrgId } from "../lib/orgs.js";
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.requireAdmin);
@@ -190,6 +193,37 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return { logo_s3_key: key, url: await signedGetUrl(key) };
   });
 
+  // --- Tutorial sample job: cloned into every new org at sign-up ---
+
+  app.get("/admin/sample-takeoff", async () => {
+    const db = getDb();
+    const [row] = await db.select({ id: orgSettings.sampleTakeoffId }).from(orgSettings).where(eq(orgSettings.id, 1));
+    if (!row?.id) return { takeoff: null };
+    const [t] = await db
+      .select({ id: takeoffs.id, sourceFilename: takeoffs.sourceFilename, status: takeoffs.status, orgId: takeoffs.orgId })
+      .from(takeoffs)
+      .where(eq(takeoffs.id, row.id));
+    return { takeoff: t ?? null };
+  });
+
+  app.put("/admin/sample-takeoff", async (req, reply) => {
+    const body = z.object({ takeoff_id: z.string().uuid().nullable() }).parse(req.body);
+    const db = getDb();
+    if (body.takeoff_id) {
+      const [t] = await db.select({ status: takeoffs.status, isSample: takeoffs.isSample }).from(takeoffs).where(eq(takeoffs.id, body.takeoff_id));
+      if (!t) return reply.code(404).send({ error: "takeoff not found" });
+      if (!["review", "approved"].includes(t.status)) {
+        return reply.code(409).send({ error: "the sample must be a finished takeoff (review or approved)" });
+      }
+      if (t.isSample) return reply.code(409).send({ error: "pick the original, not a cloned sample" });
+    }
+    await db
+      .update(orgSettings)
+      .set({ sampleTakeoffId: body.takeoff_id, updatedBy: req.user!.id, updatedAt: new Date() })
+      .where(eq(orgSettings.id, 1));
+    return { takeoff_id: body.takeoff_id };
+  });
+
   // --- Export template mapping editor (PRD §7.3) ---
 
   app.get("/admin/export-templates", async () => {
@@ -288,11 +322,27 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // --- Users (no self-signup; admin manages the list) ---
+  // --- Users: platform view across orgs. Allow-list adds land in the
+  // platform org (staff); customers arrive through invites. ---
 
   app.get("/admin/users", async () => {
     const db = getDb();
-    return db.select().from(users).orderBy(users.email);
+    return db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        orgId: users.orgId,
+        orgName: orgs.name,
+        orgRole: users.orgRole,
+        isPlatformAdmin: users.isPlatformAdmin,
+        lastSignInAt: users.lastSignInAt,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .leftJoin(orgs, eq(orgs.id, users.orgId))
+      .orderBy(orgs.name, users.email);
   });
 
   app.post("/admin/users", async (req, reply) => {
@@ -310,9 +360,39 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         email: body.email.toLowerCase(),
         role: body.role,
         name: body.name ?? null,
+        orgId: await getPlatformOrgId(),
+        isPlatformAdmin: body.role === "admin",
+        orgRole: body.role === "admin" ? "owner" : "member",
       })
       .onConflictDoNothing()
       .returning();
     return reply.code(201).send(u ?? { error: "user already exists" });
+  });
+
+  // Role changes (platform admin only): make a staff member a platform
+  // admin, or move them between estimator/sales.
+  app.patch<{ Params: { id: string } }>("/admin/users/:id", async (req, reply) => {
+    const body = z
+      .object({
+        role: z.enum(["estimator", "sales", "admin"]).optional(),
+        is_platform_admin: z.boolean().optional(),
+        org_role: z.enum(["owner", "member"]).optional(),
+      })
+      .parse(req.body);
+    if (req.params.id === req.user!.id && body.is_platform_admin === false) {
+      return reply.code(409).send({ error: "you cannot remove your own platform admin" });
+    }
+    const db = getDb();
+    const [u] = await db
+      .update(users)
+      .set({
+        ...(body.role !== undefined ? { role: body.role } : {}),
+        ...(body.is_platform_admin !== undefined ? { isPlatformAdmin: body.is_platform_admin } : {}),
+        ...(body.org_role !== undefined ? { orgRole: body.org_role } : {}),
+      })
+      .where(eq(users.id, req.params.id))
+      .returning();
+    if (!u) return reply.code(404).send({ error: "user not found" });
+    return u;
   });
 }
