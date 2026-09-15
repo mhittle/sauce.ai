@@ -29,6 +29,9 @@ importers:
       '@scribe/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@scribe/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@scribe/export':
         specifier: workspace:*
         version: link:../../packages/export
@@ -223,6 +226,18 @@ importers:
       '@types/pg':
         specifier: ^8.11.0
         version: 8.20.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.19.20)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  packages/email:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.20
+        version: 22.19.20
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

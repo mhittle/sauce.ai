@@ -21,6 +21,29 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   name: text("name"),
   role: text("role").notNull().default("estimator"),
+  phone: text("phone"),
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  termsVersion: text("terms_version"),
+  termsIp: text("terms_ip"),
+  lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const invites = pgTable("invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tokenHash: text("token_hash").notNull().unique(),
+  email: text("email").notNull(),
+  name: text("name"),
+  orgName: text("org_name"),
+  orgId: uuid("org_id"),
+  creditsGranted: integer("credits_granted").notNull().default(0),
+  invitedBy: uuid("invited_by").notNull().references(() => users.id),
+  note: text("note"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  usedBy: uuid("used_by").references(() => users.id),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

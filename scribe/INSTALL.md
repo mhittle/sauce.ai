@@ -73,7 +73,9 @@ full list):
 - **api:** `DATABASE_URL`, `REDIS_URL`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`,
   `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS`, `API_PUBLIC_URL`,
-  `WEB_PUBLIC_URL`, `NODE_ENV=production`
+  `WEB_PUBLIC_URL`, `NODE_ENV=production`; email (invites): `RESEND_API_KEY`,
+  `EMAIL_FROM`, `EMAIL_REPLY_TO` (optional) — without the key, invites are
+  created but not sent and the admin copies the link
 - **workers:** `DATABASE_URL`, `REDIS_URL`, `R2_*`, `ANTHROPIC_API_KEY`,
   `TAKEOFF_TOKEN_BUDGET`, `CRAWLER_DAILY_TOKEN_BUDGET`, `SAMGOV_API_KEY`
   (optional), `SOCRATA_APP_TOKEN` (optional), `OPENAI_API_KEY` +

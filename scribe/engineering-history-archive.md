@@ -6,6 +6,84 @@ not read during onboarding.
 
 ---
 
+## 2026-09-14 (b) — one flow: the wizard is the pipeline
+
+**Owner:** "make the beta flow the default, I don't want 2 modes." Until now
+PDFs had two paths: the automatic staged read (locate → detect → measure →
+price, no human between pages and review) and the wizard (draw → detect →
+build) as an advanced hand-off. Now there is one: after the page pick the
+worker locates the drawings, seeds them as `drawn` boxes, renders the
+wizard's page images, and parks at **`awaiting_boxes`**; the wizard opens on
+Mark with the regions pre-boxed; the human adjusts, Finds, Builds; the build
+lands on review. Status flow: `processing → awaiting_pages → processing →
+awaiting_boxes → processing → review → approved`.
+
+**Shipped.**
+- `staged.ts` — stages 3–4 (auto detect + build) removed; seeding writes
+  `status: "drawn"`, pre-renders `beta/pages/{n}.png` for every seeded page,
+  stores the seeding warnings in `docSummary {warnings, seeded: true}`, sets
+  `awaiting_boxes`, final progress "Drawings found — mark the cabinet areas".
+- `detect.ts buildFromDetections` prepends the seeded warnings to the built
+  summary (no-scale / disagreement / skipped-page notes survive the build).
+  `index.ts` beta_build now passes `evalFixture: true` — every build
+  snapshots pre-correction lines for the eval corpus, as the auto path did.
+- API `build-takeoff` accepts `awaiting_boxes`.
+- Web: `BetaDetect` rewritten as the three-step wizard (Mark · Find · Build)
+  — pages come from `takeoff.selectedPages`, Reading screen while
+  `processing`, no page step, no "beta" badge; `PagePicker` submits into
+  the wizard and the "draw the regions yourself" disclosure is gone;
+  `TakeoffReview` forwards `awaiting_boxes` to the wizard; `BoxReview.tsx`
+  (the 2026-08-10 legacy box gate) deleted; Jobs rows link `awaiting_boxes`
+  to the wizard; label "Mark cabinets".
+
+**Also (owner ask, same day): quotes have a name.** Migration `0011`
+`quotes.name`; `POST /quotes {name?}` and `PATCH /quotes/:id {name}`;
+`GET /jobs` carries `quote.name`. Review's "Looks right → Quote" opens a
+"Name this quote" dialog prefilled with the filename minus extension; the
+Quote screen's title is the name, renamed in place (click → type → Enter);
+the Quotes list shows the name with the filename beside it. Null name falls
+back to the job's filename everywhere, so old quotes need nothing.
+
+**Why the owner saw the old UI:** their checkout at
+`/Users/rd/Documents/Homize/sauce.ai` was on `scribe/estimate-reading-accuracy`
+(June, 105 commits behind) and the deployed/local build had PR 1 only —
+PRs 2–4 reached `main` via #260 on 2026-09-13. Pull `main`, rebuild.
+
+**Not changed.** `STAGED_READS=0` still selects the classic one-shot reader
+(emergency knob, not a mode); the harness still replays locate → detect →
+measure end to end; images and spreadsheets keep their gate-less paths.
+
+**Gotchas.** (1) A build failure restores `awaiting_boxes` (prior status),
+so the user lands back in the wizard with their boxes. (2) The wizard's
+Build step confirms only when the takeoff already has lines (re-marking a
+reviewed takeoff); a first build just builds. (3) `docSummary.seeded` is
+how the build knows which warnings to carry — don't drop the flag.
+
+---
+
+## 2026-09-14 (c) — Mark step: marked areas are unmistakable; overlap guard
+
+**Owner:** in Mark they double-marked a drawing because the existing region
+was a faint dashed outline, then saw the cabinets twice after Find.
+
+- `BoxOverlay` `underlays` → `areas: OverlayArea[]` — each marked area is a
+  solid redline rectangle with a tinted fill, a label chip ("Area 2 · 3
+  found" / "not scanned" / "scanning…" / "failed") and its own × button
+  (`onAreaRemove`), highlighted on hover (`onAreaHover`).
+- Wizard: chip list of the page's areas under the drawing (hover highlights
+  the box, × removes); areas numbered per page in creation order.
+- **Overlap guard:** a new box whose intersection covers ≥50% of the smaller
+  of it and an existing area is refused with a toast naming the area and
+  flashing it — the same cabinets must not be scanned twice. Partial overlaps
+  under 50% (padding) still draw.
+
+Verified on the mock (chips + SVG labels present, console clean); web
+build green. The guard's geometry is `overlapFraction` in `BetaDetect.tsx`.
+
+---
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI
