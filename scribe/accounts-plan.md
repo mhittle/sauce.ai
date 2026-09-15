@@ -40,8 +40,8 @@ Facts about the current code are from `apps/api/src/auth.ts`,
      signup page: form         invite: revoked        invite: expired
    (email read-only from       link → "This          link → "This invite
     the invite; name,           invite was            has expired — ask
-    company, phone,             withdrawn")           <inviter> for a new
-    heard-from, terms)                                 one"
+    phone; terms line)          withdrawn")           <inviter> for a new
+                                                       one"
                  |
         POST /signup {token, ...}
                  |
