@@ -15,6 +15,7 @@
     "@fastify/cors": "^11.0.0",
     "@fastify/multipart": "^9.0.0",
     "@scribe/db": "workspace:*",
+    "@scribe/email": "workspace:*",
     "@scribe/export": "workspace:*",
     "@scribe/freight": "workspace:*",
     "@scribe/pricing": "workspace:*",

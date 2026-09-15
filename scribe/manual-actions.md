@@ -10,6 +10,34 @@ real secret *values* here — document var names only.
 
 ## Open
 
+### MA-014 — Make ridadarwish12@gmail.com a platform admin (PR C, tenancy)
+Migration 0014 promotes only users with `role = 'admin'` (mhittle@gmail.com).
+After the api deploys: sign in as Mike → Admin → Users → tick **Platform
+admin** on ridadarwish12@gmail.com (also set Role = Admin). Verify with
+`GET /auth/me` → `"isPlatformAdmin": true` for both accounts. Until then
+Rida sees only the CabinetNow org's jobs (which is everything today) and no
+Admin tab.
+
+### MA-013 — Resend account, sending domain, DNS, `RESEND_API_KEY` on `scribe-api` (PR A, invites)
+Until done, Admin → Users → "Send invite" creates the invite and shows the
+link to copy; nothing is emailed (the API logs `email not configured`).
+1. https://resend.com → create the account → Domains → Add domain. Use a
+   subdomain of the product domain (e.g. `mail.<domain>`) — `up.railway.app`
+   cannot send mail, so this needs the real domain (accounts-plan.md §1.6).
+2. At the DNS host add exactly the records Resend lists: the DKIM
+   (`resend._domainkey.mail.<domain>` TXT), the SPF (`send.mail.<domain>`
+   TXT `v=spf1 include:amazonses.com ~all`) and its MX
+   (`feedback-smtp.<region>.amazonses.com`, priority 10). Add DMARC:
+   `_dmarc.mail.<domain>` TXT `v=DMARC1; p=none; rua=mailto:dmarc@<domain>`
+   (tighten to `p=quarantine` after a clean week).
+3. Wait for the domain to show **Verified** in Resend; send the dashboard
+   test email.
+4. Resend → API Keys → create a "sending" key. Railway → `scribe-api` →
+   Variables: `RESEND_API_KEY=<key>`, `EMAIL_FROM=Scribe <no-reply@mail.<domain>>`,
+   `EMAIL_REPLY_TO=<a real inbox>`. Redeploy the api.
+5. Verify: Admin → Users → invite your own address → the email arrives; the
+   invites table shows "Emailed to …".
+
 ### MA-012 — (No action to enable; rollback knob only) Staged reads default
 PR #247 makes the staged pipeline the default for PDF takeoffs — nothing to
 set; migrations 0006/0007 apply at API boot. **Rollback knob**: if staged

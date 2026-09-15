@@ -262,9 +262,14 @@ async function replaceEvalFixture(
   lines: CabinetLineItem[]
 ): Promise<void> {
   const db = getDb();
+  const [t] = await db
+    .select({ orgId: takeoffs.orgId })
+    .from(takeoffs)
+    .where(eq(takeoffs.id, takeoffId));
   await db.delete(evalFixtures).where(eq(evalFixtures.takeoffId, takeoffId));
   await db.insert(evalFixtures).values({
     takeoffId,
+    orgId: t.orgId,
     extractedLines: lines,
     promptVersion: EXTRACT_PROMPT_VERSION,
   });
