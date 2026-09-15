@@ -82,6 +82,28 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (j) — accounts / onboarding / credits / Stripe plan written (no code)
+
+**Owner ask** (`next-session-prompt.md`): plan the invite → sign-up →
+profile flow, the onboarding tutorial, the credits data model and pricing,
+and confirm the Stripe row — then stop for decisions. **Shipped:**
+`accounts-plan.md`. Key recommendations: sign-up submit issues the session
+directly (the emailed token proves the mailbox), later sign-ins are Google
+OAuth or an email magic link, no password; Google consent screen goes
+external + published (non-sensitive scopes → no review, but terms/privacy
+URLs are required); Resend on a `mail.` subdomain with SPF/DKIM/DMARC as
+manual actions; tenancy = `orgs` + `org_id` on takeoffs/quotes/customers/
+eval_fixtures, `is_platform_admin`, `requirePlatformAdmin` /
+`requireOrgOwner`, 54 routes audited; PR order **A → C → B → D** (tenancy
+before any sign-up). Credits: `model_rates` / `usage_events` (microcents)
+/ `credit_ledger` (hold → settle | release) / `platform_settings`; hook is
+`TakeoffBudget.record` plus the two hand-summed sites in `detect.ts`;
+pricing proposal $1/page, 5-page minimum, 20-page grant, re-runs included,
+`credits_enforced=false` until Stripe. **Open:** the six decisions in
+`accounts-plan.md` §5. Nothing built; no prod state touched.
+
+---
+
 ## 2026-09-15 (i) — session wrap-up: SCR-013/014 shipped, plan awaiting decision, next = sign-up + credits
 
 **Shipped:** #274 (parse hardening, salvage evidence, review error banner),
@@ -416,61 +438,17 @@ build green. The guard's geometry is `overlapFraction` in `BetaDetect.tsx`.
 
 ---
 
-## 2026-09-14 (b) — one flow: the wizard is the pipeline
-
-**Owner:** "make the beta flow the default, I don't want 2 modes." Until now
-PDFs had two paths: the automatic staged read (locate → detect → measure →
-price, no human between pages and review) and the wizard (draw → detect →
-build) as an advanced hand-off. Now there is one: after the page pick the
-worker locates the drawings, seeds them as `drawn` boxes, renders the
-wizard's page images, and parks at **`awaiting_boxes`**; the wizard opens on
-Mark with the regions pre-boxed; the human adjusts, Finds, Builds; the build
-lands on review. Status flow: `processing → awaiting_pages → processing →
-awaiting_boxes → processing → review → approved`.
-
-**Shipped.**
-- `staged.ts` — stages 3–4 (auto detect + build) removed; seeding writes
-  `status: "drawn"`, pre-renders `beta/pages/{n}.png` for every seeded page,
-  stores the seeding warnings in `docSummary {warnings, seeded: true}`, sets
-  `awaiting_boxes`, final progress "Drawings found — mark the cabinet areas".
-- `detect.ts buildFromDetections` prepends the seeded warnings to the built
-  summary (no-scale / disagreement / skipped-page notes survive the build).
-  `index.ts` beta_build now passes `evalFixture: true` — every build
-  snapshots pre-correction lines for the eval corpus, as the auto path did.
-- API `build-takeoff` accepts `awaiting_boxes`.
-- Web: `BetaDetect` rewritten as the three-step wizard (Mark · Find · Build)
-  — pages come from `takeoff.selectedPages`, Reading screen while
-  `processing`, no page step, no "beta" badge; `PagePicker` submits into
-  the wizard and the "draw the regions yourself" disclosure is gone;
-  `TakeoffReview` forwards `awaiting_boxes` to the wizard; `BoxReview.tsx`
-  (the 2026-08-10 legacy box gate) deleted; Jobs rows link `awaiting_boxes`
-  to the wizard; label "Mark cabinets".
-
-**Also (owner ask, same day): quotes have a name.** Migration `0011`
-`quotes.name`; `POST /quotes {name?}` and `PATCH /quotes/:id {name}`;
-`GET /jobs` carries `quote.name`. Review's "Looks right → Quote" opens a
-"Name this quote" dialog prefilled with the filename minus extension; the
-Quote screen's title is the name, renamed in place (click → type → Enter);
-the Quotes list shows the name with the filename beside it. Null name falls
-back to the job's filename everywhere, so old quotes need nothing.
-
-**Why the owner saw the old UI:** their checkout at
-`/Users/rd/Documents/Homize/sauce.ai` was on `scribe/estimate-reading-accuracy`
-(June, 105 commits behind) and the deployed/local build had PR 1 only —
-PRs 2–4 reached `main` via #260 on 2026-09-13. Pull `main`, rebuild.
-
-**Not changed.** `STAGED_READS=0` still selects the classic one-shot reader
-(emergency knob, not a mode); the harness still replays locate → detect →
-measure end to end; images and spreadsheets keep their gate-less paths.
-
-**Gotchas.** (1) A build failure restores `awaiting_boxes` (prior status),
-so the user lands back in the wizard with their boxes. (2) The wizard's
-Build step confirms only when the takeoff already has lines (re-marking a
-reviewed takeoff); a first build just builds. (3) `docSummary.seeded` is
-how the build knows which warnings to carry — don't drop the flag.
 ---
 
 ## Condensed history
+
+### 2026-09-14 (b) — one flow: the wizard is the pipeline (archived verbatim)
+Two PDF paths (auto staged read vs wizard) collapsed into one: after Pages the
+worker locates drawings, seeds `drawn` boxes, renders wizard page images and
+parks at `awaiting_boxes`; Mark → Find → Build lands on review. Quotes got a
+name (migration 0011, `quotes.name`). Gotchas: a build failure restores
+`awaiting_boxes`; `docSummary.seeded` tells the build which warnings to carry;
+`STAGED_READS=0` is the emergency classic reader. Full text in the archive.
 
 ### 2026-09-15 (e) — session wrap-up after #272 (archived verbatim)
 Session 2026-09-10→15 recap: Stage 1 UI, one flow, V0 A+B, Mark step, three
