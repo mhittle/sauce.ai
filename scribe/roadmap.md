@@ -17,7 +17,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
-| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #TBD tutorial; 2026-09-15 — merge pending) |
+| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #283 tutorial; 2026-09-15 — merge pending) |
 | Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | in-progress (schema + pricing proposal in `accounts-plan.md` §3, awaiting decision) |
 | Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
@@ -141,7 +141,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   platform logo on quote PDFs; team list with owner/member toggle;
   teammate invites that join the org, `POST /account/invites`);
   `requireOrgOwner`; "Account & team" in the account menu.
-- **Tutorial shipped (#TBD):** migration 0016 (`takeoffs.is_sample /
+- **Tutorial shipped (#283):** migration 0016 (`takeoffs.is_sample /
   storage_id`, `users.onboarding`, `org_settings.sample_takeoff_id`);
   Admin → Users "Sample job for new accounts" picks a finished takeoff;
   sign-up clones it into the new org (rows only, images shared via
