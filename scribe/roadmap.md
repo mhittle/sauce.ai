@@ -111,7 +111,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   grant), and the account screens from product-plan §4. Prompt for the
   session: `scribe/next-session-prompt.md`.
 - **2026-09-15 plan written** (`accounts-plan.md` §1–2): state diagram,
-  `invites` + `users` columns, sign-in = Google OAuth or email magic link
+  `invites` + `users` columns, form = email + name + phone only (owner), sign-in = Google OAuth or email magic link
   (no password), Google consent-screen steps, Resend DNS steps, tenancy
   route audit, PR split A (email + invites, LOE 3) → C (tenancy, 5) → B
   (sign-up page, 3) → D (account screens, 3); tutorial = seeded sample job

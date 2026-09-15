@@ -47,9 +47,9 @@ Facts about the current code are from `apps/api/src/auth.ts`,
                  |
                  v
    in ONE transaction:
-     users.insert (email, name, phone, heard_from, terms_accepted_at,
-                   terms_version, role 'estimator', org_role 'owner')
-     orgs.insert (name = company)             [PR C shape; see 1.6]
+     users.insert (email, name, phone, terms_accepted_at, terms_version,
+                   role 'estimator', org_role 'owner')
+     orgs.insert (name = invite.org_name ?? user name)   [PR C shape; see 1.7]
      invites.used_at = now, used_by = user.id
      credit_ledger grant of invite.credits   [after credits ship; else noop]
                  |
@@ -66,19 +66,20 @@ Guards: a used token → "This invite was already used — sign in"; an
 invite whose email already has a user → same message; token compared by
 sha256 hash, single use, never logged.
 
-### 1.3 Sign-up form fields (proposed)
+### 1.3 Sign-up form fields (owner decision 2026-09-15: email, name, phone)
 
 | Field | Required | Storage |
 |---|---|---|
 | Email | read-only, from the invite | `users.email` |
 | Full name | yes | `users.name` |
-| Company | yes | `orgs.name` (until PR C: `users.company`) |
 | Phone | no | `users.phone` |
-| How did you hear about us | select: referral / search / trade show / social / other + free text when "other" | `users.heard_from` |
-| I agree to the Terms and Privacy Policy | required checkbox, links open in a new tab | `users.terms_accepted_at`, `users.terms_version`, `users.terms_ip` |
 
-Not asked: password (see 1.4), role (everyone is `estimator`; org role
-`owner` for the first user of an org), logo (account screens, PR D).
+Under the button, one line: "By continuing you agree to the Terms and
+Privacy Policy" (links open in a new tab); submitting records
+`users.terms_accepted_at`, `terms_version`, `terms_ip` — no checkbox. The
+org is created with `name = the invitee's name` and renamed on the account
+screen (PR D) or by the admin when creating the invite (`invites.org_name`,
+optional). Not asked: company, how-heard, password, role, logo.
 
 **DECIDE:** the Terms and Privacy Policy pages must exist (public URLs)
 before the first invite goes out — they are also required fields on the
@@ -221,6 +222,7 @@ CREATE TABLE invites (
   token_hash text NOT NULL UNIQUE,           -- sha256(token); token is 32 random bytes base64url, shown once
   email text NOT NULL,
   name text,                                  -- optional prefill
+  org_name text,                              -- optional; else the org is named after the user
   credits_granted integer NOT NULL DEFAULT 0, -- pages; applied when credits ship
   org_id uuid,                                -- NULL = sign-up creates a new org; set = join this org (PR D members)
   invited_by uuid NOT NULL REFERENCES users(id),
@@ -235,9 +237,8 @@ CREATE TABLE invites (
 CREATE INDEX invites_email_idx ON invites (lower(email));
 ```
 
-`users` additions (same migration): `phone`, `company` (dropped into
-`orgs.name` by PR C), `heard_from`, `terms_accepted_at`, `terms_version`,
-`terms_ip`, `last_sign_in_at`.
+`users` additions (same migration): `phone`, `terms_accepted_at`,
+`terms_version`, `terms_ip`, `last_sign_in_at`.
 
 ### 1.9 PR plan, order and LOE (roadmap scale 1–10)
 
@@ -250,7 +251,7 @@ exists (the transaction in 1.2 needs the table).
 |---|---|---|---|
 | **A. Email provider + invites API** | `packages/email` (Resend client, `sendInvite`, log-only fallback), migration 0013, `POST /admin/invites` (platform admin; creates + emails; returns the link too), `GET /admin/invites` (pending / used / revoked), `POST /admin/invites/:id/resend`, `DELETE /admin/invites/:id` (revoke), `GET /signup/:token` (public; returns email/name/state, never the token), Admin → Users "Invite" dialog + pending list, `.env.example`, INSTALL.md | 3 | Resend account, domain, DNS, `RESEND_API_KEY`, `EMAIL_FROM` on `scribe-api` |
 | **C. Tenancy** | migration 0014 + backfill, `SessionUser` org fields, `requirePlatformAdmin` / `requireOrgOwner`, every route in 1.7, worker org stamping, cross-org 404 tests, Admin gating in web | 5 | none (migration applies at boot); confirm both owner emails are platform admins after deploy via `/auth/me` |
-| **B. Sign-up page** | `POST /signup` (transaction in 1.2, creates org), `/signup?token=` route in the web app (form, terms, error states), session hand-off identical to OAuth (`#session=`), lands on Jobs; magic link (`login_tokens`, `POST /auth/magic-link`, `GET /auth/magic/:token`, login-screen email field); welcome email; `messages.ts` copy for every error | 3 | Google consent screen → external + published (1.5); terms + privacy URLs |
+| **B. Sign-up page** | `POST /signup` (transaction in 1.2, creates org), `/signup?token=` route in the web app (name + phone, terms line, error states), session hand-off identical to OAuth (`#session=`), lands on Jobs; magic link (`login_tokens`, `POST /auth/magic-link`, `GET /auth/magic/:token`, login-screen email field); welcome email; `messages.ts` copy for every error | 3 | Google consent screen → external + published (1.5); terms + privacy URLs |
 | **D. Account screens** | `/account`: profile (name, phone), org (name, logo — reuse the org_settings logo upload), members list (owner: remove, change role), "Invite a teammate" (an invite with `org_id` set), sign out; account menu in the top bar (also hosts "Show me around", §2) | 3 | none |
 
 Total LOE 14 across four PRs; A and C can be built in parallel (disjoint
