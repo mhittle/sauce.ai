@@ -17,7 +17,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
-| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | in-progress (plan in `accounts-plan.md`, awaiting owner decisions) |
+| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | in-progress (PR A email + invites #TBD; next C tenancy, B sign-up, D account, tutorial) |
 | Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | in-progress (schema + pricing proposal in `accounts-plan.md` §3, awaiting decision) |
 | Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
@@ -116,6 +116,13 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   route audit, PR split A (email + invites, LOE 3) → C (tenancy, 5) → B
   (sign-up page, 3) → D (account screens, 3); tutorial = seeded sample job
   + `Coachmark` callouts, LOE 4, after B. Six decisions listed in §5.
+- **2026-09-15 owner:** form = email, name, phone; "ok go" on the
+  recommendations. **PR A shipped (#TBD):** `packages/email` (Resend REST,
+  log-only without the key, invite template), migration 0013 (`invites`,
+  `users.phone/terms_*/last_sign_in_at`), `POST/GET /admin/invites`,
+  `POST /admin/invites/:id/resend`, `DELETE /admin/invites/:id`, public
+  `GET /signup/:token`, Admin → Users "Invite someone" + invites list.
+  MA-013 (Resend + DNS) open. Next: PR C tenancy.
 
 ### Credits: usage ledger → per-page credits
 

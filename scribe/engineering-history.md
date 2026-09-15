@@ -82,6 +82,44 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (k) — PR A: email provider + invites API + Admin invite panel
+
+**Owner:** sign-up form = email, name, phone only; "ok go" on the plan's
+recommendations (A → C → B → D, Google OAuth + magic link, no password).
+
+**Shipped.**
+- `packages/email`: `sendEmail` posts to Resend's REST endpoint (no SDK);
+  with `RESEND_API_KEY`/`EMAIL_FROM` unset it logs and returns
+  `sent: false` so dev/tests/prod-before-DNS all work. `inviteEmail`
+  template (text + html, escaped; tests).
+- Migration `0013_invites.sql`: `invites` (token_hash sha256, email, name,
+  org_name, org_id for PR C/D, credits_granted, invited_by, note,
+  expires_at 14 d, used_at/used_by, revoked_at, last_sent_at) and
+  `users.phone / terms_accepted_at / terms_version / terms_ip /
+  last_sign_in_at`.
+- API `routes/invites.ts`: public `GET /signup/:token` (state only for
+  non-pending; email/name/inviter/credits for pending; never the token);
+  admin `GET /admin/invites` (+ `emailConfigured`), `POST /admin/invites`
+  (409 if the email has an account; emails; returns the link once),
+  `POST /admin/invites/:id/resend` (new token, new expiry — also revives
+  expired), `DELETE /admin/invites/:id` (revoke). `lib/tokens.ts`
+  (`newToken`, `hashToken`, `inviteState`; tests).
+- Web Admin → Users: "Invite someone" (email, name, company, pages
+  included, note), copyable last link, invites list (pending by default,
+  toggle for used/expired/revoked, Resend/Revoke), warning when email is
+  not configured.
+
+**Gotchas.** (1) The raw token exists only in the email and the create/
+resend response; the DB holds the hash — a lost link means Resend, which
+rotates it. (2) `org_id`/`org_name` on invites are stored but unused until
+PR C/B. (3) `POST /signup` (creating the user) is PR B, deliberately not
+here — a pending invite cannot yet be redeemed.
+
+**Manual:** MA-013 (Resend account, `mail.` subdomain DNS, `RESEND_API_KEY`
++ `EMAIL_FROM` on `scribe-api`).
+
+---
+
 ## 2026-09-15 (j) — accounts / onboarding / credits / Stripe plan written (no code)
 
 **Owner ask** (`next-session-prompt.md`): plan the invite → sign-up →
@@ -417,30 +455,14 @@ untested (needs fresh reads, ~$5). Not pursued.
 
 ---
 
-## 2026-09-14 (c) — Mark step: marked areas are unmistakable; overlap guard
-
-**Owner:** in Mark they double-marked a drawing because the existing region
-was a faint dashed outline, then saw the cabinets twice after Find.
-
-- `BoxOverlay` `underlays` → `areas: OverlayArea[]` — each marked area is a
-  solid redline rectangle with a tinted fill, a label chip ("Area 2 · 3
-  found" / "not scanned" / "scanning…" / "failed") and its own × button
-  (`onAreaRemove`), highlighted on hover (`onAreaHover`).
-- Wizard: chip list of the page's areas under the drawing (hover highlights
-  the box, × removes); areas numbered per page in creation order.
-- **Overlap guard:** a new box whose intersection covers ≥50% of the smaller
-  of it and an existing area is refused with a toast naming the area and
-  flashing it — the same cabinets must not be scanned twice. Partial overlaps
-  under 50% (padding) still draw.
-
-Verified on the mock (chips + SVG labels present, console clean); web
-build green. The guard's geometry is `overlapFraction` in `BetaDetect.tsx`.
-
----
-
 ---
 
 ## Condensed history
+
+### 2026-09-14 (c) — Mark step: marked areas unmistakable; overlap guard (archived verbatim)
+`BoxOverlay` areas became solid redline rectangles with label chips and ×;
+a new box overlapping ≥50% of an existing area is refused with a toast
+(`overlapFraction` in `BetaDetect.tsx`) so cabinets are never scanned twice.
 
 ### 2026-09-14 (b) — one flow: the wizard is the pipeline (archived verbatim)
 Two PDF paths (auto staged read vs wizard) collapsed into one: after Pages the

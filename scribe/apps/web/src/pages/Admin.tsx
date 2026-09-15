@@ -5,6 +5,7 @@ import { adminRoute } from "../main";
 import { apiGet, apiSend, apiUpload, formatUsd } from "../api";
 import {
   Badge,
+  type BadgeTone,
   Button,
   Card,
   errorMessage,
@@ -32,7 +33,7 @@ const TABS: { key: Tab; label: string; hint: string; hidden?: boolean }[] = [
   { key: "branding", label: "Branding & terms", hint: "Logo, quote terms, footer" },
   { key: "freight", label: "Freight & reading", hint: "Pallet rate, handling, cross-check" },
   { key: "templates", label: "Export mappings", hint: "Mozaik / KCD columns" },
-  { key: "users", label: "Users", hint: "Who can sign in" },
+  { key: "users", label: "Users", hint: "Invites and who can sign in" },
   { key: "sources", label: "Crawler sources", hint: "Prospector (hidden)", hidden: true },
 ];
 
@@ -69,7 +70,7 @@ export function AdminPage() {
           {tab === "branding" && <Branding />}
           {tab === "freight" && <FreightAndReading />}
           {tab === "templates" && <ExportTemplates />}
-          {tab === "users" && <Users />}
+          {tab === "users" && (<><Invites /><Users /></>)}
           {tab === "sources" && <Sources />}
         </div>
       </div>
@@ -733,6 +734,214 @@ function Sources() {
 }
 
 // ---------------------------------------------------------------------------
+// Invites (accounts-plan.md §1): a single-use sign-up link emailed to a
+// prospect. The link is shown once so it can be pasted when email is not
+// configured on the API yet.
+// ---------------------------------------------------------------------------
+
+interface InviteRow {
+  id: string;
+  email: string;
+  name: string | null;
+  orgName: string | null;
+  creditsGranted: number;
+  note: string | null;
+  expiresAt: string;
+  usedAt: string | null;
+  revokedAt: string | null;
+  lastSentAt: string | null;
+  createdAt: string;
+  state: "pending" | "used" | "revoked" | "expired";
+}
+
+interface InviteList {
+  emailConfigured: boolean;
+  invites: InviteRow[];
+}
+
+const INVITE_TONE: Record<InviteRow["state"], BadgeTone> = {
+  pending: "blue",
+  used: "good",
+  revoked: "neutral",
+  expired: "warn",
+};
+
+function Invites() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({
+    queryKey: ["invites"],
+    queryFn: () => apiGet<InviteList>("/admin/invites"),
+  });
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [credits, setCredits] = useState(20);
+  const [note, setNote] = useState("");
+  const [lastLink, setLastLink] = useState<{ email: string; link: string; sent: boolean } | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const create = useMutation({
+    mutationFn: () =>
+      apiSend<InviteRow & { sent: boolean; link: string }>("POST", "/admin/invites", {
+        email,
+        name: name || undefined,
+        orgName: orgName || undefined,
+        creditsGranted: credits,
+        note: note || undefined,
+      }),
+    onSuccess: (r) => {
+      setEmail("");
+      setName("");
+      setOrgName("");
+      setNote("");
+      setLastLink({ email: r.email, link: r.link, sent: r.sent });
+      qc.invalidateQueries({ queryKey: ["invites"] });
+      toast.success(r.sent ? `Invite emailed to ${r.email}` : `Invite created — email not configured, copy the link`);
+    },
+    onError: (e) => toast.error("Invite not created", errorMessage(e)),
+  });
+  const resend = useMutation({
+    mutationFn: (id: string) =>
+      apiSend<InviteRow & { sent: boolean; link: string }>("POST", `/admin/invites/${id}/resend`),
+    onSuccess: (r) => {
+      setLastLink({ email: r.email, link: r.link, sent: r.sent });
+      qc.invalidateQueries({ queryKey: ["invites"] });
+      toast.success(r.sent ? `New link emailed to ${r.email}` : "New link ready — copy it below");
+    },
+    onError: (e) => toast.error("Could not resend", errorMessage(e)),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => apiSend<InviteRow>("DELETE", `/admin/invites/${id}`),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["invites"] });
+      toast.info(`Invite for ${r.email} withdrawn`);
+    },
+    onError: (e) => toast.error("Could not revoke", errorMessage(e)),
+  });
+
+  const rows = (q.data?.invites ?? []).filter((i) => showAll || i.state === "pending");
+  const hidden = (q.data?.invites.length ?? 0) - rows.length;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <SectionLabel>Invite someone</SectionLabel>
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (email) create.mutate();
+          }}
+        >
+          <Field label="Email" className="min-w-56 flex-1">
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" />
+          </Field>
+          <Field label="Name (optional)" className="min-w-40">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Pat" />
+          </Field>
+          <Field label="Company (optional)" className="min-w-40">
+            <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="Pat's Cabinets" />
+          </Field>
+          <Field label="Pages included" hint="Credits granted at sign-up">
+            <NumberInput value={credits} onChange={(e) => setCredits(Number(e.target.value))} min={0} max={10000} className="w-24" />
+          </Field>
+          <Field label="Note (admins only)" className="min-w-48 flex-1">
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="met at KBIS" />
+          </Field>
+          <Button type="submit" variant="primary" disabled={!email} loading={create.isPending} className="mb-4">
+            Send invite
+          </Button>
+        </form>
+        {q.data && !q.data.emailConfigured && (
+          <p className="text-xs text-warn">
+            Email is not configured on the API (RESEND_API_KEY / EMAIL_FROM), so invites are not sent — copy the link after creating one.
+          </p>
+        )}
+        {lastLink && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-rule bg-rule-soft px-3 py-2 text-xs">
+            <span className="text-muted">
+              {lastLink.sent ? "Emailed to" : "Link for"} <span className="font-medium text-ink">{lastLink.email}</span>:
+            </span>
+            <code className="min-w-0 flex-1 truncate font-mono">{lastLink.link}</code>
+            <Button
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(lastLink.link).then(
+                  () => toast.success("Link copied"),
+                  () => toast.error("Copy failed", "Select the link and copy it by hand")
+                );
+              }}
+            >
+              Copy
+            </Button>
+          </div>
+        )}
+      </Card>
+      <Card className="p-0">
+        <div className="flex items-center justify-between px-4 py-2">
+          <SectionLabel>Invites</SectionLabel>
+          {hidden > 0 || showAll ? (
+            <button type="button" className="text-xs text-muted underline" onClick={() => setShowAll((v) => !v)}>
+              {showAll ? "Pending only" : `Show ${hidden} used / expired / revoked`}
+            </button>
+          ) : null}
+        </div>
+        {q.isLoading ? (
+          <SkeletonRows rows={3} />
+        ) : rows.length === 0 ? (
+          <p className="px-4 pb-4 text-sm text-muted">No pending invites.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
+                <th className="px-4 py-2">Email</th>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Pages</th>
+                <th className="px-3 py-2">State</th>
+                <th className="px-3 py-2">Expires</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((i) => (
+                <tr key={i.id} className="border-b border-rule-soft">
+                  <td className="px-4 py-2 font-medium">
+                    {i.email}
+                    {i.note && <div className="text-xs text-faint">{i.note}</div>}
+                  </td>
+                  <td className="px-3 py-2 text-muted">
+                    {i.name ?? "—"}
+                    {i.orgName && <div className="text-xs text-faint">{i.orgName}</div>}
+                  </td>
+                  <td className="px-3 py-2 text-muted">{i.creditsGranted}</td>
+                  <td className="px-3 py-2"><Badge tone={INVITE_TONE[i.state]}>{i.state}</Badge></td>
+                  <td className="px-3 py-2 text-muted">{new Date(i.expiresAt).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-right">
+                    {(i.state === "pending" || i.state === "expired") && (
+                      <span className="inline-flex gap-1">
+                        <Button size="sm" loading={resend.isPending && resend.variables === i.id} onClick={() => resend.mutate(i.id)}>
+                          Resend
+                        </Button>
+                        {i.state === "pending" && (
+                          <Button size="sm" variant="ghost" loading={revoke.isPending && revoke.variables === i.id} onClick={() => revoke.mutate(i.id)}>
+                            Revoke
+                          </Button>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Users (allow-list until self-signup lands in Stage 2)
 // ---------------------------------------------------------------------------
 
@@ -803,8 +1012,7 @@ function Users() {
           </Button>
         </form>
         <p className="text-xs text-faint">
-          Until self-signup lands, only listed Google accounts can sign in. Roles can't be
-          changed here yet.
+          Adds a Google account directly, no email. Roles can't be changed here yet.
         </p>
       </Card>
       <Card className="p-0">
