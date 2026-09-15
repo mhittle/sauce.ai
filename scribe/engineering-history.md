@@ -82,6 +82,29 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (n) — PR D: account screens (profile, company, team, teammate invites)
+
+**Shipped.** `routes/account.ts` (`requireUser`; owner writes behind the
+new `requireOrgOwner`, which platform admins also pass): `PATCH /me
+{name, phone}`; `GET /account` (me, org with signed logo URL, members,
+pending invites for this org); `PATCH /account/org {name}`; `POST
+/account/org/logo` (PNG/JPEG → `orgs/{org}/logo-*.{ext}`,
+`orgs.logo_s3_key`); `PATCH /account/members/:id {org_role}` (no
+self-demotion); `POST /account/invites {email, name?}` → an invite with
+`org_id` set (joins the org, no new org, no credits) via the shared
+`createInvite` in `routes/invites.ts`; `DELETE /account/invites/:id`.
+Quote PDF uses the org's logo when set, else the platform logo. Web:
+`pages/Account.tsx` at `/account` (You / Company / Team cards; members see
+read-only), "Account & team" in the account menu above Sign out.
+
+**Gotchas.** (1) An admin's platform-level invite (Admin → Users) with no
+company name makes an org named after the person; owners rename it here.
+(2) Members cannot be removed yet (users carry FKs from takeoffs/quotes);
+demote to member instead — removal is a follow-up. (3) `orgSettings`
+quote terms/footer stay platform-wide.
+
+---
+
 ## 2026-09-15 (m) — PR B: sign-up page + email magic link
 
 **Shipped.**

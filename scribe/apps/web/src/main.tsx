@@ -26,6 +26,7 @@ import { QuotesPage } from "./pages/Quotes";
 import { QuoteBuilderPage } from "./pages/QuoteBuilder";
 import { AdminPage } from "./pages/Admin";
 import { SignupPage } from "./pages/Signup";
+import { AccountPage } from "./pages/Account";
 
 const rootRoute = createRootRoute({ component: Layout });
 
@@ -119,8 +120,15 @@ export const signupRoute = createRoute({
   }),
 });
 
+export const accountRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/account",
+  component: AccountPage,
+});
+
 const routeTree = rootRoute.addChildren([
   signupRoute,
+  accountRoute,
   jobsRoute,
   dashboardRoute,
   prospectsRoute,

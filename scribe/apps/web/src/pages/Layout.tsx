@@ -277,6 +277,10 @@ function AccountMenu({ user }: { user: Me }) {
               {user.email} · {user.orgName ?? user.role}
             </div>
           </div>
+          <div className="my-1 border-t border-rule-soft" />
+          <Link to="/account" className={item} onClick={() => setOpen(false)}>
+            Account &amp; team
+          </Link>
           {user.isPlatformAdmin && (
             <>
               <div className="my-1 border-t border-rule-soft" />

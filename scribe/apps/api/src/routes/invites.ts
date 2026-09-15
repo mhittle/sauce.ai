@@ -18,7 +18,7 @@ export function signupLink(token: string): string {
 
 type InviteRow = typeof invites.$inferSelect;
 
-function publicInvite(row: InviteRow) {
+export function publicInvite(row: InviteRow) {
   return {
     id: row.id,
     email: row.email,
@@ -36,7 +36,7 @@ function publicInvite(row: InviteRow) {
   };
 }
 
-async function emailInvite(
+export async function emailInvite(
   app: FastifyInstance,
   row: InviteRow,
   token: string,
@@ -59,6 +59,41 @@ async function emailInvite(
       .where(eq(invites.id, row.id));
   }
   return { sent: result.sent, link };
+}
+
+export async function createInvite(
+  app: FastifyInstance,
+  input: {
+    email: string;
+    name?: string | null;
+    orgName?: string | null;
+    orgId?: string | null;
+    creditsGranted?: number;
+    note?: string | null;
+    invitedBy: { id: string; name: string | null; email: string };
+  }
+): Promise<{ row: InviteRow; sent: boolean; link: string } | { error: string }> {
+  const email = input.email.toLowerCase();
+  const db = getDb();
+  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+  if (existing.length > 0) return { error: "that email already has an account" };
+  const token = newToken();
+  const [row] = await db
+    .insert(invites)
+    .values({
+      tokenHash: hashToken(token),
+      email,
+      name: input.name || null,
+      orgName: input.orgName || null,
+      orgId: input.orgId ?? null,
+      creditsGranted: input.creditsGranted ?? 0,
+      invitedBy: input.invitedBy.id,
+      note: input.note || null,
+      expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+    })
+    .returning();
+  const { sent, link } = await emailInvite(app, row, token, input.invitedBy.name ?? input.invitedBy.email);
+  return { row: { ...row, lastSentAt: sent ? new Date() : null }, sent, link };
 }
 
 export async function inviteRoutes(app: FastifyInstance): Promise<void> {
@@ -108,30 +143,11 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
           note: z.string().trim().max(500).optional(),
         })
         .parse(req.body);
-      const email = body.email.toLowerCase();
-      const db = getDb();
-      const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-      if (existing.length > 0) {
-        return reply.code(409).send({ error: "that email already has an account" });
-      }
-      const token = newToken();
-      const [row] = await db
-        .insert(invites)
-        .values({
-          tokenHash: hashToken(token),
-          email,
-          name: body.name || null,
-          orgName: body.orgName || null,
-          creditsGranted: body.creditsGranted,
-          invitedBy: req.user!.id,
-          note: body.note || null,
-          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
-        })
-        .returning();
-      const { sent, link } = await emailInvite(app, row, token, req.user!.name ?? req.user!.email);
+      const made = await createInvite(app, { ...body, invitedBy: req.user! });
+      if ("error" in made) return reply.code(409).send(made);
       // The link is returned so the admin can paste it when email is not
       // configured; it is the only time the raw token leaves the server.
-      return reply.code(201).send({ ...publicInvite({ ...row, lastSentAt: sent ? new Date() : null }), sent, link });
+      return reply.code(201).send({ ...publicInvite(made.row), sent: made.sent, link: made.link });
     });
 
     // A new token: the old link stops working, the new one is emailed (and
