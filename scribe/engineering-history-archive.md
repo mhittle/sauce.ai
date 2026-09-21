@@ -61,6 +61,29 @@ how the build knows which warnings to carry — don't drop the flag.
 
 ---
 
+## 2026-09-14 (c) — Mark step: marked areas are unmistakable; overlap guard
+
+**Owner:** in Mark they double-marked a drawing because the existing region
+was a faint dashed outline, then saw the cabinets twice after Find.
+
+- `BoxOverlay` `underlays` → `areas: OverlayArea[]` — each marked area is a
+  solid redline rectangle with a tinted fill, a label chip ("Area 2 · 3
+  found" / "not scanned" / "scanning…" / "failed") and its own × button
+  (`onAreaRemove`), highlighted on hover (`onAreaHover`).
+- Wizard: chip list of the page's areas under the drawing (hover highlights
+  the box, × removes); areas numbered per page in creation order.
+- **Overlap guard:** a new box whose intersection covers ≥50% of the smaller
+  of it and an existing area is refused with a toast naming the area and
+  flashing it — the same cabinets must not be scanned twice. Partial overlaps
+  under 50% (padding) still draw.
+
+Verified on the mock (chips + SVG labels present, console clean); web
+build green. The guard's geometry is `overlapFraction` in `BetaDetect.tsx`.
+
+---
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI
