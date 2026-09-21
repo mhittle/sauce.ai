@@ -208,6 +208,89 @@ without `lineIds` keeps the old full-pass behaviour (classic path).
 
 ---
 
+## 2026-09-15 (c) — build failed in prod: `= ANY($list)` bug; builds now roll back and report progress
+
+**Owner report (live, MOLLY_CHARLEY_KITCHEN):** Find found 8 cabinets;
+Build errored `delete from takeoff_lines where … raw_model_output->>'parent'
+= ANY(($2, $3, …))`. Root cause: PR 2's scoped deletes used
+`sql\`… = ANY(${ids})\`` — drizzle expands a JS array into a parameter
+LIST, so Postgres got `ANY((…,…))`, which is invalid (ANY wants an array).
+It failed at the scoped pricing step, AFTER the lines had been inserted and
+`built_at` stamped: the area read "in takeoff" with 8 unpriced lines and
+Build then had "nothing new to build".
+
+**Fixed.**
+- All three sites (`replaceLinesForDetections`, scoped `priceAndExpand`,
+  API `deleteLinesForDetection`) use `inArray(sql\`…->>'parent'\`, ids)`
+  → `IN ($2, $3, …)`.
+- `buildFromDetections` stamps `built_at` only AFTER pricing succeeds; on
+  any failure after insert it deletes the inserted lines (+ faces) and
+  clears `built_at`, so the areas read as scanned-but-unbuilt and Build is
+  simply clickable again.
+- `build-takeoff` self-repairs the state this bug left behind: an area
+  stamped built whose lines were never priced (`product_line_id IS NULL AND
+  unmatched_reason IS NULL` on every line) is reset to unbuilt.
+- Progress during a build: the API writes `{stage: "measure", "Queued for
+  measuring"}` when Build is clicked; the worker writes "Measuring N
+  cabinets" before the model call; pricing writes "price". The Reading card
+  picks its title and stage list from the real stage (Preparing your pages /
+  Building your takeoff / Reading your drawings) instead of a client flag —
+  the "went back to Preparing" confusion.
+- `beta_build` jobs get `attempts: 2` (30 s fixed backoff) so a worker
+  restart mid-build (a deploy) recovers on its own.
+
+**Second live symptom, same day:** a job sat 25 min in `processing` showing
+the stale hand-off line — consistent with the PR 1/PR 2 deploys restarting
+the workers mid-build (unverified without the Railway log). The retry +
+progress changes cover it; if it recurs, the worker log for that job is the
+evidence to pull.
+
+**Gotcha.** Never write `= ANY(${jsArray})` in drizzle `sql` — use
+`inArray()`. Grep `= ANY(` in a review.
+
+---
+
+---
+
+## 2026-09-15 (d) — measuring answer unparseable → every size defaulted; salvage + retry + re-measure
+
+**Owner's live job (MOLLY_CHARLEY, 24 cabinets on 3 elevation areas):**
+Build ran ~2 min, then every cabinet came back 30" wide at 50% — the
+review's notes said "measurements response was not parseable JSON — sizes
+defaulted". The measure call had `max_tokens: 16000`, no `stop_reason`
+check and no salvage; the page-reading path has had 32k + salvage since
+June. Whether this answer was cut off or malformed is in
+`takeoffs/{id}/beta/measure/response-0.txt` (not pulled).
+
+**Fixed.**
+- `max_tokens: 32000` on the measure call; `stop_reason === "max_tokens"`
+  is logged and surfaces as a note ("cut off at the token limit; N of M
+  cabinets salvaged").
+- `parseMeasureResponse` salvages every COMPLETE cabinet object from an
+  unparseable answer (`salvageArrayObjects(text, "cabinets")`, the same
+  string-aware brace scanner as `salvageLineObjects`); note says how many.
+- An answer with zero usable cabinets gets ONE fresh model call; still
+  zero → the build throws ("the measuring step returned no usable sizes
+  twice — click Build again"), rolls back (2026-09-15 (c)), and the
+  wizard shows the error — instead of silently producing a takeoff of
+  defaults that LOOKS finished.
+- `POST /takeoffs/:id/remeasure` (review or awaiting_boxes): clears
+  `built_at` on every scanned area, keeps the found cabinets, queues a
+  build — "Measure again…" in the review's More menu (confirms; edits on
+  those cabinets are replaced). This is the recovery for the live job.
+
+**Gotchas.** (1) Each measuring attempt persists as `response-{attempt}.txt`.
+(2) Re-measure re-prices only the rebuilt lines like any area build; hand-
+drawn review lines (no area) are untouched. (3) The user's proposal
+("read the printed dimensions near each box across every page") is what
+the measure pass already does — `nearbyDims` per marker from the whole
+page's text layer + every page sent as context; the failure was purely
+the answer format.
+
+---
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI

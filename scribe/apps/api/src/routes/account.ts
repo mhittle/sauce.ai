@@ -5,6 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb, invites, orgs, users } from "@scribe/db";
 import { putObject, signedGetUrl } from "@scribe/storage";
 import { createInvite, publicInvite } from "./invites.js";
+import { cloneSampleTakeoff } from "../lib/sample.js";
 
 // Account screens (accounts-plan.md §1.9 PR D): the signed-in user's profile,
 // their org (name, logo), its members and teammate invites. Everything is
@@ -17,6 +18,8 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       .object({
         name: z.string().trim().min(1).max(120).optional(),
         phone: z.string().trim().max(40).nullable().optional(),
+        // Tutorial progress: {seen: {jobs: true, …}, dismissed?: true}.
+        onboarding: z.record(z.unknown()).optional(),
       })
       .parse(req.body);
     const db = getDb();
@@ -25,10 +28,17 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       .set({
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.phone !== undefined ? { phone: body.phone || null } : {}),
+        ...(body.onboarding !== undefined ? { onboarding: body.onboarding } : {}),
       })
       .where(eq(users.id, req.user!.id))
-      .returning({ id: users.id, name: users.name, phone: users.phone, email: users.email });
+      .returning({ id: users.id, name: users.name, phone: users.phone, email: users.email, onboarding: users.onboarding });
     return u;
+  });
+
+  // "Show me around": make sure the org has its sample job (idempotent).
+  app.post("/account/sample", async (req) => {
+    const id = await cloneSampleTakeoff(req.orgId, req.user!.id);
+    return { takeoffId: id };
   });
 
   app.get("/account", async (req) => {

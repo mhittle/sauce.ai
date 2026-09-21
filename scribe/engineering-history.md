@@ -82,6 +82,42 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (o) — onboarding tutorial: seeded sample job + coachmarks
+
+**Shipped (migration `0016_onboarding.sql`).**
+- **Sample job.** `org_settings.sample_takeoff_id` (Admin → Users →
+  "Sample job for new accounts"; must be review/approved and not itself a
+  clone). `lib/sample.ts cloneSampleTakeoff(orgId, userId)`: copies the
+  takeoff row (`is_sample`, `storage_id` = original, status `review`,
+  name "Sample — <file>"), its detections and lines with ids remapped
+  (faces' `raw_model_output.parent`, `detection_id`); idempotent per org;
+  called after sign-up (best-effort) and by `POST /account/sample`. Image
+  routes (`pages`, `thumbs`, `reads`, `beta/pages`) read from
+  `storage_id`; a preHandler refuses non-GET `/takeoffs/:id/…` on a sample
+  except accept-lines / approve / reopen (409 "this is the sample job —
+  upload your own plan set"), so reviewing, approving and quoting it works
+  and nothing re-reads it. `/jobs` carries `isSample`; the row shows a
+  "sample" badge.
+- **Coachmarks.** `ui/Coachmark.tsx` (fixed popover pinned to
+  `[data-tour=…]`, never blocks input, Next / Skip tour, N/M) and
+  `components/Tour.tsx` (`TOURS` copy per screen; steps whose anchor is
+  absent are skipped; progress `users.onboarding {seen, dismissed}` via
+  `PATCH /me`; `/auth/me` returns it). Anchors: Jobs upload zone + sample
+  row; Pages continue button; Mark step action; Review accept button +
+  estimate bar; Quote tiers + send. "Show me around" in the account menu
+  clears progress, re-seeds the sample and goes to Jobs.
+
+**Gotchas.** (1) `storage_id` is only honoured by the four image routes;
+worker key helpers still use the takeoff id — hence the write block on
+samples. (2) Deleting the original sample takeoff is blocked by the FK
+from `org_settings`; clear the sample first. (3) The tour reads `["me"]`
+from the query cache — a page that renders before `/auth/me` resolves
+simply shows nothing until it does.
+
+**Manual:** MA-016 (choose a sample plan set we may show to strangers).
+
+---
+
 ## 2026-09-15 (n) — PR D: account screens (profile, company, team, teammate invites)
 
 **Shipped.** `routes/account.ts` (`requireUser`; owner writes behind the
@@ -361,88 +397,21 @@ MOLLY_CHARLEY_KITCHEN job → review; Measure again from the review's More
 menu → review). If a non-clean answer recurs, the warn line has the edges.
 Strict JSON via structured outputs needs an SDK bump (0.70.1 has no
 `output_config`) — in the measurement-accuracy plan, not this PR.
-## 2026-09-15 (d) — measuring answer unparseable → every size defaulted; salvage + retry + re-measure
-
-**Owner's live job (MOLLY_CHARLEY, 24 cabinets on 3 elevation areas):**
-Build ran ~2 min, then every cabinet came back 30" wide at 50% — the
-review's notes said "measurements response was not parseable JSON — sizes
-defaulted". The measure call had `max_tokens: 16000`, no `stop_reason`
-check and no salvage; the page-reading path has had 32k + salvage since
-June. Whether this answer was cut off or malformed is in
-`takeoffs/{id}/beta/measure/response-0.txt` (not pulled).
-
-**Fixed.**
-- `max_tokens: 32000` on the measure call; `stop_reason === "max_tokens"`
-  is logged and surfaces as a note ("cut off at the token limit; N of M
-  cabinets salvaged").
-- `parseMeasureResponse` salvages every COMPLETE cabinet object from an
-  unparseable answer (`salvageArrayObjects(text, "cabinets")`, the same
-  string-aware brace scanner as `salvageLineObjects`); note says how many.
-- An answer with zero usable cabinets gets ONE fresh model call; still
-  zero → the build throws ("the measuring step returned no usable sizes
-  twice — click Build again"), rolls back (2026-09-15 (c)), and the
-  wizard shows the error — instead of silently producing a takeoff of
-  defaults that LOOKS finished.
-- `POST /takeoffs/:id/remeasure` (review or awaiting_boxes): clears
-  `built_at` on every scanned area, keeps the found cabinets, queues a
-  build — "Measure again…" in the review's More menu (confirms; edits on
-  those cabinets are replaced). This is the recovery for the live job.
-
-**Gotchas.** (1) Each measuring attempt persists as `response-{attempt}.txt`.
-(2) Re-measure re-prices only the rebuilt lines like any area build; hand-
-drawn review lines (no area) are untouched. (3) The user's proposal
-("read the printed dimensions near each box across every page") is what
-the measure pass already does — `nearbyDims` per marker from the whole
-page's text layer + every page sent as context; the failure was purely
-the answer format.
-
----
-
-## 2026-09-15 (c) — build failed in prod: `= ANY($list)` bug; builds now roll back and report progress
-
-**Owner report (live, MOLLY_CHARLEY_KITCHEN):** Find found 8 cabinets;
-Build errored `delete from takeoff_lines where … raw_model_output->>'parent'
-= ANY(($2, $3, …))`. Root cause: PR 2's scoped deletes used
-`sql\`… = ANY(${ids})\`` — drizzle expands a JS array into a parameter
-LIST, so Postgres got `ANY((…,…))`, which is invalid (ANY wants an array).
-It failed at the scoped pricing step, AFTER the lines had been inserted and
-`built_at` stamped: the area read "in takeoff" with 8 unpriced lines and
-Build then had "nothing new to build".
-
-**Fixed.**
-- All three sites (`replaceLinesForDetections`, scoped `priceAndExpand`,
-  API `deleteLinesForDetection`) use `inArray(sql\`…->>'parent'\`, ids)`
-  → `IN ($2, $3, …)`.
-- `buildFromDetections` stamps `built_at` only AFTER pricing succeeds; on
-  any failure after insert it deletes the inserted lines (+ faces) and
-  clears `built_at`, so the areas read as scanned-but-unbuilt and Build is
-  simply clickable again.
-- `build-takeoff` self-repairs the state this bug left behind: an area
-  stamped built whose lines were never priced (`product_line_id IS NULL AND
-  unmatched_reason IS NULL` on every line) is reset to unbuilt.
-- Progress during a build: the API writes `{stage: "measure", "Queued for
-  measuring"}` when Build is clicked; the worker writes "Measuring N
-  cabinets" before the model call; pricing writes "price". The Reading card
-  picks its title and stage list from the real stage (Preparing your pages /
-  Building your takeoff / Reading your drawings) instead of a client flag —
-  the "went back to Preparing" confusion.
-- `beta_build` jobs get `attempts: 2` (30 s fixed backoff) so a worker
-  restart mid-build (a deploy) recovers on its own.
-
-**Second live symptom, same day:** a job sat 25 min in `processing` showing
-the stale hand-off line — consistent with the PR 1/PR 2 deploys restarting
-the workers mid-build (unverified without the Railway log). The retry +
-progress changes cover it; if it recurs, the worker log for that job is the
-evidence to pull.
-
-**Gotcha.** Never write `= ANY(${jsArray})` in drizzle `sql` — use
-`inArray()`. Grep `= ANY(` in a review.
-
----
-
 ---
 
 ## Condensed history
+
+### 2026-09-15 (d) — unparseable measuring answer → salvage, retry, re-measure (archived verbatim)
+`max_tokens` 32k on the measure call with a `stop_reason` note; `parseMeasureResponse`
+salvages complete cabinet objects; zero usable → one retry, then the build throws
+and rolls back; `POST /takeoffs/:id/remeasure` ("Measure again…" in Review's More
+menu). Each attempt persists as `response-{attempt}.txt`.
+
+### 2026-09-15 (c) — `= ANY($list)` build failure; builds roll back (archived verbatim)
+Drizzle `sql\`= ANY(${ids})\`` expands to an invalid list — use `inArray`.
+`buildFromDetections` stamps `built_at` only after pricing and deletes
+inserted lines on failure; self-repair for stamped-but-unpriced areas;
+build progress stages; `beta_build` retries once (30 s). Full text in the archive.
 
 ### 2026-09-15 (b) — Mark step PR 2: areas own their cabinets (archived verbatim)
 Migration 0012 (`takeoff_lines.detection_id`, `takeoff_detections.built_at`);

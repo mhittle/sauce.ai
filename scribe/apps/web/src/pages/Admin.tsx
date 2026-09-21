@@ -70,7 +70,7 @@ export function AdminPage() {
           {tab === "branding" && <Branding />}
           {tab === "freight" && <FreightAndReading />}
           {tab === "templates" && <ExportTemplates />}
-          {tab === "users" && (<><Invites /><Users /></>)}
+          {tab === "users" && (<><Invites /><SampleJob /><Users /></>)}
           {tab === "sources" && <Sources />}
         </div>
       </div>
@@ -938,6 +938,63 @@ function Invites() {
         )}
       </Card>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tutorial sample job: one finished takeoff, cloned into every new org.
+// ---------------------------------------------------------------------------
+
+function SampleJob() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({
+    queryKey: ["sample-takeoff"],
+    queryFn: () => apiGet<{ takeoff: { id: string; sourceFilename: string | null; status: string } | null }>("/admin/sample-takeoff"),
+  });
+  const [id, setId] = useState("");
+  const save = useMutation({
+    mutationFn: (takeoff_id: string | null) => apiSend("PUT", "/admin/sample-takeoff", { takeoff_id }),
+    onSuccess: () => {
+      setId("");
+      qc.invalidateQueries({ queryKey: ["sample-takeoff"] });
+      toast.success("Sample job saved");
+    },
+    onError: (e) => toast.error("Not saved", errorMessage(e)),
+  });
+  const t = q.data?.takeoff ?? null;
+  return (
+    <Card>
+      <SectionLabel>Sample job for new accounts</SectionLabel>
+      <p className="mb-3 text-sm text-muted">
+        {t ? (
+          <>
+            Currently <span className="font-medium text-ink">{t.sourceFilename ?? t.id}</span> ({t.status}). New sign-ups get a copy on their Jobs list.
+          </>
+        ) : (
+          "None set — new sign-ups start with an empty Jobs list. Paste the id of a finished (reviewed or approved) takeoff from the URL of its review screen."
+        )}
+      </p>
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (id.trim()) save.mutate(id.trim());
+        }}
+      >
+        <Field label="Takeoff id" className="min-w-80 flex-1">
+          <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono" />
+        </Field>
+        <Button type="submit" variant="primary" disabled={!id.trim()} loading={save.isPending} className="mb-4">
+          Use as sample
+        </Button>
+        {t && (
+          <Button variant="quiet" onClick={() => save.mutate(null)} className="mb-4">
+            Clear
+          </Button>
+        )}
+      </form>
+    </Card>
   );
 }
 

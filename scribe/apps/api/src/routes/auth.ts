@@ -21,8 +21,10 @@ export const cookieOpts = {
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/me", async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: "not signed in" });
-    const [org] = await getDb().select({ name: orgs.name }).from(orgs).where(eq(orgs.id, req.orgId));
-    return { ...req.user, orgId: req.orgId, orgName: org?.name ?? null };
+    const db = getDb();
+    const [org] = await db.select({ name: orgs.name }).from(orgs).where(eq(orgs.id, req.orgId));
+    const [u] = await db.select({ onboarding: users.onboarding }).from(users).where(eq(users.id, req.user!.id));
+    return { ...req.user, orgId: req.orgId, orgName: org?.name ?? null, onboarding: u?.onboarding ?? {} };
   });
 
   app.post("/auth/logout", async (_req, reply) => {

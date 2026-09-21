@@ -5,6 +5,7 @@ import { getDb, invites, loginTokens, orgs, users } from "@scribe/db";
 import { magicLinkEmail, sendEmail } from "@scribe/email";
 import { SESSION_COOKIE, signSession } from "../auth.js";
 import { hashToken, inviteState, newToken } from "../lib/tokens.js";
+import { cloneSampleTakeoff } from "../lib/sample.js";
 import { apiUrl, cookieOpts, webUrl } from "./auth.js";
 
 const MAGIC_TTL_MS = 15 * 60_000;
@@ -79,6 +80,11 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
       return u;
     });
     req.log.info({ userId: user.id, orgId: user.orgId, invite: invite.id }, "signup completed");
+    try {
+      await cloneSampleTakeoff(user.orgId, user.id);
+    } catch (err) {
+      req.log.warn({ err, orgId: user.orgId }, "sample job not seeded");
+    }
 
     const token = signSession(user.id);
     reply.setCookie(SESSION_COOKIE, token, cookieOpts);

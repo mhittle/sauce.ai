@@ -13,6 +13,7 @@ import {
   Stepper,
   useToast,
 } from "../ui";
+import { Tour } from "../components/Tour";
 import { categoryLabel } from "../labels";
 import {
   BoxOverlay,
@@ -434,6 +435,7 @@ export function BetaDetectPage() {
 
   return (
     <div>
+      <Tour screen="mark" />
       <PageTitle
         eyebrow="Mark the cabinet areas"
         actions={
@@ -442,7 +444,7 @@ export function BetaDetectPage() {
             <Link to="/takeoffs/$takeoffId/pages" params={{ takeoffId }}>
               <Button variant="quiet">← Pages</Button>
             </Link>
-            {stepAction}
+            <span data-tour="mark-actions">{stepAction}</span>
           </div>
         }
       >

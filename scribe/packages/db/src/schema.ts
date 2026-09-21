@@ -37,6 +37,7 @@ export const users = pgTable("users", {
   termsVersion: text("terms_version"),
   termsIp: text("terms_ip"),
   lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+  onboarding: jsonb("onboarding").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -152,6 +153,10 @@ export const takeoffs = pgTable("takeoffs", {
   tokensUsed: bigint("tokens_used", { mode: "number" }).notNull().default(0),
   progress: jsonb("progress"),
   error: text("error"),
+  // migrations/0016 — the tutorial's cloned sample job; storage_id is the
+  // takeoff whose objects (pages, reads) this row displays.
+  isSample: boolean("is_sample").notNull().default(false),
+  storageId: uuid("storage_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -273,6 +278,7 @@ export const orgSettings = pgTable("org_settings", {
   palletConfig: jsonb("pallet_config").notNull().default({}),
   freightProvider: text("freight_provider").notNull().default("flat_pallet"),
   crossValidationEnabled: boolean("cross_validation_enabled").notNull().default(false),
+  sampleTakeoffId: uuid("sample_takeoff_id"),
   updatedBy: uuid("updated_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

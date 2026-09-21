@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiGet, apiPublic, apiSend, ApiError, clearSession } from "../api";
 import { Button, Input } from "../components/ui";
@@ -237,6 +237,20 @@ function AccountMenu({ user }: { user: Me }) {
     };
   }, [open]);
 
+  const navigate = useNavigate();
+  async function showMeAround() {
+    setOpen(false);
+    try {
+      await apiSend("PATCH", "/me", { onboarding: {} });
+      await apiSend("POST", "/account/sample");
+    } catch {
+      // the tour still runs on whatever is on the page
+    }
+    qc.invalidateQueries({ queryKey: ["me"] });
+    qc.invalidateQueries({ queryKey: ["jobs"] });
+    navigate({ to: "/" });
+  }
+
   async function signOut() {
     try {
       await apiSend("POST", "/auth/logout");
@@ -281,6 +295,9 @@ function AccountMenu({ user }: { user: Me }) {
           <Link to="/account" className={item} onClick={() => setOpen(false)}>
             Account &amp; team
           </Link>
+          <button type="button" role="menuitem" className={item} onClick={showMeAround}>
+            Show me around
+          </button>
           {user.isPlatformAdmin && (
             <>
               <div className="my-1 border-t border-rule-soft" />

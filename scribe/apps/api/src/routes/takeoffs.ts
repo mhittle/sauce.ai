@@ -50,6 +50,42 @@ const EXT_TO_KIND: Record<string, SourceKind> = {
 
 const BBox = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 
+// The tutorial's sample job shares the original's images, so anything that
+// would re-read or re-render it is refused; reviewing, approving and quoting
+// it are the point of the tutorial.
+const SAMPLE_ALLOWED = new Set([
+  "/takeoffs/:id/accept-lines",
+  "/takeoffs/:id/approve",
+  "/takeoffs/:id/reopen",
+]);
+
+async function refuseSampleWrites(
+  req: import("fastify").FastifyRequest,
+  reply: import("fastify").FastifyReply
+): Promise<void> {
+  const url = req.routeOptions.url ?? "";
+  if (SAMPLE_ALLOWED.has(url)) return;
+  const id = (req.params as { id: string }).id;
+  const [t] = await getDb()
+    .select({ isSample: takeoffs.isSample })
+    .from(takeoffs)
+    .where(eq(takeoffs.id, id));
+  if (t?.isSample) {
+    await reply.code(409).send({
+      error: "this is the sample job — upload your own plan set to run a read",
+    });
+  }
+}
+
+// Page/read images live under the ORIGINAL takeoff's key space for a sample.
+async function storageIdFor(id: string): Promise<string> {
+  const [t] = await getDb()
+    .select({ storageId: takeoffs.storageId })
+    .from(takeoffs)
+    .where(eq(takeoffs.id, id));
+  return t?.storageId ?? id;
+}
+
 // Lines an area produced, plus the door/front faces derived from them.
 async function deleteLinesForDetection(
   takeoffId: string,
@@ -225,6 +261,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", async (req, reply) => {
     if (req.routeOptions.url?.startsWith("/takeoffs/:id")) {
       await requireTakeoffInOrg(req, reply);
+      if (!reply.sent && req.method !== "GET") await refuseSampleWrites(req, reply);
     }
   });
 
@@ -346,6 +383,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         docConfidence: t.docConfidence,
         progress: t.progress,
         error: t.error,
+        isSample: t.isSample,
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
         quote: q
@@ -432,7 +470,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string; page: string } }>(
     "/takeoffs/:id/pages/:page/image",
     async (req) => {
-      const key = `takeoffs/${req.params.id}/pages/${req.params.page}.png`;
+      const key = `takeoffs/${await storageIdFor(req.params.id)}/pages/${req.params.page}.png`;
       return { url: await signedGetUrl(key) };
     }
   );
@@ -456,7 +494,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       ) {
         return reply.code(404).send({ error: "page out of range" });
       }
-      const key = `takeoffs/${req.params.id}/thumbs/${page}.png`;
+      const key = `takeoffs/${rows[0].storageId ?? req.params.id}/thumbs/${page}.png`;
       return { url: await signedGetUrl(key) };
     }
   );
@@ -476,7 +514,7 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       if (!/^[A-Za-z0-9._-]+$/.test(req.params.readId)) {
         return reply.code(400).send({ error: "invalid read id" });
       }
-      const key = `takeoffs/${req.params.id}/reads/${req.params.readId}.png`;
+      const key = `takeoffs/${await storageIdFor(req.params.id)}/reads/${req.params.readId}.png`;
       return { url: await signedGetUrl(key) };
     }
   );
@@ -510,8 +548,9 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       if (rows[0].sourceKind !== "pdf") {
         return reply.code(400).send({ error: "detect view is PDF-only" });
       }
-      const key = `takeoffs/${req.params.id}/beta/pages/${page}.png`;
+      const key = `takeoffs/${rows[0].storageId ?? req.params.id}/beta/pages/${page}.png`;
       if (await objectExists(key)) return { url: await signedGetUrl(key) };
+      if (rows[0].isSample) return { url: null };
       await getTakeoffQueue().add(
         "beta_render",
         { takeoff_id: req.params.id, page },
