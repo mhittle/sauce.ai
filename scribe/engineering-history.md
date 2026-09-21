@@ -82,6 +82,43 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (m) — PR B: sign-up page + email magic link
+
+**Shipped.**
+- `POST /signup {token, name, phone?}` (public): pending invite → one
+  transaction creates the org (`invite.org_name ?? name`; or joins
+  `invite.org_id`), the user (`estimator`, org `owner` for a new org,
+  `terms_accepted_at/version/ip`, `last_sign_in_at`) and consumes the
+  invite; the session token is set as the cookie AND returned in the body
+  (`session`) — the SPA stores it (`setSession`) and goes to Jobs. 409 with
+  `state` when the invite is used/revoked/expired or the email already has
+  an account.
+- Web `/signup?token=…` (`pages/Signup.tsx`, renders without a session):
+  looks the token up, shows plain copy for invalid/used/revoked/expired,
+  else the form — email read-only, name (prefilled from the invite),
+  phone optional, "By continuing you agree to the Terms and Privacy
+  Policy" (links from `TERMS_URL` / `PRIVACY_URL` on the api, plain text
+  when unset).
+- Magic link: migration `0015_login_tokens.sql`; `POST /auth/magic-link
+  {email}` always answers `{ok: true}` (no account enumeration), emails
+  `GET /auth/magic/:token` (15 min, single use) which redirects with
+  `#session=` like the Google callback; expired/used → `?auth_error=
+  link_expired`. Sign-in screen: "Email me a sign-in link" under the
+  Google button; `not_allowed` copy now says sign-ups are by invitation.
+  `magicLinkEmail` template.
+- Google sign-in for an invited user needs nothing new: the callback
+  already accepts any existing `users` row, and sign-up creates it.
+
+**Not done.** No welcome email (the invite email is the welcome). No
+password (decision). The tutorial's sample job is not seeded yet — a new
+org lands on an empty Jobs list.
+
+**Manual:** MA-015 (consent screen external + published, Terms/Privacy
+pages and `TERMS_URL` / `PRIVACY_URL` on `scribe-api`). Without
+MA-013 the magic link is only in the api log (`magic link not emailed`).
+
+---
+
 ## 2026-09-15 (l) — PR C: tenancy — orgs, org_id on every customer table, platform admins
 
 **Shipped (migration `0014_orgs.sql`, applies at boot).** `orgs` (name,
@@ -380,55 +417,17 @@ evidence to pull.
 
 ---
 
-## 2026-09-15 (b) — Mark step PR 2: areas own their cabinets; corrections rebuild one area
-
-**Owner-approved decisions (2026-09-15):** removing an area deletes its
-cabinets; resizing/moving (or changing plan↔elevation) discards its
-cabinets until rescanned; an approved takeoff must be reopened before
-amending; kind comes from the page type with a per-area override.
-
-**Shipped.**
-- Migration `0012`: `takeoff_lines.detection_id` (+ index) — the area a
-  cabinet came from; `takeoff_detections.built_at` — when the area's
-  cabinets were last built (NULL = new or changed → the next build takes
-  exactly these). `CabinetLineItem.detection_id`; `ReadLine.detection_id`.
-- `buildFromDetections` is now **scoped**: it measures only `done` areas
-  with `built_at IS NULL`, `replaceLinesForDetections` deletes those areas'
-  previous lines (+ derived faces) and inserts the new ones, stamps
-  `built_at`, and `priceAndExpand(takeoffId, log, {lineIds})` matches and
-  expands ONLY the inserted lines — manual product picks, edited inches and
-  accepted confidence on untouched areas survive. Eval fixture = every
-  area-built cabinet. Error when nothing is unbuilt.
-- API: `build-takeoff` needs unbuilt scanned areas (409 on approved);
-  `PATCH /detections/:id {kind?, rect?}` resets the area (drawn, items
-  null, built_at null) and deletes its lines (`removed_lines` in the
-  response); `DELETE /detections/:id` deletes its lines too;
-  `POST /takeoffs/:id/reopen` (approved → review; transition added to
-  `TAKEOFF_STATUS_TRANSITIONS`).
-- Web: areas are **movable** (drag the label chip) and **resizable**
-  (corner handles) in `BoxOverlay` (`onAreaChange`), reusing the box
-  drag machinery; the interior stays pass-through for drawing. The wizard
-  PATCHes the rect, confirms when the area is already in the takeoff, and
-  tells you how many cabinets were removed. Build button: "Update N areas
-  (M cabinets)" on a reviewed takeoff, disabled with a hint when nothing
-  is unbuilt; area notes say "in takeoff". Approved takeoffs lock the
-  wizard with a banner; Review's More menu gains "Reopen for changes" and
-  "Add or change areas…" (review only).
-
-**Gotchas.** (1) Lines drawn by hand on the review screen have
-`detection_id NULL` and are never touched by area builds. (2) Legacy
-takeoffs built before 0012 have lines with NULL `detection_id` and areas
-with NULL `built_at` — a "rebuild" there would ADD a second copy of every
-cabinet; the wizard shows those areas as unbuilt. To re-do a legacy
-takeoff, clear its areas (which deletes nothing, since nothing links) and
-delete the old lines by hand, or start a new job. (3) `priceAndExpand`
-without `lineIds` keeps the old full-pass behaviour (classic path).
-
----
-
 ---
 
 ## Condensed history
+
+### 2026-09-15 (b) — Mark step PR 2: areas own their cabinets (archived verbatim)
+Migration 0012 (`takeoff_lines.detection_id`, `takeoff_detections.built_at`);
+`buildFromDetections` scoped to unbuilt areas with per-area line replacement
+and `priceAndExpand(..., {lineIds})`; PATCH/DELETE detection resets and
+deletes its lines; `POST /takeoffs/:id/reopen`; movable/resizable areas.
+Gotchas: hand-drawn review lines have NULL `detection_id`; legacy takeoffs
+would double on rebuild.
 
 ### 2026-09-15 — Mark step PR 1: side panel, no pre-selection, kind + scale (archived verbatim)
 Extract stage no longer locates/seeds — renders page images and parks at

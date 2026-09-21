@@ -75,7 +75,8 @@ full list):
   `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS`, `API_PUBLIC_URL`,
   `WEB_PUBLIC_URL`, `NODE_ENV=production`; email (invites): `RESEND_API_KEY`,
   `EMAIL_FROM`, `EMAIL_REPLY_TO` (optional) — without the key, invites are
-  created but not sent and the admin copies the link
+  created but not sent and the admin copies the link; sign-up: `TERMS_URL`,
+  `PRIVACY_URL`, `TERMS_VERSION` (links under the sign-up form)
 - **workers:** `DATABASE_URL`, `REDIS_URL`, `R2_*`, `ANTHROPIC_API_KEY`,
   `TAKEOFF_TOKEN_BUDGET`, `CRAWLER_DAILY_TOKEN_BUDGET`, `SAMGOV_API_KEY`
   (optional), `SOCRATA_APP_TOKEN` (optional), `OPENAI_API_KEY` +

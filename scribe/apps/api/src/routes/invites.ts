@@ -4,6 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, invites, users } from "@scribe/db";
 import { emailConfigured, inviteEmail, sendEmail } from "@scribe/email";
 import { hashToken, inviteState, newToken } from "../lib/tokens.js";
+import { legalUrls } from "./signup.js";
 
 const INVITE_TTL_MS = 14 * 86_400_000;
 
@@ -84,6 +85,7 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
       creditsGranted: row.creditsGranted,
       inviterName: inviter?.name ?? inviter?.email ?? "Scribe",
       expiresAt: row.expiresAt,
+      ...legalUrls(),
     };
   });
 

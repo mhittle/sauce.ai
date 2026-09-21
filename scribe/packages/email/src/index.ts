@@ -54,5 +54,5 @@ export async function sendEmail(
   return { sent: true, id: data.id };
 }
 
-export { inviteEmail } from "./templates.js";
+export { inviteEmail, magicLinkEmail } from "./templates.js";
 export type { InviteEmailInput } from "./templates.js";

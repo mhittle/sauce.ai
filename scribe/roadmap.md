@@ -17,7 +17,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
-| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | in-progress (PR A #279 invites, PR C #280 tenancy; next B sign-up, D account, tutorial) |
+| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | in-progress (PR A #279 invites, PR C #280 tenancy, PR B #281 sign-up; next D account, tutorial) |
 | Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | in-progress (schema + pricing proposal in `accounts-plan.md` §3, awaiting decision) |
 | Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
@@ -128,7 +128,15 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   into the CabinetNow platform org), `req.orgId` + `X-Org-Id` for platform
   admins, `lib/scope.ts` on every takeoff/quote route, per-org lists and
   dashboard, `/projects` platform-only, Admin → Users role/platform-admin
-  controls. MA-014 (make Rida a platform admin). Next: PR B sign-up.
+  controls. MA-014 (make Rida a platform admin).
+- **PR B shipped (#281):** `POST /signup` (org + owner user + invite
+  consumed in one transaction, session returned in the body), `/signup?
+  token=` page (invite states, email read-only, name, phone, terms line),
+  email magic link (`login_tokens` migration 0015, `POST /auth/magic-link`
+  always 200, `GET /auth/magic/:token`), sign-in screen gets the email
+  form and plain copy for `not_allowed` / `link_expired`. MA-015 (Google
+  consent screen + terms URLs). Next: PR D account screens, then the
+  tutorial.
 
 ### Credits: usage ledger → per-page credits
 

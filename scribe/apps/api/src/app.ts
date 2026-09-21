@@ -11,6 +11,7 @@ import { projectRoutes } from "./routes/projects.js";
 import { adminRoutes } from "./routes/admin.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { inviteRoutes } from "./routes/invites.js";
+import { signupRoutes } from "./routes/signup.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -40,6 +41,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(adminRoutes);
   await app.register(dashboardRoutes);
   await app.register(inviteRoutes);
+  await app.register(signupRoutes);
 
   return app;
 }
