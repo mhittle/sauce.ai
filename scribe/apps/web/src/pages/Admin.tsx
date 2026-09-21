@@ -950,6 +950,10 @@ interface UserRow {
   email: string;
   name: string | null;
   role: string;
+  orgName: string | null;
+  orgRole: "owner" | "member";
+  isPlatformAdmin: boolean;
+  lastSignInAt: string | null;
 }
 
 const ROLE_HINT: Record<string, string> = {
@@ -980,11 +984,17 @@ function Users() {
     },
     onError: (e) => toast.error("User not added", errorMessage(e)),
   });
+  const patch = useMutation({
+    mutationFn: (v: { id: string; role?: string; is_platform_admin?: boolean }) =>
+      apiSend<UserRow>("PATCH", `/admin/users/${v.id}`, { role: v.role, is_platform_admin: v.is_platform_admin }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    onError: (e) => toast.error("User not changed", errorMessage(e)),
+  });
 
   return (
     <div className="space-y-4">
       <Card>
-        <SectionLabel>Allow someone to sign in</SectionLabel>
+        <SectionLabel>Allow a staff Google account to sign in</SectionLabel>
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
@@ -1012,7 +1022,8 @@ function Users() {
           </Button>
         </form>
         <p className="text-xs text-faint">
-          Adds a Google account directly, no email. Roles can't be changed here yet.
+          Adds a CabinetNow staff account directly (no email); customers arrive through invites above.
+          Platform admins see every org's jobs and this panel.
         </p>
       </Card>
       <Card className="p-0">
@@ -1024,7 +1035,10 @@ function Users() {
               <tr className="border-b border-rule text-left font-mono text-[11px] uppercase tracking-wider text-muted">
                 <th className="px-4 py-2">Email</th>
                 <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Org</th>
                 <th className="px-3 py-2">Role</th>
+                <th className="px-3 py-2">Platform admin</th>
+                <th className="px-3 py-2">Last sign-in</th>
               </tr>
             </thead>
             <tbody>
@@ -1032,7 +1046,30 @@ function Users() {
                 <tr key={u.id} className="border-b border-rule-soft">
                   <td className="px-4 py-2 font-medium">{u.email}</td>
                   <td className="px-3 py-2 text-muted">{u.name ?? "—"}</td>
-                  <td className="px-3 py-2"><Badge>{u.role}</Badge></td>
+                  <td className="px-3 py-2 text-muted">
+                    {u.orgName ?? "—"} <span className="text-faint">· {u.orgRole}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <Select
+                      value={u.role}
+                      onChange={(e) => patch.mutate({ id: u.id, role: e.target.value })}
+                      className="w-32"
+                    >
+                      <option value="estimator">Estimator</option>
+                      <option value="sales">Sales</option>
+                      <option value="admin">Admin</option>
+                    </Select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={u.isPlatformAdmin}
+                      onChange={(e) => patch.mutate({ id: u.id, is_platform_admin: e.target.checked })}
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-muted">
+                    {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleDateString() : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

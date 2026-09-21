@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   customers,
   getDb,
@@ -18,6 +18,7 @@ import {
 } from "../lib/settings.js";
 import { runPricing, type DbLine } from "../lib/pricing-run.js";
 import { renderQuotePdf } from "../lib/quote-pdf.js";
+import { quoteInOrg, takeoffInOrg } from "../lib/scope.js";
 
 const QuotePatch = z.object({
   name: z.string().trim().max(120).nullable().optional(),
@@ -86,7 +87,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     const tRows = await db
       .select()
       .from(takeoffs)
-      .where(eq(takeoffs.id, body.takeoff_id));
+      .where(takeoffInOrg(req.orgId, body.takeoff_id));
     if (tRows.length === 0) {
       return reply.code(404).send({ error: "takeoff not found" });
     }
@@ -121,6 +122,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     const [quote] = await db
       .insert(quotes)
       .values({
+        orgId: req.orgId,
         takeoffId: body.takeoff_id,
         customerId: body.customer_id ?? null,
         name: body.name || null,
@@ -147,11 +149,12 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Quotes carry their job's filename: a hex id means nothing to a person.
-  app.get("/quotes", async () => {
+  app.get("/quotes", async (req) => {
     const db = getDb();
     const rows = await db
       .select()
       .from(quotes)
+      .where(eq(quotes.orgId, req.orgId))
       .orderBy(desc(quotes.createdAt))
       .limit(200);
     if (rows.length === 0) return [];
@@ -168,7 +171,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { id: string } }>("/quotes/:id", async (req, reply) => {
     const db = getDb();
-    const rows = await db.select().from(quotes).where(eq(quotes.id, req.params.id));
+    const rows = await db.select().from(quotes).where(quoteInOrg(req.orgId, req.params.id));
     if (rows.length === 0) return reply.code(404).send({ error: "not found" });
     const quote = rows[0];
 
@@ -194,7 +197,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     const [job] = await db
       .select({ sourceFilename: takeoffs.sourceFilename, status: takeoffs.status })
       .from(takeoffs)
-      .where(eq(takeoffs.id, quote.takeoffId));
+      .where(takeoffInOrg(req.orgId, quote.takeoffId));
     return {
       ...quote,
       sourceFilename: job?.sourceFilename ?? null,
@@ -209,7 +212,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   app.patch<{ Params: { id: string } }>("/quotes/:id", async (req, reply) => {
     const patch = QuotePatch.parse(req.body);
     const db = getDb();
-    const rows = await db.select().from(quotes).where(eq(quotes.id, req.params.id));
+    const rows = await db.select().from(quotes).where(quoteInOrg(req.orgId, req.params.id));
     if (rows.length === 0) return reply.code(404).send({ error: "not found" });
     const quote = rows[0];
 
@@ -278,7 +281,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
         sentAt: patch.status === "sent" ? new Date() : quote.sentAt,
         updatedAt: new Date(),
       })
-      .where(eq(quotes.id, req.params.id))
+      .where(quoteInOrg(req.orgId, req.params.id))
       .returning();
 
     return { ...updated, pricing: run, quote_tiers: tiered.tiers };
@@ -291,7 +294,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .update(quotes)
         .set({ freightVerified: true, updatedAt: new Date() })
-        .where(eq(quotes.id, req.params.id))
+        .where(quoteInOrg(req.orgId, req.params.id))
         .returning();
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       return rows[0];
@@ -305,7 +308,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       const rows = await db
         .select()
         .from(quotes)
-        .where(eq(quotes.id, req.params.id));
+        .where(quoteInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
       const quote = rows[0];
 
@@ -323,7 +326,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
         const c = await db
           .select()
           .from(customers)
-          .where(eq(customers.id, quote.customerId));
+          .where(and(eq(customers.id, quote.customerId), eq(customers.orgId, req.orgId)));
         customerCompany = c[0]?.company ?? null;
       }
 
@@ -467,13 +470,17 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     const db = getDb();
     const [c] = await db
       .insert(customers)
-      .values({ company: body.company, contact: body.contact ?? null })
+      .values({ orgId: req.orgId, company: body.company, contact: body.contact ?? null })
       .returning();
     return reply.code(201).send(c);
   });
 
-  app.get("/customers", async () => {
+  app.get("/customers", async (req) => {
     const db = getDb();
-    return db.select().from(customers).orderBy(customers.company);
+    return db
+      .select()
+      .from(customers)
+      .where(eq(customers.orgId, req.orgId))
+      .orderBy(customers.company);
   });
 }

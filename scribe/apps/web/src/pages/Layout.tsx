@@ -15,6 +15,10 @@ interface Me {
   email: string;
   role: string;
   name: string | null;
+  orgId: string;
+  orgName: string | null;
+  orgRole: "owner" | "member";
+  isPlatformAdmin: boolean;
 }
 
 // Product nav (product-plan.md §3.2): Jobs is the app. Quotes stays until PR 2
@@ -85,7 +89,7 @@ export function Layout() {
                 {n.label}
               </Link>
             ))}
-            {user.role === "admin" && (
+            {user.isPlatformAdmin && (
               <Link to="/admin" search={{ tab: undefined }} className={NAV_LINK}>
                 Admin
               </Link>
@@ -225,10 +229,10 @@ function AccountMenu({ user }: { user: Me }) {
               {user.name ?? user.email}
             </div>
             <div className="truncate text-xs text-muted">
-              {user.email} · {user.role}
+              {user.email} · {user.orgName ?? user.role}
             </div>
           </div>
-          {user.role === "admin" && (
+          {user.isPlatformAdmin && (
             <>
               <div className="my-1 border-t border-rule-soft" />
               <div className="px-2 pb-1 pt-1 font-mono text-[10px] uppercase tracking-wider text-faint">

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
-import { getDb, users } from "@scribe/db";
+import { getDb, orgs, users } from "@scribe/db";
 import { SESSION_COOKIE, signSession } from "../auth.js";
 
 function apiUrl(): string {
@@ -21,7 +21,8 @@ const cookieOpts = {
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/me", async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: "not signed in" });
-    return req.user;
+    const [org] = await getDb().select({ name: orgs.name }).from(orgs).where(eq(orgs.id, req.orgId));
+    return { ...req.user, orgId: req.orgId, orgName: org?.name ?? null };
   });
 
   app.post("/auth/logout", async (_req, reply) => {
@@ -96,9 +97,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         return reply.redirect(`${webUrl()}/?auth_error=not_allowed`);
       }
       const u = rows[0];
-      if (info.name && !u.name) {
-        await db.update(users).set({ name: info.name }).where(eq(users.id, u.id));
-      }
+      await db
+        .update(users)
+        .set({ lastSignInAt: new Date(), ...(info.name && !u.name ? { name: info.name } : {}) })
+        .where(eq(users.id, u.id));
 
       const token = signSession(u.id);
       reply.setCookie(SESSION_COOKIE, token, cookieOpts);

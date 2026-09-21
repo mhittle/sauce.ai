@@ -82,6 +82,49 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-09-15 (l) — PR C: tenancy — orgs, org_id on every customer table, platform admins
+
+**Shipped (migration `0014_orgs.sql`, applies at boot).** `orgs` (name,
+`is_platform`, logo); the platform org "CabinetNow" is created and every
+existing user/takeoff/quote/customer/eval_fixture is backfilled into it,
+then `org_id` goes NOT NULL. `users.org_id / org_role (owner|member) /
+is_platform_admin` (backfilled from `role = 'admin'`). Seed puts
+`AUTH_ALLOWED_EMAILS` users in the platform org (first = platform admin).
+- **Request context:** `SessionUser` carries `orgId`, `orgRole`,
+  `isPlatformAdmin`; `req.orgId` is the org the request acts in — the
+  user's own, or for platform admins the `X-Org-Id` header (support view).
+  `requireAdmin` now means **platform admin** (pricing, sources, users,
+  invites, prospects, org-settings). `/auth/me` returns `orgId`,
+  `orgName`, `orgRole`, `isPlatformAdmin`.
+- **Scoping (`lib/scope.ts`):** `takeoffInOrg` / `quoteInOrg` replace every
+  `eq(takeoffs.id, …)` / `eq(quotes.id, …)` (18 + 6 sites); a preHandler
+  404s any `/takeoffs/:id/…` route whose takeoff is outside the org (covers
+  detections, page images, exports); `/takeoff-lines/:id` PATCH/DELETE
+  filter by `inArray(takeoff_id, <org's takeoffs>)`; `/takeoffs`, `/jobs`,
+  `/quotes`, `/customers` list per org; inserts stamp `org_id`; dashboard
+  SQL is per org (prospect counts platform-admin only); `/projects` is
+  platform-admin only. Workers copy `takeoffs.org_id` onto eval fixtures.
+- **Admin → Users:** org column, role select, platform-admin checkbox
+  (`PATCH /admin/users/:id`; you cannot un-admin yourself), last sign-in.
+  Web nav/operator menu and `TechnicalDetail` key off `isPlatformAdmin`.
+
+**Not changed (deliberate).** `org_settings` stays the single platform row
+(freight, handling, quote terms/logo, cross-validation) — per-org branding
+comes with the account screens (PR D). Pricing configs, product lines,
+export templates, sources and projects are platform-level.
+
+**Gotchas.** (1) A new tenant org has no takeoffs, so `/jobs` is empty
+until they upload — the sample job (tutorial) fills it later. (2) Machine
+users (dev bypass, signal connector) are created in the platform org via
+`getPlatformOrgId()`. (3) `X-Org-Id` is honoured only when
+`isPlatformAdmin`; the web app does not send it yet.
+
+**Manual:** MA-014 — after deploy, tick "Platform admin" for
+ridadarwish12@gmail.com in Admin → Users (the migration promotes only
+`role = 'admin'`, i.e. mhittle@gmail.com).
+
+---
+
 ## 2026-09-15 (k) — PR A: email provider + invites API + Admin invite panel
 
 **Owner:** sign-up form = email, name, phone only; "ok go" on the plan's
@@ -383,81 +426,21 @@ without `lineIds` keeps the old full-pass behaviour (classic path).
 
 ---
 
-## 2026-09-15 — Mark step PR 1: side panel, no pre-selection, kind + scale on the area
-
-**Owner (approved plan):** (1) the cabinet table beside the drawing, not
-under it; (2) no pre-selected areas — the whole-page fallback boxed an
-entire letter-size sheet as "Area 1"; (3) selection synced both ways
-between drawing and table. PR 2 (areas own their cabinets; a correction
-rescans one area) follows.
-
-**Shipped.**
-- `staged.ts` — the extract stage no longer locates or seeds anything: it
-  renders the wizard's page images for the selected pages (progress
-  "Rendering page N for marking"), stores the estimation/schedule notes in
-  `docSummary {warnings, seeded: true}`, parks at `awaiting_boxes`. One
-  fewer vision call per page in prod. The harness (`prepare-staged.mjs`)
-  still runs locate as the stand-in for the human's boxes.
-- Area **kind** (plan | elevation): `POST /detections` derives it from the
-  page type chosen at Pages (`selectedPages[].class`, else the classifier's
-  call) — `areaKindForPage`; optional `kind` in the body; new
-  `PATCH /takeoffs/:id/detections/:id {kind}` (clears found cabinets, back
-  to `drawn`). The chip in the wizard has a plan/elevation select.
-- Area **scale** (PR A) now computed in `detectRegion` at scan time from
-  the page's dimension strings inside the rect + the printed note, stored
-  on the detection as before.
-- Wizard layout: `[9rem rail][drawing][22rem panel]`; the panel holds the
-  Areas list (kind select, ×, "Clear page" with confirm) and the cabinets
-  table, and scrolls on its own. Two-way selection: clicking a dot scrolls
-  its row into view (`data-box-id` + `scrollIntoView`); clicking a row
-  selects and scrolls the drawing (BoxOverlay already did that).
-
-**Gotchas.** (1) Old takeoffs parked at `awaiting_boxes` with seeded
-`queued`/`drawn` regions still work — the wizard shows whatever
-detections exist. (2) `DrawingScale` on a detection is now written by the
-scan, so an area edited after scanning keeps the old scale until rescanned
-(PR 2 resets status on edit). (3) `locateRegions`/`locateRooms` are
-unused in prod now; kept for the harness.
-
----
-
-## 2026-09-14 (d) — V0 PR C measured and DROPPED: printed sizes beat geometry
-
-**Owner:** "test a bit, if it is better continue" → it was not; "forget it".
-Code discarded (never committed). The evidence, so nobody re-runs this blind:
-
-- **Free A/B on the 18 kits** (saved measure responses replayed through a
-  geometry-first merge: box×scale as baseline, printed dims override when they
-  agree, geometry replaces defaults when nothing is printed): **F1 0.465 →
-  0.465 on every kit; size error 1.64" → 1.66"**. Two reasons: (1) the
-  measure-v6 responses mark almost every cabinet `measured: true`, so
-  "printed wins" leaves geometry nothing to do (q21 33/33, q22 22/22, q9
-  26/26); (2) on plan-only kits the geometry sits on the RUN while the lines
-  are the model's UNITS, so it never touches them.
-- **Printed vs geometry against the labels** (66 matched cabinets, 7 kits
-  with a trusted scale): mean |printed − gold| **0.64"** vs |geometry − gold|
-  **1.16"**; printed closer 21×, geometry closer 5×, tie 40. Geometry is a
-  decent fallback (inside one standard width), not a better answer. (Caveat:
-  the matching used printed widths, so this is biased toward printed.)
-- **The size-mismatch flag cannot catch what it was meant to.** Of 48
-  confirmed-correct printed sizes, 12 sit >1.5" from their box (false
-  alarms at the planned tolerance); of the 18 WRONG printed sizes, the
-  median distance to the box is 0.41" — when the model mis-sizes a cabinet
-  its box is usually wrong the same way. At max(3", 12%): 3 false alarms,
-  3 of 18 caught.
-
-**What survives of V0.** PR A (scale sources) and PR B (vector snap) are on
-main, gated off, harmless. Geometry-from-scale remains the right tool for
-the ORIGINAL ask — a box the reviewer draws gets its inches (~1.2" accuracy)
-instead of empty fields — that is PR D, if wanted, and needs only PR A/B.
-Whether telling the model the geometric size improves its own answers is
-untested (needs fresh reads, ~$5). Not pursued.
-
----
-
 ---
 
 ## Condensed history
+
+### 2026-09-15 — Mark step PR 1: side panel, no pre-selection, kind + scale (archived verbatim)
+Extract stage no longer locates/seeds — renders page images and parks at
+`awaiting_boxes`; area kind (plan|elevation) from the Pages page type with a
+per-area override (`areaKindForPage`, `PATCH …/detections/:id {kind}`); scale
+computed at scan time; wizard layout rail/drawing/panel with two-way selection.
+
+### 2026-09-14 (d) — V0 PR C measured and DROPPED (archived verbatim)
+Geometry-first size merge replayed on the 18 kits: F1 0.465 → 0.465, size
+error 1.64" → 1.66"; printed dims beat box×scale (0.64" vs 1.16" mean error);
+the size-mismatch flag catches 3 of 18 wrong sizes at 3 false alarms. PR A/B
+stay gated on main; geometry is a fallback for reviewer-drawn boxes only.
 
 ### 2026-09-14 (c) — Mark step: marked areas unmistakable; overlap guard (archived verbatim)
 `BoxOverlay` areas became solid redline rectangles with label chips and ×;
