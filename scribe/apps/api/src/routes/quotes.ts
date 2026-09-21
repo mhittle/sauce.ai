@@ -4,6 +4,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   customers,
   getDb,
+  orgs,
   quotes,
   takeoffLines,
   takeoffs,
@@ -330,10 +331,13 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
         customerCompany = c[0]?.company ?? null;
       }
 
+      // The tenant's own logo when they set one, else the platform logo.
+      const [org] = await db.select({ logoS3Key: orgs.logoS3Key }).from(orgs).where(eq(orgs.id, req.orgId));
+      const logoKey = org?.logoS3Key ?? settings.logoS3Key;
       let logo: Buffer | null = null;
-      if (settings.logoS3Key) {
+      if (logoKey) {
         try {
-          logo = await getObject(settings.logoS3Key);
+          logo = await getObject(logoKey);
         } catch {
           logo = null;
         }

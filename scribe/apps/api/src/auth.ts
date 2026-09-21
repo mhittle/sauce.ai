@@ -52,6 +52,7 @@ declare module "fastify" {
   interface FastifyInstance {
     requireUser: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireOrgOwner: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -196,6 +197,20 @@ export const authPlugin = fp(async (app) => {
     async (req: FastifyRequest, reply: FastifyReply) => {
       if (!req.user) {
         await reply.code(401).send({ error: "authentication required" });
+      }
+    }
+  );
+
+  // Org owners manage their own org (name, logo, members, teammate invites).
+  app.decorate(
+    "requireOrgOwner",
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      if (!req.user) {
+        await reply.code(401).send({ error: "authentication required" });
+        return;
+      }
+      if (req.user.orgRole !== "owner" && !req.user.isPlatformAdmin) {
+        await reply.code(403).send({ error: "org owner required" });
       }
     }
   );
