@@ -136,6 +136,17 @@ these.
 
 ## 2026-09-23
 
+- **Redteam deploy routing — Railway + `redteam.sauce.ai` (follow-up to
+  PR #285).** Owner chose to host redteam on Railway (like `signal`) and
+  reach it at the subdomain `redteam.sauce.ai` rather than a `sauce.ai/redteam`
+  path (which would have needed a reverse proxy in front of both the news box
+  and the container). Root landing card link changed `/redteam` →
+  `https://redteam.sauce.ai`; the `manual-actions.md` deploy entry rewritten
+  as a Railway walkthrough (root dir `redteam/`, `/app/data` volume,
+  `PUBLIC_BASE_URL=https://redteam.sauce.ai`, custom-domain CNAME). No code
+  change to the service. *Code:* `index.html`, `manual-actions.md`. *Server
+  state:* none yet — the deploy itself is still the open manual action.
+
 - **Redteam — adversarial safety testing for clinical chatbots
   (interactive session, sauce.ai/redteam).** New **standalone service** in
   `redteam/` — FastAPI + SQLite (stdlib), containerized like `signal/`, and
