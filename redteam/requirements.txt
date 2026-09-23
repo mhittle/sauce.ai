@@ -1,0 +1,10 @@
+# sauce.ai/redteam runtime dependencies.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.7,<3.0
+requests>=2.31,<3.0
+# Attacker/judge ensembles reach OpenAI/Llama/Gemini over plain HTTP (requests);
+# the Anthropic SDK is used for Claude models and Anthropic-API targets.
+anthropic>=0.40,<1.0
+# Optional: only for kind=web_chat targets (browser-driven chat pages).
+# playwright>=1.44,<2.0

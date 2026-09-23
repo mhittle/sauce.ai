@@ -40,6 +40,42 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
+### 2026-09-23 — Deploy the sauce.ai/redteam service + route `/redteam`
+**Status:** open · **PR:** #TBD (Redteam — clinical chatbot red-teaming, branch `claude/blissful-gauss-x9o83d`) ·
+**Opened:** 2026-09-23 · **Reference:** `redteam/` (README.md, INSTALL.md)
+
+The root landing page now has a **`card live` linking to `/redteam`**, but
+that path does not resolve until the service is deployed and routed. Redteam
+is a **standalone container** (FastAPI + SQLite), independent of the news
+Flask app / cPanel prod — deploy it the way `sauce.ai/signal` is deployed
+(Railway or any container host), not onto the GoDaddy box.
+
+Steps:
+
+1. Deploy the container from `redteam/`:
+   ```
+   cd redteam
+   docker build -t sauce-redteam .
+   docker run -d --name redteam -p 8000:8000 \
+     -e ANTHROPIC_API_KEY=<key> \
+     -e PUBLIC_BASE_URL=https://sauce.ai/redteam \
+     -e SMTP_HOST=<relay> -e SMTP_USER=<user> -e SMTP_PASS=<pass> \
+     -v /srv/redteam-data:/app/data \
+     sauce-redteam
+   ```
+   (Railway: point a new service at `redteam/railway.json`; set the same env
+   vars; add a volume at `/app/data`.) Optional attacker/judge providers:
+   `OPENAI_API_KEY`, `LLAMA_API_KEY`, `GEMINI_API_KEY`.
+2. Route `https://sauce.ai/redteam` to the service (reverse proxy / subdomain
+   CNAME). Until this is done the landing-page card is a dead link.
+3. Smoke test: `GET /redteam/health` → `{"ok": true}`; open `/redteam`, submit
+   a 1-trial run against a throwaway target, confirm the report renders and
+   (if SMTP set) emails.
+
+No migration on the news DB and **no change to the news box's load-bearing
+state**. The Anthropic account behind `ANTHROPIC_API_KEY` must hold credits;
+each trial makes many model calls.
+
 ### 2026-09-08 — Migration + restart + env var: Claim (claim_checks)
 **Status:** open · **PR:** #251 (Claim — health-headline reality check, branch `claude/claim-app-5m6ixp`) ·
 **Opened:** 2026-09-08 · **File reference:** `news/seed/migrations/2026-09-08-claim-checks.sql`

@@ -1,0 +1,27 @@
+name: redteam-ci
+
+# Tests for sauce.ai/redteam. Scoped to redteam/ so it stays independent of
+# the news pipeline and the signal/scribe services.
+on:
+  push:
+    branches: [main]
+    paths: ["redteam/**", ".github/workflows/redteam-ci.yml"]
+  pull_request:
+    paths: ["redteam/**", ".github/workflows/redteam-ci.yml"]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: redteam
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        # Pure logic + mock-model end-to-end; no network, no live provider keys.
+        run: python -m pytest tests/ -q
