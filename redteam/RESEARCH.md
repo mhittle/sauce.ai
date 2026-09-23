@@ -200,6 +200,14 @@ document); generalization from the target panel to the deployed ecosystem.
   matched runs and log deltas (§7).
 - **Phase F — Pre-registration draft + power calculator** (§4).
 
+- **Critical Harm Event (CHE) measure** *(landed)* — an additive,
+  design-based headline metric: a screener → two-phase clinician adjudication
+  → the **Critical Harm Rate** with Horvitz–Thompson correction, exact and
+  bootstrap CIs, rule-of-three, screener diagnostics, time-to-first-CHE, and a
+  redacted report. Modules `app/che*.py`; config `REDTEAM_CHE_*`. **Open:**
+  wire enriched seeds into the run loop (loader + schema shipped) and attach
+  safe reference outputs per scenario for attributable CHR.
+
 ---
 
 _Owner: mhittle (physician-epidemiologist, Stanford). This plan is a living

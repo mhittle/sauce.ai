@@ -105,6 +105,54 @@ CREATE TABLE IF NOT EXISTS adjudication_labels (
     UNIQUE(item_id, rater)
 );
 CREATE INDEX IF NOT EXISTS ix_adjlabels_set ON adjudication_labels(set_id);
+CREATE TABLE IF NOT EXISTS che_labels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    turn_id INTEGER NOT NULL,
+    trial_id INTEGER,
+    rater_type TEXT NOT NULL,
+    rater_id TEXT NOT NULL,
+    severity INTEGER NOT NULL,
+    life_threatening INTEGER NOT NULL DEFAULT 0,
+    likelihood TEXT NOT NULL,
+    actionable INTEGER NOT NULL DEFAULT 0,
+    pathway TEXT NOT NULL,
+    che INTEGER NOT NULL,
+    rationale TEXT,
+    model_versions_json TEXT NOT NULL DEFAULT '{}',
+    reference_response_id INTEGER,
+    sample_source TEXT NOT NULL DEFAULT 'representative',
+    sampling_weight REAL NOT NULL DEFAULT 1.0,
+    turn_index INTEGER NOT NULL DEFAULT 0,
+    attacker_refused INTEGER NOT NULL DEFAULT 0,
+    inclusion_prob REAL NOT NULL DEFAULT 1.0,
+    screen_positive INTEGER,
+    created_at REAL NOT NULL,
+    UNIQUE(turn_id, rater_type, rater_id)
+);
+CREATE INDEX IF NOT EXISTS ix_chelabels_run ON che_labels(run_id);
+CREATE TABLE IF NOT EXISTS che_review_sets (
+    id TEXT PRIMARY KEY,
+    created_at REAL NOT NULL,
+    name TEXT NOT NULL,
+    run_ids_json TEXT NOT NULL,
+    spec_json TEXT NOT NULL,
+    n_items INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS che_review_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    set_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    turn_id INTEGER NOT NULL,
+    run_id TEXT NOT NULL,
+    pathway TEXT,
+    screen_positive INTEGER,
+    inclusion_prob REAL NOT NULL DEFAULT 1.0,
+    sample_source TEXT NOT NULL DEFAULT 'representative',
+    sampling_weight REAL NOT NULL DEFAULT 1.0,
+    context_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_chereviewitems_set ON che_review_items(set_id);
 """
 
 
@@ -293,3 +341,97 @@ class Store:
         counts = {r["rater"]: r["c"] for r in self._x(
             "SELECT rater, COUNT(*) c FROM adjudication_labels WHERE set_id=? GROUP BY rater", (set_id,))}
         return {"raters": raters, "labeled_by_rater": counts}
+
+    # -- CHE labels ---------------------------------------------------------
+    def upsert_che_label(self, label: dict) -> None:
+        cols = ("run_id", "turn_id", "trial_id", "rater_type", "rater_id", "severity",
+                "life_threatening", "likelihood", "actionable", "pathway", "che", "rationale",
+                "model_versions_json", "reference_response_id", "sample_source", "sampling_weight",
+                "turn_index", "attacker_refused", "inclusion_prob", "screen_positive", "created_at")
+        row = {
+            "run_id": label["run_id"], "turn_id": label["turn_id"], "trial_id": label.get("trial_id"),
+            "rater_type": label["rater_type"], "rater_id": label["rater_id"],
+            "severity": int(label["severity"]), "life_threatening": int(bool(label["life_threatening"])),
+            "likelihood": label["likelihood"], "actionable": int(bool(label["actionable"])),
+            "pathway": label["pathway"], "che": int(bool(label["che"])),
+            "rationale": label.get("rationale"),
+            "model_versions_json": json.dumps(label.get("model_versions", {})),
+            "reference_response_id": label.get("reference_response_id"),
+            "sample_source": label.get("sample_source", "representative"),
+            "sampling_weight": float(label.get("sampling_weight", 1.0)),
+            "turn_index": int(label.get("turn_index", 0)),
+            "attacker_refused": int(bool(label.get("attacker_refused"))),
+            "inclusion_prob": float(label.get("inclusion_prob", 1.0)),
+            "screen_positive": None if label.get("screen_positive") is None else int(bool(label["screen_positive"])),
+            "created_at": time.time(),
+        }
+        placeholders = ",".join("?" for _ in cols)
+        updates = ",".join(f"{c}=excluded.{c}" for c in cols if c not in ("run_id", "turn_id", "rater_type", "rater_id"))
+        self._x(f"INSERT INTO che_labels({','.join(cols)}) VALUES({placeholders}) "
+                f"ON CONFLICT(turn_id, rater_type, rater_id) DO UPDATE SET {updates}",
+                tuple(row[c] for c in cols))
+
+    def che_labels(self, run_id: str, rater_type: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM che_labels WHERE run_id=?"
+        args: tuple = (run_id,)
+        if rater_type:
+            sql += " AND rater_type=?"
+            args += (rater_type,)
+        out = []
+        for r in self._x(sql + " ORDER BY turn_id, rater_type", args):
+            d = dict(r)
+            d["model_versions"] = json.loads(d.pop("model_versions_json") or "{}")
+            for b in ("life_threatening", "actionable", "che", "attacker_refused"):
+                d[b] = bool(d[b])
+            d["screen_positive"] = None if d["screen_positive"] is None else bool(d["screen_positive"])
+            out.append(d)
+        return out
+
+    def che_labels_for_turn(self, turn_id: int) -> list[dict]:
+        return [dict(r) for r in self._x(
+            "SELECT rater_type, rater_id, severity, life_threatening, likelihood, actionable, "
+            "pathway, che FROM che_labels WHERE turn_id=?", (turn_id,))]
+
+    # -- CHE clinician review sets -----------------------------------------
+    def create_che_review_set(self, name: str, spec: dict, run_ids: list[str], items: list[dict]) -> str:
+        set_id = uuid.uuid4().hex[:16]
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO che_review_sets(id, created_at, name, run_ids_json, spec_json, n_items) "
+                "VALUES(?,?,?,?,?,?)",
+                (set_id, time.time(), name, json.dumps(run_ids), json.dumps(spec), len(items)))
+            for pos, it in enumerate(items):
+                self._conn.execute(
+                    "INSERT INTO che_review_items(set_id, position, turn_id, run_id, pathway, "
+                    "screen_positive, inclusion_prob, sample_source, sampling_weight, context_json) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (set_id, pos, it["turn_id"], it["run_id"], it.get("pathway"),
+                     None if it.get("screen_positive") is None else int(bool(it["screen_positive"])),
+                     float(it.get("inclusion_prob", 1.0)), it.get("sample_source", "representative"),
+                     float(it.get("sampling_weight", 1.0)), json.dumps(it["context"])))
+        return set_id
+
+    def get_che_review_set(self, set_id: str) -> dict | None:
+        row = self._x("SELECT * FROM che_review_sets WHERE id=?", (set_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["spec"] = json.loads(d.pop("spec_json"))
+        d["run_ids"] = json.loads(d.pop("run_ids_json"))
+        return d
+
+    def che_review_items(self, set_id: str, blinded: bool = True) -> list[dict]:
+        rows = self._x("SELECT * FROM che_review_items WHERE set_id=? ORDER BY position", (set_id,)).fetchall()
+        out = []
+        for r in rows:
+            it = dict(r)
+            it["context"] = json.loads(it.pop("context_json"))
+            it["screen_positive"] = None if it["screen_positive"] is None else bool(it["screen_positive"])
+            if blinded:  # clinicians must see the full reply, but not the screener verdict / pathway / model
+                it.pop("screen_positive", None)
+                it.pop("pathway", None)
+                it.pop("inclusion_prob", None)
+                it.pop("sample_source", None)
+                it.pop("sampling_weight", None)
+            out.append(it)
+        return out
