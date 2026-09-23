@@ -68,6 +68,43 @@ CREATE TABLE IF NOT EXISTS quota (
     email TEXT PRIMARY KEY,
     trials_used INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS adjudication_sets (
+    id TEXT PRIMARY KEY,
+    created_at REAL NOT NULL,
+    name TEXT NOT NULL,
+    spec_json TEXT NOT NULL,
+    run_ids_json TEXT NOT NULL,
+    n_items INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS adjudication_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    set_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    turn_id INTEGER NOT NULL,
+    run_id TEXT NOT NULL,
+    stratum TEXT NOT NULL,
+    harm_bin TEXT NOT NULL,
+    inclusion_prob REAL NOT NULL,
+    judge_p_harm REAL,
+    judge_harmful INTEGER,
+    context_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_adjitems_set ON adjudication_items(set_id);
+CREATE TABLE IF NOT EXISTS adjudication_labels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    set_id TEXT NOT NULL,
+    rater TEXT NOT NULL,
+    harmful INTEGER NOT NULL,
+    severity INTEGER,
+    categories_json TEXT NOT NULL DEFAULT '[]',
+    escalated INTEGER,
+    confidence INTEGER,
+    notes TEXT,
+    created_at REAL NOT NULL,
+    UNIQUE(item_id, rater)
+);
+CREATE INDEX IF NOT EXISTS ix_adjlabels_set ON adjudication_labels(set_id);
 """
 
 
@@ -181,3 +218,78 @@ class Store:
                     u["orchestration"] = json.loads(u.pop("orchestration_json") or "{}")
                     t["turns"].append(u)
         return trials
+
+    # -- adjudication -------------------------------------------------------
+    def create_adjudication_set(self, name: str, spec: dict, run_ids: list[str],
+                                items: list[dict]) -> str:
+        """items: dicts with turn_id, run_id, stratum, harm_bin, inclusion_prob,
+        judge_p_harm, judge_harmful, context."""
+        set_id = uuid.uuid4().hex[:16]
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO adjudication_sets(id, created_at, name, spec_json, run_ids_json, n_items) "
+                "VALUES(?,?,?,?,?,?)",
+                (set_id, time.time(), name, json.dumps(spec), json.dumps(run_ids), len(items)))
+            for pos, it in enumerate(items):
+                self._conn.execute(
+                    "INSERT INTO adjudication_items(set_id, position, turn_id, run_id, stratum, harm_bin, "
+                    "inclusion_prob, judge_p_harm, judge_harmful, context_json) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (set_id, pos, it["turn_id"], it["run_id"], it["stratum"], it["harm_bin"],
+                     it["inclusion_prob"], it.get("judge_p_harm"),
+                     None if it.get("judge_harmful") is None else int(it["judge_harmful"]),
+                     json.dumps(it["context"])))
+        return set_id
+
+    def get_adjudication_set(self, set_id: str) -> dict | None:
+        row = self._x("SELECT * FROM adjudication_sets WHERE id=?", (set_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["spec"] = json.loads(d.pop("spec_json"))
+        d["run_ids"] = json.loads(d.pop("run_ids_json"))
+        return d
+
+    def adjudication_items(self, set_id: str, blinded: bool = True) -> list[dict]:
+        rows = self._x("SELECT * FROM adjudication_items WHERE set_id=? ORDER BY position", (set_id,)).fetchall()
+        out = []
+        for r in rows:
+            it = dict(r)
+            it["context"] = json.loads(it.pop("context_json"))
+            if blinded:
+                it.pop("judge_p_harm", None)
+                it.pop("judge_harmful", None)
+                it.pop("stratum", None)
+                it.pop("harm_bin", None)
+                it.pop("inclusion_prob", None)
+            out.append(it)
+        return out
+
+    def submit_label(self, set_id: str, item_id: int, rater: str, *, harmful: bool,
+                     severity: int | None, categories: list[str], escalated: bool | None,
+                     confidence: int | None, notes: str | None) -> None:
+        self._x(
+            "INSERT INTO adjudication_labels(item_id, set_id, rater, harmful, severity, categories_json, "
+            "escalated, confidence, notes, created_at) VALUES(?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(item_id, rater) DO UPDATE SET harmful=excluded.harmful, severity=excluded.severity, "
+            "categories_json=excluded.categories_json, escalated=excluded.escalated, "
+            "confidence=excluded.confidence, notes=excluded.notes, created_at=excluded.created_at",
+            (item_id, set_id, rater, int(harmful), severity, json.dumps(categories),
+             None if escalated is None else int(escalated), confidence, notes, time.time()))
+
+    def adjudication_labels(self, set_id: str) -> list[dict]:
+        rows = self._x("SELECT * FROM adjudication_labels WHERE set_id=? ORDER BY item_id, rater", (set_id,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["categories"] = json.loads(d.pop("categories_json"))
+            d["harmful"] = bool(d["harmful"])
+            d["escalated"] = None if d["escalated"] is None else bool(d["escalated"])
+            out.append(d)
+        return out
+
+    def adjudication_progress(self, set_id: str) -> dict:
+        raters = [r["rater"] for r in self._x(
+            "SELECT DISTINCT rater FROM adjudication_labels WHERE set_id=? ORDER BY rater", (set_id,))]
+        counts = {r["rater"]: r["c"] for r in self._x(
+            "SELECT rater, COUNT(*) c FROM adjudication_labels WHERE set_id=? GROUP BY rater", (set_id,))}
+        return {"raters": raters, "labeled_by_rater": counts}
