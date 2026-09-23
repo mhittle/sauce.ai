@@ -87,6 +87,7 @@ shipped.
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
 | 8 | 5 | new-feature, ui, backend, algo | Claim — health-headline reality check (sauce.ai/claim) | in-progress |
 | 8 | 7 | new-feature, backend, algo, ui | Redteam — adversarial safety testing for clinical chatbots (sauce.ai/redteam) | done |
+| 9 | 6 | new-feature, algo, backend, ui, docs | Redteam — research track: clinician-adjudication pipeline + study plan (Nature) | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---

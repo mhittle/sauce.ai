@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from . import adjudication as adj
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
@@ -55,6 +56,26 @@ class RunIn(BaseModel):
     orchestration: dict = Field(default_factory=dict)
     judges: list[str] = Field(default_factory=list)
     target: TargetIn
+
+
+class AdjudicationSetIn(BaseModel):
+    run_ids: list[str]
+    name: str = ""
+    n: int = 120
+    seed: int = 0
+    by_specialty: bool = True
+    by_tactic: bool = False
+    allocation: str = "proportional"
+
+
+class LabelIn(BaseModel):
+    rater: str
+    harmful: bool
+    severity: int | None = None
+    categories: list[str] = Field(default_factory=list)
+    escalated: bool | None = None
+    confidence: int | None = None
+    notes: str = ""
 
 
 class SlidingWindow:
@@ -222,6 +243,95 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             "summary": run["summary"], "bandit": run["bandit"], "usage": run["usage"],
             "trials": store.trials_for_run(run_id),
         })
+
+    # -- adjudication (clinician judge-validation study) -------------------
+
+    @app.post("/adjudication/sets")
+    def create_adjudication_set(body: AdjudicationSetIn):
+        run_ids = [r.strip() for r in body.run_ids if r.strip()]
+        if not run_ids:
+            raise HTTPException(400, "at least one run_id is required")
+        turns = []
+        for rid in run_ids:
+            run = store.get_run(rid)
+            if not run:
+                raise HTTPException(404, f"unknown run {rid}")
+            turns.extend(adj.turns_from_trials(rid, store.trials_for_run(rid)))
+        if not turns:
+            raise HTTPException(400, "the selected runs have no completed replies to adjudicate")
+        spec = adj.SampleSpec(n=body.n, seed=body.seed, by_specialty=body.by_specialty,
+                              by_tactic=body.by_tactic, allocation=body.allocation)
+        sampled = adj.stratified_sample(turns, spec)
+        # attach the judge's stored verdict per sampled turn (kept out of the blinded view)
+        judged = {}
+        for rid in run_ids:
+            for t in store.trials_for_run(rid):
+                for u in t["turns"]:
+                    judged[u["id"]] = (u["p_harm"], bool(u["harmful"]))
+        items = [{
+            "turn_id": s.turn_id, "run_id": s.run_id, "stratum": s.stratum, "harm_bin": s.harm_bin,
+            "inclusion_prob": s.inclusion_prob,
+            "judge_p_harm": judged.get(s.turn_id, (None, None))[0],
+            "judge_harmful": judged.get(s.turn_id, (None, None))[1],
+            "context": s.context,
+        } for s in sampled]
+        name = body.name.strip() or f"adjudication of {len(run_ids)} run(s)"
+        set_id = store.create_adjudication_set(name, spec.__dict__, run_ids, items)
+        base = settings.public_base_url.rstrip("/")
+        return {"set_id": set_id, "n_items": len(items),
+                "label_url": f"{base}/adjudicate/{set_id}",
+                "analysis_url": f"{base}/adjudication/{set_id}/analysis"}
+
+    @app.get("/adjudication/{set_id}/items")
+    def adjudication_items(set_id: str):
+        s = store.get_adjudication_set(set_id)
+        if not s:
+            raise HTTPException(404, "unknown adjudication set")
+        return {"set_id": set_id, "name": s["name"], "n_items": s["n_items"],
+                "harm_categories": HARM_CATEGORIES, "severity_levels": SEVERITY_LEVELS,
+                "items": store.adjudication_items(set_id, blinded=True)}
+
+    @app.post("/adjudication/{set_id}/items/{item_id}/label")
+    def submit_label(set_id: str, item_id: int, body: LabelIn):
+        s = store.get_adjudication_set(set_id)
+        if not s:
+            raise HTTPException(404, "unknown adjudication set")
+        rater = body.rater.strip()
+        if not rater:
+            raise HTTPException(400, "a rater id is required")
+        if body.severity is not None and not 0 <= body.severity <= 4:
+            raise HTTPException(400, "severity must be 0–4")
+        cats = [c for c in body.categories if c in HARM_CATEGORIES]
+        store.submit_label(set_id, item_id, rater, harmful=body.harmful, severity=body.severity,
+                           categories=cats, escalated=body.escalated, confidence=body.confidence,
+                           notes=body.notes.strip()[:2000] or None)
+        return {"ok": True, "progress": store.adjudication_progress(set_id)}
+
+    @app.get("/adjudication/{set_id}/analysis")
+    def adjudication_analysis(set_id: str):
+        s = store.get_adjudication_set(set_id)
+        if not s:
+            raise HTTPException(404, "unknown adjudication set")
+        items = store.adjudication_items(set_id, blinded=False)
+        labels = store.adjudication_labels(set_id)
+        return {"set_id": set_id, "name": s["name"], "spec": s["spec"],
+                "progress": store.adjudication_progress(set_id),
+                **adj.analyze_set(items, labels)}
+
+    @app.get("/adjudication/{set_id}/export")
+    def adjudication_export(set_id: str):
+        s = store.get_adjudication_set(set_id)
+        if not s:
+            raise HTTPException(404, "unknown adjudication set")
+        return JSONResponse({"set": s, "items": store.adjudication_items(set_id, blinded=False),
+                             "labels": store.adjudication_labels(set_id)})
+
+    @app.get("/adjudicate/{set_id}", response_class=HTMLResponse)
+    def adjudicate_ui(set_id: str):
+        if not store.get_adjudication_set(set_id):
+            raise HTTPException(404, "unknown adjudication set")
+        f = STATIC / "adjudicate.html"
+        return HTMLResponse(f.read_text() if f.exists() else "<h1>adjudication</h1>")
 
     @app.get("/", response_class=HTMLResponse)
     def index():

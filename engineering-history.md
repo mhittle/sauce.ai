@@ -136,6 +136,43 @@ these.
 
 ## 2026-09-23
 
+- **Redteam — research track: clinician-adjudication pipeline + study plan
+  (toward a peer-reviewed paper).** Owner wants to use redteam as the
+  instrument behind a Nature-tier study; the gap from tool to paper is
+  measurement validity, so Phase A builds the **judge-validation pipeline**
+  and a versioned plan. New `redteam/RESEARCH.md` (thesis: reframe clinical-AI
+  safety as epidemiological measurement — exposure = adversarial conversation,
+  outcome = clinician-adjudicated harm; NNH / prompts-until-harm survival /
+  expected DALY burden; a validated automated adjudicator; a reproducible
+  benchmark — plus SAP, DALY→GBD plan, ablations, reproducibility/ethics/dual-
+  use, and a 6-phase build roadmap). Build (all pure-stdlib where it matters):
+  `app/agreement.py` — Cohen's κ, **Gwet's AC1** (rare-label robust), weighted
+  κ (linear/quadratic), diagnostic accuracy (sens/spec/PPV/NPV with Wilson
+  CIs), AUROC via Mann–Whitney with mid-ranks, Brier, ECE, reliability bins,
+  Fleiss' κ, majority vote. `app/adjudication.py` — stratified sampling by
+  predicted-harm bin (oversampling positive/uncertain bins, recording stratum
+  + inclusion probability), blinded `turns_from_trials`, and `analyze_set`
+  composing labels + judge into inter-rater + judge-vs-human + calibration.
+  `store.py` — `adjudication_sets` / `_items` / `_labels` tables + CRUD
+  (labels upsert per (item,rater)). `main.py` — `POST /adjudication/sets`,
+  `GET /adjudication/<id>/items` (blinded), `POST .../items/<id>/label`,
+  `GET .../analysis`, `GET .../export`, and `GET /adjudicate/<id>` (blinded
+  labeling page, `static/adjudicate.html`, localStorage-backed). Blinding
+  strips arm/model/judge-score/stratum from the rater view. Fixed a
+  zero-denominator Wilson NaN → JSON-safe None. Tests `+37` across
+  `test_agreement`, `test_adjudication`, `test_adjudication_api` (suite 89
+  pass). Verified end-to-end in the pre-installed Chromium: two blinded raters
+  label a seeded set → live κ=0.80 / AC1=0.80 / weighted-κ=1.0 and
+  judge-vs-human sens/spec + AUROC + Brier. *Code:* `redteam/RESEARCH.md`,
+  `app/agreement.py`, `app/adjudication.py`, `app/store.py`, `app/main.py`,
+  `app/static/adjudicate.html`, `README.md`. *Server state:* three new SQLite
+  tables (created on boot by `Store`; a redeploy with a persisted
+  `/app/data` volume picks them up automatically — no migration step).
+  *Open (roadmap Phases B–F):* reproducible batch/experiment mode + tidy
+  per-turn export, the separate analysis repo (mixed models / frailty
+  survival / IRT / DALY PSA), GBD-weighted DALY module, ablation harness,
+  OSF pre-registration + power calculator.
+
 - **Redteam — model dropdowns for the attacker/arbiter/judge ensembles
   (follow-up to PR #285).** The advanced panel's three free-text model fields
   (source of the earlier `claude-sonnelt-5` typo → 404 mid-run) became

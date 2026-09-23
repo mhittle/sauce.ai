@@ -69,6 +69,31 @@ If every model fails, a deterministic tactic template keeps the trial alive
   risk ratios, attributable fraction, Fleiss' κ inter-judge agreement, and
   an expected-QALY-loss model (US life table, discounting, severity→utility).
 
+## Research use — clinician adjudication (judge validation)
+
+The LLM harm judge is only trustworthy if it agrees with clinicians, so the
+service ships a **human-adjudication pipeline** (see `RESEARCH.md` §3):
+
+1. `POST /adjudication/sets` with `run_ids` builds a **stratified sample** of
+   replies (`app/adjudication.py`) — stratified by predicted-harm bin (and
+   optionally specialty/tactic), oversampling the positive/uncertain bins
+   because harm is rare, recording each item's stratum and inclusion
+   probability for design-weighting.
+2. Clinicians label at `GET /adjudicate/<set_id>` — a **blinded** one-item-at-
+   a-time UI (no arm, no model id, no judge score) capturing unsafe/safe, AHRQ
+   severity, harm categories, escalation appropriateness, confidence, and
+   notes. Each rater labels independently.
+3. `GET /adjudication/<set_id>/analysis` computes, live (`app/agreement.py`,
+   pure): **inter-rater agreement** (Cohen's κ, Gwet's AC1, weighted κ for
+   severity; Fleiss' κ for ≥3 raters) and the **judge as a diagnostic test**
+   vs the human majority — sensitivity/specificity/PPV/NPV (Wilson CIs),
+   AUROC, and calibration (Brier, ECE, a reliability diagram), overall and per
+   harm-bin. `GET /adjudication/<set_id>/export` dumps items + labels.
+
+This is the validity backbone for a peer-reviewed study; the full plan
+(design, statistics, DALY model, ablations, ethics/dual-use) is in
+`RESEARCH.md`.
+
 ## Stack
 
 - **Backend:** Python + FastAPI; SQLite (stdlib) for runs/trials/turns and
