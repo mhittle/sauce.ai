@@ -58,7 +58,9 @@ that, for every algorithm:
      case-finding (Se).
    - with an expected prevalence: PPV/NPV at that prevalence, apparent
      prevalence, and the Rogan–Gladen correction.
-6. **Report** (`app/report.py`) — one self-contained HTML document, served at
+6. **Report** (`app/report.py`) — ranking table, one card per algorithm, and
+   the list of studies read, each linked to the ranked algorithm(s) it
+   develops or validates. One self-contained HTML document, served at
    `/jobs/<id>`, emailed if SMTP is set; JSON at `/jobs/<id>/export`, SQL per
    algorithm at `/jobs/<id>/algorithms/<rank>.sql`.
 

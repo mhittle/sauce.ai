@@ -136,6 +136,16 @@ these.
 
 ## 2026-09-23
 
+- **Phenotype — studies read link to their algorithms (follow-up to
+  PR #288).** Each entry in the report's "Studies read" list now links to the
+  ranked algorithm card(s) it supports, labelled *develops* or *validates*
+  (`grading.Candidate.roles`, study → role; "developed" wins when a paper
+  does both). Algorithm cards carry `id="alg-<rank>"` anchors, ranking-table
+  names link to them, and each validation row shows its role tag. The JSON
+  export gains `candidates[].studies` and `studies[].algorithms`. *Code:*
+  `phenotype/app/{grading,pipeline,report}.py`, pipeline test. No server
+  state.
+
 - **Redteam — research Phase B: tidy dataset export + cross-model
   comparison.** Unblocks the confirmatory statistics in `RESEARCH.md` §5 by
   emitting an analysis-ready dataset and a descriptive comparative result.

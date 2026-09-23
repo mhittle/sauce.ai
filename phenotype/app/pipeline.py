@@ -223,6 +223,13 @@ class Runner:
                 "literature_calls": self.lit.calls,
                 "log": prog["log"][-50:],
             }
+            links: dict[str, list[dict]] = {}
+            for c in result["candidates"]:
+                for st in c["studies"]:
+                    links.setdefault(st["key"], []).append(
+                        {"rank": c["rank"], "name": c["algorithm"]["name"], "role": st["role"]})
+            for st in result["studies"]:
+                st["algorithms"] = links.get(st["key"], [])
             job = store.get_job(job_id)
             html = render_report(job, result, self.settings)
             store.update_job(job_id, status="complete", stage="done", finished_at=time.time(),

@@ -83,6 +83,7 @@ class Candidate:
     composite: float = 0.0
     grade: dict = field(default_factory=dict)
     at_prevalence: dict | None = None
+    roles: dict[str, str] = field(default_factory=dict)   # study key -> developed | validated_existing
 
     @property
     def studies(self) -> list[Study]:
@@ -105,6 +106,8 @@ def cluster(studies: list[Study]) -> list[Candidate]:
             elif ea.role == "developed" and len(ea.algorithm.summary) > len(cand.algorithm.summary):
                 cand.algorithm = ea.algorithm   # keep the fullest original description
             cand.members += [(s, v) for v in ea.validations]
+            if cand.roles.get(s.key) != "developed":
+                cand.roles[s.key] = ea.role
     return list(groups.values())
 
 
@@ -227,6 +230,9 @@ def candidate_dict(c: Candidate, rank_no: int) -> dict:
              "population": v.population, "n_validated": v.n_validated,
              "reference_standard": v.reference_standard, "reference_detail": v.reference_detail,
              "sampling": v.sampling, "blinded": v.blinded, "external": v.external,
+             "role": c.roles.get(s.key, "developed"),
              "risk": r, "metrics": {k: m.__dict__ for k, m in v.metrics.items()}}
             for (s, v), r in zip(c.members, c.risk)],
+        "studies": [{"key": s.key, "citation": s.citation(), "url": s.url, "role": c.roles.get(s.key, "developed")}
+                    for s in c.studies],
     }
