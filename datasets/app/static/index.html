@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sauce.ai · datasets</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">sauce.ai <span>/ datasets</span></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="search">Search</button>
+      <button class="tab" data-view="directory">Directory</button>
+      <button class="tab" data-view="crawls">Crawls</button>
+    </nav>
+    <div class="top-right">
+      <span id="stats" class="muted"></span>
+      <button id="broad-btn" class="btn secondary" title="Crawl the web for datasets across all conditions, highest 510(k) count first">Run 1-hour crawl</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main>
+    <!-- Search -->
+    <section id="view-search" class="view">
+      <form id="search-form" class="search">
+        <input id="q" type="search" autocomplete="off"
+               placeholder='e.g. "MS brain MRI with contrast and clinical labels" or "pneumothorax"'>
+        <button class="btn" type="submit">Search</button>
+      </form>
+      <p class="hint muted">Shows everything already indexed, then launches an agent swarm to find more. New finds appear here as they're recorded.</p>
+      <div id="conditions-strip"></div>
+      <div id="crawl-panel" class="crawl-panel hidden"></div>
+      <div id="results-meta" class="muted"></div>
+      <div id="results" class="cards"></div>
+    </section>
+
+    <!-- Directory -->
+    <section id="view-directory" class="view hidden">
+      <h2>Conditions, ranked by FDA 510(k) clearances</h2>
+      <p class="muted small">510(k) count = clearances whose device name matches the condition or its device terms (openFDA). A proxy for how active the SaMD market is for that condition.</p>
+      <label class="small"><input id="only-with" type="checkbox"> Only conditions with datasets</label>
+      <table class="dir">
+        <thead><tr><th>#</th><th>Condition</th><th class="num">510(k)</th><th class="num">Datasets</th><th class="num">Open</th><th class="num">Downloaded</th></tr></thead>
+        <tbody id="dir-body"></tbody>
+      </table>
+      <div id="dir-results" class="cards"></div>
+    </section>
+
+    <!-- Crawls -->
+    <section id="view-crawls" class="view hidden">
+      <h2>Crawl sessions</h2>
+      <table class="dir">
+        <thead><tr><th>ID</th><th>Mode</th><th>Query</th><th>Status</th><th class="num">Found</th><th class="num">New</th><th class="num">Tokens (in/out)</th><th>Started</th><th></th></tr></thead>
+        <tbody id="crawls-body"></tbody>
+      </table>
+      <pre id="crawl-log" class="log hidden"></pre>
+    </section>
+  </main>
+
+  <template id="card-tpl">
+    <article class="card">
+      <div class="card-head">
+        <a class="title" target="_blank" rel="noopener"></a>
+        <span class="badge new hidden">NEW</span>
+      </div>
+      <div class="sub"><span class="source"></span> · <span class="badge access"></span> <span class="badge dl"></span></div>
+      <p class="desc"></p>
+      <div class="chips"></div>
+      <dl class="meta"></dl>
+      <div class="files"></div>
+      <details class="access-details"><summary>How to access</summary><p class="instructions"></p><ul class="links"></ul></details>
+    </article>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
