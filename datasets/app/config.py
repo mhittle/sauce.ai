@@ -51,6 +51,16 @@ class Settings:
     max_files_per_dataset: int = _int("DATASETS_MAX_FILES_PER_DATASET", 10)
     allow_private_hosts: bool = _bool("DATASETS_ALLOW_PRIVATE_HOSTS", False)
     cors_origins: str = os.environ.get("CORS_ORIGINS", "*")
+    # Literature linker (background): articles that cite / mention each dataset.
+    literature_enabled: bool = _bool("DATASETS_LITERATURE", True)
+    openalex_api_key: str | None = os.environ.get("OPENALEX_API_KEY")
+    openalex_mailto: str | None = os.environ.get("OPENALEX_MAILTO")
+    lit_refresh_days: int = _int("DATASETS_LIT_REFRESH_DAYS", 30)
+    lit_interval_sec: float = float(_int("DATASETS_LIT_INTERVAL_SEC", 2))
+    lit_idle_sec: float = float(_int("DATASETS_LIT_IDLE_SEC", 300))
+    # A name alias matching more papers than this is too generic; keep its
+    # top-cited page only. 0 = no limit.
+    lit_max_mention_hits: int = _int("DATASETS_LIT_MAX_MENTION_HITS", 20000)
 
     @property
     def db_path(self) -> Path:

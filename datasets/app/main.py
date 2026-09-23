@@ -15,8 +15,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import fda
+from . import crawler, fda
 from .config import Settings, get_settings
+from .literature import LiteratureWorker
 from .manager import CrawlBusy, CrawlManager
 from .store import Store
 
@@ -31,21 +32,29 @@ class CrawlRequest(BaseModel):
 
 
 def create_app(settings: Settings | None = None, store: Store | None = None,
-               manager: CrawlManager | None = None) -> FastAPI:
+               manager: CrawlManager | None = None,
+               literature: LiteratureWorker | None = None) -> FastAPI:
     settings = settings or get_settings()
     store = store or Store(settings.db_path)
     store.mark_stale_crawls()
     manager = manager or CrawlManager(store, settings)
+    literature = literature or LiteratureWorker(
+        store, settings,
+        client_factory=crawler.make_client if settings.anthropic_api_key else None)
     logging.basicConfig(level=logging.INFO)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        if settings.literature_enabled:
+            literature.start()
         yield
+        literature.stop()
         manager.shutdown()
 
     app = FastAPI(title="sauce.ai/datasets", lifespan=lifespan,
                   description="LLM-driven medical dataset finder", version="0.1.0")
     app.state.store, app.state.manager, app.state.settings = store, manager, settings
+    app.state.literature = literature
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins or ["*"],
                        allow_methods=["*"], allow_headers=["*"])
@@ -57,7 +66,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
 
     @app.get("/api/stats")
     def stats():
-        return {**store.stats(), "active_crawls": manager.active(),
+        lit = store.literature_summary()
+        return {**store.stats(), "papers": lit["articles"], "active_crawls": manager.active(),
                 "llm_configured": manager.llm_ready()}
 
     # -------------------------------------------------------- search
@@ -149,6 +159,29 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         if not d:
             raise HTTPException(404, "dataset not found")
         return d
+
+    @app.get("/api/datasets/{ds_id}/articles")
+    def dataset_articles(ds_id: str, relation: str | None = Query(None, pattern="^(cites|mentions)$"),
+                         limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
+        """Papers linked to a dataset: descriptor paper(s), then papers citing
+        them, then papers naming the dataset; most-cited first."""
+        if not store.get_dataset(ds_id):
+            raise HTTPException(404, "dataset not found")
+        return store.dataset_articles(ds_id, relation, limit, offset)
+
+    @app.post("/api/datasets/{ds_id}/articles/refresh", status_code=202)
+    def refresh_articles(ds_id: str):
+        if not store.get_dataset(ds_id):
+            raise HTTPException(404, "dataset not found")
+        store.reset_literature(ds_id)
+        return {"queued": True}
+
+    @app.get("/api/literature")
+    def literature_status():
+        return {**store.literature_summary(), "worker_running": literature.running(),
+                "enabled": settings.literature_enabled,
+                "openalex": bool(settings.openalex_api_key),
+                "last_error": literature.last_error}
 
     @app.post("/api/datasets/{ds_id}/download", status_code=202)
     def retry_download(ds_id: str):

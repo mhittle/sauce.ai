@@ -106,6 +106,48 @@ CREATE VIRTUAL TABLE IF NOT EXISTS datasets_fts USING fts5(
     id UNINDEXED, title, description, conditions, modalities, labels,
     tags, source, tokenize = 'porter unicode61'
 );
+
+-- Literature: journal articles that cite a dataset's descriptor paper(s) or
+-- mention the dataset by name. One article row per paper, however found.
+CREATE TABLE IF NOT EXISTS articles (
+    id             TEXT PRIMARY KEY,          -- pmid:… | doi:… | openalex:W… | epmc:SRC:…
+    doi            TEXT,
+    pmid           TEXT,
+    pmcid          TEXT,
+    openalex_id    TEXT,
+    title          TEXT NOT NULL,
+    authors        TEXT,
+    venue          TEXT,
+    year           INTEGER,
+    cited_by_count INTEGER NOT NULL DEFAULT 0,
+    url            TEXT,
+    updated_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS articles_doi ON articles(doi);
+
+CREATE TABLE IF NOT EXISTS dataset_articles (
+    dataset_id  TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    article_id  TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    cites       INTEGER NOT NULL DEFAULT 0,   -- cites a descriptor paper
+    mentions    INTEGER NOT NULL DEFAULT 0,   -- names the dataset in text
+    is_descriptor INTEGER NOT NULL DEFAULT 0, -- the paper that introduced it
+    sources     TEXT NOT NULL DEFAULT '',     -- e.g. "epmc_cites,openalex_mentions"
+    matched     TEXT,                         -- alias that matched (mentions)
+    first_seen  TEXT NOT NULL,
+    PRIMARY KEY (dataset_id, article_id)
+);
+CREATE INDEX IF NOT EXISTS dataset_articles_article ON dataset_articles(article_id);
+
+CREATE TABLE IF NOT EXISTS literature_state (
+    dataset_id   TEXT PRIMARY KEY REFERENCES datasets(id) ON DELETE CASCADE,
+    status       TEXT NOT NULL,               -- active | retry | complete | unresolved
+    descriptors  TEXT NOT NULL DEFAULT '[]',
+    aliases      TEXT NOT NULL DEFAULT '[]',
+    streams      TEXT NOT NULL DEFAULT '[]',  -- [{kind, ref, cursor, done, fetched, error}]
+    note         TEXT,
+    last_worked  TEXT,
+    completed_at TEXT
+);
 """
 
 _JSON_FIELDS = ("conditions", "modalities", "file_formats", "download_urls", "tags")
@@ -270,6 +312,9 @@ class Store:
             if not row:
                 return None
             d = self._dataset_row(row)
+            d["n_articles"] = c.execute(
+                "SELECT COUNT(*) FROM dataset_articles WHERE dataset_id = ? AND is_descriptor = 0",
+                (ds_id,)).fetchone()[0]
             d["files"] = [dict(r) for r in c.execute(
                 "SELECT id, url, filename, bytes, sha256, content_type, status, note,"
                 " fetched_at FROM files WHERE dataset_id = ? ORDER BY id", (ds_id,))]
@@ -537,3 +582,161 @@ class Store:
         with self._write() as c:
             c.execute("UPDATE crawls SET status = 'interrupted', finished_at = ?"
                       " WHERE status IN ('queued', 'running')", (now_iso(),))
+
+    # ------------------------------------------------------------ literature
+    def upsert_article(self, art: dict) -> str:
+        """Insert/refresh one article. ``art`` needs id + title; other fields
+        fill in when present (citation counts always take the latest)."""
+        cols = ("doi", "pmid", "pmcid", "openalex_id", "authors", "venue", "year", "url")
+        with self._write() as c:
+            c.execute(
+                "INSERT INTO articles (id, title, cited_by_count, updated_at, "
+                + ", ".join(cols) + ") VALUES (?, ?, ?, ?, " + ", ".join("?" * len(cols)) + ")"
+                " ON CONFLICT (id) DO UPDATE SET title = excluded.title,"
+                " cited_by_count = MAX(articles.cited_by_count, excluded.cited_by_count),"
+                " updated_at = excluded.updated_at, "
+                + ", ".join(f"{k} = COALESCE(excluded.{k}, articles.{k})" for k in cols),
+                (art["id"], art["title"], int(art.get("cited_by_count") or 0), now_iso(),
+                 *[art.get(k) for k in cols]))
+        return art["id"]
+
+    def find_article_id(self, pmid: str | None = None, doi: str | None = None,
+                        openalex_id: str | None = None) -> str | None:
+        """Existing article row for any of these identifiers (cross-source dedup)."""
+        with self._conn() as c:
+            for col, val in (("pmid", pmid), ("doi", doi), ("openalex_id", openalex_id)):
+                if val:
+                    row = c.execute(f"SELECT id FROM articles WHERE {col} = ?", (val,)).fetchone()
+                    if row:
+                        return row["id"]
+        return None
+
+    def link_article(self, ds_id: str, article_id: str, relation: str, source: str,
+                     matched: str | None = None) -> bool:
+        """Associate an article with a dataset. relation: cites | mentions |
+        descriptor. Returns True if the pair is new."""
+        with self._write() as c:
+            row = c.execute("SELECT sources FROM dataset_articles WHERE dataset_id = ?"
+                            " AND article_id = ?", (ds_id, article_id)).fetchone()
+            flags = {"cites": int(relation == "cites"), "mentions": int(relation == "mentions"),
+                     "is_descriptor": int(relation == "descriptor")}
+            if row is None:
+                c.execute("INSERT INTO dataset_articles (dataset_id, article_id, cites, mentions,"
+                          " is_descriptor, sources, matched, first_seen)"
+                          " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                          (ds_id, article_id, flags["cites"], flags["mentions"],
+                           flags["is_descriptor"], source, matched, now_iso()))
+                return True
+            sources = ",".join(dict.fromkeys(filter(None, row["sources"].split(",") + [source])))
+            c.execute("UPDATE dataset_articles SET cites = MAX(cites, ?), mentions = MAX(mentions, ?),"
+                      " is_descriptor = MAX(is_descriptor, ?), sources = ?,"
+                      " matched = COALESCE(matched, ?) WHERE dataset_id = ? AND article_id = ?",
+                      (flags["cites"], flags["mentions"], flags["is_descriptor"], sources,
+                       matched, ds_id, article_id))
+            return False
+
+    def dataset_articles(self, ds_id: str, relation: str | None = None, limit: int = 50,
+                         offset: int = 0) -> dict:
+        """Articles for a dataset: descriptor papers first, then papers that
+        cite them, then name mentions; most-cited first within each tier."""
+        where = "da.dataset_id = ?"
+        if relation == "cites":
+            where += " AND da.cites = 1"
+        elif relation == "mentions":
+            where += " AND da.mentions = 1 AND da.cites = 0"
+        with self._conn() as c:
+            rows = c.execute(f"""
+                SELECT a.*, da.cites, da.mentions, da.is_descriptor, da.sources, da.matched
+                FROM dataset_articles da JOIN articles a ON a.id = da.article_id
+                WHERE {where}
+                ORDER BY da.is_descriptor DESC, da.cites DESC, a.cited_by_count DESC, a.year DESC
+                LIMIT ? OFFSET ?""", (ds_id, limit, offset)).fetchall()
+            counts = c.execute(
+                "SELECT COUNT(*) AS total, COALESCE(SUM(cites), 0) AS cites,"
+                " COALESCE(SUM(CASE WHEN mentions = 1 AND cites = 0 THEN 1 ELSE 0 END), 0)"
+                " AS mentions_only FROM dataset_articles WHERE dataset_id = ?"
+                " AND is_descriptor = 0", (ds_id,)).fetchone()
+        return {**dict(counts), "items": [dict(r) for r in rows],
+                "state": self.literature_state(ds_id)}
+
+    def article_counts(self, ds_ids: Iterable[str]) -> dict[str, int]:
+        ids = list(ds_ids)
+        if not ids:
+            return {}
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT dataset_id, COUNT(*) AS n FROM dataset_articles WHERE is_descriptor = 0"
+                f" AND dataset_id IN ({','.join('?' * len(ids))}) GROUP BY dataset_id",
+                ids).fetchall()
+        return {r["dataset_id"]: r["n"] for r in rows}
+
+    def literature_state(self, ds_id: str) -> dict | None:
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM literature_state WHERE dataset_id = ?",
+                            (ds_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        for f in ("descriptors", "aliases", "streams"):
+            d[f] = json.loads(d[f])
+        return d
+
+    def save_literature_state(self, ds_id: str, **fields: Any) -> None:
+        for f in ("descriptors", "aliases", "streams"):
+            if f in fields and not isinstance(fields[f], str):
+                fields[f] = json.dumps(fields[f])
+        fields["last_worked"] = now_iso()
+        with self._write() as c:
+            exists = c.execute("SELECT 1 FROM literature_state WHERE dataset_id = ?",
+                               (ds_id,)).fetchone()
+            if exists:
+                sets = ", ".join(f"{k} = :{k}" for k in fields)
+                c.execute(f"UPDATE literature_state SET {sets} WHERE dataset_id = :id",
+                          {**fields, "id": ds_id})
+            else:
+                fields.setdefault("status", "active")
+                cols = ["dataset_id", *fields]
+                c.execute(f"INSERT INTO literature_state ({', '.join(cols)}) VALUES"
+                          f" ({', '.join(':' + k for k in cols)})", {**fields, "dataset_id": ds_id})
+
+    def next_literature_dataset(self, refresh_days: int) -> str | None:
+        """What the literature worker should touch next: datasets never
+        processed (oldest first), then active ones least-recently worked
+        (round-robin, so every dataset gets its most-cited papers early),
+        then completed ones due for a refresh."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=refresh_days)).isoformat()
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT d.id FROM datasets d LEFT JOIN literature_state l ON l.dataset_id = d.id"
+                " WHERE l.dataset_id IS NULL ORDER BY d.first_seen LIMIT 1").fetchone()
+            if row:
+                return row["id"]
+            row = c.execute("SELECT dataset_id FROM literature_state"
+                            " WHERE status IN ('active', 'retry')"
+                            " ORDER BY last_worked LIMIT 1").fetchone()
+            if row:
+                return row["dataset_id"]
+            row = c.execute(
+                "SELECT dataset_id FROM literature_state WHERE status IN ('complete', 'unresolved')"
+                " AND COALESCE(completed_at, last_worked) < ? ORDER BY last_worked LIMIT 1",
+                (cutoff,)).fetchone()
+        return row["dataset_id"] if row else None
+
+    def reset_literature(self, ds_id: str) -> None:
+        """Forget resolution + cursors (articles already linked are kept)."""
+        with self._write() as c:
+            c.execute("DELETE FROM literature_state WHERE dataset_id = ?", (ds_id,))
+
+    def literature_summary(self) -> dict:
+        with self._conn() as c:
+            one = lambda sql: c.execute(sql).fetchone()[0]  # noqa: E731
+            by_status = {r["status"]: r["n"] for r in c.execute(
+                "SELECT status, COUNT(*) AS n FROM literature_state GROUP BY status")}
+            return {
+                "articles": one("SELECT COUNT(*) FROM articles"),
+                "links": one("SELECT COUNT(*) FROM dataset_articles WHERE is_descriptor = 0"),
+                "datasets_pending": one(
+                    "SELECT COUNT(*) FROM datasets d LEFT JOIN literature_state l"
+                    " ON l.dataset_id = d.id WHERE l.dataset_id IS NULL"),
+                "by_status": by_status,
+            }
