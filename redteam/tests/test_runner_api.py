@@ -9,7 +9,7 @@ from app.config import Settings
 from app.main import create_app
 from app.providers import ChatModel, MockModel
 from app.report import render_report
-from app.runner import Runner, RunSpec, allocate_arms
+from app.runner import Runner, RunQueue, RunSpec, allocate_arms
 from app.store import QuotaExceeded, Store
 from app.targets import TargetConfig
 
@@ -140,6 +140,62 @@ def test_full_run_produces_report(monkeypatch, store):
     assert run["summary"]["adversarial"]["prompts_until_harm"]["km"]["median"] == 2
     assert run["report_html"] and "Clinical red-team report" in run["report_html"]
     assert run["summary"]["adversarial"]["expected_qaly_loss_per_response"]["mean"] > 0
+
+
+def _seed_completed_trial(store, run_id, harmful=True):
+    from app.personas import make_persona
+    persona = make_persona(random.Random(0), "endocrinology", None, ["dosing_error"]).as_dict()
+    tid = store.create_trial(run_id, 0, "adversarial", persona)
+    ann = {"harmful": harmful, "p_harm": 0.8 if harmful else 0.01, "expected_qaly_loss": 0.02,
+           "modal_severity": "severe" if harmful else "none",
+           "categories": ["dosing_error"] if harmful else [], "red_flags_present": True,
+           "escalated_appropriately": not harmful, "judge_votes": {"j": harmful},
+           "correct_guidance": "see a clinician", "rationale": "x", "evidence_quotes": []}
+    store.add_turn(tid, run_id, 1, tactic="authority_claim", degraded=False,
+                   user_message="hi", target_reply="take a double dose", orchestration={},
+                   annotation=ann, latency_ms=10)
+    store.finish_trial(tid, status="harm" if harmful else "complete", n_turns=1,
+                       first_harm_turn=1 if harmful else None)
+
+
+def test_finalize_partial_report_builds_from_completed_trials(store):
+    settings = Settings(db_path=":memory:")
+    runner = Runner(settings, store, mocks={})
+    spec = make_spec(n=10)
+    run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings),
+                              TargetConfig(kind="openai_chat", url="https://x").public_dict(), 0.0)
+    _seed_completed_trial(store, run_id, harmful=True)
+    assert runner.finalize_partial_report(run_id, "service restarted mid-run") is True
+    run = store.get_run(run_id)
+    assert run["report_html"] and "Partial report" in run["report_html"]
+    assert run["summary"]["adversarial"]["trials_with_harm"] == 1
+
+
+def test_finalize_partial_report_noop_without_completed_trials(store):
+    settings = Settings(db_path=":memory:")
+    runner = Runner(settings, store, mocks={})
+    spec = make_spec(n=5)
+    run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings),
+                              TargetConfig(kind="openai_chat", url="https://x").public_dict(), 0.0)
+    assert runner.finalize_partial_report(run_id, "note") is False
+    assert store.get_run(run_id)["report_html"] is None
+
+
+def test_recover_generates_partial_report_for_interrupted_run(store):
+    settings = Settings(db_path=":memory:")
+    runner = Runner(settings, store, mocks={})
+    queue = RunQueue(runner)
+    spec = make_spec(n=8)
+    run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings),
+                              TargetConfig(kind="openai_chat", url="https://x").public_dict(), 0.0)
+    store.update_run(run_id, status="running", completed_trials=1)
+    _seed_completed_trial(store, run_id, harmful=True)
+    queue.recover()
+    run = store.get_run(run_id)
+    assert run["status"] == "failed"
+    assert run["report_html"] and "Partial report" in run["report_html"]
+    # 8 requested, 1 completed -> 7 refunded
+    assert store.trials_used(spec.email) == 0  # nothing was reserved in this test path
 
 
 def test_run_with_control_arm(monkeypatch, store):

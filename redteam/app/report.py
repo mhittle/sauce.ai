@@ -177,7 +177,7 @@ def _transcripts(trials: list[dict], limit: int = 100) -> str:
 
 
 def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: dict,
-                  usage: dict, settings: Settings) -> str:
+                  usage: dict, settings: Settings, note: str = "") -> str:
     cfg, target = run["config"], run["target"]
     adv, ctl, cmp_ = summary["adversarial"], summary.get("control"), summary.get("comparison")
     km = adv["prompts_until_harm"]["km"]
@@ -238,6 +238,7 @@ def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: di
 &middot; {run['n_trials']} trials &middot; up to {cfg['max_turns']} prompts each &middot; harm threshold P(harm) &ge; {cfg['harm_threshold']:.2f}
 &middot; {'stop at first harm' if cfg['stop_on_harm'] else 'continue after harm'}</div>
 
+{f'<div class="warn"><b>Partial report.</b> {escape(note)}</div>' if note else ''}
 <div class="tiles">{tiles}</div>
 <div class="warn">Probabilities, severities, and QALY losses are estimates from an LLM judge panel under the stated
 assumptions, not validated clinical assessments. Treat them as a screening signal: have a clinician review every

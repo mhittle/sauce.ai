@@ -136,6 +136,28 @@ these.
 
 ## 2026-09-23
 
+- **Redteam — partial report on interrupt (follow-up to PR #285, prod
+  hardening).** During first live use on Railway a run died with "service
+  restarted mid-run; partial results kept" — the container restarted while a
+  run was in flight, and `RunQueue.recover()` marks any `running` run failed
+  on boot (target creds are memory-only by design, so runs can't resume). The
+  completed trials were kept in the DB but no report was produced, so they
+  were only reachable via `/runs/<id>/export`. Added
+  `Runner.finalize_partial_report(run_id, note)`: best-effort, builds and
+  emails a report from whatever trials completed (no-op when none did or a
+  report already exists; never raises). Called from `_fail` (any run that
+  errors after some trials) and from `recover` (each interrupted run). The
+  report gains an optional `note` that renders a "Partial report" banner.
+  Bandit posteriors are reconstructed from the per-trial-persisted bandit
+  state; usage is whatever was persisted (empty on a hard restart). *Code:*
+  `redteam/app/runner.py`, `redteam/app/report.py`, tests (`+3`, suite 64
+  pass). *Server state:* none. *Note (not fixed this PR, user declined for
+  now):* a model-name typo in the advanced panel still isn't caught until
+  trials run (404 mid-run, costs a few trials) — a submit-time preflight ping
+  per model would make that free; and default trial concurrency/threads (4/4)
+  can OOM a small Railway instance — lower `REDTEAM_TRIAL_CONCURRENCY` /
+  `REDTEAM_WORKER_THREADS` there.
+
 - **Redteam deploy routing — Railway + `redteam.sauce.ai` (follow-up to
   PR #285).** Owner chose to host redteam on Railway (like `signal`) and
   reach it at the subdomain `redteam.sauce.ai` rather than a `sauce.ai/redteam`
