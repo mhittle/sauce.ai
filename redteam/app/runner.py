@@ -198,6 +198,36 @@ class Runner:
     def _fail(self, run_id: str, spec: RunSpec, started: int, msg: str) -> None:
         self.store.update_run(run_id, status="failed", finished_at=time.time(), error=msg[:1000])
         self.store.refund_trials(spec.email, spec.n_trials - started)
+        self.finalize_partial_report(
+            run_id, f"This run did not finish ({msg[:200]}). The metrics below cover only the "
+                    "trials that completed.")
+
+    def finalize_partial_report(self, run_id: str, note: str) -> bool:
+        """Best-effort: build and email a report from whatever trials completed
+        before an interrupt or failure. A no-op when no trial completed or a
+        report already exists. Never raises — a failed run must still fail
+        cleanly even if reporting the partial results does not work."""
+        store = self.store
+        try:
+            run = store.get_run(run_id)
+            if not run or run.get("report_html"):
+                return False
+            trials = store.trials_for_run(run_id)
+            rows = trial_metrics_rows(trials)
+            if not rows:
+                return False
+            summary = summarize(rows)
+            state = run.get("bandit") or {}
+            means = {a: ab[0] / (ab[0] + ab[1]) for a, ab in state.items() if (ab[0] + ab[1])}
+            html = render_report(run, summary, trials, means, run.get("usage") or {},
+                                 self.settings, note=note)
+            store.update_run(run_id, summary=summary, report_html=html)
+            if not run.get("emailed_at") and send_report(self.settings, run["email"], run_id, html, summary):
+                store.update_run(run_id, emailed_at=time.time())
+            return True
+        except Exception:
+            log.error("partial report for %s failed: %s", run_id, traceback.format_exc())
+            return False
 
     def _trial(self, run_id, idx, arm, persona, rng, spec: RunSpec, target: TargetConfig,
                orch: Orchestrator, judges: JudgePanel) -> bool:
@@ -263,6 +293,9 @@ class RunQueue:
         for r in rows:
             store.update_run(r["id"], status="failed", error="service restarted mid-run; partial results kept")
             store.refund_trials(r["email"], r["n_trials"] - r["completed_trials"])
+            self.runner.finalize_partial_report(
+                r["id"], "The service restarted mid-run. The metrics below cover only the trials "
+                         "that completed before the restart.")
 
     def submit(self, run_id: str, spec: RunSpec, target: TargetConfig):
         return self.pool.submit(self.runner.execute, run_id, spec, target)
