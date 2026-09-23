@@ -10,6 +10,13 @@ real secret *values* here — document var names only.
 
 ## Open
 
+> **Status 2026-09-23:** MA-013/014/015/016 all landed with the accounts
+> work merged on 2026-09-21 and are **untouched** — none has been confirmed
+> done. Together with **MA-006** (real pricing rates) they are what stands
+> between "merged and live" and "a prospect can use this end to end": MA-006
+> or no quote can be sent, MA-013 or no invite email goes out, MA-015 or
+> Google sign-in stays capped at 100 hand-listed users.
+
 ### MA-016 — Pick the tutorial's sample job (tutorial PR)
 New sign-ups get a copy of one finished takeoff on their Jobs list. Until
 set, they start empty (the tour skips that step). Decision 5 in

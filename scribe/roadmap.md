@@ -17,7 +17,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
-| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #283 tutorial; 2026-09-15 — merge pending) |
+| Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #283 tutorial; merged + live 2026-09-21) |
 | Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | in-progress (schema + pricing proposal in `accounts-plan.md` §3, awaiting decision) |
 | Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
@@ -150,7 +150,12 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   sequence per screen (Jobs, Pages, Mark, Review, Quote) anchored on
   `data-tour` elements, progress in `users.onboarding`, "Show me around"
   in the account menu resets it and re-seeds the sample. MA-016 (pick the
-  sample). **Status: done** pending merge of the five PRs.
+  sample). **Status: done** — all five merged to `main` 2026-09-21 and
+  verified live 2026-09-23 (api route + web bundle strings). Still blocked
+  on the owner before an outside prospect can be invited: MA-013 (Resend —
+  invites are created but only logged today), MA-015 (Google consent screen
+  + terms/privacy URLs), MA-014 (platform admin), MA-016 (sample job), and
+  MA-006 (real rates — the send gate blocks every quote until entered).
 
 ### Credits: usage ledger → per-page credits
 
@@ -165,6 +170,13 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   $1/page is a 20–50× markup on cost; the risk is not margin but that small
   jobs look free (a 4-page kitchen = $4) — pair it with a per-job minimum or
   packs (25 pages / $20).
+- **2026-09-23 recommended split:** build **3a the usage ledger FIRST** —
+  it needs no pricing decision, and it replaces the 1–6¢/page estimate with
+  a measured per-page/per-stage distribution to price against. 3b credits
+  (hold/settle/release, balance, cost preview, signup grant) follows once
+  the owner picks the unit. **Live risk meanwhile:** the invite form's
+  "Pages included" is stored and shown to the invitee but nothing enforces
+  it — accounts read without limit at our cost.
 - **2026-09-15 plan written** (`accounts-plan.md` §3): `model_rates`,
   `usage_events` (cost in microcents), `credit_ledger` with hold/settle/
   release, `platform_settings` (grant, minimum, enforcement flag);

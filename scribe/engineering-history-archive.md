@@ -291,6 +291,112 @@ the answer format.
 
 ---
 
+## 2026-09-15 (f) — SCR-013 evidence: no build failed after #270; prose-wrapped answers now parse; failed re-measure visible
+
+**Context.** Owner report (via the wrap-up): Build and "Measure again…"
+still error on the measuring step after #272 and land on the wizard.
+Evidence pulled before any code: prod DB through the API (`/jobs`,
+`/takeoffs/:id`, `/detections`) and the Railway `scribe workers` log
+(7-day window, filters `"measure response"`, `"beta build"`, `"job failed"`).
+
+**What the data says.** All beta builds 09-13 UTC: 247913a4 done (20);
+f876cac2 + 9018debb FAILED 18:41 with the pre-#270 `= ANY((…))` query —
+still on the Jobs list as "build takeoff failed", parked at `awaiting_boxes`
+by design; 8a8e3914 done 18:49 pre-#272 (24/24 defaulted at 0.5 — the first
+report); 40f9cb79 done 19:07 (`end_turn`, 16.6k chars, 24/24 clean JSON);
+0a26eb66 done 19:12 (`end_turn`, 7.4k chars, **25/25 via salvage**, 3
+estimated) → `review`, lines carry `reviewerEdited` at 19:13. No
+`beta build failed` after #270, no BullMQ `job failed`, no `remeasure` ever
+queued. So: the measuring step does not fail post-#272, and the wizard did
+forward. What IS real: 2 of the last 3 prod answers were not parseable as a
+whole though every cabinet object was complete (all 18 kits parse), and the
+review said "25 salvaged, the rest defaulted" when nothing defaulted. The
+stored `response-0.txt` were not pulled (no API route; MinIO console only).
+
+**Shipped (#274).**
+- `extractJson`: outermost JSON value by a balanced string-aware scan,
+  prose/fences before and after ignored, trailing commas forgiven, a value
+  that never closes still throws (salvage path). Tried candidates in order,
+  so `{kitchen}` in a preamble no longer poisons the parse.
+- `parseMeasureResponse(text, markerCount)` → `parse: json|salvage|none`;
+  warning counts the defaulted markers ("nothing defaulted" / "4 of 5
+  defaulted"); salvages when the first complete value was an inner object.
+- Worker: `parse` on the `measure response` log line; a `measure answer was
+  not clean JSON` warn with 400-char head/tail — the next occurrence is
+  diagnosable from Railway without MinIO.
+- Review page: `takeoffs.error` banner + **Measure again** button in
+  `review` (a failed re-measure or a failed area update on a reviewed
+  takeoff restores `review`; the error was invisible there).
+- 9 tests; 18-kit zero-API replay identical to `summary.csv` per kit.
+
+**Not changed.** Routing (`BetaDetect.tsx` forward, review forward) — the
+evidence says both work. Measure prompt (measure-v6) and call shape.
+
+**Open.** Owner verifies on prod after deploy (Build on a fresh
+MOLLY_CHARLEY_KITCHEN job → review; Measure again from the review's More
+menu → review). If a non-clean answer recurs, the warn line has the edges.
+Strict JSON via structured outputs needs an SDK bump (0.70.1 has no
+`output_config`) — in the measurement-accuracy plan, not this PR.
+
+---
+
+## 2026-09-15 (g) — measurement-accuracy plan written (no code)
+
+`measurement-accuracy-plan.md`, from the 18 kits (zero API) + the prod
+Charley builds. Findings: F1 0.47 is a COUNT problem (158/382 gold matched;
+sizes on matched are 62% exact width, 53% within 1"); fixing Find's count
+after the fact costs about as many touches as marking each cabinet
+(elevation sets ~15 vs 17.6 gold per kit); the text-layer `nearbyDims`
+hold the gold width for 26% of matched cabinets and for 2 of the 60 the
+model got wrong — the printed-dim shortlist is not the missing information,
+legibility is (elevation areas get no high-res crop; plan areas do). Owner
+batch-accepted 16/24 lines on prod and typed no size. Options A (areas +
+Find count gate + per-area measuring, recommended, LOE 7 in 3 PRs + an
+optional reviewer PR), B (mark every cabinet), C (reviewer pass). Step 0 =
+a ~$4 live per-area A/B on the kits before PR 2. Awaiting the owner.
+
+---
+
+---
+
+## 2026-09-15 (h) — customer-facing copy for pipeline errors and read notes; the "not clean JSON" cause
+
+**Owner:** the Jobs list showed the SCR-011 SQL in red and the review's
+notes said "measurements response was not valid JSON — 22 complete cabinet
+answers salvaged, nothing defaulted". Customer-facing app: calm plain copy
+for the customer, the technical text for the developer only (SCR-014).
+
+**Cause of the salvage, from #274's new warn line** (takeoff 99656b83,
+2026-09-14 01:45 PDT, 22/22 salvaged): the model answers with a markdown
+work-through of every marker before the JSON ("**Marker 1:** … (from chain
+[y≈149]: 14)"), then the object. `extractJson` capped candidate brackets at
+8; the preamble has one `[y≈…]` per marker, so the real `{"cabinets"` was
+never reached. Now every candidate is tried (test with 22 bracketed
+markers). The preamble itself is harmless — arguably useful reasoning — the
+parser has to accept it. A strict output contract (structured outputs, SDK
+bump) is in `measurement-accuracy-plan.md`.
+
+**Shipped.** `apps/web/src/messages.ts`: `friendlyError` (build failed →
+"We couldn't finish building this takeoff. Please try Build again."; billing
+/ 429 / 529 → "The reading service isn't available right now…"; media type →
+"upload as PNG or JPEG"; default generic), `friendlyNote` / `friendlyNotes`
+(schedule missing, N defaulted, N estimated, cut off, page cap, plan-run
+arithmetic, unread page type, failed page part; developer-only notes —
+salvage with nothing defaulted, cross-validation — hidden from customers;
+unknown → one generic line; duplicates merged), `friendlyAreaError`.
+`components/TechnicalDetail.tsx`: raw text under "Technical details (admin)"
+for `role === "admin"` (same `["me"]` query as the shell). Wired into the
+Jobs list, the wizard (takeoff error + failed areas), the review banner,
+the review notes panel and the failed screen. The worker's strings are
+unchanged — they are the evidence.
+
+**Gotcha.** New pipeline warning strings need a `NOTE_RULES` entry or they
+render as the generic line for customers (admins still see the raw text).
+
+---
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI
