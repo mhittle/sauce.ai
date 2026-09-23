@@ -12,6 +12,10 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from pydantic import BaseModel, Field
 
 from . import adjudication as adj
+from . import che
+from . import che_report
+from . import che_review
+from . import che_screener
 from . import compare as cmp_mod
 from . import dataset
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
@@ -78,6 +82,29 @@ class LabelIn(BaseModel):
     escalated: bool | None = None
     confidence: int | None = None
     notes: str = ""
+
+
+class CheScreenIn(BaseModel):
+    screener_model: str = ""
+    seed: int = 0
+
+
+class CheReviewSetIn(BaseModel):
+    run_ids: list[str]
+    name: str = ""
+    neg_sample_rate: float | None = None
+    seed: int = 0
+
+
+class CheLabelIn(BaseModel):
+    rater: str
+    rater_type: str = "clinician_1"
+    severity: int
+    life_threatening: bool = False
+    likelihood: str = "low"
+    actionable: bool = False
+    pathway: str = "other"
+    rationale: str = ""
 
 
 class SlidingWindow:
@@ -369,6 +396,134 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             raise HTTPException(404, "unknown adjudication set")
         f = STATIC / "adjudicate.html"
         return HTMLResponse(f.read_text() if f.exists() else "<h1>adjudication</h1>")
+
+    # -- Critical Harm Event (CHE) measurement -----------------------------
+
+    def _build_model(spec: str):
+        return (runner.model_factory(spec, settings, runner.mocks)
+                if runner.mocks is not None else runner.model_factory(spec, settings))
+
+    @app.post("/runs/{run_id}/che/screen")
+    def che_screen(run_id: str, body: CheScreenIn):
+        if not settings.che_enabled:
+            raise HTTPException(400, "CHE measurement is disabled (REDTEAM_CHE_ENABLED)")
+        run = store.get_run(run_id)
+        if not run:
+            raise HTTPException(404, "unknown run")
+        cfg = run["config"]
+        attackers = (cfg.get("orchestration") or {}).get("attackers") or []
+        spec = body.screener_model.strip() or settings.che_screener_model
+        try:
+            che_screener.assert_screener_distinct(spec, attackers)
+            model = _build_model(spec)
+        except (che_screener.ScreenerModelConflict, Exception) as exc:
+            if isinstance(exc, che_screener.ScreenerModelConflict):
+                raise HTTPException(400, str(exc))
+            raise HTTPException(400, f"could not build screener model {spec!r}: {exc}")
+        versions = {"attacker": ",".join(attackers), "target": dataset.target_label(run), "screener": spec}
+        screener = che_screener.CheScreener(spec, model, settings.che_screen_threshold, versions)
+        n = 0
+        for t in store.trials_for_run(run_id):
+            from .personas import Persona
+            persona = Persona(**t["persona"])
+            history: list[dict] = []
+            for u in t["turns"]:
+                history.append({"role": "user", "content": u["user_message"]})
+                fields = screener.screen(persona, list(history), u["target_reply"])
+                store.upsert_che_label({
+                    "run_id": run_id, "turn_id": u["id"], "trial_id": t["id"],
+                    "rater_type": "llm_screener", "rater_id": spec, "turn_index": u["idx"],
+                    "model_versions": versions, "sample_source": "representative",
+                    "inclusion_prob": 1.0, **fields})
+                history.append({"role": "assistant", "content": u["target_reply"]})
+                n += 1
+        return {"run_id": run_id, "screened": n, "screener_model": spec}
+
+    @app.post("/che/review-sets")
+    def che_review_set(body: CheReviewSetIn):
+        run_ids = [r.strip() for r in body.run_ids if r.strip()]
+        if not run_ids:
+            raise HTTPException(400, "at least one run_id is required")
+        labels = []
+        for rid in run_ids:
+            if not store.get_run(rid):
+                raise HTTPException(404, f"unknown run {rid}")
+            labels.extend(store.che_labels(rid, rater_type="llm_screener"))
+        if not labels:
+            raise HTTPException(400, "no screener labels yet — run POST /runs/<id>/che/screen first")
+        rate = settings.che_neg_sample_rate if body.neg_sample_rate is None else body.neg_sample_rate
+        selected = che_review.select_two_phase(labels, neg_sample_rate=rate, seed=body.seed)
+        # blinded context: persona brief + conversation up to the scored turn + full reply
+        turn_ctx = {}
+        for rid in run_ids:
+            for t in store.trials_for_run(rid):
+                hist = []
+                for u in t["turns"]:
+                    hist.append({"role": "user", "content": u["user_message"]})
+                    turn_ctx[u["id"]] = {"persona_brief": adj._persona_brief(t["persona"]),
+                                         "conversation_before": list(hist), "reply": u["target_reply"]}
+                    hist.append({"role": "assistant", "content": u["target_reply"]})
+        items = [{"turn_id": s.turn_id, "run_id": s.run_id, "pathway": s.pathway,
+                  "screen_positive": s.screen_positive, "inclusion_prob": s.inclusion_prob,
+                  "sample_source": s.sample_source, "sampling_weight": s.sampling_weight,
+                  "context": turn_ctx.get(s.turn_id, {"reply": ""})} for s in selected]
+        spec = {"neg_sample_rate": rate, "seed": body.seed}
+        set_id = store.create_che_review_set(body.name.strip() or f"CHE review of {len(run_ids)} run(s)",
+                                             spec, run_ids, items)
+        base = settings.public_base_url.rstrip("/")
+        return {"set_id": set_id, "n_items": len(items),
+                "n_screen_positive": sum(1 for s in selected if s.screen_positive),
+                "label_url": f"{base}/che-review/{set_id}"}
+
+    @app.get("/che-review/{set_id}/items")
+    def che_review_items(set_id: str):
+        s = store.get_che_review_set(set_id)
+        if not s:
+            raise HTTPException(404, "unknown CHE review set")
+        return {"set_id": set_id, "name": s["name"], "n_items": s["n_items"],
+                "pathways": list(che.PATHWAYS), "likelihood": list(che.LIKELIHOOD),
+                "che_severity": che.CHE_SEVERITY, "items": store.che_review_items(set_id, blinded=True)}
+
+    @app.post("/che-review/{set_id}/items/{item_id}/label")
+    def che_review_label(set_id: str, item_id: int, body: CheLabelIn):
+        s = store.get_che_review_set(set_id)
+        if not s:
+            raise HTTPException(404, "unknown CHE review set")
+        if body.rater_type not in che.RATER_TYPES or body.rater_type == "llm_screener":
+            raise HTTPException(400, "rater_type must be clinician_1, clinician_2, or adjudicator")
+        if not 0 <= body.severity <= 5:
+            raise HTTPException(400, "severity must be 0–5")
+        if body.likelihood not in che.LIKELIHOOD or body.pathway not in che.PATHWAYS:
+            raise HTTPException(400, "invalid likelihood or pathway")
+        item = next((it for it in store.che_review_items(set_id, blinded=False) if it["id"] == item_id), None)
+        if not item:
+            raise HTTPException(404, "unknown item")
+        derived = che.derive_che(body.severity, body.life_threatening, body.likelihood, body.actionable)
+        store.upsert_che_label({
+            "run_id": item["run_id"], "turn_id": item["turn_id"], "rater_type": body.rater_type,
+            "rater_id": body.rater.strip() or body.rater_type, "severity": body.severity,
+            "life_threatening": body.life_threatening, "likelihood": body.likelihood,
+            "actionable": body.actionable, "pathway": body.pathway, "che": derived,
+            "rationale": body.rationale.strip()[:1200], "sample_source": item["sample_source"],
+            "sampling_weight": item["sampling_weight"], "inclusion_prob": item["inclusion_prob"],
+            "screen_positive": item["screen_positive"], "model_versions": {}})
+        return {"ok": True, "che": derived}
+
+    @app.get("/che-review/{set_id}", response_class=HTMLResponse)
+    def che_review_ui(set_id: str):
+        if not store.get_che_review_set(set_id):
+            raise HTTPException(404, "unknown CHE review set")
+        f = STATIC / "che_review.html"
+        return HTMLResponse(f.read_text() if f.exists() else "<h1>CHE review</h1>")
+
+    @app.get("/che/report", response_class=HTMLResponse)
+    def che_report_html(runs: str = Query(...)):
+        ids = _run_ids(runs)
+        return HTMLResponse(che_report.render_che_html(che_report.che_report_json(store, ids, settings), ids))
+
+    @app.get("/che.json")
+    def che_report_json_ep(runs: str = Query(...)):
+        return che_report.che_report_json(store, _run_ids(runs), settings)
 
     @app.get("/", response_class=HTMLResponse)
     def index():
