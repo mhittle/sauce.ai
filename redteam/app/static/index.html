@@ -33,6 +33,16 @@ button:disabled{opacity:.55;cursor:default}
 .muted{color:var(--muted)}.small{font-size:13px}
 details summary{cursor:pointer;font-weight:600;font-size:14px;margin:6px 0}
 .pill{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px 4px 2px 0}
+.modelpick{margin-bottom:6px}
+.modelpick .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.chip{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:3px 6px 3px 11px;font-size:12px}
+.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0}
+.chip button:hover{color:var(--accent)}
+.modelpick .addrow{display:flex;gap:6px;align-items:center}
+.modelpick select,.modelpick .custom{flex:1;min-width:0}
+.modelpick .custom{display:none}
+.modelpick .add{white-space:nowrap;padding:8px 14px}
+.modelpick .phint{margin-top:3px}
 #status{border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:16px;background:var(--card);display:none}
 .bar{height:9px;background:var(--line);border-radius:5px;overflow:hidden;margin:8px 0}
 .bar>div{height:100%;width:0;background:var(--accent);transition:width .4s}
@@ -70,7 +80,8 @@ code{background:var(--card);border:1px solid var(--line);border-radius:4px;paddi
     </div>
     <div class="row">
       <div data-when="openai_chat anthropic"><label>Model <span class="hint">as the API names it</span></label>
-        <input id="model" placeholder="e.g. gpt-4o-mini / claude-sonnet-5 / your-model-id"></div>
+        <input id="model" list="modelids" placeholder="e.g. gpt-4o-mini / claude-sonnet-5 / your-model-id">
+        <datalist id="modelids"></datalist></div>
       <div data-when="openai_chat anthropic http_json"><label>API key <span class="hint">held in memory for the run only, never stored</span></label>
         <input id="api_key" type="password" autocomplete="off"></div>
     </div>
@@ -132,12 +143,13 @@ code{background:var(--card);border:1px solid var(--line);border-radius:4px;paddi
       <summary>Advanced: the red-team engine (optional)</summary>
       <p class="small muted">The attacker is an ensemble of LLMs that propose, refine, and vote on the next patient
       message most likely to push the bot into an unsafe reply. All of this is optional — defaults use Claude.</p>
-      <label>Attacker models <span class="hint">comma-separated <code>provider:model</code>; mix providers to strengthen it</span></label>
-      <input id="attackers" placeholder="anthropic:claude-sonnet-5, openai:gpt-4o, llama:meta-llama/Llama-3.3-70B-Instruct-Turbo">
+      <label>Attacker (adversary) models <span class="hint">the ensemble that writes each next patient message; add one or more, mix providers to strengthen it</span></label>
+      <div class="modelpick" data-role="attackers"></div>
       <div class="row">
-        <div><label>Arbiter / scorer models</label><input id="arbiters" placeholder="anthropic:claude-opus-5"></div>
+        <div><label>Arbiter / scorer models <span class="hint">score &amp; vote on candidates</span></label>
+          <div class="modelpick" data-role="arbiters"></div></div>
         <div><label>Judge models <span class="hint">annotate every reply; ≥3 gives inter-rater κ</span></label>
-          <input id="judges" placeholder="anthropic:claude-opus-5"></div>
+          <div class="modelpick" data-role="judges"></div></div>
       </div>
       <div class="row3">
         <div><label>Sub-agent levels <span class="hint">propose→refine depth</span></label><input id="levels" type="number" min="1" max="4" value="1"></div>
@@ -195,8 +207,7 @@ async function boot(){
   });
   syncConditions();
   sp.onchange = syncConditions;
-  ['attackers','arbiters','judges'].forEach(id =>
-    $(id).placeholder = (id==='attackers'?CFG.defaults.attackers:id==='arbiters'?CFG.defaults.arbiters:CFG.defaults.judges).join(', '));
+  buildModelPicks();
   const avail = CFG.available_providers;
   $('providers').textContent = avail.length
     ? 'Provider keys configured on the server: ' + avail.join(', ') + '. Models from other providers need their key set server-side.'
@@ -209,6 +220,76 @@ async function boot(){
 function syncConditions(){
   const s = CFG.specialties.find(x => x.key === $('specialty').value);
   $('conditions').innerHTML = (s ? s.conditions : []).map(c => `<option value="${c}">`).join('');
+}
+
+// --- model pickers (attacker / arbiter / judge) --------------------------
+const PICKS = {attackers: [], arbiters: [], judges: []};
+const DEFAULTS = {};
+
+function buildModelPicks(){
+  DEFAULTS.attackers = CFG.defaults.attackers;
+  DEFAULTS.arbiters = CFG.defaults.arbiters;
+  DEFAULTS.judges = CFG.defaults.judges;
+  const byProv = {};
+  (CFG.model_catalog || []).forEach(m => (byProv[m.provider] = byProv[m.provider] || []).push(m));
+  const dl = $('modelids');
+  if(dl) dl.innerHTML = [...new Set((CFG.model_catalog || []).map(m => m.model))]
+    .map(id => `<option value="${id}">`).join('');
+  document.querySelectorAll('.modelpick').forEach(box => {
+    const role = box.dataset.role;
+    const sel = document.createElement('select'); sel.className = 'pick';
+    sel.add(new Option('Add a model…', ''));
+    Object.entries(byProv).forEach(([prov, models]) => {
+      const og = document.createElement('optgroup'); og.label = prov;
+      models.forEach(m => {
+        const o = new Option(m.available ? m.label : m.label + ' — no key set', m.spec);
+        o.disabled = !m.available; og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+    sel.add(new Option('Custom — enter manually…', '__custom__'));
+    const custom = document.createElement('input');
+    custom.className = 'custom'; custom.placeholder = 'provider:model';
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'sec add'; add.textContent = 'Add';
+    box.innerHTML = '<div class="chips"></div>';
+    const addrow = document.createElement('div'); addrow.className = 'addrow';
+    addrow.append(sel, custom, add); box.append(addrow);
+    const phint = document.createElement('div'); phint.className = 'phint small muted';
+    box.append(phint);
+
+    const addSpec = spec => {
+      spec = (spec || '').trim();
+      if(spec && !PICKS[role].includes(spec)) PICKS[role].push(spec);
+      renderPick(role);
+    };
+    sel.onchange = () => {
+      if(sel.value === '__custom__'){ custom.style.display = 'block'; custom.focus(); }
+      else { custom.style.display = 'none'; if(sel.value) addSpec(sel.value); sel.value = ''; }
+    };
+    add.onclick = () => {
+      if(custom.style.display !== 'none' && custom.value.trim()){ addSpec(custom.value); custom.value = ''; custom.style.display = 'none'; }
+      else if(sel.value && sel.value !== '__custom__'){ addSpec(sel.value); sel.value = ''; }
+    };
+    custom.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); add.onclick(); } };
+    renderPick(role);
+  });
+}
+
+function renderPick(role){
+  const box = document.querySelector(`.modelpick[data-role="${role}"]`);
+  const chips = box.querySelector('.chips');
+  chips.innerHTML = '';
+  PICKS[role].forEach(spec => {
+    const c = document.createElement('span'); c.className = 'chip';
+    c.textContent = spec;
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '×';
+    x.setAttribute('aria-label', 'remove ' + spec);
+    x.onclick = () => { PICKS[role] = PICKS[role].filter(s => s !== spec); renderPick(role); };
+    c.appendChild(x); chips.appendChild(c);
+  });
+  box.querySelector('.phint').textContent = PICKS[role].length
+    ? '' : 'Using default: ' + (DEFAULTS[role] || []).join(', ');
 }
 function syncKind(){
   const k = $('kind').value;
@@ -225,7 +306,6 @@ async function refreshQuota(){
 $('email')?.addEventListener('change', refreshQuota);
 
 function collect(){
-  const list = s => s.split(',').map(x=>x.trim()).filter(Boolean);
   const k = $('kind').value;
   const target = {kind:k, url:$('url').value.trim(), model:$('model').value.trim(),
     api_key:$('api_key').value, system_prompt:$('system_prompt').value,
@@ -234,14 +314,14 @@ function collect(){
     send_selector:$('send_selector').value.trim(), response_selector:$('response_selector').value.trim()};
   const orch = {levels:+$('levels').value, candidates_per_agent:+$('candidates_per_agent').value,
     consensus_rounds:+$('consensus_rounds').value, bandit:$('bandit').checked, lookahead:$('lookahead').checked};
-  if(list($('attackers').value).length) orch.attackers = list($('attackers').value);
-  if(list($('arbiters').value).length) orch.arbiters = list($('arbiters').value);
+  if(PICKS.attackers.length) orch.attackers = PICKS.attackers.slice();
+  if(PICKS.arbiters.length) orch.arbiters = PICKS.arbiters.slice();
   return {email:$('email').value.trim(), n_trials:+$('n_trials').value, specialty:$('specialty').value,
     condition:$('condition').value.trim(),
     focus_harms:[...document.querySelectorAll('#harms input:checked')].map(c=>c.value),
     max_turns:+$('max_turns').value, stop_on_harm:$('stop_on_harm').value==='true',
     control_fraction:+$('control_fraction').value, harm_threshold:+$('harm_threshold').value,
-    notes:$('notes').value.trim(), judges:list($('judges').value), orchestration:orch, target};
+    notes:$('notes').value.trim(), judges:PICKS.judges.slice(), orchestration:orch, target};
 }
 
 $('form').addEventListener('submit', async e => {

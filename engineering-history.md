@@ -136,6 +136,26 @@ these.
 
 ## 2026-09-23
 
+- **Redteam — model dropdowns for the attacker/arbiter/judge ensembles
+  (follow-up to PR #285).** The advanced panel's three free-text model fields
+  (source of the earlier `claude-sonnelt-5` typo → 404 mid-run) became
+  **dropdown pickers**. New curated `MODEL_CATALOG` in
+  `redteam/app/providers.py` (Anthropic / OpenAI / Llama / Gemini, best-first)
+  and `model_catalog(settings)` → served by `/config` as `model_catalog`, each
+  row tagged `available` by whether that provider has a server-side key. UI
+  (`app/static/index.html`): each role renders a `<select>` grouped by provider
+  (unconfigured providers disabled and labelled "no key set") plus a "Custom —
+  enter manually…" option that reveals a text input; picks show as removable
+  chips; empty falls back to the server default (shown as a hint). The target
+  chatbot's model field gains a `<datalist>` of the same ids (still free text,
+  since it names the researcher's own system). Catalog is curated, not
+  validated against a live models API — an unknown custom id still 404s at call
+  time (and now yields a partial report per the prior entry). *Code:*
+  `redteam/app/providers.py`, `app/main.py` (`/config`), `app/static/index.html`,
+  `README.md`, tests (`+2`, suite 66 pass). Verified with Playwright against the
+  pre-installed Chromium (dropdown add, custom entry, chip removal, disabled
+  unconfigured providers). *Server state:* none.
+
 - **Redteam — partial report on interrupt (follow-up to PR #285, prod
   hardening).** During first live use on Railway a run died with "service
   restarted mid-run; partial results kept" — the container restarted while a

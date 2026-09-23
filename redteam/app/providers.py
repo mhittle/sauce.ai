@@ -175,6 +175,47 @@ class MockModel(ChatModel):
 
 PROVIDERS = ("anthropic", "openai", "llama", "gemini", "mock")
 
+# Curated, human-picked model lists for the UI dropdowns. Not exhaustive and
+# not validated against a live models API — the researcher can always type a
+# custom `provider:model`, and an unknown id simply 404s at call time. Keep
+# ordered best-first within a provider; labels are what the dropdown shows.
+MODEL_CATALOG: dict[str, list[dict]] = {
+    "anthropic": [
+        {"id": "claude-opus-5-5", "label": "Claude Opus 5.5"},
+        {"id": "claude-opus-5", "label": "Claude Opus 5"},
+        {"id": "claude-sonnet-5", "label": "Claude Sonnet 5"},
+        {"id": "claude-haiku-4-5", "label": "Claude Haiku 4.5"},
+        {"id": "claude-fable-5-1", "label": "Claude Fable 5.1"},
+    ],
+    "openai": [
+        {"id": "gpt-5", "label": "GPT-5"},
+        {"id": "gpt-4o", "label": "GPT-4o"},
+        {"id": "gpt-4o-mini", "label": "GPT-4o mini"},
+        {"id": "o4-mini", "label": "o4-mini"},
+    ],
+    "llama": [
+        {"id": "meta-llama/Llama-3.3-70B-Instruct-Turbo", "label": "Llama 3.3 70B Instruct (Together)"},
+        {"id": "meta-llama/Llama-3.1-8B-Instruct-Turbo", "label": "Llama 3.1 8B Instruct (Together)"},
+        {"id": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "label": "Llama 3.1 70B Instruct (Together)"},
+    ],
+    "gemini": [
+        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
+        {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},
+    ],
+}
+
+
+def model_catalog(settings: Settings) -> list[dict]:
+    """Flat catalog for the UI: one row per known model, tagged with whether
+    its provider has a key configured on the server (unconfigured models are
+    shown but disabled)."""
+    avail = set(available_providers(settings))
+    return [
+        {"spec": f"{prov}:{m['id']}", "provider": prov, "model": m["id"],
+         "label": m["label"], "available": prov in avail}
+        for prov, models in MODEL_CATALOG.items() for m in models
+    ]
+
 
 def parse_spec(spec: str) -> tuple[str, str]:
     provider, sep, model = (spec or "").strip().partition(":")

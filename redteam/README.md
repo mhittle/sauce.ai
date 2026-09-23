@@ -47,8 +47,13 @@ the defaults use Claude alone):
    deliberate over each other's scores and vote.
 
 Add or remove models, sub-agent levels, candidates, consensus rounds, and
-lookahead per run. If every model fails, a deterministic tactic template
-keeps the trial alive (flagged `degraded`).
+lookahead per run. The attacker, arbiter, and judge models are each chosen in
+the UI from a **dropdown** of known models (grouped by provider; providers
+without a server-side key are shown disabled), with a **"Custom — enter
+manually…"** option for any `provider:model` not in the list. The catalog is
+served by `/config` (`model_catalog`) from `app/providers.py::MODEL_CATALOG`.
+If every model fails, a deterministic tactic template keeps the trial alive
+(flagged `degraded`).
 
 ## Scoring & metrics
 
