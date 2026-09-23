@@ -27,14 +27,16 @@ Format:
 - **PR:** —
 
 ### SCR-014 — Raw pipeline errors and read notes shown to customers
-- **Status:** resolved (this PR; prod verify after deploy)
+- **Status:** resolved (#276, merged + deployed; owner spot-check on a live job still welcome)
 - **Reported:** 2026-09-15 by owner (Jobs list showing the SQL of the SCR-011 failure in red; review notes showing "measurements response was not valid JSON — 22 complete cabinet answers salvaged, nothing defaulted")
 - **Description:** `takeoffs.error`, `docSummary.warnings` and `takeoff_detections.error` are written by the worker in developer language (SQL, model-answer diagnostics) and rendered verbatim on the Jobs list, the wizard, the review's "notes from the read" panel and the failed screen. This is a customer-facing app: the copy must be short and calm for the customer, while the developer still needs to see what happened.
 - **Notes / fix:** `apps/web/src/messages.ts` maps every known error/note pattern to one plain sentence (`friendlyError`, `friendlyNote`, `friendlyNotes`; unknown notes get a generic line, developer-only notes such as a salvage that changed nothing or a cross-validation skip are hidden from customers). `TechnicalDetail` shows the raw text under a "Technical details (admin)" toggle for `role === "admin"` only. The worker keeps writing the technical sentence — it is the evidence. 11 web tests.
-- **PR:** this PR
+- **PR:** #276
 
 ### SCR-013 — Measuring step fails in prod; wizard does not land on the review
-- **Status:** in-progress (#274 merged → owner verifies on prod, then resolved)
+- **Status:** in-progress (#274 merged + deployed 2026-09-15; owner has not
+  yet re-run Build / "Measure again" on a live job, so it stays open. As of
+  2026-09-23 no new occurrence has been reported.)
 - **Reported:** 2026-09-15 by owner (MOLLY_CHARLEY_KITCHEN, 24 cabinets / 3 elevation areas)
 - **Description:** First report: Build ran ~2 min, then every cabinet came
   back 30" @ 50% with the note "measurements response was not parseable JSON

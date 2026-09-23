@@ -74,11 +74,105 @@ deploys if a future session doesn't know it exists. Keep this current.
   got PR 1 only while all four showed "merged". Fixed by #260 (the PR 3
   branch, which contained all the merges, opened against `main`). Either
   base every PR on `main`, or merge bottom-up and delete each branch.
+- **Accounts are LIVE but email is NOT configured (2026-09-21, #279–#283).**
+  `RESEND_API_KEY` / `EMAIL_FROM` are unset on `scribe-api`, so every invite
+  and magic link is created and then only LOGGED (`email not configured`);
+  the admin copies the link out of Admin → Users by hand. Setting the two
+  vars switches sending on with no code change (MA-013).
+- **Migration 0014 created the platform org "CabinetNow"** and backfilled
+  every pre-existing user, takeoff, quote, customer and eval_fixture into
+  it. `orgs.is_platform` marks it; machine users (dev bypass,
+  signal-connector) are created there by `getPlatformOrgId()`. Only users
+  who had `role = 'admin'` were promoted to `is_platform_admin` — anyone
+  else needs the Admin → Users checkbox (MA-014) or they see no Admin tab.
+- **The Google OAuth consent screen is still in TESTING mode** (external
+  publishing is MA-015), so Google sign-in is capped at 100 hand-listed
+  test users. Invited users can still sign up and sign in by email link
+  once MA-013 is done — the cap only binds the Google button.
+- **`org_settings.sample_takeoff_id` is unset**, so new sign-ups land on an
+  empty Jobs list and the tutorial's sample step is skipped (MA-016). The
+  sample must be a plan set we may show strangers; the test kits are
+  customers' drawings.
+- **Local dev recipe (verified 2026-09-22, no new services installed):**
+  brew Postgres 14 already on 5432 (`createdb scribe_dev`) and the
+  already-running Docker Redis on 6379; api on **3011**, web on **5174**
+  (3001 and 5173 are the owner's other servers — never take them). From
+  `scribe/`, after `pnpm build`:
+  ```
+  DATABASE_URL=postgres://localhost:5432/scribe_dev REDIS_URL=redis://localhost:6379 \
+  NODE_ENV=development PORT=3011 API_PUBLIC_URL=http://localhost:3011 \
+  WEB_PUBLIC_URL=http://localhost:5174 SESSION_SECRET=local-dev-secret \
+  AUTH_ALLOWED_EMAILS=mhittle@gmail.com,ridadarwish12@gmail.com \
+  node apps/api/dist/server.js
+  (cd apps/web && VITE_API_URL=http://localhost:3011 npx vite --port 5174 --strictPort)
+  ```
+  Migrations apply at boot. Dev-bypass signs you in as the local admin
+  (`GOOGLE_CLIENT_ID` unset); object storage is NOT configured, so plan and
+  logo uploads fail locally by design — the invite → sign-up → account flow
+  does not need them.
 - **`ROUTER_TOLERANT_MERGE=1` is SET on `scribe-workers`** (owner, 2026-08-12)
   — the demoted-role re-admit merge is LIVE prod behavior (kit-measured 0.379
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-09-23 — session wrap-up: accounts + tutorial merged and live; billing still unbuilt
+
+**Context.** Session 2026-09-15→23. The owner's four tasks were: plan the
+invite → sign-up → profile flow, plan the onboarding tutorial, specify what
+credits need (plan only), and confirm the Stripe row. After the plan came an
+"ok go", so tasks 1 and 2 were built; 3 and 4 remain plan-only by decision.
+
+**What shipped (all merged to `main` 2026-09-21).**
+- **#278** `accounts-plan.md` — state diagram, schemas, Google/Resend manual
+  steps, tenancy route audit, PR split, credits schema + pricing proposal.
+- **#279 PR A** `packages/email` (Resend REST, log-only without the key) +
+  migration 0013 `invites` + admin invite API + Admin → Users invite panel.
+- **#280 PR C** tenancy: migration 0014 `orgs`, `org_id` on takeoffs/quotes/
+  customers/eval_fixtures, `is_platform_admin`, `req.orgId` (+ `X-Org-Id`
+  for platform admins), `lib/scope.ts` on ~24 id lookups, per-org lists and
+  dashboard, `/projects` platform-only. **This closed the security item** —
+  before it, any signed-in user saw every takeoff.
+- **#281 PR B** `POST /signup` (org + owner user + invite consumed in one
+  transaction, session in the body) + `/signup?token=` page + email magic
+  link (migration 0015 `login_tokens`).
+- **#282 PR D** `/account`: profile, company name/logo (org logo now wins on
+  that org's quote PDFs), team roles, teammate invites; `requireOrgOwner`.
+- **#283** onboarding tutorial: migration 0016, sample-job clone
+  (`storage_id` shares the original's images; non-GET writes on a sample are
+  refused), `Tour`/`Coachmark` with a sequence per screen, progress in
+  `users.onboarding`, "Show me around" in the account menu.
+
+**Owner decisions this session.** Sign-up form is email + name + phone only
+(no company, no how-heard, no checkbox — a terms LINE). PR order A → C → B
+→ D, so tenancy landed before any outside user could exist. Sign-in is
+Google OAuth or an email magic link; no password.
+
+**Prod verification (2026-09-23).** `/health/db` ok; `GET /signup/<bogus>`
+returns the route's own `{"error":"invite not found"}` (not route-not-found),
+so PR B's routes are deployed and migrations 0013–0016 applied at boot. Live
+web bundle `index-CDvzjuQb.js` contains "Create my account", "Email me a
+sign-in link", "Show me around", "Sample job for new accounts", "Invite
+someone", "Skip tour". Every merged file confirmed present on `origin/main`
+by `git cat-file` (the 2026-09-13 stacked-PR trap did not recur).
+
+**Also run locally (2026-09-22)** on a throwaway `scribe_dev` DB: invite →
+copy link → sign-up → new org → Account page, end to end, green. Recipe in
+Load-bearing state.
+
+**NOT built, by decision.** Credits and Stripe. There is no `usage_events`,
+`credit_ledger`, `model_rates`, `platform_settings` or Stripe code on main.
+**Gotcha:** the invite form's "Pages included" is stored on the invite and
+shown to the invitee at sign-up, but nothing reads or decrements it — every
+account today reads without limit at our API cost.
+
+**Open for the owner.** Pricing shape (per page + minimum, or per job),
+signup grant, pack sizes — `accounts-plan.md` §3.4. Manual actions MA-006
+(real rates; the send gate blocks every quote until done), MA-013, MA-014,
+MA-015, MA-016. Measurement-accuracy Option A/B/C still undecided; SCR-015
+still needs evidence.
 
 ---
 
@@ -298,108 +392,32 @@ minimum. **Manual actions:** MA-006/007/008/009/011 still open (not asked).
 
 ---
 
-## 2026-09-15 (h) — customer-facing copy for pipeline errors and read notes; the "not clean JSON" cause
-
-**Owner:** the Jobs list showed the SCR-011 SQL in red and the review's
-notes said "measurements response was not valid JSON — 22 complete cabinet
-answers salvaged, nothing defaulted". Customer-facing app: calm plain copy
-for the customer, the technical text for the developer only (SCR-014).
-
-**Cause of the salvage, from #274's new warn line** (takeoff 99656b83,
-2026-09-14 01:45 PDT, 22/22 salvaged): the model answers with a markdown
-work-through of every marker before the JSON ("**Marker 1:** … (from chain
-[y≈149]: 14)"), then the object. `extractJson` capped candidate brackets at
-8; the preamble has one `[y≈…]` per marker, so the real `{"cabinets"` was
-never reached. Now every candidate is tried (test with 22 bracketed
-markers). The preamble itself is harmless — arguably useful reasoning — the
-parser has to accept it. A strict output contract (structured outputs, SDK
-bump) is in `measurement-accuracy-plan.md`.
-
-**Shipped.** `apps/web/src/messages.ts`: `friendlyError` (build failed →
-"We couldn't finish building this takeoff. Please try Build again."; billing
-/ 429 / 529 → "The reading service isn't available right now…"; media type →
-"upload as PNG or JPEG"; default generic), `friendlyNote` / `friendlyNotes`
-(schedule missing, N defaulted, N estimated, cut off, page cap, plan-run
-arithmetic, unread page type, failed page part; developer-only notes —
-salvage with nothing defaulted, cross-validation — hidden from customers;
-unknown → one generic line; duplicates merged), `friendlyAreaError`.
-`components/TechnicalDetail.tsx`: raw text under "Technical details (admin)"
-for `role === "admin"` (same `["me"]` query as the shell). Wired into the
-Jobs list, the wizard (takeoff error + failed areas), the review banner,
-the review notes panel and the failed screen. The worker's strings are
-unchanged — they are the evidence.
-
-**Gotcha.** New pipeline warning strings need a `NOTE_RULES` entry or they
-render as the generic line for customers (admins still see the raw text).
-
----
-
-## 2026-09-15 (g) — measurement-accuracy plan written (no code)
-
-`measurement-accuracy-plan.md`, from the 18 kits (zero API) + the prod
-Charley builds. Findings: F1 0.47 is a COUNT problem (158/382 gold matched;
-sizes on matched are 62% exact width, 53% within 1"); fixing Find's count
-after the fact costs about as many touches as marking each cabinet
-(elevation sets ~15 vs 17.6 gold per kit); the text-layer `nearbyDims`
-hold the gold width for 26% of matched cabinets and for 2 of the 60 the
-model got wrong — the printed-dim shortlist is not the missing information,
-legibility is (elevation areas get no high-res crop; plan areas do). Owner
-batch-accepted 16/24 lines on prod and typed no size. Options A (areas +
-Find count gate + per-area measuring, recommended, LOE 7 in 3 PRs + an
-optional reviewer PR), B (mark every cabinet), C (reviewer pass). Step 0 =
-a ~$4 live per-area A/B on the kits before PR 2. Awaiting the owner.
-
----
-
-## 2026-09-15 (f) — SCR-013 evidence: no build failed after #270; prose-wrapped answers now parse; failed re-measure visible
-
-**Context.** Owner report (via the wrap-up): Build and "Measure again…"
-still error on the measuring step after #272 and land on the wizard.
-Evidence pulled before any code: prod DB through the API (`/jobs`,
-`/takeoffs/:id`, `/detections`) and the Railway `scribe workers` log
-(7-day window, filters `"measure response"`, `"beta build"`, `"job failed"`).
-
-**What the data says.** All beta builds 09-13 UTC: 247913a4 done (20);
-f876cac2 + 9018debb FAILED 18:41 with the pre-#270 `= ANY((…))` query —
-still on the Jobs list as "build takeoff failed", parked at `awaiting_boxes`
-by design; 8a8e3914 done 18:49 pre-#272 (24/24 defaulted at 0.5 — the first
-report); 40f9cb79 done 19:07 (`end_turn`, 16.6k chars, 24/24 clean JSON);
-0a26eb66 done 19:12 (`end_turn`, 7.4k chars, **25/25 via salvage**, 3
-estimated) → `review`, lines carry `reviewerEdited` at 19:13. No
-`beta build failed` after #270, no BullMQ `job failed`, no `remeasure` ever
-queued. So: the measuring step does not fail post-#272, and the wizard did
-forward. What IS real: 2 of the last 3 prod answers were not parseable as a
-whole though every cabinet object was complete (all 18 kits parse), and the
-review said "25 salvaged, the rest defaulted" when nothing defaulted. The
-stored `response-0.txt` were not pulled (no API route; MinIO console only).
-
-**Shipped (#274).**
-- `extractJson`: outermost JSON value by a balanced string-aware scan,
-  prose/fences before and after ignored, trailing commas forgiven, a value
-  that never closes still throws (salvage path). Tried candidates in order,
-  so `{kitchen}` in a preamble no longer poisons the parse.
-- `parseMeasureResponse(text, markerCount)` → `parse: json|salvage|none`;
-  warning counts the defaulted markers ("nothing defaulted" / "4 of 5
-  defaulted"); salvages when the first complete value was an inner object.
-- Worker: `parse` on the `measure response` log line; a `measure answer was
-  not clean JSON` warn with 400-char head/tail — the next occurrence is
-  diagnosable from Railway without MinIO.
-- Review page: `takeoffs.error` banner + **Measure again** button in
-  `review` (a failed re-measure or a failed area update on a reviewed
-  takeoff restores `review`; the error was invisible there).
-- 9 tests; 18-kit zero-API replay identical to `summary.csv` per kit.
-
-**Not changed.** Routing (`BetaDetect.tsx` forward, review forward) — the
-evidence says both work. Measure prompt (measure-v6) and call shape.
-
-**Open.** Owner verifies on prod after deploy (Build on a fresh
-MOLLY_CHARLEY_KITCHEN job → review; Measure again from the review's More
-menu → review). If a non-clean answer recurs, the warn line has the edges.
-Strict JSON via structured outputs needs an SDK bump (0.70.1 has no
-`output_config`) — in the measurement-accuracy plan, not this PR.
 ---
 
 ## Condensed history
+
+### 2026-09-15 (h) — customer-facing copy for pipeline errors and notes (archived verbatim)
+`apps/web/src/messages.ts` (`friendlyError`, `friendlyNote(s)`, `friendlyAreaError`)
+maps every known error/note to one plain sentence; developer-only notes are hidden
+from customers; `TechnicalDetail` shows the raw text to admins only (#276). Cause of
+the salvage: the model writes a markdown preamble with one `[y≈…]` per marker and
+`extractJson` capped candidates at 8. **Gotcha:** a new pipeline warning string needs
+a `NOTE_RULES` entry or customers see the generic line.
+
+### 2026-09-15 (g) — measurement-accuracy plan written (archived verbatim)
+`measurement-accuracy-plan.md` from the 18 kits + prod Charley builds: F1 0.47
+is a COUNT problem, text-layer `nearbyDims` cap at 26% coverage, legibility
+(not the printed-dim shortlist) is the gap. Options A (areas + Find count gate
++ per-area measuring, recommended, LOE 7), B (mark every cabinet), C (reviewer
+pass); Step 0 is a ~$4 live per-area A/B. Awaiting the owner.
+
+### 2026-09-15 (f) — SCR-013 evidence + #274 parse hardening (archived verbatim)
+Prod DB + Railway logs showed no build failure after #270 and the wizard DID
+forward; what was real is that 2 of 3 prod measure answers were not parseable
+whole. #274: balanced-scan `extractJson` (prose/fences/trailing commas, every
+candidate tried), `parseMeasureResponse` → `json|salvage|none` with an honest
+defaulted count, a `measure answer was not clean JSON` warn carrying 400-char
+head/tail, and a review-screen error banner + "Measure again".
 
 ### 2026-09-15 (d) — unparseable measuring answer → salvage, retry, re-measure (archived verbatim)
 `max_tokens` 32k on the measure call with a `stop_reason` note; `parseMeasureResponse`
