@@ -36,6 +36,18 @@ q{font-style:italic;color:#52514e}
 """
 
 
+ROLE_LABELS = {"developed": "develops", "validated_existing": "validates"}
+
+
+def _alg_links(links: list[dict]) -> str:
+    """Links from a study to the ranked algorithms it develops or validates."""
+    if not links:
+        return ""
+    items = [f'<a href="#alg-{x["rank"]}">#{x["rank"]} {escape(x["name"])}</a> '
+             f'<span class=muted>({ROLE_LABELS.get(x["role"], "validates")})</span>' for x in links]
+    return '<br><span class=small>&rarr; ' + "; ".join(items) + "</span>"
+
+
 def _pct(x, d=1) -> str:
     return "&ndash;" if x is None else f"{100 * x:.{d}f}%"
 
@@ -109,7 +121,8 @@ def _validation_rows(c: dict) -> str:
             mets.append(f"<b>{C.METRIC_LABELS[m]}</b> {_pct(mv['value'])}{ci}{cnt} {mark}{quote}")
         ref = C.REFERENCE_STANDARDS[v["reference_standard"]]["label"]
         samp = C.SAMPLING[v["sampling"]]["label"]
-        ext = ' <span class="tag">external</span>' if v["external"] else ""
+        ext = f' <span class="tag">{ROLE_LABELS.get(v.get("role"), "validates")}</span>'
+        ext += ' <span class="tag">external</span>' if v["external"] else ""
         rows.append(
             f"<tr><td><a href=\"{escape(v['url'])}\">{escape(v['citation'][:160])}</a>{ext}</td>"
             f"<td>{escape(v['dataset'])}<br><span class=muted>{escape(v['country'])} {escape(v['years'])} "
@@ -133,7 +146,7 @@ def _candidate(c: dict, open_: bool) -> str:
                 f"Expected PPV {_pct(ap['ppv'])}, NPV {_pct(ap['npv'], 2)}. The algorithm would flag "
                 f"{_pct(ap['apparent_prevalence'], 2)} of the population; correct a crude prevalence with "
                 f"Rogan&ndash;Gladen: p = (apparent + Sp &minus; 1) / (Se + Sp &minus; 1).</p>")
-    return f"""<details{' open' if open_ else ''}><summary><b>#{c['rank']} {escape(a['name'])}</b> &nbsp; {_grade(c['grade'])}
+    return f"""<details id="alg-{c['rank']}"{' open' if open_ else ''}><summary><b>#{c['rank']} {escape(a['name'])}</b> &nbsp; {_grade(c['grade'])}
  &nbsp;<span class=muted>score {comp_score(c)}</span></summary><div class=body>
 <p>{escape(a['summary'])}</p>
 <h3>Algorithm, spelled out</h3><pre>{escape(c['pseudocode'])}</pre>
@@ -163,14 +176,15 @@ def render_report(job: dict, result: dict, settings: Settings) -> str:
     idn = flow["identified"]
     n_ident = sum(v for v in idn.values() if isinstance(v, int))
     rank_rows = "".join(
-        f"<tr><td class=n>{c['rank']}</td><td>{escape(c['algorithm']['name'])}</td><td>{_grade(c['grade'])}</td>"
+        f"<tr><td class=n>{c['rank']}</td><td><a href=\"#alg-{c['rank']}\">{escape(c['algorithm']['name'])}</a></td><td>{_grade(c['grade'])}</td>"
         f"<td class=n>{comp_score(c)}</td>"
         + "".join(f"<td class=n>{_ci(c['pooled'].get(m))}</td>" for m in ("sensitivity", "specificity", "ppv"))
         + f"<td class=n>{len(c['validations'])}</td></tr>" for c in cands)
     studies = "".join(
         f"<li><a href=\"{escape(s['url'])}\">{escape(s['citation'])}</a> <span class=muted small>"
         f"({escape(s['text_basis'])}{', cited by ' + str(s['cited_by']) if s['cited_by'] else ''}"
-        f"{', ' + str(s['n_algorithms']) + ' algorithm(s)' if s['n_algorithms'] else ', no extractable accuracy data'})</span></li>"
+        f"{'' if s['n_algorithms'] else ', no extractable accuracy data'})</span>"
+        f"{_alg_links(s.get('algorithms') or [])}</li>"
         for s in result["studies"])
     excluded = "".join(f"<tr><td><a href=\"{escape(x['url'])}\">{escape(x['citation'][:180])}</a></td>"
                        f"<td>{escape(x['label'])}</td><td>{escape(x['reason'])}</td></tr>" for x in result["excluded"])

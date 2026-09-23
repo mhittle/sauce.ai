@@ -51,10 +51,20 @@ def test_full_pipeline():
     assert read["pmid:111"]["cited_by"] == 250
     assert {x["label"] for x in res["excluded"]} == {"exclude", "review"}
 
+    # every study read links to the ranked algorithm(s) it develops or validates
+    assert read["pmid:111"]["algorithms"] == [{"rank": 1, "name": top["algorithm"]["name"], "role": "developed"}]
+    assert [(x["rank"], x["role"]) for x in read["pmid:222"]["algorithms"]] == [(1, "validated_existing"),
+                                                                                (2, "developed")]
+    assert {st["key"] for st in top["studies"]} == {"pmid:111", "pmid:222", "pmid:555"}
+
     html = job["report_html"]
     assert "Validated phenotyping algorithms for multiple sclerosis" in html
     assert "https://pubmed.ncbi.nlm.nih.gov/111/" in html and "<script" not in html
     assert "Rogan" in html
+    assert 'id="alg-1"' in html and 'id="alg-2"' in html
+    studies_html = html.split("<h2>Studies read</h2>")[1].split("</ol>")[0]
+    assert studies_html.count('href="#alg-1"') == 3 and studies_html.count('href="#alg-2"') == 1
+    assert "(develops)" in studies_html and "(validates)" in studies_html
 
 
 def test_literature_outage_fails_cleanly():
