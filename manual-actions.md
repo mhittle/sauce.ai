@@ -40,41 +40,43 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ## Open
 
-### 2026-09-23 — Deploy the sauce.ai/redteam service + route `/redteam`
-**Status:** open · **PR:** #TBD (Redteam — clinical chatbot red-teaming, branch `claude/blissful-gauss-x9o83d`) ·
-**Opened:** 2026-09-23 · **Reference:** `redteam/` (README.md, INSTALL.md)
+### 2026-09-23 — Deploy the redteam service on Railway + point `redteam.sauce.ai` at it
+**Status:** open · **PR:** #285 (merged; routing decided 2026-09-23) · **Reference:** `redteam/` (README.md, INSTALL.md)
 
-The root landing page now has a **`card live` linking to `/redteam`**, but
-that path does not resolve until the service is deployed and routed. Redteam
-is a **standalone container** (FastAPI + SQLite), independent of the news
-Flask app / cPanel prod — deploy it the way `sauce.ai/signal` is deployed
-(Railway or any container host), not onto the GoDaddy box.
+The root landing card links to **`https://redteam.sauce.ai`** (decided:
+Railway host + subdomain, matching `sauce.ai/signal`). That subdomain does
+not resolve until the service is deployed and the DNS record + Railway domain
+are set. Redteam is a **standalone container** (FastAPI + SQLite), independent
+of the news Flask app / cPanel prod — it is **not** deployed onto the GoDaddy
+box.
 
 Steps:
 
-1. Deploy the container from `redteam/`:
-   ```
-   cd redteam
-   docker build -t sauce-redteam .
-   docker run -d --name redteam -p 8000:8000 \
-     -e ANTHROPIC_API_KEY=<key> \
-     -e PUBLIC_BASE_URL=https://sauce.ai/redteam \
-     -e SMTP_HOST=<relay> -e SMTP_USER=<user> -e SMTP_PASS=<pass> \
-     -v /srv/redteam-data:/app/data \
-     sauce-redteam
-   ```
-   (Railway: point a new service at `redteam/railway.json`; set the same env
-   vars; add a volume at `/app/data`.) Optional attacker/judge providers:
-   `OPENAI_API_KEY`, `LLAMA_API_KEY`, `GEMINI_API_KEY`.
-2. Route `https://sauce.ai/redteam` to the service (reverse proxy / subdomain
-   CNAME). Until this is done the landing-page card is a dead link.
-3. Smoke test: `GET /redteam/health` → `{"ok": true}`; open `/redteam`, submit
-   a 1-trial run against a throwaway target, confirm the report renders and
-   (if SMTP set) emails.
+1. **Create the Railway service.** New service → Deploy from GitHub repo
+   `mhittle/sauce.ai`; set the service **root directory** to `redteam/` so it
+   uses `redteam/railway.json` + `redteam/Dockerfile`. Health check is
+   `/health` (already configured in `railway.json`).
+2. **Set variables** (Service → Variables):
+   - `ANTHROPIC_API_KEY=<key>` (required; account must hold credits — each
+     trial makes many model calls)
+   - `PUBLIC_BASE_URL=https://redteam.sauce.ai`
+   - Optional email: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (without these the
+     report is served at its URL but not emailed)
+   - Optional attacker/judge providers so researchers can pick them:
+     `OPENAI_API_KEY`, `LLAMA_API_KEY`, `GEMINI_API_KEY`
+3. **Persist state.** Add a Railway **volume mounted at `/app/data`** (the
+   SQLite DB defaults to `data/redteam.db`; the per-email quota lives there).
+   Without it, runs and quota reset on every redeploy.
+4. **Domain.** In the Railway service add the custom domain
+   `redteam.sauce.ai`; create the CNAME it gives you at the `sauce.ai` DNS
+   host. (Railway terminates TLS.)
+5. **Smoke test:** `curl https://redteam.sauce.ai/health` → `{"ok": true}`;
+   open the site, submit a 1-trial run against a throwaway target, confirm the
+   report renders (and emails, if SMTP set).
 
 No migration on the news DB and **no change to the news box's load-bearing
-state**. The Anthropic account behind `ANTHROPIC_API_KEY` must hold credits;
-each trial makes many model calls.
+state**. (For a non-Railway host, `redteam/INSTALL.md` has the plain
+`docker build`/`docker run` + reverse-proxy path instead.)
 
 ### 2026-09-08 — Migration + restart + env var: Claim (claim_checks)
 **Status:** open · **PR:** #251 (Claim — health-headline reality check, branch `claude/claim-app-5m6ixp`) ·
