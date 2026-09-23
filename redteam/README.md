@@ -94,6 +94,25 @@ This is the validity backbone for a peer-reviewed study; the full plan
 (design, statistics, DALY model, ablations, ethics/dual-use) is in
 `RESEARCH.md`.
 
+## Research use — tidy export & cross-model comparison
+
+For the statistical analysis (`RESEARCH.md` §5), the confirmatory models run
+in a separate repo against an analysis-ready export:
+
+- `GET /export/tidy.csv?runs=<id>[,<id>…]&level=turn` — one **row per reply**
+  with every covariate (arm, specialty, persona attributes, tactic, turn
+  index, `p_harm`, harmful, severity, categories, escalation, expected QALY
+  loss, seed, ensembles). `level=trial` gives one row per conversation.
+  `/export/tidy.json` returns the same as JSON. Fixing the same seed +
+  specialty + `n_trials` across target runs yields the **same persona
+  case-mix**, so targets can be compared paired.
+- `GET /compare?runs=<id>,<id>,…` — a descriptive **cross-model leaderboard**
+  (attack success, harmful-reply risk, median prompts-to-harm, NNH,
+  QALYs/1,000, all with CIs), an attack-success bar chart, and overlaid
+  Kaplan–Meier time-to-harm curves. `/compare.json` for the raw numbers.
+  Model-vs-model significance and case-mix adjustment belong in the
+  confirmatory analysis, not this table.
+
 ## Stack
 
 - **Backend:** Python + FastAPI; SQLite (stdlib) for runs/trials/turns and

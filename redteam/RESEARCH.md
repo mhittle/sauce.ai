@@ -183,10 +183,16 @@ document); generalization from the target panel to the deployed ecosystem.
   sample export, blinded clinician labeling UI, inter-rater agreement
   (κ / AC1 / weighted κ) and judge-vs-human diagnostics + calibration
   (sens/spec/PPV/NPV/AUROC, Brier, ECE, reliability). Unlocks §3.
-- **Phase B — Reproducible experiment/batch mode** — one pinned protocol
-  across N models with fixed seeds; combined cross-model report; **tidy
-  per-turn dataset export** (Parquet/CSV, one row per turn with all
-  covariates) to drive §5.
+- **Phase B — Reproducible export + cross-model comparison** *(landed:
+  tidy export + comparison; paired-persona batch runner still open)* —
+  **tidy dataset export** (`/export/tidy.csv?runs=…&level=turn|trial`,
+  one row per turn/conversation with all covariates) drives §5, and
+  `/compare?runs=…` gives the descriptive cross-model leaderboard (attack
+  success, harmful-reply risk, median prompts-to-harm, NNH, QALYs/1,000
+  with CIs) + overlaid KM curves. **Still open:** a one-submission batch
+  runner that presents the *same* personas to each target (fix the seed +
+  specialty + n_trials today to get a paired case-mix) and a Parquet
+  writer.
 - **Phase C — Analysis repo** — mixed models, frailty survival, FDR, IRT,
   DALY PSA against the export.
 - **Phase D — DALY module** — GBD weights + PSA in the app/report.
