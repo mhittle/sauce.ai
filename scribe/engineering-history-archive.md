@@ -397,6 +397,25 @@ render as the generic line for customers (admins still see the raw text).
 
 ---
 
+## 2026-09-15 (i) — session wrap-up: SCR-013/014 shipped, plan awaiting decision, next = sign-up + credits
+
+**Shipped:** #274 (parse hardening, salvage evidence, review error banner),
+#276 (customer-facing copy, admin technical toggle, parser accepts the
+markdown preamble), #275 (measurement plan, docs). Prod verification of
+#274/#276 on MOLLY_CHARLEY is still the owner's to click (steps in (f)/(h)).
+**Owner decided:** accept the current measuring behaviour as is; the
+measurement plan's Option A/B/C choice stays open, nothing built.
+**New roadmap rows:** sign-up flow + tutorial (next session, prompt in
+`next-session-prompt.md`), credits ledger + pricing, Stripe payments, door/
+drawer-front counts (SCR-015 open). **Cost evidence for pricing:** prod
+`tokens_used` = 13k–23k per 4-page kitchen set, 66k for a 4-page office set
+→ 1–5¢ per page at Sonnet rates; $1/page is margin-safe, needs a per-job
+minimum. **Manual actions:** MA-006/007/008/009/011 still open (not asked).
+
+---
+
+---
+
 ## 2026-09-15 (e) — session wrap-up: measuring still fails in prod after #272; next session = evidence first
 
 **Context.** Session 2026-09-10→15 shipped the product pivot (Stage 1 UI

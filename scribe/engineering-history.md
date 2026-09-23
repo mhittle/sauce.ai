@@ -168,11 +168,18 @@ Load-bearing state.
 shown to the invitee at sign-up, but nothing reads or decrements it — every
 account today reads without limit at our API cost.
 
+**Owner decision 2026-09-23: measurement accuracy is CLOSED.** None of
+Option A/B/C taken; the current measuring behaviour is accepted and the
+reviewer correcting sizes on Review is the product's answer. The $4 Step 0
+experiment was never run. `measurement-accuracy-plan.md` keeps a CLOSED
+banner and stays as the evidence base — the study is not to be re-proposed
+or re-run on the same 18 kits. SCR-015 (door/drawer-front counts) is a
+separate item and stays open.
+
 **Open for the owner.** Pricing shape (per page + minimum, or per job),
 signup grant, pack sizes — `accounts-plan.md` §3.4. Manual actions MA-006
 (real rates; the send gate blocks every quote until done), MA-013, MA-014,
-MA-015, MA-016. Measurement-accuracy Option A/B/C still undecided; SCR-015
-still needs evidence.
+MA-015, MA-016.
 
 ---
 
@@ -375,26 +382,15 @@ pricing proposal $1/page, 5-page minimum, 20-page grant, re-runs included,
 
 ---
 
-## 2026-09-15 (i) — session wrap-up: SCR-013/014 shipped, plan awaiting decision, next = sign-up + credits
-
-**Shipped:** #274 (parse hardening, salvage evidence, review error banner),
-#276 (customer-facing copy, admin technical toggle, parser accepts the
-markdown preamble), #275 (measurement plan, docs). Prod verification of
-#274/#276 on MOLLY_CHARLEY is still the owner's to click (steps in (f)/(h)).
-**Owner decided:** accept the current measuring behaviour as is; the
-measurement plan's Option A/B/C choice stays open, nothing built.
-**New roadmap rows:** sign-up flow + tutorial (next session, prompt in
-`next-session-prompt.md`), credits ledger + pricing, Stripe payments, door/
-drawer-front counts (SCR-015 open). **Cost evidence for pricing:** prod
-`tokens_used` = 13k–23k per 4-page kitchen set, 66k for a 4-page office set
-→ 1–5¢ per page at Sonnet rates; $1/page is margin-safe, needs a per-job
-minimum. **Manual actions:** MA-006/007/008/009/011 still open (not asked).
-
----
-
 ---
 
 ## Condensed history
+
+### 2026-09-15 (i) — session wrap-up, superseded by 2026-09-23 (archived verbatim)
+Shipped #274/#275/#276; owner accepted the measuring behaviour as is (the study
+was formally CLOSED on 2026-09-23). Recorded the prod cost evidence that still
+drives pricing: 13k–23k tokens for a 4-page kitchen set, 66k for a 4-page office
+set, i.e. 1–5¢ per page at Sonnet rates. Queued the sign-up/credits/Stripe rows.
 
 ### 2026-09-15 (h) — customer-facing copy for pipeline errors and notes (archived verbatim)
 `apps/web/src/messages.ts` (`friendlyError`, `friendlyNote(s)`, `friendlyAreaError`)

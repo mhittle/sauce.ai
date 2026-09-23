@@ -16,7 +16,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 |---|---|---|---|---|
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
-| Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
+| Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommended areas + Find count gate + per-area measuring | 9 | 5 | takeoff | **closed 2026-09-23** (owner: no option taken; current measuring accepted, reviewer corrects) |
 | Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #283 tutorial; merged + live 2026-09-21) |
 | Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | in-progress (schema + pricing proposal in `accounts-plan.md` §3, awaiting decision) |
 | Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
@@ -87,8 +87,20 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 ### Measurement accuracy study — how should the tool get the most accurate sizes?
 
-- **Priority 9 / LOE 5 / takeoff / in-progress (plan written 2026-09-15,
-  `measurement-accuracy-plan.md`; owner decides A/B/C + Step 0 go).** A PLAN,
+- **Priority 9 / LOE 5 / takeoff / CLOSED 2026-09-23.** The owner closed
+  this without taking Option A, B or C: the current measuring behaviour is
+  accepted, and the reviewer correcting sizes on the Review screen is the
+  product's answer for now. The plan and all of its measurements stay in
+  `measurement-accuracy-plan.md` as the evidence base — **do not re-run the
+  study**; reopen only if the owner asks, or if a NEW piece of evidence
+  (not a re-analysis of the 18 kits) changes the picture. The $4 Step 0
+  experiment was never run. What the study established and still holds:
+  F1 0.47 is a COUNT problem, not a sizing one (158/382 gold matched; on
+  matched cabinets 62% exact width, 53% within 1"); the text layer holds
+  the gold width for only 26% of matched cabinets, so the printed-dim
+  shortlist is not the missing information — legibility is; and geometry
+  as a size override was measured and dropped 2026-09-14 (fallback only).
+- **Original scope, for the record.** A PLAN,
   approved by the owner before any build. Compare, with kit numbers (`replay-staged.mjs`, F1 0.47
   baseline): marking whole areas (today) vs individual cabinets vs runs;
   one measuring call over all pages (today) vs per area vs per cabinet crop

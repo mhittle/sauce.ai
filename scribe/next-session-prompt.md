@@ -115,10 +115,18 @@ Do not start before credits work.
   strangers — the test kits are customers' drawings).
 - Older: MA-007, MA-008, MA-009, MA-011.
 
+## Settled — do not reopen
+- **Measurement accuracy is CLOSED (2026-09-23).** I took none of Option
+  A/B/C; the current measuring behaviour is accepted and the reviewer
+  correcting sizes on the Review screen is the answer for now. Do NOT
+  propose the study again, re-run the 18-kit analysis, or spend the $4
+  Step 0 experiment. `measurement-accuracy-plan.md` stays as the evidence
+  base. Reopen only if I say so, or on genuinely new evidence — not a
+  re-analysis of the same kits.
+
 ## Also open (don't start unless I say)
-- Measurement-accuracy plan (`measurement-accuracy-plan.md`): Option A/B/C
-  undecided. This is the product's known weak spot — the count, not the
-  sizes — and it matters more than billing if outside users are coming.
-- SCR-015 door/drawer-front counts: evidence first.
+- SCR-015 door/drawer-front counts: evidence first. (Face counts per
+  cabinet — related to reading, but NOT part of the closed measurement
+  study.)
 - SCR-013: #274 is deployed; I still owe a live Build / "Measure again"
   spot-check before it can be closed.

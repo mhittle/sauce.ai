@@ -1,8 +1,15 @@
 # Measurement accuracy plan — how should Scribe get the most accurate cabinet sizes?
 
-**Status:** plan only (2026-09-15). Nothing here is built. Owner picks an
-option (or none) before any code. Companion to `product-plan.md` §3V and
-`v0-drawing-scale-plan.md`.
+> **CLOSED 2026-09-23 — the owner took none of the options.** Current
+> measuring behaviour is accepted; the reviewer correcting sizes on the
+> Review screen is the answer for now. Nothing in this document was built,
+> and the ~$4 Step 0 experiment was never run. **Keep this file**: its
+> measurements are the evidence base for any future attempt, and re-running
+> the same analysis on the same 18 kits would only reproduce them. Reopen
+> only on the owner's word or on genuinely new evidence.
+
+**Status:** CLOSED (written 2026-09-15, closed 2026-09-23). Nothing here is
+built. Companion to `product-plan.md` §3V and `v0-drawing-scale-plan.md`.
 
 All numbers below come from the 18-quote staged kits
 (`~/Desktop/Scribe Testing/staged-kits`, labels v3, zero-API replay through
