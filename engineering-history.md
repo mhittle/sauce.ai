@@ -136,6 +136,35 @@ these.
 
 ## 2026-09-23
 
+- **Redteam — research Phase B: tidy dataset export + cross-model
+  comparison.** Unblocks the confirmatory statistics in `RESEARCH.md` §5 by
+  emitting an analysis-ready dataset and a descriptive comparative result.
+  New `app/dataset.py` (pure): flattens stored runs/trials/turns into tidy
+  long tables — one **row per reply** (`TURN_COLUMNS`: arm, specialty,
+  persona attributes, tactic, turn index, `p_harm`, harmful, severity,
+  categories, escalation, expected QALY loss, seed, attacker/arbiter/judge
+  specs) and one **row per conversation** (`TRIAL_COLUMNS`) — with CSV
+  serialization that keeps a nullable boolean (escalation) blank rather than
+  coercing None→False. New `app/compare.py`: `compare_runs` ranks targets by
+  attack-success rate and `render_comparison_html` builds a leaderboard
+  (attack success, harmful-reply risk, median prompts-to-harm, NNH,
+  QALYs/1,000, all with CIs) + an attack-success bar chart with Wilson
+  whiskers + overlaid Kaplan–Meier curves (reuses `report.km_svg` /
+  `report.CSS` and the dataviz categorical palette). Endpoints in `main.py`:
+  `GET /export/tidy.csv?runs=…&level=turn|trial`, `/export/tidy.json`,
+  `/compare` (HTML), `/compare.json` — a shared `_run_ids` parser 400s on
+  empty and 404s on unknown ids. Fixing the same seed + specialty +
+  n_trials across target runs already yields the same persona case-mix
+  (make_persona is deterministic), so targets compare paired today. Tests
+  `+13` (`test_dataset`, `test_compare`, `test_export_compare_api`; suite
+  102 pass); verified the rendered comparison report (4 mock targets:
+  leaderboard, bar chart, KM overlay). *Code:* `redteam/app/dataset.py`,
+  `app/compare.py`, `app/main.py`, `README.md`, `RESEARCH.md`. *Server
+  state:* none (read-only over existing tables). *Open (Phase B remainder):*
+  a one-submission batch runner presenting the same personas to each target,
+  and a Parquet writer; then Phase C (analysis repo: mixed models / frailty
+  survival / IRT / DALY PSA).
+
 - **Redteam — research track: clinician-adjudication pipeline + study plan
   (toward a peer-reviewed paper).** Owner wants to use redteam as the
   instrument behind a Nature-tier study; the gap from tool to paper is

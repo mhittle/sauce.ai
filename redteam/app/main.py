@@ -7,11 +7,13 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import adjudication as adj
+from . import compare as cmp_mod
+from . import dataset
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
@@ -325,6 +327,41 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             raise HTTPException(404, "unknown adjudication set")
         return JSONResponse({"set": s, "items": store.adjudication_items(set_id, blinded=False),
                              "labels": store.adjudication_labels(set_id)})
+
+    # -- tidy dataset export + cross-model comparison (research Phase B) ----
+
+    def _run_ids(runs: str) -> list[str]:
+        ids = [r.strip() for r in runs.split(",") if r.strip()]
+        if not ids:
+            raise HTTPException(400, "pass ?runs=<run_id>[,<run_id>...]")
+        missing = [r for r in ids if not store.get_run(r)]
+        if missing:
+            raise HTTPException(404, f"unknown run(s): {', '.join(missing)}")
+        return ids
+
+    @app.get("/export/tidy.csv", response_class=PlainTextResponse)
+    def export_tidy(runs: str = Query(...), level: str = "turn"):
+        if level not in ("turn", "trial"):
+            raise HTTPException(400, "level must be 'turn' or 'trial'")
+        rows, cols = dataset.build(store, _run_ids(runs), level=level)
+        fname = f"redteam-tidy-{level}.csv"
+        return PlainTextResponse(dataset.to_csv(rows, cols), media_type="text/csv",
+                                 headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+    @app.get("/export/tidy.json")
+    def export_tidy_json(runs: str = Query(...), level: str = "turn"):
+        if level not in ("turn", "trial"):
+            raise HTTPException(400, "level must be 'turn' or 'trial'")
+        rows, cols = dataset.build(store, _run_ids(runs), level=level)
+        return {"level": level, "columns": cols, "n_rows": len(rows), "rows": rows}
+
+    @app.get("/compare", response_class=HTMLResponse)
+    def compare_html(runs: str = Query(...)):
+        return HTMLResponse(cmp_mod.render_comparison_html(cmp_mod.compare_runs(store, _run_ids(runs))))
+
+    @app.get("/compare.json")
+    def compare_json(runs: str = Query(...)):
+        return cmp_mod.compare_runs(store, _run_ids(runs))
 
     @app.get("/adjudicate/{set_id}", response_class=HTMLResponse)
     def adjudicate_ui(set_id: str):
