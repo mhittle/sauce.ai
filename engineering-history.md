@@ -146,6 +146,46 @@ these.
   `PUBLIC_BASE_URL=https://redteam.sauce.ai`, custom-domain CNAME). No code
   change to the service. *Code:* `index.html`, `manual-actions.md`. *Server
   state:* none yet — the deploy itself is still the open manual action.
+- **Phenotype — validated EHR phenotyping algorithms (interactive session,
+  sauce.ai/phenotype).** New **standalone service** in `phenotype/` —
+  FastAPI + SQLite, containerized like `redteam/`, independent of news prod.
+  Finds validated case-ascertainment algorithms for a condition, spells them
+  out, links them to validation references, and ranks them by validity and
+  evidence. **Literature** (`app/literature.py`): PubMed E-utilities +
+  Europe PMC (abstracts, OA full-text JATS incl. tables, cited-by counts,
+  and the citation/reference graph for a one-hop snowball), injectable `http_get`, per-host
+  rate limit, SQLite HTTP cache, dedupe by PMID → DOI → title. Model-suggested
+  papers are kept only if the title resolves in PubMed. **Models**
+  (`app/extract.py`): `claude-sonnet-5` screens abstracts (validation /
+  review / exclude, fails open), `claude-opus-5` extracts into
+  `app/schema.py` (Algorithm → OR-ed Rules → Components with code system,
+  codes, care setting; Validations with reference standard, sampling,
+  blinding, metrics). All output coerced to controlled vocabularies;
+  sampling limits estimable metrics (positives-only ⇒ PPV only). Every
+  metric needs a verbatim quote containing the number (normalized match),
+  else `verified=false`. **Grading** (`app/grading.py`, `app/metrics.py`,
+  pure stdlib): cluster by signature (ICD to 3 chars + counting logic),
+  logit DerSimonian–Laird pooling (variance from counts → CI → p & n; when
+  only records-verified is known, n assumed = half, cap 100, flagged),
+  QUADAS-2-style RoB, applicability (data type, ICD-9/10 era, NLP, country),
+  GRADE-style grade, score = use-weighted pooled lower CLs × quality ×
+  applicability × replication; PPV/NPV at the user's prevalence +
+  Rogan–Gladen. **Compiler** (`app/compile.py`): deterministic pseudocode +
+  OMOP CDM v5.4 SQL (source concepts, RxNorm ingredient expansion via
+  `concept_ancestor`, windows, separation, require-each, lab thresholds,
+  note_nlp, exclusions, age, look-back); executed against a synthetic CDM on
+  Postgres 16 and returned the expected person. Self-contained HTML report
+  (`app/report.py`), SMTP email, JSON export, per-algorithm `.sql`. Root
+  `index.html` gains a `card live` → `https://phenotype.sauce.ai` (Railway +
+  subdomain, following the redteam routing decision; "3 live" → "4 live").
+  *Code:* new `phenotype/` tree + `.github/workflows/phenotype-ci.yml`; 38
+  tests (fake APIs + mock models, no network). OpenAlex was tried for
+  snowballing and dropped: keyless requests now draw on a shared per-IP daily
+  budget and 429 with multi-hour Retry-After (live-tested); the client now
+  fails fast on a 429 whose Retry-After exceeds 60 s. *Server state:* none on the
+  news box — see `manual-actions.md` (Railway deploy + `phenotype.sauce.ai` CNAME). *Open:*
+  human eval of extraction accuracy against a hand-abstracted set (e.g. the
+  MS, RA, diabetes validation literature) before relying on rankings.
 
 - **Redteam — adversarial safety testing for clinical chatbots
   (interactive session, sauce.ai/redteam).** New **standalone service** in

@@ -42,6 +42,43 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ### 2026-09-23 — Deploy the redteam service on Railway + point `redteam.sauce.ai` at it
 **Status:** open · **PR:** #285 (merged; routing decided 2026-09-23) · **Reference:** `redteam/` (README.md, INSTALL.md)
+### 2026-09-23 — Deploy the sauce.ai/phenotype service at `phenotype.sauce.ai`
+**Status:** open · **PR:** #288 (Phenotype — validated EHR phenotyping algorithms, branch `claude/gifted-heisenberg-rn4khq`) ·
+**Opened:** 2026-09-23 · **Reference:** `phenotype/` (README.md, INSTALL.md)
+
+The root landing card links to **`https://phenotype.sauce.ai`** (Railway host
++ subdomain, same as redteam). The subdomain does not resolve until the
+service is deployed and DNS is set. Standalone container (FastAPI + SQLite),
+independent of the news Flask app / cPanel prod — **not** deployed onto the
+GoDaddy box.
+
+Steps:
+
+1. **Create the Railway service.** New service → Deploy from GitHub repo
+   `mhittle/sauce.ai`; set the **root directory** to `phenotype/` so it uses
+   `phenotype/railway.json` + `phenotype/Dockerfile`. Health check `/health`
+   is preconfigured.
+2. **Set variables** (Service → Variables):
+   - `ANTHROPIC_API_KEY=<key>` (required; ~40 model calls per review)
+   - `PUBLIC_BASE_URL=https://phenotype.sauce.ai`
+   - `PHENOTYPE_CONTACT_EMAIL=<contact address>` (NCBI asks for one)
+   - Optional: `NCBI_API_KEY` (PubMed 3 → 10 requests/s); `SMTP_HOST`,
+     `SMTP_USER`, `SMTP_PASS` to email reports
+3. **Persist state.** Add a Railway **volume mounted at `/app/data`** (jobs
+   and the 7-day literature cache live in `data/phenotype.db`).
+4. **Domain.** Add the custom domain `phenotype.sauce.ai` in the Railway
+   service; create the CNAME it gives you at the `sauce.ai` DNS host.
+5. **Smoke test:** `curl https://phenotype.sauce.ai/health` → `{"ok": true}`;
+   submit "multiple sclerosis" with defaults; confirm the report lists the
+   ≥3-claims-in-1-year algorithm with its validation references and
+   `/jobs/<id>/algorithms/1.sql` returns SQL.
+
+No migration on the news DB and **no change to the news box's load-bearing
+state**.
+
+### 2026-09-23 — Deploy the sauce.ai/redteam service + route `/redteam`
+**Status:** open · **PR:** #TBD (Redteam — clinical chatbot red-teaming, branch `claude/blissful-gauss-x9o83d`) ·
+**Opened:** 2026-09-23 · **Reference:** `redteam/` (README.md, INSTALL.md)
 
 The root landing card links to **`https://redteam.sauce.ai`** (decided:
 Railway host + subdomain, matching `sauce.ai/signal`). That subdomain does

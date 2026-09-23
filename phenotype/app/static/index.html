@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sauce.ai/phenotype — validated EHR phenotyping algorithms</title>
+<style>
+:root{--bg:#fcfcfb;--fg:#0b0b0b;--muted:#52514e;--line:#e4e3de;--accent:#2a78d6;--card:#fff;--warn:#fff6e5;--warnline:#f0d9a8}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--fg:#f3f2ee;--muted:#a9a89f;--line:#33322e;--accent:#3987e5;--card:#232320;--warn:#2a2410;--warnline:#5c4d1c}}
+:root[data-theme=dark]{--bg:#1a1a19;--fg:#f3f2ee;--muted:#a9a89f;--line:#33322e;--accent:#3987e5;--card:#232320;--warn:#2a2410;--warnline:#5c4d1c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:28px 16px 80px}
+a{color:var(--accent)}
+h1{font-size:26px;margin:0 0 6px}
+h2{font-size:17px;margin:26px 0 8px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.lede{color:var(--muted);margin:0 0 4px}
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
+.hint{font-weight:400;color:var(--muted);font-size:12px}
+input,select,textarea{width:100%;padding:8px 10px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:7px;font:inherit}
+textarea{min-height:60px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+.checks{display:flex;flex-wrap:wrap;gap:6px 16px}
+.checks label{font-weight:400;margin:0;display:flex;gap:6px;align-items:center}
+.checks input{width:auto}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer;margin-top:18px}
+button:disabled{opacity:.55;cursor:default}
+.note{background:var(--warn);border:1px solid var(--warnline);border-radius:8px;padding:10px 12px;font-size:13px;margin:14px 0}
+.status{margin-top:18px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--card);display:none}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0}
+.bar div{height:100%;width:0;background:var(--accent);transition:width .4s}
+ol.steps{padding-left:20px;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body><div class="wrap">
+<p class="lede"><a href="/">sauce.ai</a> / phenotype</p>
+<h1>Validated phenotyping algorithms, ranked</h1>
+<p class="lede">Name a condition. The service searches PubMed, Europe PMC and the citation graph for studies that
+validated a case-ascertainment algorithm in claims or EHR data, spells each algorithm out (codes, counting
+logic, OMOP SQL), links it to its validation references, and ranks the algorithms by pooled accuracy and
+strength of evidence for <i>your</i> use and data.</p>
+<ol class="steps">
+  <li>Search + one-hop citation snowball; model-suggested papers kept only if they resolve in PubMed.</li>
+  <li>Screen abstracts; read included papers (open-access full text when available).</li>
+  <li>Extract algorithms and accuracy figures, each backed by a verbatim quote.</li>
+  <li>Pool across validations, grade the evidence (QUADAS-2 / GRADE-style), rank.</li>
+</ol>
+
+<form id="f">
+<h2>Condition</h2>
+<div class="row">
+  <div><label for="condition">Condition</label><input id="condition" required placeholder="multiple sclerosis"></div>
+  <div><label for="synonyms">Synonyms <span class="hint">comma-separated, optional</span></label><input id="synonyms" placeholder="MS, demyelinating disease"></div>
+</div>
+
+<h2>Your study</h2>
+<label for="use">Intended use <span class="hint">decides which accuracy metrics drive the ranking</span></label>
+<select id="use"></select>
+<p class="hint" id="usehelp"></p>
+<label>Your data</label>
+<div class="checks" id="dtypes"></div>
+<div class="row">
+  <div><label for="era">Coding era</label><select id="era"></select></div>
+  <div><label for="country">Country <span class="hint">optional</span></label><input id="country" placeholder="United States"></div>
+</div>
+<div class="row">
+  <div><label for="prev">Expected prevalence <span class="hint">optional, e.g. 0.003 &mdash; gives PPV/NPV at your prevalence</span></label><input id="prev" inputmode="decimal"></div>
+  <div><label for="email">Email <span class="hint">optional &mdash; report is emailed when done</span></label><input id="email" type="email"></div>
+</div>
+
+<h2>Search depth</h2>
+<div class="row">
+  <div><label for="maxr">Records to screen</label><input id="maxr" type="number" value="150" min="10"></div>
+  <div><label for="maxe">Papers to read in full</label><input id="maxe" type="number" value="25" min="1"></div>
+</div>
+<div class="checks" style="margin-top:10px">
+  <label><input type="checkbox" id="snow" checked> Citation snowballing</label>
+  <label><input type="checkbox" id="sugg" checked> Add model-suggested known papers (verified in PubMed)</label>
+</div>
+<label for="notes">Notes for the reviewer <span class="hint">optional, e.g. "pediatric", "Medicare", "need incident cases"</span></label>
+<textarea id="notes"></textarea>
+
+<p class="note">Output is a machine-assisted evidence review, not a substitute for reading the papers. Figures that
+cannot be matched to a verbatim quote are flagged; code lists often live in supplements the service cannot read.</p>
+<button id="go" type="submit">Find algorithms</button>
+</form>
+
+<div class="status" id="st"><b id="stmsg">Queued.</b><div class="bar"><div id="stbar"></div></div>
+<a id="stlink" href="#">Open the report page</a></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const STAGES = ["search","screen","snowball","extract","grade","done"];
+fetch("config").then(r => r.json()).then(cfg => {
+  for (const [k, v] of Object.entries(cfg.intended_uses)) $("use").add(new Option(v.label, k));
+  const help = () => { $("usehelp").textContent = cfg.intended_uses[$("use").value].help; };
+  $("use").onchange = help; help();
+  for (const [k, v] of Object.entries(cfg.coding_eras)) $("era").add(new Option(v, k));
+  for (const [k, v] of Object.entries(cfg.data_types)) {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="checkbox" value="${k}" ${k === "claims" ? "checked" : ""}> `;
+    l.append(v); $("dtypes").append(l);
+  }
+  $("maxr").max = cfg.limits.max_records_cap; $("maxe").max = cfg.limits.max_extract_cap;
+});
+$("f").onsubmit = async e => {
+  e.preventDefault();
+  $("go").disabled = true;
+  const prev = $("prev").value.trim();
+  const body = {
+    condition: $("condition").value, synonyms: $("synonyms").value.split(",").map(s => s.trim()).filter(Boolean),
+    intended_use: $("use").value, coding_era: $("era").value, country: $("country").value,
+    data_types: [...$("dtypes").querySelectorAll("input:checked")].map(i => i.value),
+    expected_prevalence: prev ? Number(prev) : null, email: $("email").value, notes: $("notes").value,
+    max_records: Number($("maxr").value), max_extract: Number($("maxe").value),
+    snowball: $("snow").checked, model_suggestions: $("sugg").checked,
+  };
+  const r = await fetch("jobs", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const d = await r.json();
+  if (!r.ok) { alert(d.detail || "Request failed"); $("go").disabled = false; return; }
+  $("st").style.display = "block"; $("stlink").href = d.report;
+  const poll = async () => {
+    const s = await (await fetch(d.poll)).json();
+    const i = STAGES.indexOf(s.stage);
+    $("stbar").style.width = `${Math.max(3, 100 * (i + 1) / STAGES.length)}%`;
+    if (s.status === "complete") { location.href = d.report; return; }
+    if (s.status === "failed" || s.status === "cancelled") { $("stmsg").textContent = `${s.status}: ${s.error || ""}`; $("go").disabled = false; return; }
+    const p = s.progress || {};
+    $("stmsg").textContent = s.stage === "extract" && p.extract_total
+      ? `Reading papers: ${p.extract_done}/${p.extract_total}` : `Working: ${s.stage || "queued"}`;
+    setTimeout(poll, 4000);
+  };
+  poll();
+};
+</script>
+</body></html>

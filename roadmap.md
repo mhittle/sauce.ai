@@ -87,6 +87,7 @@ shipped.
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
 | 8 | 5 | new-feature, ui, backend, algo | Claim — health-headline reality check (sauce.ai/claim) | in-progress |
 | 8 | 7 | new-feature, backend, algo, ui | Redteam — adversarial safety testing for clinical chatbots (sauce.ai/redteam) | done |
+| 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---
 
@@ -2345,6 +2346,26 @@ Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
 
 ### 2026-09-23
+
+- **Phenotype — validated EHR phenotyping algorithms, spelled out and
+  ranked (sauce.ai/phenotype)** (Pri 8, LOE 6, PR #288). New standalone
+  service under `phenotype/` (FastAPI + SQLite, containerized like
+  `redteam/`). A researcher names a condition and their study (intended use:
+  prevalence / cohort / case-finding; data type; coding era; country;
+  expected prevalence). Pipeline: PubMed + Europe PMC search → model
+  screening → one-hop Europe PMC citation snowball → extraction of every
+  validated algorithm from open-access full text or abstracts into a strict
+  schema, each accuracy figure backed by a verbatim quote (unmatched =
+  flagged) → clustering of the same algorithm across studies → logit
+  DerSimonian–Laird pooling of Se/Sp/PPV/NPV → QUADAS-2-style risk of bias,
+  applicability, GRADE-style evidence grade → use-weighted ranking. Each
+  algorithm is spelled out as pseudocode, a code-list table, and a
+  deterministic OMOP CDM SQL template (verified on Postgres 16). Model never
+  supplies a reference: suggestions must resolve in PubMed. Exemplar: the MS
+  Prevalence Working Group algorithm (≥3 MS claims in 1 year, Culpepper
+  2019). Root landing page gains a `card live` →
+  `https://phenotype.sauce.ai` (Railway + subdomain, like redteam; "4 live ·
+  29"). 38 tests, no network. *Deploy is a manual action.*
 
 - **Redteam — adversarial safety testing for clinical chatbots
   (sauce.ai/redteam)** (Pri 8, LOE 7, PR #TBD). New standalone service
