@@ -91,6 +91,8 @@ function card(ds, markNew) {
     files.append(ul);
   }
 
+  setupPapers($(".papers", n), ds);
+
   $(".instructions", n).textContent = ds.access_instructions || "See the source page.";
   const links = $(".links", n);
   const src = el("li"); src.append(el("a", { href: ds.url, target: "_blank", rel: "noopener" }, "Source page"));
@@ -99,6 +101,45 @@ function card(ds, markNew) {
     const li = el("li"); li.append(el("a", { href: u, target: "_blank", rel: "noopener" }, u)); links.append(li);
   }
   return n;
+}
+
+// Papers linked by the background literature worker; loaded on first open.
+function setupPapers(det, ds) {
+  const sum = $("summary", det);
+  sum.textContent = ds.n_articles ? `Used in ${ds.n_articles.toLocaleString()} papers` : "Papers";
+  const list = $(".paper-list", det);
+  let offset = 0, loaded = false;
+  const more = el("button", { class: "btn link" }, "Show more");
+  async function load() {
+    const r = await api(`/api/datasets/${ds.id}/articles?limit=20&offset=${offset}`);
+    if (!loaded) {
+      loaded = true;
+      const st = r.state;
+      const head = el("div", { class: "pmeta" });
+      head.textContent = !st ? "Not searched yet — the literature worker will get to it."
+        : `${r.cites} cite the dataset paper · ${r.mentions_only} name it in the text` +
+          (st.status === "active" || st.status === "retry" ? " · still collecting" : "");
+      list.append(head);
+    }
+    for (const a of r.items) list.append(paper(a));
+    offset += r.items.length;
+    more.remove();
+    if (r.items.length === 20) list.append(more);
+  }
+  more.onclick = () => load().catch(() => {});
+  det.addEventListener("toggle", () => { if (det.open && !loaded) load().catch(() => {}); });
+}
+
+function paper(a) {
+  const d = el("div", { class: "paper" });
+  const kind = a.is_descriptor ? ["descriptor", "Dataset paper"] : a.cites ? ["cites", "Cites"] : ["mentions", "Mentions"];
+  d.append(el("span", { class: `tag ${kind[0]}` }, kind[1]));
+  if (a.url && /^https?:/.test(a.url)) d.append(el("a", { href: a.url, target: "_blank", rel: "noopener" }, a.title));
+  else d.append(el("span", {}, a.title));
+  const meta = [a.authors && a.authors.split(",").slice(0, 3).join(",") + (a.authors.split(",").length > 3 ? " et al." : ""),
+                a.venue, a.year, `${a.cited_by_count.toLocaleString()} citations`].filter(Boolean).join(" · ");
+  d.append(el("div", { class: "pmeta" }, meta));
+  return d;
 }
 
 function renderCards(container, list, markNew = false) {
@@ -240,7 +281,7 @@ async function refreshStats() {
   try {
     const s = await api("/api/stats");
     state.llm = s.llm_configured;
-    $("#stats").textContent = `${s.datasets} datasets · ${s.conditions} conditions · ${s.files} files (${fmtBytes(s.bytes)})` +
+    $("#stats").textContent = `${s.datasets} datasets · ${s.conditions} conditions · ${s.files} files (${fmtBytes(s.bytes)}) · ${s.papers.toLocaleString()} papers` +
       (s.active_crawls.length ? ` · ${s.active_crawls.length} crawl running` : "");
     $("#broad-btn").disabled = !s.llm_configured;
     banner(s.llm_configured ? "" : "Crawling is disabled: set ANTHROPIC_API_KEY on the server. Search still works over the indexed catalog.");

@@ -78,6 +78,17 @@ h2 { font-size: 18px; margin: 0 0 8px; }
 .files ul, .links { margin: 4px 0 0; padding-left: 18px; }
 .files .skip { color: var(--muted); }
 details summary { cursor: pointer; font-size: 13px; color: var(--info); }
+.paper-list { font-size: 13px; margin-top: 6px; }
+.paper { padding: 5px 0; border-top: 1px solid var(--line); }
+.paper:first-child { border-top: 0; }
+.paper a { color: var(--ink); font-weight: 550; text-decoration: none; }
+.paper a:hover { text-decoration: underline; }
+.paper .pmeta { color: var(--muted); font-size: 12px; }
+.tag { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+       padding: 0 5px; border-radius: 3px; margin-right: 4px; vertical-align: 1px; }
+.tag.descriptor { background: var(--accent); color: var(--accent-ink); }
+.tag.cites { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.tag.mentions { background: var(--chip); color: var(--muted); }
 .instructions { white-space: pre-wrap; font-size: 13px; margin: 6px 0; }
 .links { font-size: 12px; overflow-wrap: anywhere; }
 

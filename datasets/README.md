@@ -19,6 +19,7 @@ real database are later.
 | **Directory** | Every condition, ranked by FDA 510(k) clearances, with dataset / open / downloaded counts. Click a row for its datasets. |
 | **Run 1-hour crawl** | Broad crawl: walks conditions in 510(k) order (seeded from `seed/conditions.json`, plus any condition found since), running a planned swarm per condition until the hour is up. The same thing runs from cron via `python -m jobs.crawl`. |
 | **Dataset cards** | Title, source, access type (open / free registration / credentialed / DUA / by request), conditions, modalities, labels, size, subjects, formats, license, citation, **access instructions**, direct links, and links to files we collected. |
+| **Papers** | A background worker links journal articles to every dataset: the paper(s) that introduced it, papers that **cite** those, and papers that **name** the dataset in their text. Cards show "Used in N papers", most-cited first. See *Literature linker* below. |
 | **Downloads** | For open-access datasets, direct flat-file links (csv/tsv/json/parquet/xlsx/zip/tar.gz/nii.gz/edf/dcm/h5/…) are downloaded to `data/files/<dataset-id>/` (size-capped, sha256 recorded) and served at `/files/<id>`. Anything behind a login/DUA is marked *Manual access* with instructions. |
 
 ## How a crawl works
@@ -44,6 +45,37 @@ query ─▶ planner (1 structured-output call)
   also has a turn cap (`DATASETS_MAX_TURNS`). Token usage is recorded per crawl
   (Crawls tab).
 
+## Literature linker
+
+Runs continuously in the API process (`DATASETS_LITERATURE=true`), one small
+unit of work every `DATASETS_LIT_INTERVAL_SEC`:
+
+1. **Resolve** (once per dataset): gather candidate papers (DOIs on the card,
+   Europe PMC / OpenAlex title search); Claude picks the descriptor paper(s)
+   and 1–5 exact-phrase aliases ("BraTS 2021"). Without an API key a
+   heuristic does this (DOI matches, distinctive title tokens).
+2. **Harvest**, one page per step, datasets round-robin so each gets its
+   most-cited papers early:
+   - *cites* first: Europe PMC "cited by" for each descriptor, OpenAlex
+     `cites:` sorted by citation count;
+   - then *mentions*: Europe PMC full-text phrase search sorted by citations,
+     OpenAlex full-text search.
+   Pagination continues to the end, so the goal is every paper. An alias
+   matching more than `DATASETS_LIT_MAX_MENTION_HITS` papers is treated as
+   too generic (top-cited page kept only).
+3. **Refresh** every `DATASETS_LIT_REFRESH_DAYS` (new papers, updated counts).
+
+Articles are deduped across sources by PMID → DOI → OpenAlex id. Tiers in
+the UI: *Dataset paper* → *Cites* → *Mentions*. "Mentions" is a text match;
+it includes reviews and papers that discuss rather than use the dataset.
+
+Sources: Europe PMC (no key; PubMed/PMC + open-access full text) and
+OpenAlex (set `OPENALEX_API_KEY`, free — strongly recommended: descriptor
+papers at CS venues such as AAAI/NeurIPS/arXiv, e.g. CheXpert's, are only
+there). API: `GET /api/datasets/{id}/articles?relation=cites|mentions`,
+`POST /api/datasets/{id}/articles/refresh`, `GET /api/literature`.
+CLI backfill: `python -m jobs.literature --minutes 30`.
+
 ## Layout
 
 ```
@@ -54,6 +86,7 @@ datasets/
 │   ├── manager.py    background crawl threads, cancel, download pool
 │   ├── store.py      SQLite catalog (datasets, files, conditions, crawls, FTS5)
 │   ├── fda.py        openFDA 510(k) counts
+│   ├── literature.py background linker: papers citing / naming each dataset
 │   ├── download.py   flat-file downloader + URL probe (SSRF-guarded)
 │   ├── config.py     env settings
 │   └── static/       single-page UI (no build step)

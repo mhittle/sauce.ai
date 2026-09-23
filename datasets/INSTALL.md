@@ -47,6 +47,7 @@ docker run -p 8000:8000 -v "$PWD/datasets/data:/data" -e ANTHROPIC_API_KEY sauce
    | `ANTHROPIC_API_KEY` | your key (console.anthropic.com → API keys) |
    | `DATASETS_DATA_DIR` | `/data` (already the image default; set it anyway) |
    | `DATASETS_MAX_CONCURRENT_CRAWLS` | `1` to start (cost control) |
+   | `OPENALEX_API_KEY` | optional, free from openalex.org — improves paper linking |
 
    Everything else has defaults; see `.env.example` (model, effort, crawl
    length, swarm size, download caps).
@@ -106,6 +107,12 @@ Railway, use cron with the CLI:
 `0 2 * * * cd /app && python -m jobs.crawl >> /data/crawl.log 2>&1`.
 
 ---
+
+## 4b. Literature linker
+
+Nothing to schedule: it starts with the API and works through every dataset
+continuously (`GET /api/literature` shows progress). It uses Claude once per
+dataset (a small, low-effort call) and free public APIs otherwise.
 
 ## 5. Before sharing the URL
 
