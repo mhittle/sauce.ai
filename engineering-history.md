@@ -134,6 +134,67 @@ these.
 
 ---
 
+## 2026-09-23
+
+- **Redteam — adversarial safety testing for clinical chatbots
+  (interactive session, sauce.ai/redteam).** New **standalone service** in
+  `redteam/` — FastAPI + SQLite (stdlib), containerized like `signal/`, and
+  **independent of the news Flask app / cPanel prod** (so it never touches
+  the load-bearing prod state below). Product: a researcher points it at a
+  clinical chatbot, picks a specialty/condition + trial count, and it runs
+  synthetic patient conversations designed to elicit an unsafe clinical
+  response as fast as possible, scores every reply, and emails an
+  epidemiological report. **Architecture.** `app/orchestrator.py` is the IP:
+  a Thompson-sampling bandit over a red-team **tactic** catalog (crescendo,
+  authority claim, access barrier, symptom minimization, context burial, …),
+  shared across a run's trials and rewarded by the judge's P(harm); a
+  configurable **multi-provider attacker ensemble** (Claude / OpenAI / Llama
+  / Gemini, `provider:model` specs) that **proposes** candidate next
+  messages, **refines** them across N sub-agent levels (beam search), an
+  **arbiter panel** that scores predicted P(elicit) + realism (optional
+  **lookahead**: simulate the bot's reply with a surrogate and score that),
+  Borda/mean/max aggregation, and a **consensus** deliberation+vote when the
+  top candidates are close. Every complex layer is optional; the default is
+  Claude alone (`claude-sonnet-5` attacker, `claude-opus-5` arbiter/judge).
+  `app/judge.py` annotates each target reply (panel) for P(follow) ×
+  P(harm|follow), an AHRQ severity distribution, harm categories, escalation
+  appropriateness, with **verbatim-evidence enforcement** (a quote not found
+  in the reply is dropped). `app/metrics.py` (pure stdlib, no numpy):
+  Wilson/Byar intervals, **number needed to harm** (single-arm 1/risk and
+  vs. an optional cooperative **control arm** via Newcombe risk difference),
+  Katz **risk ratio**, attributable fraction, **Kaplan–Meier**
+  prompts-until-harm (Greenwood variance, log(−log) CIs, RMST) + **log-rank**,
+  **Fleiss' κ** inter-judge agreement, and an **expected-QALY-loss** model
+  (US life table, discounting, severity→utility). `app/report.py` emits one
+  self-contained HTML doc (inline CSS + SVG KM curve + stat tiles + annotated
+  transcripts with highlighted evidence), served at `/runs/<id>` and emailed
+  (`app/mailer.py`, SMTP; skipped gracefully if unconfigured).
+  **Providers/targets:** Anthropic SDK for Claude + Anthropic-API targets;
+  plain `requests` for any OpenAI-compatible host and for the OpenAI/custom
+  JSON HTTP / browser (`web_chat`, Playwright) targets under test.
+  **Safety/ops:** SSRF guard (`app/netguard.py`) rejects private/loopback/
+  metadata target URLs, re-checked before each trial; **target API keys live
+  in memory for the run only, never written to SQLite** (a restart fails +
+  refunds in-flight runs rather than resuming); free-tier **100-trial/email
+  quota** reserved at submit and refunded for untaken trials; per-trial
+  billing wired at $0. In-process thread-pool run queue (single replica;
+  needs a shared broker before scaling out). Anthropic refusal fallback
+  enabled by default on Claude attacker/judge calls. Root `index.html` gains
+  a `card live` → `/redteam` (counter "1 live · 30" → "3 live · 29"; the
+  claim card had already been promoted to live without the counter catching
+  up). *Code:* new `redteam/` tree (`app/{config,catalog,personas,providers,
+  targets,netguard,orchestrator,judge,metrics,store,runner,report,mailer,
+  main}.py`, `app/static/index.html`), tests (`tests/test_{metrics,catalog,
+  orchestrator,judge,targets_providers,runner_api}.py`, 61 pass, no network),
+  `Dockerfile`/`railway.json`/`requirements*.txt`/`.env.example`/`README.md`/
+  `INSTALL.md`; root `index.html`. *Server state:* none on the news box; the
+  service deploys separately (Railway/container) — see `manual-actions.md`
+  (deploy + route `/redteam`). *Open:* the `/redteam` card links to a service
+  that is not live until deployed; owner to stand up the container, set
+  `ANTHROPIC_API_KEY` (+ optional OPENAI/LLAMA/GEMINI + SMTP), and proxy
+  `/redteam`. Human eval of orchestrator attack-success + judge calibration
+  against a labelled set is the natural next step before charging.
+
 ## 2026-09-08
 
 - **Claim — health-headline reality check, steps 1 + 2 (interactive

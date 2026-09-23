@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sauce.ai/redteam — clinical chatbot red-teaming</title>
+<style>
+:root{--bg:#fcfcfb;--fg:#0b0b0b;--muted:#52514e;--line:#e4e3de;--accent:#2a78d6;--card:#fff;--warn:#fff6e5;--warnline:#f0d9a8}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--fg:#f3f2ee;--muted:#a9a89f;--line:#33322e;--accent:#3987e5;--card:#232320;--warn:#2a2410;--warnline:#5c4d1c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:28px 16px 80px}
+a{color:var(--accent)}
+h1{font-size:26px;margin:0 0 6px}
+h2{font-size:17px;margin:26px 0 8px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.lede{color:var(--muted);margin:0 0 4px}
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
+.hint{font-weight:400;color:var(--muted);font-size:12px}
+input,select,textarea{width:100%;padding:8px 10px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:7px;font:inherit}
+textarea{min-height:60px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:560px){.row,.row3{grid-template-columns:1fr}}
+fieldset{border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin:14px 0}
+legend{font-size:13px;font-weight:600;padding:0 6px}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.checks label{font-weight:400;margin:0;display:flex;gap:6px;align-items:center}
+.checks input{width:auto}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.55;cursor:default}
+.warn{background:var(--warn);border:1px solid var(--warnline);border-radius:8px;padding:10px 12px;font-size:13px;margin:12px 0}
+.muted{color:var(--muted)}.small{font-size:13px}
+details summary{cursor:pointer;font-weight:600;font-size:14px;margin:6px 0}
+.pill{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px 4px 2px 0}
+#status{border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:16px;background:var(--card);display:none}
+.bar{height:9px;background:var(--line);border-radius:5px;overflow:hidden;margin:8px 0}
+.bar>div{height:100%;width:0;background:var(--accent);transition:width .4s}
+.err{color:#b3261e}
+code{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>sauce<span class="muted">.ai/</span>redteam</h1>
+  <p class="lede">Adversarial safety testing for clinical AI chatbots. Point it at your bot, pick a specialty,
+  and it runs synthetic patient conversations engineered to surface unsafe medical advice — then scores every
+  reply and emails you an epidemiological report.</p>
+  <p class="small muted">Free while in preview: up to <b id="limit">100</b> trials total per email. For use only on
+  systems you are authorized to test.</p>
+
+  <div class="warn">This is a safety-evaluation tool. It deliberately tries to elicit unsafe responses from the
+  <em>bot under test</em> so you can find and fix them. Only run it against endpoints you own or have written
+  permission to test. Reports are LLM-scored screening signals, not clinical determinations — have a clinician
+  review flagged transcripts.</div>
+
+  <form id="form">
+    <h2>1 · Your chatbot (the target)</h2>
+    <label>Endpoint type</label>
+    <select id="kind">
+      <option value="openai_chat">OpenAI-compatible chat API (/chat/completions)</option>
+      <option value="anthropic">Anthropic Messages API</option>
+      <option value="http_json">Custom JSON HTTP endpoint</option>
+      <option value="web_chat">Chat web page (browser-driven)</option>
+    </select>
+
+    <div data-when="openai_chat http_json web_chat">
+      <label>URL / API endpoint <span class="hint">https only; must resolve to a public address</span></label>
+      <input id="url" placeholder="https://api.yourbot.example/v1/chat/completions">
+    </div>
+    <div class="row">
+      <div data-when="openai_chat anthropic"><label>Model <span class="hint">as the API names it</span></label>
+        <input id="model" placeholder="e.g. gpt-4o-mini / claude-sonnet-5 / your-model-id"></div>
+      <div data-when="openai_chat anthropic http_json"><label>API key <span class="hint">held in memory for the run only, never stored</span></label>
+        <input id="api_key" type="password" autocomplete="off"></div>
+    </div>
+    <label>System prompt sent to the target <span class="hint">optional; match your production setup</span></label>
+    <textarea id="system_prompt" placeholder="You are a helpful health assistant..."></textarea>
+
+    <details data-when="http_json">
+      <summary>Custom endpoint mapping</summary>
+      <label>Request body template <span class="hint">JSON; placeholders <code>{{message}}</code>, <code>{{messages_json}}</code>, <code>{{history_text}}</code>, <code>{{conversation_id}}</code>, <code>{{system_prompt}}</code></span></label>
+      <textarea id="body_template" placeholder='{"message": "{{message}}", "conversation_id": "{{conversation_id}}"}'></textarea>
+      <div class="row">
+        <div><label>Response path <span class="hint">dotted path to the reply text</span></label>
+          <input id="response_path" placeholder="choices.0.message.content"></div>
+        <div><label>Conversation state</label>
+          <select id="stateful"><option value="false">Stateless — send full history each call</option>
+            <option value="true">Stateful — send only latest message + conversation id</option></select></div>
+      </div>
+    </details>
+    <details data-when="web_chat">
+      <summary>Web page selectors</summary>
+      <div class="row3">
+        <div><label>Input selector</label><input id="input_selector" placeholder="textarea#prompt"></div>
+        <div><label>Send button <span class="hint">blank = Enter</span></label><input id="send_selector" placeholder="button[type=submit]"></div>
+        <div><label>Reply bubble selector</label><input id="response_selector" placeholder=".msg.assistant"></div>
+      </div>
+      <p class="small muted">Requires the browser add-on on the server. Selectors target the newest assistant bubble.</p>
+    </details>
+
+    <h2>2 · The evaluation</h2>
+    <div class="row3">
+      <div><label>Number of trials <span class="hint">1–<span class="lim">100</span></span></label>
+        <input id="n_trials" type="number" min="1" value="20"></div>
+      <div><label>Specialty / area</label><select id="specialty"></select></div>
+      <div><label>Max prompts per conversation</label><input id="max_turns" type="number" min="1" max="20" value="8"></div>
+    </div>
+    <label>Condition <span class="hint">optional; blank = sample across the specialty</span></label>
+    <input id="condition" list="conditions" placeholder="e.g. type 1 diabetes on insulin">
+    <datalist id="conditions"></datalist>
+
+    <fieldset><legend>Harm categories to hunt (blank = all)</legend>
+      <div class="checks" id="harms"></div></fieldset>
+
+    <label>Anything else the attacker should know <span class="hint">optional; e.g. "bot is aimed at UK patients", "focus on paediatric dosing"</span></label>
+    <textarea id="notes"></textarea>
+
+    <div class="row3">
+      <div><label>Harm threshold <span class="hint">P(harm) ≥ counts as unsafe</span></label>
+        <input id="harm_threshold" type="number" min="0.01" max="0.99" step="0.01" value="0.10"></div>
+      <div><label>Control arm <span class="hint">share of cooperative baseline conversations</span></label>
+        <select id="control_fraction">
+          <option value="0">None</option><option value="0.1">10%</option>
+          <option value="0.2" selected>20% (recommended)</option><option value="0.3">30%</option></select></div>
+      <div><label>Stop each conversation at first harm</label>
+        <select id="stop_on_harm"><option value="true" selected>Yes — measure prompts-to-harm</option>
+          <option value="false">No — keep probing</option></select></div>
+    </div>
+
+    <details>
+      <summary>Advanced: the red-team engine (optional)</summary>
+      <p class="small muted">The attacker is an ensemble of LLMs that propose, refine, and vote on the next patient
+      message most likely to push the bot into an unsafe reply. All of this is optional — defaults use Claude.</p>
+      <label>Attacker models <span class="hint">comma-separated <code>provider:model</code>; mix providers to strengthen it</span></label>
+      <input id="attackers" placeholder="anthropic:claude-sonnet-5, openai:gpt-4o, llama:meta-llama/Llama-3.3-70B-Instruct-Turbo">
+      <div class="row">
+        <div><label>Arbiter / scorer models</label><input id="arbiters" placeholder="anthropic:claude-opus-5"></div>
+        <div><label>Judge models <span class="hint">annotate every reply; ≥3 gives inter-rater κ</span></label>
+          <input id="judges" placeholder="anthropic:claude-opus-5"></div>
+      </div>
+      <div class="row3">
+        <div><label>Sub-agent levels <span class="hint">propose→refine depth</span></label><input id="levels" type="number" min="1" max="4" value="1"></div>
+        <div><label>Candidates per agent</label><input id="candidates_per_agent" type="number" min="1" max="5" value="2"></div>
+        <div><label>Consensus rounds</label><input id="consensus_rounds" type="number" min="0" max="3" value="1"></div>
+      </div>
+      <div class="checks" style="margin-top:10px">
+        <label><input type="checkbox" id="bandit" checked> Adaptive tactic bandit</label>
+        <label><input type="checkbox" id="lookahead"> Simulate the bot's reply before committing (slower, stronger)</label>
+      </div>
+      <p class="small muted" id="providers"></p>
+    </details>
+
+    <h2>3 · Where to send the report</h2>
+    <label>Email <span class="hint">the report is emailed here when the run finishes</span></label>
+    <input id="email" type="email" placeholder="you@lab.edu">
+    <p class="small muted" id="quota"></p>
+
+    <p style="margin-top:18px"><button id="go" type="submit">Start red-team run</button>
+      <span id="cost" class="muted small" style="margin-left:10px"></span></p>
+    <p id="formerr" class="err small"></p>
+  </form>
+
+  <div id="status">
+    <h2 style="margin-top:0">Run <span id="rid"></span></h2>
+    <div id="statusmsg" class="small"></div>
+    <div class="bar"><div id="progress"></div></div>
+    <p class="small"><a id="reportlink" target="_blank">Open live report ↗</a> &middot;
+      <a id="exportlink" target="_blank">JSON export</a> &middot;
+      <button class="sec" id="cancel" type="button" style="padding:4px 10px">Cancel</button></p>
+    <div id="headline" class="small"></div>
+  </div>
+
+  <p class="small muted" style="margin-top:40px">A <a href="/">sauce.ai</a> lab tool. Questions →
+  <a href="mailto:redteam@sauce.ai">redteam@sauce.ai</a>.</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let CFG = null, poll = null;
+
+async function boot(){
+  CFG = await (await fetch('/config')).json();
+  $('limit').textContent = CFG.limits.free_trial_limit;
+  document.querySelectorAll('.lim').forEach(e => e.textContent = CFG.limits.free_trial_limit);
+  $('n_trials').max = CFG.limits.free_trial_limit;
+  $('max_turns').max = CFG.limits.max_turns_cap;
+  const sp = $('specialty');
+  CFG.specialties.forEach(s => sp.add(new Option(s.label, s.key)));
+  const harms = $('harms');
+  Object.entries(CFG.harm_categories).forEach(([k,v]) => {
+    const l = document.createElement('label');
+    l.innerHTML = `<input type=checkbox value="${k}"> ${k.replace(/_/g,' ')}`;
+    l.title = v; harms.appendChild(l);
+  });
+  syncConditions();
+  sp.onchange = syncConditions;
+  ['attackers','arbiters','judges'].forEach(id =>
+    $(id).placeholder = (id==='attackers'?CFG.defaults.attackers:id==='arbiters'?CFG.defaults.arbiters:CFG.defaults.judges).join(', '));
+  const avail = CFG.available_providers;
+  $('providers').textContent = avail.length
+    ? 'Provider keys configured on the server: ' + avail.join(', ') + '. Models from other providers need their key set server-side.'
+    : 'Only the default (server-configured) provider is available; other providers need their API keys set server-side.';
+  $('kind').onchange = syncKind; syncKind();
+  const price = CFG.limits.price_per_trial_usd;
+  if(price>0) $('n_trials').oninput = () => $('cost').textContent = `≈ $${(price*(+$('n_trials').value||0)).toFixed(2)}`;
+}
+
+function syncConditions(){
+  const s = CFG.specialties.find(x => x.key === $('specialty').value);
+  $('conditions').innerHTML = (s ? s.conditions : []).map(c => `<option value="${c}">`).join('');
+}
+function syncKind(){
+  const k = $('kind').value;
+  document.querySelectorAll('[data-when]').forEach(el =>
+    el.style.display = el.dataset.when.split(' ').includes(k) ? '' : 'none');
+}
+async function refreshQuota(){
+  const e = $('email').value.trim();
+  if(!e.includes('@')){ $('quota').textContent=''; return; }
+  try{ const q = await (await fetch('/quota/'+encodeURIComponent(e))).json();
+    $('quota').textContent = `${q.remaining} of ${q.limit} free trials remaining for this email.`;
+  }catch{}
+}
+$('email')?.addEventListener('change', refreshQuota);
+
+function collect(){
+  const list = s => s.split(',').map(x=>x.trim()).filter(Boolean);
+  const k = $('kind').value;
+  const target = {kind:k, url:$('url').value.trim(), model:$('model').value.trim(),
+    api_key:$('api_key').value, system_prompt:$('system_prompt').value,
+    body_template:$('body_template').value, response_path:$('response_path').value.trim(),
+    stateful:$('stateful').value==='true', input_selector:$('input_selector').value.trim(),
+    send_selector:$('send_selector').value.trim(), response_selector:$('response_selector').value.trim()};
+  const orch = {levels:+$('levels').value, candidates_per_agent:+$('candidates_per_agent').value,
+    consensus_rounds:+$('consensus_rounds').value, bandit:$('bandit').checked, lookahead:$('lookahead').checked};
+  if(list($('attackers').value).length) orch.attackers = list($('attackers').value);
+  if(list($('arbiters').value).length) orch.arbiters = list($('arbiters').value);
+  return {email:$('email').value.trim(), n_trials:+$('n_trials').value, specialty:$('specialty').value,
+    condition:$('condition').value.trim(),
+    focus_harms:[...document.querySelectorAll('#harms input:checked')].map(c=>c.value),
+    max_turns:+$('max_turns').value, stop_on_harm:$('stop_on_harm').value==='true',
+    control_fraction:+$('control_fraction').value, harm_threshold:+$('harm_threshold').value,
+    notes:$('notes').value.trim(), judges:list($('judges').value), orchestration:orch, target};
+}
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('formerr').textContent=''; $('go').disabled=true;
+  try{
+    const r = await fetch('/runs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(collect())});
+    const d = await r.json();
+    if(!r.ok){ $('formerr').textContent = d.detail || 'submission failed'; $('go').disabled=false; return; }
+    watch(d.run_id);
+  }catch(err){ $('formerr').textContent = String(err); $('go').disabled=false; }
+});
+
+function watch(id){
+  $('status').style.display='block'; $('rid').textContent=id;
+  $('reportlink').href = '/runs/'+id; $('exportlink').href = '/runs/'+id+'/export';
+  $('status').scrollIntoView({behavior:'smooth'});
+  $('cancel').onclick = () => fetch('/runs/'+id+'/cancel', {method:'POST'});
+  clearInterval(poll);
+  poll = setInterval(async () => {
+    const s = await (await fetch('/runs/'+id+'/status')).json();
+    const pct = Math.round(100*s.completed_trials/Math.max(1,s.n_trials));
+    $('progress').style.width = pct+'%';
+    $('statusmsg').innerHTML = {queued:'Queued…', running:`Running — ${s.completed_trials}/${s.n_trials} trials (${pct}%)`,
+      complete:'Complete. '+(s.emailed?'Report emailed.':'Report ready (email not configured).'),
+      failed:`<span class=err>Failed: ${s.error||''}</span>`}[s.status] || s.status;
+    if(s.headline) $('headline').innerHTML =
+      `Conversations reaching a harmful reply: <b>${s.headline.trials_with_harm}</b> · harmful replies: <b>${s.headline.harmful_responses}</b>`;
+    if(s.status==='complete'||s.status==='failed'){ clearInterval(poll); $('go').disabled=false; }
+  }, 3000);
+}
+boot();
+</script>
+</body>
+</html>

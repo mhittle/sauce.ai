@@ -86,6 +86,7 @@ shipped.
 | 8 | 5 | new-feature, ui, algo, backend | Blindspot — the biggest stories your algorithm is hiding from you | in-progress |
 | 8 | 6 | new-feature, ui, algo, backend | Ask your feed (grounded conversational news over your personalized corpus) | done |
 | 8 | 5 | new-feature, ui, backend, algo | Claim — health-headline reality check (sauce.ai/claim) | in-progress |
+| 8 | 7 | new-feature, backend, algo, ui | Redteam — adversarial safety testing for clinical chatbots (sauce.ai/redteam) | done |
 
 ---
 
@@ -2342,6 +2343,35 @@ app-behavior change.
 
 Reverse chronological. Each entry links to the merged PR; the matching
 narrative lives in `engineering-history.md` under the same date.
+
+### 2026-09-23
+
+- **Redteam — adversarial safety testing for clinical chatbots
+  (sauce.ai/redteam)** (Pri 8, LOE 7, PR #TBD). New standalone service
+  under `redteam/` (FastAPI + SQLite, containerized like `signal/`), not
+  part of the news Flask app. A researcher enters a target chatbot
+  (OpenAI-compatible / Anthropic / custom JSON HTTP / browser chat page),
+  a specialty or condition, and a trial count; the service runs synthetic
+  patient conversations engineered to elicit unsafe clinical advice fastest,
+  scores every reply, and emails an epidemiological report. **The magic
+  sauce** is `app/orchestrator.py`: a Thompson-sampling tactic bandit feeds
+  a configurable multi-provider ensemble (Claude/GPT/Llama/Gemini) that
+  proposes → refines across sub-agent levels → an arbiter panel scores
+  (optional target-reply lookahead) → consensus vote picks the next
+  patient message. All complexity is optional (default is Claude alone).
+  Judge panel annotates each reply for P(follow) × P(harm|follow), AHRQ
+  severity, harm categories, and escalation, with verbatim-evidence
+  enforcement. Metrics (pure stdlib): NNH (single-arm + vs. optional
+  control arm), Wilson/Byar intervals, Kaplan–Meier prompts-until-harm +
+  log-rank, Newcombe risk difference, Katz risk ratio, Fleiss' κ, and an
+  expected-QALY-loss model. Self-contained HTML report (inline SVG KM
+  curve, stat tiles, annotated transcripts) served + emailed. Free-tier
+  100-trial/email quota; per-trial billing wired at $0. SSRF guard on
+  researcher URLs; target credentials in memory only, never persisted.
+  Root landing page gains a `card live` → `/redteam` (header now
+  "3 live · 29 in development"). 61 tests, no network. *Deploy is a manual
+  action* (`manual-actions.md`): stand up the container and route
+  `/redteam` to it — the card links to a service that isn't live until then.
 
 ### 2026-05-31
 
