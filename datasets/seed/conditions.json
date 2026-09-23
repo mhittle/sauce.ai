@@ -1,0 +1,366 @@
+[
+ {
+  "name": "stroke",
+  "display": "Stroke",
+  "synonyms": [
+   "cva",
+   "ischemic stroke",
+   "large vessel occlusion",
+   "lvo"
+  ],
+  "fda_terms": [
+   "stroke",
+   "large vessel occlusion",
+   "lvo"
+  ]
+ },
+ {
+  "name": "intracranial hemorrhage",
+  "display": "Intracranial Hemorrhage",
+  "synonyms": [
+   "ich",
+   "brain bleed"
+  ],
+  "fda_terms": [
+   "intracranial hemorrhage",
+   "hemorrhage triage"
+  ]
+ },
+ {
+  "name": "pulmonary embolism",
+  "display": "Pulmonary Embolism",
+  "synonyms": [
+   "pe"
+  ],
+  "fda_terms": [
+   "pulmonary embolism"
+  ]
+ },
+ {
+  "name": "pneumothorax",
+  "display": "Pneumothorax",
+  "synonyms": [
+   "collapsed lung",
+   "ptx"
+  ],
+  "fda_terms": [
+   "pneumothorax"
+  ]
+ },
+ {
+  "name": "lung nodule",
+  "display": "Lung Nodule",
+  "synonyms": [
+   "pulmonary nodule",
+   "lung cancer screening"
+  ],
+  "fda_terms": [
+   "lung nodule",
+   "pulmonary nodule"
+  ]
+ },
+ {
+  "name": "lung cancer",
+  "display": "Lung Cancer",
+  "synonyms": [
+   "nsclc"
+  ],
+  "fda_terms": [
+   "lung cancer"
+  ]
+ },
+ {
+  "name": "breast cancer",
+  "display": "Breast Cancer",
+  "synonyms": [
+   "mammography",
+   "breast lesion"
+  ],
+  "fda_terms": [
+   "mammography",
+   "breast cancer",
+   "breast density",
+   "tomosynthesis"
+  ]
+ },
+ {
+  "name": "prostate cancer",
+  "display": "Prostate Cancer",
+  "synonyms": [],
+  "fda_terms": [
+   "prostate"
+  ]
+ },
+ {
+  "name": "colorectal cancer",
+  "display": "Colorectal Cancer",
+  "synonyms": [
+   "colon polyp",
+   "polyp"
+  ],
+  "fda_terms": [
+   "polyp",
+   "colonoscopy"
+  ]
+ },
+ {
+  "name": "skin cancer",
+  "display": "Skin Cancer",
+  "synonyms": [
+   "melanoma",
+   "skin lesion"
+  ],
+  "fda_terms": [
+   "melanoma",
+   "skin lesion"
+  ]
+ },
+ {
+  "name": "atrial fibrillation",
+  "display": "Atrial Fibrillation",
+  "synonyms": [
+   "afib",
+   "af"
+  ],
+  "fda_terms": [
+   "atrial fibrillation",
+   "arrhythmia detection"
+  ]
+ },
+ {
+  "name": "arrhythmia",
+  "display": "Cardiac Arrhythmia",
+  "synonyms": [
+   "ecg arrhythmia"
+  ],
+  "fda_terms": [
+   "arrhythmia"
+  ]
+ },
+ {
+  "name": "heart failure",
+  "display": "Heart Failure",
+  "synonyms": [
+   "reduced ejection fraction",
+   "lvef"
+  ],
+  "fda_terms": [
+   "ejection fraction",
+   "heart failure"
+  ]
+ },
+ {
+  "name": "coronary artery disease",
+  "display": "Coronary Artery Disease",
+  "synonyms": [
+   "cad",
+   "coronary stenosis"
+  ],
+  "fda_terms": [
+   "coronary",
+   "plaque analysis",
+   "ffr"
+  ]
+ },
+ {
+  "name": "diabetic retinopathy",
+  "display": "Diabetic Retinopathy",
+  "synonyms": [
+   "dr"
+  ],
+  "fda_terms": [
+   "diabetic retinopathy",
+   "retinopathy"
+  ]
+ },
+ {
+  "name": "glaucoma",
+  "display": "Glaucoma",
+  "synonyms": [],
+  "fda_terms": [
+   "glaucoma"
+  ]
+ },
+ {
+  "name": "fracture",
+  "display": "Bone Fracture",
+  "synonyms": [
+   "fractures"
+  ],
+  "fda_terms": [
+   "fracture"
+  ]
+ },
+ {
+  "name": "osteoporosis",
+  "display": "Osteoporosis",
+  "synonyms": [
+   "low bone density"
+  ],
+  "fda_terms": [
+   "osteoporosis",
+   "bone density"
+  ]
+ },
+ {
+  "name": "alzheimer's disease",
+  "display": "Alzheimer's Disease",
+  "synonyms": [
+   "alzheimers",
+   "dementia"
+  ],
+  "fda_terms": [
+   "alzheimer",
+   "amyloid",
+   "brain volumetric"
+  ]
+ },
+ {
+  "name": "multiple sclerosis",
+  "display": "Multiple Sclerosis",
+  "synonyms": [
+   "ms",
+   "ms lesions"
+  ],
+  "fda_terms": [
+   "multiple sclerosis",
+   "white matter lesion",
+   "brain mri"
+  ]
+ },
+ {
+  "name": "epilepsy",
+  "display": "Epilepsy",
+  "synonyms": [
+   "seizure"
+  ],
+  "fda_terms": [
+   "seizure",
+   "eeg"
+  ]
+ },
+ {
+  "name": "sleep apnea",
+  "display": "Sleep Apnea",
+  "synonyms": [
+   "osa",
+   "obstructive sleep apnea"
+  ],
+  "fda_terms": [
+   "sleep apnea",
+   "apnea"
+  ]
+ },
+ {
+  "name": "sepsis",
+  "display": "Sepsis",
+  "synonyms": [],
+  "fda_terms": [
+   "sepsis"
+  ]
+ },
+ {
+  "name": "diabetes",
+  "display": "Diabetes",
+  "synonyms": [
+   "glucose",
+   "type 2 diabetes"
+  ],
+  "fda_terms": [
+   "glucose",
+   "insulin dosing"
+  ]
+ },
+ {
+  "name": "covid-19",
+  "display": "COVID-19",
+  "synonyms": [
+   "sars-cov-2",
+   "coronavirus"
+  ],
+  "fda_terms": [
+   "covid",
+   "sars-cov-2"
+  ]
+ },
+ {
+  "name": "pneumonia",
+  "display": "Pneumonia",
+  "synonyms": [],
+  "fda_terms": [
+   "pneumonia"
+  ]
+ },
+ {
+  "name": "liver disease",
+  "display": "Liver Disease",
+  "synonyms": [
+   "hepatic steatosis",
+   "fatty liver",
+   "nafld"
+  ],
+  "fda_terms": [
+   "liver",
+   "hepatic"
+  ]
+ },
+ {
+  "name": "kidney disease",
+  "display": "Kidney Disease",
+  "synonyms": [
+   "ckd",
+   "renal"
+  ],
+  "fda_terms": [
+   "kidney",
+   "renal"
+  ]
+ },
+ {
+  "name": "aortic aneurysm",
+  "display": "Aortic Aneurysm",
+  "synonyms": [
+   "aaa",
+   "aortic dissection"
+  ],
+  "fda_terms": [
+   "aortic",
+   "aneurysm"
+  ]
+ },
+ {
+  "name": "thyroid nodule",
+  "display": "Thyroid Nodule",
+  "synonyms": [
+   "thyroid cancer"
+  ],
+  "fda_terms": [
+   "thyroid"
+  ]
+ },
+ {
+  "name": "brain tumor",
+  "display": "Brain Tumor",
+  "synonyms": [
+   "glioma",
+   "glioblastoma",
+   "meningioma"
+  ],
+  "fda_terms": [
+   "brain tumor",
+   "glioma"
+  ]
+ },
+ {
+  "name": "cervical cancer",
+  "display": "Cervical Cancer",
+  "synonyms": [
+   "pap smear",
+   "cervical cytology"
+  ],
+  "fda_terms": [
+   "cervical cytology",
+   "cervical"
+  ]
+ }
+]

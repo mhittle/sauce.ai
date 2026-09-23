@@ -1,0 +1,26 @@
+name: datasets-ci
+
+# Tests for sauce.ai/datasets. Scoped to the datasets/ folder.
+on:
+  push:
+    branches: [main]
+    paths: ["datasets/**", ".github/workflows/datasets-ci.yml"]
+  pull_request:
+    paths: ["datasets/**", ".github/workflows/datasets-ci.yml"]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: datasets
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        # No network or API key needed: LLM + HTTP are faked.
+        run: python -m pytest tests/ -q
