@@ -176,13 +176,14 @@ these.
   note_nlp, exclusions, age, look-back); executed against a synthetic CDM on
   Postgres 16 and returned the expected person. Self-contained HTML report
   (`app/report.py`), SMTP email, JSON export, per-algorithm `.sql`. Root
-  `index.html` gains a `card live` → `/phenotype/` ("3 live" → "4 live").
+  `index.html` gains a `card live` → `https://phenotype.sauce.ai` (Railway +
+  subdomain, following the redteam routing decision; "3 live" → "4 live").
   *Code:* new `phenotype/` tree + `.github/workflows/phenotype-ci.yml`; 38
   tests (fake APIs + mock models, no network). OpenAlex was tried for
   snowballing and dropped: keyless requests now draw on a shared per-IP daily
   budget and 429 with multi-hour Retry-After (live-tested); the client now
   fails fast on a 429 whose Retry-After exceeds 60 s. *Server state:* none on the
-  news box — see `manual-actions.md` (deploy + route `/phenotype/`). *Open:*
+  news box — see `manual-actions.md` (Railway deploy + `phenotype.sauce.ai` CNAME). *Open:*
   human eval of extraction accuracy against a hand-abstracted set (e.g. the
   MS, RA, diabetes validation literature) before relying on rankings.
 

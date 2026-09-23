@@ -42,39 +42,39 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ### 2026-09-23 — Deploy the redteam service on Railway + point `redteam.sauce.ai` at it
 **Status:** open · **PR:** #285 (merged; routing decided 2026-09-23) · **Reference:** `redteam/` (README.md, INSTALL.md)
-### 2026-09-23 — Deploy the sauce.ai/phenotype service + route `/phenotype/`
-**Status:** open · **PR:** #TBD (Phenotype — validated EHR phenotyping algorithms, branch `claude/gifted-heisenberg-rn4khq`) ·
+### 2026-09-23 — Deploy the sauce.ai/phenotype service at `phenotype.sauce.ai`
+**Status:** open · **PR:** #288 (Phenotype — validated EHR phenotyping algorithms, branch `claude/gifted-heisenberg-rn4khq`) ·
 **Opened:** 2026-09-23 · **Reference:** `phenotype/` (README.md, INSTALL.md)
 
-The root landing page now has a **`card live` linking to `/phenotype/`**,
-which does not resolve until the service is deployed and routed. Standalone
-container (FastAPI + SQLite), independent of the news Flask app / cPanel
-prod — deploy it like `redteam/`.
+The root landing card links to **`https://phenotype.sauce.ai`** (Railway host
++ subdomain, same as redteam). The subdomain does not resolve until the
+service is deployed and DNS is set. Standalone container (FastAPI + SQLite),
+independent of the news Flask app / cPanel prod — **not** deployed onto the
+GoDaddy box.
 
-1. Deploy the container from `phenotype/`:
-   ```
-   cd phenotype
-   docker build -t sauce-phenotype .
-   docker run -d --name phenotype -p 8001:8000 \
-     -e ANTHROPIC_API_KEY=<key> \
-     -e PUBLIC_BASE_URL=https://sauce.ai/phenotype \
-     -e PHENOTYPE_CONTACT_EMAIL=<contact address for NCBI> \
-     -e SMTP_HOST=<relay> -e SMTP_USER=<user> -e SMTP_PASS=<pass> \
-     -v /srv/phenotype-data:/app/data \
-     sauce-phenotype
-   ```
-   (Railway: new service at `phenotype/railway.json`, same env vars, volume
-   at `/app/data`.) Optional: `NCBI_API_KEY` (raises PubMed rate limit).
-2. Route `https://sauce.ai/phenotype/` to the service **with the trailing
-   slash, stripping the prefix** (the form uses relative URLs), or use a
-   subdomain. Until then the landing-page card is a dead link.
-3. Smoke test: `GET /phenotype/health` → `{"ok": true}`; submit "multiple
-   sclerosis" with defaults; confirm the report lists the ≥3-claims-in-1-year
-   algorithm with its validation references and the SQL endpoint returns text.
+Steps:
 
-No migration on the news DB and no change to the news box's load-bearing
-state. The Anthropic account must hold credits (~40 model calls per job).
+1. **Create the Railway service.** New service → Deploy from GitHub repo
+   `mhittle/sauce.ai`; set the **root directory** to `phenotype/` so it uses
+   `phenotype/railway.json` + `phenotype/Dockerfile`. Health check `/health`
+   is preconfigured.
+2. **Set variables** (Service → Variables):
+   - `ANTHROPIC_API_KEY=<key>` (required; ~40 model calls per review)
+   - `PUBLIC_BASE_URL=https://phenotype.sauce.ai`
+   - `PHENOTYPE_CONTACT_EMAIL=<contact address>` (NCBI asks for one)
+   - Optional: `NCBI_API_KEY` (PubMed 3 → 10 requests/s); `SMTP_HOST`,
+     `SMTP_USER`, `SMTP_PASS` to email reports
+3. **Persist state.** Add a Railway **volume mounted at `/app/data`** (jobs
+   and the 7-day literature cache live in `data/phenotype.db`).
+4. **Domain.** Add the custom domain `phenotype.sauce.ai` in the Railway
+   service; create the CNAME it gives you at the `sauce.ai` DNS host.
+5. **Smoke test:** `curl https://phenotype.sauce.ai/health` → `{"ok": true}`;
+   submit "multiple sclerosis" with defaults; confirm the report lists the
+   ≥3-claims-in-1-year algorithm with its validation references and
+   `/jobs/<id>/algorithms/1.sql` returns SQL.
 
+No migration on the news DB and **no change to the news box's load-bearing
+state**.
 
 ### 2026-09-23 — Deploy the sauce.ai/redteam service + route `/redteam`
 **Status:** open · **PR:** #TBD (Redteam — clinical chatbot red-teaming, branch `claude/blissful-gauss-x9o83d`) ·

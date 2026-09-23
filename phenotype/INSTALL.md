@@ -43,9 +43,9 @@ docker run -p 8000:8000 -e ANTHROPIC_API_KEY=... -v $PWD/data:/app/data phenotyp
 `railway.json` builds the Dockerfile and health-checks `/health`. Mount a
 volume at `/app/data` so jobs and the HTTP cache survive restarts.
 
-**Routing.** The form uses relative URLs, so serve it at a path with a
-trailing slash (`https://sauce.ai/phenotype/`, proxy stripping the prefix) or
-on its own subdomain.
+**Routing.** Production is Railway at `https://phenotype.sauce.ai` (see
+`manual-actions.md`). The form uses relative URLs, so it also works behind a
+path prefix with a trailing slash if the proxy strips the prefix.
 
 ## Operational notes
 

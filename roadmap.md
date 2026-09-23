@@ -2348,7 +2348,7 @@ narrative lives in `engineering-history.md` under the same date.
 ### 2026-09-23
 
 - **Phenotype — validated EHR phenotyping algorithms, spelled out and
-  ranked (sauce.ai/phenotype)** (Pri 8, LOE 6, PR #TBD). New standalone
+  ranked (sauce.ai/phenotype)** (Pri 8, LOE 6, PR #288). New standalone
   service under `phenotype/` (FastAPI + SQLite, containerized like
   `redteam/`). A researcher names a condition and their study (intended use:
   prevalence / cohort / case-finding; data type; coding era; country;
@@ -2363,7 +2363,8 @@ narrative lives in `engineering-history.md` under the same date.
   deterministic OMOP CDM SQL template (verified on Postgres 16). Model never
   supplies a reference: suggestions must resolve in PubMed. Exemplar: the MS
   Prevalence Working Group algorithm (≥3 MS claims in 1 year, Culpepper
-  2019). Root landing page gains a `card live` → `/phenotype/` ("4 live ·
+  2019). Root landing page gains a `card live` →
+  `https://phenotype.sauce.ai` (Railway + subdomain, like redteam; "4 live ·
   29"). 38 tests, no network. *Deploy is a manual action.*
 
 - **Redteam — adversarial safety testing for clinical chatbots
