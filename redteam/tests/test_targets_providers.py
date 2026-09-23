@@ -8,6 +8,19 @@ from app.targets import (TargetConfig, TargetError, dig, render_template,
                          validate_config, open_session)
 
 
+def test_model_catalog_marks_availability():
+    from app.providers import model_catalog
+    cat = model_catalog(Settings(anthropic_api_key="k", openai_api_key=None,
+                                 llama_api_key=None, gemini_api_key=None))
+    specs = {m["spec"]: m for m in cat}
+    assert specs["anthropic:claude-sonnet-5"]["available"] is True
+    assert specs["openai:gpt-5"]["available"] is False
+    # every row is a valid provider:model spec
+    for m in cat:
+        parse_spec(m["spec"])
+    assert all(k in m for m in cat for k in ("spec", "provider", "model", "label", "available"))
+
+
 def test_parse_spec_valid_and_invalid():
     assert parse_spec("anthropic:claude-opus-5") == ("anthropic", "claude-opus-5")
     for bad in ("", "noprovider", "unknown:model", "openai:"):

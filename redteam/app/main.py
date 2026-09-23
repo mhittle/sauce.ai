@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
-from .providers import PROVIDERS, available_providers
+from .providers import PROVIDERS, available_providers, model_catalog
 from .runner import Runner, RunQueue, RunSpec
 from .store import QuotaExceeded, Store
 from .targets import TARGET_KINDS, TargetConfig, validate_config
@@ -109,6 +109,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             "target_kinds": list(TARGET_KINDS),
             "providers": list(PROVIDERS),
             "available_providers": available_providers(settings),
+            "model_catalog": model_catalog(settings),
             "defaults": {
                 "attackers": list(settings.default_attackers),
                 "arbiters": [settings.default_arbiter],

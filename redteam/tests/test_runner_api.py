@@ -222,6 +222,8 @@ def test_api_config_and_quota(store):
     cfg = c.get("/config").json()
     assert "endocrinology" in {s["key"] for s in cfg["specialties"]}
     assert cfg["limits"]["free_trial_limit"] == 100
+    catalog_specs = {m["spec"] for m in cfg["model_catalog"]}
+    assert "anthropic:claude-sonnet-5" in catalog_specs and "openai:gpt-5" in catalog_specs
     assert c.get("/quota/new@user.com").json()["remaining"] == 100
     assert c.get("/health").json()["ok"]
 
