@@ -1,0 +1,27 @@
+name: phenotype-ci
+
+# Tests for sauce.ai/phenotype. Scoped to phenotype/ so it stays independent of
+# the news pipeline and the other services.
+on:
+  push:
+    branches: [main]
+    paths: ["phenotype/**", ".github/workflows/phenotype-ci.yml"]
+  pull_request:
+    paths: ["phenotype/**", ".github/workflows/phenotype-ci.yml"]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: phenotype
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        # Pure logic + fake literature APIs + mock models; no network, no keys.
+        run: python -m pytest tests/ -q

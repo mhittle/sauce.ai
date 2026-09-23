@@ -42,6 +42,43 @@ Sort **Open** newest-first. **Completed** newest-first.
 
 ### 2026-09-23 — Deploy the redteam service on Railway + point `redteam.sauce.ai` at it
 **Status:** open · **PR:** #285 (merged; routing decided 2026-09-23) · **Reference:** `redteam/` (README.md, INSTALL.md)
+### 2026-09-23 — Deploy the sauce.ai/phenotype service + route `/phenotype/`
+**Status:** open · **PR:** #TBD (Phenotype — validated EHR phenotyping algorithms, branch `claude/gifted-heisenberg-rn4khq`) ·
+**Opened:** 2026-09-23 · **Reference:** `phenotype/` (README.md, INSTALL.md)
+
+The root landing page now has a **`card live` linking to `/phenotype/`**,
+which does not resolve until the service is deployed and routed. Standalone
+container (FastAPI + SQLite), independent of the news Flask app / cPanel
+prod — deploy it like `redteam/`.
+
+1. Deploy the container from `phenotype/`:
+   ```
+   cd phenotype
+   docker build -t sauce-phenotype .
+   docker run -d --name phenotype -p 8001:8000 \
+     -e ANTHROPIC_API_KEY=<key> \
+     -e PUBLIC_BASE_URL=https://sauce.ai/phenotype \
+     -e PHENOTYPE_CONTACT_EMAIL=<contact address for NCBI> \
+     -e SMTP_HOST=<relay> -e SMTP_USER=<user> -e SMTP_PASS=<pass> \
+     -v /srv/phenotype-data:/app/data \
+     sauce-phenotype
+   ```
+   (Railway: new service at `phenotype/railway.json`, same env vars, volume
+   at `/app/data`.) Optional: `NCBI_API_KEY` (raises PubMed rate limit).
+2. Route `https://sauce.ai/phenotype/` to the service **with the trailing
+   slash, stripping the prefix** (the form uses relative URLs), or use a
+   subdomain. Until then the landing-page card is a dead link.
+3. Smoke test: `GET /phenotype/health` → `{"ok": true}`; submit "multiple
+   sclerosis" with defaults; confirm the report lists the ≥3-claims-in-1-year
+   algorithm with its validation references and the SQL endpoint returns text.
+
+No migration on the news DB and no change to the news box's load-bearing
+state. The Anthropic account must hold credits (~40 model calls per job).
+
+
+### 2026-09-23 — Deploy the sauce.ai/redteam service + route `/redteam`
+**Status:** open · **PR:** #TBD (Redteam — clinical chatbot red-teaming, branch `claude/blissful-gauss-x9o83d`) ·
+**Opened:** 2026-09-23 · **Reference:** `redteam/` (README.md, INSTALL.md)
 
 The root landing card links to **`https://redteam.sauce.ai`** (decided:
 Railway host + subdomain, matching `sauce.ai/signal`). That subdomain does
