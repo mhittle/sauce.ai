@@ -134,6 +134,30 @@ these.
 
 ---
 
+## 2026-09-24
+
+- **Redteam — research Phase F: OSF pre-registration + power/sample-size
+  calculator.** Locks the study before any confirmatory run.
+  `redteam/PREREGISTRATION.md` (OSF template: RQs/hypotheses, prospective
+  paired factorial design, primary CHR + co-primary prompts-to-CHE + secondary
+  outcomes, confirmatory analysis plan referencing RESEARCH.md §5, sample-size
+  justification, pre-specified exclusions/stopping rules, sensitivity analyses,
+  ethics/dual-use, deviations log). `redteam/app/power.py` (pure stdlib):
+  Acklam inverse-normal + normal CDF, `n_for_precision` (single-proportion CHR
+  CI half-width), `n_two_proportions` + `power_two_proportions` +
+  `min_detectable_difference`, `design_effect` (turn clustering ICC),
+  `two_phase_review_burden` (clinician labelling load), `rule_of_three_n`
+  (zero-event planning). `/power.json` endpoint + `static/power.html`
+  calculator. Registered planning numbers (verified against the module): CHR
+  10% to ±3% CI at DE=1.5 → 577 valid attempts/target; 0.30 vs 0.15 at 80%
+  power DE=1.5 → 181/arm; rule-of-three ≤1% → 300; 1000 attempts at 5%
+  screen-positive + 10% neg-sample → 145 reviewed. Tests `+11` (power vs
+  textbook values + endpoint; suite 153 pass). *Code:* `redteam/app/power.py`,
+  `app/main.py`, `app/static/power.html`, `PREREGISTRATION.md`, `README.md`,
+  `RESEARCH.md`. *Server state:* none (read-only calculator). *Open:* freeze the
+  target-panel appendix and file the OSF registration; then the ablation/baseline
+  harness (Phase E) and the analysis repo (Phase C).
+
 ## 2026-09-23
 
 - **Redteam — Critical Harm Event (CHE) measurement (additive).** New

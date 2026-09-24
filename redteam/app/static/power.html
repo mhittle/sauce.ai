@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sample-size & power — sauce.ai/redteam</title>
+<style>
+:root{--bg:#fcfcfb;--fg:#0b0b0b;--muted:#52514e;--line:#e4e3de;--accent:#2a78d6;--card:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--fg:#f3f2ee;--muted:#a9a89f;--line:#33322e;--accent:#3987e5;--card:#232320}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:22px;margin:0 0 4px}.muted{color:var(--muted)}.small{font-size:13px}
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
+.hint{font-weight:400;color:var(--muted);font-size:12px}
+select,input{width:100%;padding:8px 10px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:7px;font:inherit}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:520px){.row{grid-template-columns:1fr}}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer;margin-top:16px}
+.out{margin-top:18px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px}
+.big{font-size:30px;font-weight:600}.k{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:8px}
+.err{color:#b3261e}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sample-size &amp; power</h1>
+  <p class="muted small">Planning for the Critical Harm study (see RESEARCH.md §4 / PREREGISTRATION.md). Design effect
+  for clustering (turns within conversations) is applied to every n.</p>
+
+  <label>What to compute</label>
+  <select id="mode">
+    <option value="precision">Precision — n for a target CHR CI half-width</option>
+    <option value="two_proportions">Two-proportion comparison — n per group</option>
+    <option value="mde">Minimum detectable difference — given n</option>
+    <option value="review_burden">Two-phase clinician review burden</option>
+    <option value="rule_of_three">Zero-event planning (rule of three)</option>
+  </select>
+
+  <div class="row">
+    <div data-m="precision"><label>Expected CHR (p) <span class="hint">0–1</span></label><input id="p" type="number" step="0.005" value="0.10"></div>
+    <div data-m="precision"><label>CI half-width</label><input id="half_width" type="number" step="0.005" value="0.03"></div>
+    <div data-m="two_proportions mde"><label>Reference proportion (p1)</label><input id="p1" type="number" step="0.01" value="0.30"></div>
+    <div data-m="two_proportions"><label>Comparator (p2)</label><input id="p2" type="number" step="0.01" value="0.15"></div>
+    <div data-m="two_proportions mde"><label>Alpha</label><input id="alpha" type="number" step="0.01" value="0.05"></div>
+    <div data-m="two_proportions mde"><label>Power</label><input id="power" type="number" step="0.05" value="0.80"></div>
+    <div data-m="mde"><label>n per group</label><input id="n_per_group" type="number" value="200"></div>
+    <div data-m="precision two_proportions mde"><label>Turns per conversation (m)</label><input id="cluster_size" type="number" step="0.5" value="6"></div>
+    <div data-m="precision two_proportions mde"><label>ICC <span class="hint">turn clustering</span></label><input id="icc" type="number" step="0.01" value="0.10"></div>
+    <div data-m="review_burden"><label>Valid attempts (n)</label><input id="n_valid" type="number" value="1000"></div>
+    <div data-m="review_burden"><label>Screen-positive rate</label><input id="screen_positive_rate" type="number" step="0.01" value="0.05"></div>
+    <div data-m="review_burden"><label>Negative sample rate</label><input id="neg_sample_rate" type="number" step="0.01" value="0.10"></div>
+    <div data-m="rule_of_three"><label>Target 95% upper bound</label><input id="target_upper" type="number" step="0.005" value="0.01"></div>
+  </div>
+
+  <button id="go">Compute</button>
+  <p id="err" class="err small"></p>
+  <div id="out" class="out" style="display:none"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const ALL=["p","half_width","p1","p2","alpha","power","n_per_group","cluster_size","icc","n_valid","screen_positive_rate","neg_sample_rate","target_upper"];
+function sync(){
+  const m=$('mode').value;
+  document.querySelectorAll('[data-m]').forEach(el=>el.style.display=el.dataset.m.split(' ').includes(m)?'':'none');
+}
+$('mode').onchange=sync; sync();
+function fmt(x){return x==null?'—':(typeof x==='number'?(Math.abs(x)<1&&x!==0?x.toFixed(4):x.toLocaleString()):x);}
+$('go').onclick=async()=>{
+  $('err').textContent='';
+  const m=$('mode').value; const q=new URLSearchParams({mode:m});
+  ALL.forEach(k=>{const el=$(k); if(el) q.set(k, el.value);});
+  let d; try{ const r=await fetch('/power.json?'+q); d=await r.json(); if(!r.ok){$('err').textContent=d.detail||'error';return;} }
+  catch(e){ $('err').textContent=String(e); return; }
+  const head={precision:['n','Attempts needed'],two_proportions:['total','Total attempts (both groups)'],
+    mde:['mde_abs','Min detectable difference'],review_burden:['expected_reviewed','Outputs to clinician-review'],
+    rule_of_three:['n','Attempts needed']}[m];
+  const cells=Object.entries(d).filter(([k])=>!k.startsWith('_')).map(([k,v])=>`<div><div class="k">${k}</div><div>${fmt(v)}</div></div>`).join('');
+  $('out').style.display='block';
+  $('out').innerHTML=`<div class="k">${head[1]}</div><div class="big">${fmt(d[head[0]])}</div><div class="grid">${cells}</div>`;
+};
+</script>
+</body>
+</html>

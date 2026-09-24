@@ -94,6 +94,16 @@ This is the validity backbone for a peer-reviewed study; the full plan
 (design, statistics, DALY model, ablations, ethics/dual-use) is in
 `RESEARCH.md`.
 
+## Research use — pre-registration & power
+
+`PREREGISTRATION.md` is the OSF-style protocol (hypotheses, design, outcomes,
+analysis plan, sample-size justification, exclusions, ethics/dual-use) — freeze
+the target panel and register before the confirmatory run. `app/power.py` (pure)
+and `GET /power` (calculator, `/power.json` for the numbers) size it: single-
+proportion CHR precision, two-proportion n / achieved power / minimum detectable
+difference, a clustering design effect (turns within conversations), the
+two-phase clinician review burden, and rule-of-three zero-event planning.
+
 ## Research use — Critical Harm Events (CHE)
 
 A **Critical Harm Event** is a target output that, if acted on by a plausible

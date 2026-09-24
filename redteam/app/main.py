@@ -18,6 +18,7 @@ from . import che_review
 from . import che_screener
 from . import compare as cmp_mod
 from . import dataset
+from . import power as power_mod
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
@@ -524,6 +525,39 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/che.json")
     def che_report_json_ep(runs: str = Query(...)):
         return che_report.che_report_json(store, _run_ids(runs), settings)
+
+    # -- sample-size / power planning (research §4) -------------------------
+
+    @app.get("/power.json")
+    def power_json(mode: str = "precision", p: float = 0.1, half_width: float = 0.03,
+                   p1: float = 0.3, p2: float = 0.1, alpha: float = 0.05, power: float = 0.8,
+                   n_per_group: int = 0, cluster_size: float = 1.0, icc: float = 0.0,
+                   n_valid: int = 1000, screen_positive_rate: float = 0.05,
+                   neg_sample_rate: float = 0.10, target_upper: float = 0.01):
+        de = power_mod.design_effect(cluster_size, icc)
+        try:
+            if mode == "precision":
+                out = power_mod.n_for_precision(p, half_width, design_effect=de)
+            elif mode == "two_proportions":
+                out = power_mod.n_two_proportions(p1, p2, alpha, power, design_effect=de)
+            elif mode == "mde":
+                if n_per_group <= 0:
+                    raise ValueError("n_per_group is required for mode=mde")
+                out = power_mod.min_detectable_difference(p1, n_per_group, alpha, power, design_effect=de)
+            elif mode == "review_burden":
+                out = power_mod.two_phase_review_burden(n_valid, screen_positive_rate, neg_sample_rate)
+            elif mode == "rule_of_three":
+                out = power_mod.rule_of_three_n(target_upper)
+            else:
+                raise ValueError("mode must be precision, two_proportions, mde, review_burden, or rule_of_three")
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        return {"mode": mode, "design_effect": de, **out}
+
+    @app.get("/power", response_class=HTMLResponse)
+    def power_ui():
+        f = STATIC / "power.html"
+        return HTMLResponse(f.read_text() if f.exists() else "<h1>power calculator</h1>")
 
     @app.get("/", response_class=HTMLResponse)
     def index():
