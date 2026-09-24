@@ -198,7 +198,12 @@ document); generalization from the target panel to the deployed ecosystem.
 - **Phase D — DALY module** — GBD weights + PSA in the app/report.
 - **Phase E — Ablation harness** — toggle orchestrator components across
   matched runs and log deltas (§7).
-- **Phase F — Pre-registration draft + power calculator** (§4).
+- **Phase F — Pre-registration + power calculator** *(landed)* —
+  `PREREGISTRATION.md` (OSF-style: hypotheses, design, outcomes, analysis plan,
+  sample-size justification, exclusions, ethics/dual-use) and `app/power.py` +
+  `/power` calculator (single-proportion precision, two-proportion n / power /
+  MDE, clustering design effect, two-phase review burden, rule-of-three). Freeze
+  the target-panel appendix and register on OSF before the confirmatory run.
 
 - **Critical Harm Event (CHE) measure** *(landed)* — an additive,
   design-based headline metric: a screener → two-phase clinician adjudication
