@@ -110,3 +110,15 @@ def test_devices_api(tmp_path, monkeypatch):
     assert client.get("/api/devices/K000001").status_code == 404
     rows = client.get("/api/conditions").json()
     assert rows[0]["fda_denovo_count"] == 1
+
+
+def test_crawl_datasets_new_first(tmp_path):
+    client, store, _ = make(tmp_path, llm=False)
+    old, _ = store.upsert_dataset({**RECORD, "url": "https://a.org/old", "title": "Old"})
+    new, _ = store.upsert_dataset({**RECORD, "url": "https://a.org/new", "title": "New"})
+    cid = store.create_crawl("query", "ms mri", 5)
+    store.add_crawl_hit(cid, old, False)
+    store.add_crawl_hit(cid, new, True)
+    body = client.get(f"/api/crawls/{cid}/datasets").json()
+    assert [(d["title"], d["is_new"]) for d in body["items"]] == [("New", True), ("Old", False)]
+    assert client.get("/api/crawls/999/datasets").status_code == 404
