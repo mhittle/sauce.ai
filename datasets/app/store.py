@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zlib
 import re
 import sqlite3
 import threading
@@ -138,6 +139,69 @@ CREATE TABLE IF NOT EXISTS dataset_articles (
 );
 CREATE INDEX IF NOT EXISTS dataset_articles_article ON dataset_articles(article_id);
 
+-- FDA device submissions (510(k) and De Novo, both from openFDA's 510k
+-- endpoint; De Novo numbers start with DEN) matched to conditions.
+CREATE TABLE IF NOT EXISTS devices (
+    k_number              TEXT PRIMARY KEY,
+    submission_type       TEXT NOT NULL,          -- 510k | denovo
+    device_name           TEXT,
+    applicant             TEXT,
+    contact               TEXT,
+    address               TEXT,
+    country_code          TEXT,
+    decision_date         TEXT,
+    decision_code         TEXT,
+    decision_description  TEXT,
+    date_received         TEXT,
+    product_code          TEXT,
+    generic_name          TEXT,
+    device_class          TEXT,
+    regulation_number     TEXT,
+    medical_specialty     TEXT,
+    advisory_committee    TEXT,
+    clearance_type        TEXT,
+    statement_or_summary  TEXT,
+    third_party_flag      TEXT,
+    expedited_review_flag TEXT,
+    raw                   TEXT,
+    updated_at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS devices_decision ON devices(decision_date);
+
+CREATE TABLE IF NOT EXISTS condition_devices (
+    condition TEXT NOT NULL,
+    k_number  TEXT NOT NULL REFERENCES devices(k_number) ON DELETE CASCADE,
+    PRIMARY KEY (condition, k_number)
+);
+
+-- The public summary / decision-summary PDF of each submission.
+CREATE TABLE IF NOT EXISTS device_docs (
+    k_number     TEXT PRIMARY KEY REFERENCES devices(k_number) ON DELETE CASCADE,
+    status       TEXT NOT NULL,          -- done | failed | none
+    requested    INTEGER NOT NULL DEFAULT 0,
+    pdf_url      TEXT,
+    pages        INTEGER,
+    text         BLOB,                   -- zlib-compressed extracted text
+    predicates   TEXT NOT NULL DEFAULT '[]',
+    extracted    TEXT,                   -- LLM structured summary (JSON)
+    extracted_at TEXT,
+    error        TEXT,
+    fetched_at   TEXT
+);
+
+-- Catalog datasets / papers referenced in a submission's summary.
+CREATE TABLE IF NOT EXISTS device_links (
+    k_number   TEXT NOT NULL REFERENCES devices(k_number) ON DELETE CASCADE,
+    dataset_id TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    article_id TEXT NOT NULL DEFAULT '',
+    via        TEXT NOT NULL,            -- alias | doi | title
+    matched    TEXT,
+    snippet    TEXT,
+    PRIMARY KEY (k_number, dataset_id, article_id)
+);
+CREATE INDEX IF NOT EXISTS device_links_dataset ON device_links(dataset_id);
+CREATE INDEX IF NOT EXISTS device_links_article ON device_links(article_id);
+
 CREATE TABLE IF NOT EXISTS literature_state (
     dataset_id   TEXT PRIMARY KEY REFERENCES datasets(id) ON DELETE CASCADE,
     status       TEXT NOT NULL,               -- active | retry | complete | unresolved
@@ -200,6 +264,22 @@ class Store:
         with self._conn() as c:
             c.execute("PRAGMA journal_mode=WAL")
             c.executescript(SCHEMA)
+            self._migrate(c)
+
+    @staticmethod
+    def _migrate(c: sqlite3.Connection) -> None:
+        """Additive column migrations for catalogs created by older versions."""
+        have = {r[1] for r in c.execute("PRAGMA table_info(conditions)")}
+        for col, decl in (("fda_denovo_count", "INTEGER"), ("fda_synced_at", "TEXT"),
+                          ("fda_devices_capped", "INTEGER NOT NULL DEFAULT 0")):
+            if col not in have:
+                c.execute(f"ALTER TABLE conditions ADD COLUMN {col} {decl}")
+        have = {r[1] for r in c.execute("PRAGMA table_info(devices)")}
+        for col, decl in (("is_software", "INTEGER NOT NULL DEFAULT 0"),
+                          ("is_ai", "INTEGER NOT NULL DEFAULT 0"), ("ai_source", "TEXT")):
+            if col not in have:
+                c.execute(f"ALTER TABLE devices ADD COLUMN {col} {decl}")
+        c.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
 
     # ------------------------------------------------------------ plumbing
     @contextmanager
@@ -315,6 +395,10 @@ class Store:
             d["n_articles"] = c.execute(
                 "SELECT COUNT(*) FROM dataset_articles WHERE dataset_id = ? AND is_descriptor = 0",
                 (ds_id,)).fetchone()[0]
+            d["devices"] = [dict(r) for r in c.execute(
+                "SELECT DISTINCT v.k_number, v.submission_type, v.device_name, v.applicant,"
+                " v.decision_date FROM device_links l JOIN devices v ON v.k_number = l.k_number"
+                " WHERE l.dataset_id = ? ORDER BY v.decision_date DESC", (ds_id,))]
             d["files"] = [dict(r) for r in c.execute(
                 "SELECT id, url, filename, bytes, sha256, content_type, status, note,"
                 " fetched_at FROM files WHERE dataset_id = ? ORDER BY id", (ds_id,))]
@@ -446,7 +530,17 @@ class Store:
         having = "HAVING n_datasets > 0" if only_with_datasets else ""
         with self._conn() as c:
             rows = c.execute(f"""
-                SELECT c.name, c.display, c.fda_510k_count, c.fda_checked_at,
+                SELECT c.name, c.display, c.fda_510k_count, c.fda_denovo_count,
+                       c.fda_checked_at,
+                       (SELECT COUNT(*) FROM condition_devices cd JOIN devices v
+                          ON v.k_number = cd.k_number WHERE cd.condition = c.name
+                          AND v.is_software = 1 AND v.submission_type = '510k') AS sw_510k,
+                       (SELECT COUNT(*) FROM condition_devices cd JOIN devices v
+                          ON v.k_number = cd.k_number WHERE cd.condition = c.name
+                          AND v.is_software = 1 AND v.submission_type = 'denovo') AS sw_denovo,
+                       (SELECT COUNT(*) FROM condition_devices cd JOIN devices v
+                          ON v.k_number = cd.k_number WHERE cd.condition = c.name
+                          AND v.is_ai = 1) AS n_ai,
                        c.synonyms, COUNT(dc.dataset_id) AS n_datasets,
                        SUM(CASE WHEN d.access_type = 'open' THEN 1 ELSE 0 END) AS n_open,
                        SUM(CASE WHEN d.download_status IN ('downloaded', 'partial')
@@ -455,7 +549,8 @@ class Store:
                 LEFT JOIN dataset_conditions dc ON dc.condition = c.name
                 LEFT JOIN datasets d ON d.id = dc.dataset_id
                 GROUP BY c.name {having}
-                ORDER BY COALESCE(c.fda_510k_count, -1) DESC, n_datasets DESC, c.name
+                ORDER BY COALESCE(c.fda_510k_count, -1) DESC,
+                         COALESCE(c.fda_denovo_count, 0) DESC, n_datasets DESC, c.name
             """).fetchall()
         out = []
         for r in rows:
@@ -739,4 +834,303 @@ class Store:
                     "SELECT COUNT(*) FROM datasets d LEFT JOIN literature_state l"
                     " ON l.dataset_id = d.id WHERE l.dataset_id IS NULL"),
                 "by_status": by_status,
+            }
+
+    # ------------------------------------------------------------ FDA devices
+    _DEVICE_COLS = ("submission_type", "device_name", "applicant", "contact", "address",
+                    "country_code", "decision_date", "decision_code", "decision_description",
+                    "date_received", "product_code", "generic_name", "device_class",
+                    "regulation_number", "medical_specialty", "advisory_committee",
+                    "clearance_type", "statement_or_summary", "third_party_flag",
+                    "expedited_review_flag", "raw")
+
+    def upsert_devices(self, devices: list[dict]) -> None:
+        """Insert/refresh submissions. ``is_software`` comes from the record;
+        ``is_ai`` only ever goes up (it is also set by the FDA AI list and by
+        the summary PDF text, which a plain record refresh must not undo)."""
+        cols = self._DEVICE_COLS
+        ts = now_iso()
+        with self._write() as c:
+            c.executemany(
+                f"INSERT INTO devices (k_number, updated_at, is_software, {', '.join(cols)})"
+                f" VALUES (?, ?, ?, {', '.join('?' * len(cols))}) ON CONFLICT (k_number) DO UPDATE"
+                " SET updated_at = excluded.updated_at,"
+                " is_software = MAX(devices.is_ai, excluded.is_software), "
+                + ", ".join(f"{k} = COALESCE(excluded.{k}, devices.{k})" for k in cols),
+                [(d["k_number"], ts, int(bool(d.get("is_software"))), *[d.get(k) for k in cols])
+                 for d in devices])
+
+    def insert_device_stubs(self, stubs: list[dict]) -> None:
+        cols = ("submission_type", "device_name", "applicant", "decision_date",
+                "advisory_committee", "product_code")
+        with self._write() as c:
+            c.executemany(
+                f"INSERT OR IGNORE INTO devices (k_number, updated_at, is_software,"
+                f" {', '.join(cols)}) VALUES (?, ?, 1, {', '.join('?' * len(cols))})",
+                [(d["k_number"], now_iso(), *[d.get(k) for k in cols]) for d in stubs])
+
+    def reclassify_software(self, classify) -> int:
+        """Re-run the software heuristic over every stored record (used once
+        after upgrading, since older rows predate the flag)."""
+        with self._conn() as c:
+            rows = [dict(r) for r in c.execute(
+                "SELECT k_number, device_name, generic_name, regulation_number FROM devices")]
+        hits = {r["k_number"] for r in rows if classify(r)}
+        with self._write() as c:
+            # AI-flagged rows stay software whatever the name says.
+            c.executemany("UPDATE devices SET is_software = CASE WHEN is_ai = 1 THEN 1"
+                          " ELSE ? END WHERE k_number = ?",
+                          [(int(r["k_number"] in hits), r["k_number"]) for r in rows])
+        return len(hits)
+
+    def mark_ai(self, k_numbers: list[str], source: str) -> None:
+        """Flag submissions as AI-enabled (and therefore software). The FDA
+        list outranks a summary-text match as the recorded source."""
+        with self._write() as c:
+            c.executemany(
+                "UPDATE devices SET is_ai = 1, is_software = 1, ai_source = CASE"
+                " WHEN ai_source = 'fda_list' THEN ai_source ELSE ? END WHERE k_number = ?",
+                [(source, k) for k in k_numbers])
+
+    def kv_get(self, k: str) -> str | None:
+        with self._conn() as c:
+            row = c.execute("SELECT v FROM kv WHERE k = ?", (k,)).fetchone()
+        return row["v"] if row else None
+
+    def kv_set(self, k: str, v: str) -> None:
+        with self._write() as c:
+            c.execute("INSERT INTO kv VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v",
+                      (k, v))
+
+    def missing_devices(self, k_numbers: list[str]) -> list[str]:
+        """Numbers with no openFDA-backed record yet (stub rows count as missing)."""
+        if not k_numbers:
+            return []
+        with self._conn() as c:
+            have = {r["k_number"] for r in c.execute(
+                f"SELECT k_number FROM devices WHERE raw IS NOT NULL AND k_number IN"
+                f" ({','.join('?' * len(k_numbers))})", k_numbers)}
+        return [k for k in k_numbers if k not in have]
+
+    def set_condition_devices(self, name: str, k_numbers: list[str], n_510k: int,
+                              n_denovo: int, capped: bool = False) -> None:
+        key = normalize_condition(name)
+        with self._write() as c:
+            c.execute("DELETE FROM condition_devices WHERE condition = ?", (key,))
+            c.executemany("INSERT OR IGNORE INTO condition_devices VALUES (?, ?)",
+                          [(key, k) for k in k_numbers])
+            c.execute("UPDATE conditions SET fda_510k_count = ?, fda_denovo_count = ?,"
+                      " fda_checked_at = ?, fda_synced_at = ?, fda_devices_capped = ?"
+                      " WHERE name = ?",
+                      (n_510k, n_denovo, now_iso(), now_iso(), int(capped), key))
+
+    def condition_due_for_device_sync(self, days: int) -> str | None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        with self._conn() as c:
+            row = c.execute("SELECT name FROM conditions WHERE fda_synced_at IS NULL"
+                            " OR fda_synced_at < ? ORDER BY fda_synced_at IS NOT NULL,"
+                            " fda_synced_at LIMIT 1", (cutoff,)).fetchone()
+        return row["name"] if row else None
+
+    _DEVICE_SORTS = {"decision_date": "d.decision_date", "date_received": "d.date_received",
+                     "applicant": "d.applicant COLLATE NOCASE",
+                     "device_name": "d.device_name COLLATE NOCASE", "k_number": "d.k_number",
+                     "type": "d.submission_type", "product_code": "d.product_code",
+                     "links": "n_links"}
+
+    def list_devices(self, condition: str | None = None, submission_type: str | None = None,
+                     q: str | None = None, dataset_id: str | None = None,
+                     linked_only: bool = False, category: str | None = None,
+                     sort: str = "decision_date",
+                     direction: str = "desc", limit: int = 50, offset: int = 0) -> dict:
+        where, params = ["1=1"], []
+        join = ""
+        if condition:
+            join += " JOIN condition_devices cd ON cd.k_number = d.k_number AND cd.condition = ?"
+            params.append(normalize_condition(condition))
+        if dataset_id:
+            where.append("d.k_number IN (SELECT k_number FROM device_links WHERE dataset_id = ?)")
+            params.append(dataset_id)
+        if submission_type in ("510k", "denovo", "pma"):
+            where.append("d.submission_type = ?")
+            params.append(submission_type)
+        if q:
+            where.append("(d.device_name LIKE ? OR d.applicant LIKE ? OR d.k_number LIKE ?"
+                         " OR d.product_code LIKE ? OR d.generic_name LIKE ?)")
+            params += [f"%{q}%"] * 5
+        if linked_only:
+            where.append("d.k_number IN (SELECT k_number FROM device_links)")
+        if category == "software":
+            where.append("d.is_software = 1")
+        elif category == "ai":
+            where.append("d.is_ai = 1")
+        order = self._DEVICE_SORTS.get(sort, "d.decision_date")
+        direction = "ASC" if str(direction).lower() == "asc" else "DESC"
+        base = f"FROM devices d{join} WHERE {' AND '.join(where)}"
+        with self._conn() as c:
+            total = c.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
+            facets = dict(c.execute(
+                f"SELECT COALESCE(SUM(d.is_software), 0) AS software,"
+                f" COALESCE(SUM(d.is_ai), 0) AS ai {base}", params).fetchone())
+            rows = c.execute(
+                f"""SELECT d.k_number, d.submission_type, d.device_name, d.applicant,
+                       d.decision_date, d.date_received, d.decision_description,
+                       d.product_code, d.generic_name, d.device_class, d.clearance_type,
+                       d.country_code, d.is_software, d.is_ai, d.ai_source,
+                       (SELECT COUNT(*) FROM device_links l WHERE l.k_number = d.k_number)
+                         AS n_links,
+                       (SELECT status FROM device_docs x WHERE x.k_number = d.k_number)
+                         AS doc_status
+                {base} ORDER BY {order} {direction}, d.k_number DESC LIMIT ? OFFSET ?""",
+                [*params, limit, offset]).fetchall()
+        return {"total": total, "facets": facets, "items": [dict(r) for r in rows]}
+
+    def get_device(self, k: str) -> dict | None:
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM devices WHERE k_number = ?", (k,)).fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            d["raw"] = json.loads(d["raw"]) if d["raw"] else None
+            d["conditions"] = [r["condition"] for r in c.execute(
+                "SELECT condition FROM condition_devices WHERE k_number = ?", (k,))]
+            doc = c.execute("SELECT k_number, status, requested, pdf_url, pages, predicates,"
+                            " extracted, extracted_at, error, fetched_at FROM device_docs"
+                            " WHERE k_number = ?", (k,)).fetchone()
+            d["doc"] = None
+            if doc:
+                d["doc"] = dict(doc)
+                d["doc"]["predicates"] = json.loads(doc["predicates"])
+                d["doc"]["extracted"] = json.loads(doc["extracted"]) if doc["extracted"] else None
+                known = {r["k_number"] for r in c.execute(
+                    f"SELECT k_number FROM devices WHERE k_number IN"
+                    f" ({','.join('?' * len(d['doc']['predicates']))})",
+                    d["doc"]["predicates"])} if d["doc"]["predicates"] else set()
+                d["doc"]["predicates"] = [{"k_number": p, "known": p in known}
+                                          for p in d["doc"]["predicates"]]
+            d["links"] = [dict(r) for r in c.execute(
+                """SELECT l.dataset_id, ds.title AS dataset_title, l.article_id,
+                          a.title AS article_title, a.url AS article_url, l.via, l.matched,
+                          l.snippet
+                   FROM device_links l JOIN datasets ds ON ds.id = l.dataset_id
+                   LEFT JOIN articles a ON a.id = l.article_id
+                   WHERE l.k_number = ? ORDER BY l.article_id = '' DESC, ds.title""", (k,))]
+        return d
+
+    def device_text(self, k: str) -> str | None:
+        with self._conn() as c:
+            row = c.execute("SELECT text FROM device_docs WHERE k_number = ?", (k,)).fetchone()
+        return zlib.decompress(row["text"]).decode() if row and row["text"] else None
+
+    def save_device_doc(self, k: str, status: str, pdf_url: str | None = None,
+                        pages: int | None = None, text: str | None = None,
+                        predicates: list[str] | None = None, error: str | None = None) -> None:
+        blob = zlib.compress(text.encode()) if text else None
+        with self._write() as c:
+            c.execute(
+                "INSERT INTO device_docs (k_number, status, pdf_url, pages, text, predicates,"
+                " error, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                " ON CONFLICT (k_number) DO UPDATE SET status = excluded.status,"
+                " pdf_url = excluded.pdf_url, pages = excluded.pages, text = excluded.text,"
+                " predicates = excluded.predicates, error = excluded.error,"
+                " fetched_at = excluded.fetched_at",
+                (k, status, pdf_url, pages, blob, json.dumps(predicates or []), error, now_iso()))
+
+    def save_device_extraction(self, k: str, extracted: dict | None, error: str | None = None) -> None:
+        with self._write() as c:
+            c.execute("UPDATE device_docs SET extracted = ?, extracted_at = ?, requested = 0,"
+                      " error = COALESCE(?, error) WHERE k_number = ?",
+                      (json.dumps(extracted) if extracted else None, now_iso(), error, k))
+
+    def request_device_analysis(self, k: str) -> None:
+        """Move a submission to the front of the document worker's queue."""
+        with self._write() as c:
+            c.execute("INSERT INTO device_docs (k_number, status, requested) VALUES (?, 'queued', 1)"
+                      " ON CONFLICT (k_number) DO UPDATE SET requested = 1", (k,))
+
+    def next_device_doc(self, want_extraction: bool) -> tuple[str, str] | None:
+        """(k_number, job) for the document worker: 'fetch' a summary PDF not
+        yet read, or 'extract' (LLM summary) for one a user opened. User
+        requests first, then submissions under conditions that have datasets,
+        then everything else, newest decisions first."""
+        with self._conn() as c:
+            reqs = c.execute("SELECT k_number, status, extracted FROM device_docs"
+                             " WHERE requested = 1 ORDER BY fetched_at").fetchall()
+        stale = []
+        for r in reqs:
+            if r["status"] == "queued":
+                return r["k_number"], "fetch"
+            if r["status"] == "done" and want_extraction and not r["extracted"]:
+                return r["k_number"], "extract"
+            stale.append(r["k_number"])  # nothing left to do for this request
+        if stale:
+            with self._write() as c:
+                c.executemany("UPDATE device_docs SET requested = 0 WHERE k_number = ?",
+                              [(k,) for k in stale])
+        with self._conn() as c:
+            row = c.execute(
+                """SELECT d.k_number FROM devices d
+                   LEFT JOIN device_docs x ON x.k_number = d.k_number
+                   WHERE x.k_number IS NULL OR x.status = 'queued'
+                   ORDER BY EXISTS (SELECT 1 FROM condition_devices cd
+                                    JOIN dataset_conditions dc ON dc.condition = cd.condition
+                                    WHERE cd.k_number = d.k_number) DESC,
+                            d.decision_date DESC LIMIT 1""").fetchone()
+        return (row["k_number"], "fetch") if row else None
+
+    def link_targets(self) -> dict:
+        """What a summary PDF is matched against: per-dataset aliases (from the
+        literature linker, else a distinctive title) and descriptor papers."""
+        with self._conn() as c:
+            ds = c.execute("SELECT d.id, d.title, l.aliases, l.descriptors FROM datasets d"
+                           " LEFT JOIN literature_state l ON l.dataset_id = d.id").fetchall()
+        aliases: list[tuple[str, str]] = []
+        titles: list[tuple[str, str, str]] = []
+        for r in ds:
+            names = json.loads(r["aliases"]) if r["aliases"] else []
+            if not names and len(r["title"].split()) >= 2 and len(r["title"]) >= 10:
+                names = [r["title"]]
+            aliases += [(r["id"], a) for a in names]
+            for dsc in json.loads(r["descriptors"]) if r["descriptors"] else []:
+                if dsc.get("title") and len(dsc["title"]) >= 30:
+                    titles.append((r["id"], dsc["article_id"], dsc["title"]))
+        return {"aliases": aliases, "titles": titles}
+
+    def datasets_for_article(self, article_id: str) -> list[str]:
+        with self._conn() as c:
+            return [r["dataset_id"] for r in c.execute(
+                "SELECT dataset_id FROM dataset_articles WHERE article_id = ?", (article_id,))]
+
+    def replace_device_links(self, k: str, links: list[dict]) -> None:
+        with self._write() as c:
+            c.execute("DELETE FROM device_links WHERE k_number = ?", (k,))
+            c.executemany(
+                "INSERT OR IGNORE INTO device_links (k_number, dataset_id, article_id, via,"
+                " matched, snippet) VALUES (?, ?, ?, ?, ?, ?)",
+                [(k, l["dataset_id"], l.get("article_id") or "", l["via"], l.get("matched"),
+                  l.get("snippet")) for l in links])
+
+    def devices_for_articles(self, article_ids: list[str]) -> dict[str, list[str]]:
+        if not article_ids:
+            return {}
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT article_id, k_number FROM device_links WHERE article_id IN"
+                f" ({','.join('?' * len(article_ids))}) ORDER BY k_number", article_ids).fetchall()
+        out: dict[str, list[str]] = {}
+        for r in rows:
+            out.setdefault(r["article_id"], []).append(r["k_number"])
+        return out
+
+    def device_summary(self) -> dict:
+        with self._conn() as c:
+            one = lambda sql: c.execute(sql).fetchone()[0]  # noqa: E731
+            return {
+                "devices": one("SELECT COUNT(*) FROM devices"),
+                "denovo": one("SELECT COUNT(*) FROM devices WHERE submission_type = 'denovo'"),
+                "software": one("SELECT COUNT(*) FROM devices WHERE is_software = 1"),
+                "ai": one("SELECT COUNT(*) FROM devices WHERE is_ai = 1"),
+                "docs_read": one("SELECT COUNT(*) FROM device_docs WHERE status = 'done'"),
+                "docs_extracted": one("SELECT COUNT(*) FROM device_docs WHERE extracted IS NOT NULL"),
+                "linked": one("SELECT COUNT(DISTINCT k_number) FROM device_links"),
             }

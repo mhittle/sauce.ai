@@ -36,3 +36,13 @@ class FakeClient:
         if self.script:
             return self.script.pop(0)
         return response([text("done")], "end_turn")
+
+
+def fake_refresh(counts):
+    """Stand-in for fda.refresh_condition (openFDA device sync): counts is a
+    callable name -> 510(k) count."""
+    def refresh(store, name, session=None):
+        n = counts(name)
+        store.set_condition_devices(name, [], n, 0)
+        return n
+    return refresh

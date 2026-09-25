@@ -61,6 +61,19 @@ class Settings:
     # A name alias matching more papers than this is too generic; keep its
     # top-cited page only. 0 = no limit.
     lit_max_mention_hits: int = _int("DATASETS_LIT_MAX_MENTION_HITS", 20000)
+    # FDA devices: openFDA key raises the 1,000 requests/day anonymous limit.
+    openfda_api_key: str | None = os.environ.get("OPENFDA_API_KEY")
+    devices_enabled: bool = _bool("DATASETS_DEVICES", True)
+    fda_max_devices_per_condition: int = _int("DATASETS_FDA_MAX_DEVICES", 5000)
+    device_interval_sec: float = float(_int("DATASETS_DEVICE_INTERVAL_SEC", 3))
+    # LLM summaries of submission PDFs: "on_demand" (when a user opens one),
+    # "all" (background, every submission — costs scale with the device count),
+    # or "off".
+    device_llm: str = os.environ.get("DATASETS_DEVICE_LLM", "on_demand")
+    # FDA's "AI-Enabled Medical Devices" list (xlsx); synced weekly. The media
+    # id changes when FDA republishes — override here if the default 404s.
+    fda_ai_list_url: str = os.environ.get(
+        "DATASETS_FDA_AI_LIST_URL", "https://www.fda.gov/media/178540/download?attachment")
 
     @property
     def db_path(self) -> Path:

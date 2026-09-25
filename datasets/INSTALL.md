@@ -48,6 +48,7 @@ docker run -p 8000:8000 -v "$PWD/datasets/data:/data" -e ANTHROPIC_API_KEY sauce
    | `DATASETS_DATA_DIR` | `/data` (already the image default; set it anyway) |
    | `DATASETS_MAX_CONCURRENT_CRAWLS` | `1` to start (cost control) |
    | `OPENALEX_API_KEY` | optional, free from openalex.org — improves paper linking |
+   | `OPENFDA_API_KEY` | optional, free from open.fda.gov — lifts the 1,000 requests/day limit |
 
    Everything else has defaults; see `.env.example` (model, effort, crawl
    length, swarm size, download caps).
