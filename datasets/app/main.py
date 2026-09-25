@@ -172,6 +172,20 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         c["active"] = crawl_id in manager.active()
         return c
 
+    @app.get("/api/crawls/{crawl_id}/datasets")
+    def crawl_datasets(crawl_id: int):
+        """Dataset cards a crawl recorded (new ones first, then updated), each
+        flagged is_new — what the crawl found, in the order it found them."""
+        c = store.get_crawl(crawl_id)
+        if not c:
+            raise HTTPException(404, "crawl not found")
+        new = set(c["new_hits"])
+        ordered = [i for i in c["hits"] if i in new] + [i for i in c["hits"] if i not in new]
+        items = store.get_datasets(ordered)
+        for d in items:
+            d["is_new"] = d["id"] in new
+        return {"crawl_id": crawl_id, "status": c["status"], "items": items}
+
     @app.post("/api/crawls/{crawl_id}/cancel")
     def cancel_crawl(crawl_id: int):
         if not manager.cancel(crawl_id):

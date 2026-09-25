@@ -542,6 +542,9 @@ function route() {
   } else if (h.startsWith("#/device/")) {
     show("device", false);
     loadDevice(decodeURIComponent(h.slice(9))).catch(e => banner(e.message));
+  } else if (h.startsWith("#/crawl/")) {
+    show("crawl", false);
+    loadCrawl(decodeURIComponent(h.slice(8))).catch(e => banner(e.message));
   } else if (h.startsWith("#/dataset/")) {
     show("dataset", false);
     loadDataset(decodeURIComponent(h.slice(10))).catch(e => banner(e.message));
@@ -565,14 +568,76 @@ async function loadCrawls() {
       td.append(b);
     }
     tr.append(td);
-    tr.onclick = async () => {
-      const d = await api(`/api/crawls/${c.id}`);
-      const log = $("#crawl-log"); log.classList.remove("hidden");
-      log.textContent = d.log.map(l => `${l.at}  ${l.msg}`).join("\n") || "(no log yet)";
-    };
+    tr.onclick = () => { location.hash = `#/crawl/${c.id}`; };
     return tr;
   }));
 }
+
+// One crawl: header, plan, the cards it found (new first), and its log.
+let crawlPoll = null;
+async function loadCrawl(id) {
+  clearTimeout(crawlPoll);
+  const [c, found] = await Promise.all([api(`/api/crawls/${id}`), api(`/api/crawls/${id}/datasets`)]);
+  if (location.hash !== `#/crawl/${id}`) return;
+  const running = c.status === "running" || c.status === "queued";
+  const back = el("a", { href: "#" }, "← Back"); back.onclick = e => { e.preventDefault(); history.back(); };
+  const head = el("div", { class: "dev-head" });
+  head.append(back, el("h2", {}, c.query ? `Crawl #${c.id}: “${c.query}”` : `Crawl #${c.id}: all conditions`));
+  const sub = el("div", { class: "sub" });
+  sub.textContent = [`${c.mode} crawl`, c.status, `started ${ago(c.started_at)}`, `${c.minutes} min budget`,
+    `${c.hits.length} datasets found (${c.new_hits.length} new)`,
+    `${c.input_tokens.toLocaleString()} in / ${c.output_tokens.toLocaleString()} out tokens`].join(" · ");
+  head.append(sub);
+  if (running) {
+    const stop = el("button", { class: "btn link" }, "Stop crawl");
+    stop.onclick = () => api(`/api/crawls/${id}/cancel`, { method: "POST" }).then(() => loadCrawl(id)).catch(() => {});
+    head.append(stop);
+  }
+  if (c.error) head.append(el("p", { class: "muted small" }, `Error: ${c.error}`));
+  if (c.query) {
+    const row = el("div", { class: "small" });
+    row.append(el("a", { href: `?q=${encodeURIComponent(c.query)}` }, "Open as a search"));
+    head.append(row);
+  }
+  const parts = [head];
+
+  if (c.plan) {
+    const p = el("div", { class: "panel" }); p.style.marginTop = "12px";
+    p.append(el("h3", {}, "Plan"));
+    if (c.plan.summary) p.append(el("p", { class: "small" }, c.plan.summary));
+    const conds = (c.plan.conditions || []).map(x => x.name).filter(Boolean);
+    if (conds.length) {
+      const cl = el("div", { class: "chip-links" });
+      conds.forEach(n => cl.append(el("a", { href: `#/devices?condition=${encodeURIComponent(n)}` }, n)));
+      p.append(cl);
+    }
+    const ul = el("ul", { class: "small" });
+    (c.plan.angles || []).forEach(a => ul.append(el("li", {}, `${a.focus}: ${a.instructions}`)));
+    if (ul.children.length) p.append(ul);
+    parts.push(p);
+  }
+
+  const meta = el("p", { class: "muted small" });
+  meta.textContent = found.items.length ? `${found.items.length} dataset cards — new finds first` + (running ? " (updating while the crawl runs)" : "")
+    : running ? "No datasets recorded yet — cards appear here as the agents find them." : "This crawl recorded no datasets.";
+  const cards = el("div", { class: "cards" });
+  state.newIds = new Set(found.items.filter(d => d.is_new).map(d => d.id));
+  found.items.forEach(d => cards.append(card(d, true)));
+  parts.push(meta, cards);
+
+  const det = el("details", { class: "panel" }); det.style.marginTop = "14px";
+  det.append(el("summary", {}, `Agent log (${c.log.length} lines)`));
+  const pre = el("pre", { class: "log" });
+  pre.textContent = c.log.map(l => `${l.at}  ${l.msg}`).join("\n") || "(no log yet)";
+  det.append(pre);
+  if (crawlLogOpen) det.open = true;
+  det.addEventListener("toggle", () => { crawlLogOpen = det.open; });
+  parts.push(det);
+
+  $("#crawl").replaceChildren(...parts);
+  if (running) crawlPoll = setTimeout(() => loadCrawl(id).catch(() => {}), 4000);
+}
+let crawlLogOpen = false;
 
 // ------------------------------------------------------------------ chrome
 async function refreshStats() {
@@ -590,7 +655,7 @@ async function refreshStats() {
 
 function show(view, clearHash = true) {
   if (clearHash && location.hash) history.pushState(null, "", location.pathname + location.search);
-  const tabFor = { device: "devices", dataset: "search" }[view] || view;
+  const tabFor = { device: "devices", dataset: "search", crawl: "crawls" }[view] || view;
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === tabFor));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("hidden", v.id !== `view-${view}`));
   if (view === "directory") loadDirectory();
