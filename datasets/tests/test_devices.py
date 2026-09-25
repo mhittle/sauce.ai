@@ -48,7 +48,7 @@ class Session:
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(devmod, "PAGE", 2)
     settings = Settings(data_dir=tmp_path, device_interval_sec=0, openfda_api_key=None,
-                        fda_ai_list_url="")
+                        fda_ai_list_url="", device_mapping=False)
     store = Store(settings.db_path)
     store.upsert_condition("pneumothorax", fda_terms=["chest x-ray triage", "ms"])
     return settings, store
@@ -223,7 +223,7 @@ def test_ai_list_sync_flags_and_enriches(env):
     assert store.get_device("DEN200001")["raw"] is not None  # enriched
     assert store.get_device("P200002")["submission_type"] == "pma"
     res = store.list_devices(category="ai")
-    assert res["total"] == 3 and res["facets"] == {"software": 3, "ai": 3}
+    assert res["total"] == 3 and res["facets"] == {"software": 3, "ai": 3, "n_510k": 1, "n_denovo": 1, "n_pma": 1}
     store.mark_ai(["K213941"], "summary_text")             # FDA list stays the source
     assert store.get_device("K213941")["ai_source"] == "fda_list"
 
@@ -238,3 +238,68 @@ def test_reclassify_existing_rows(env):
         c.execute("UPDATE devices SET is_software = 0")  # as migrated from an older catalog
     assert store.reclassify_software(is_software_record) == 1
     assert store.get_device("K1")["is_software"] == 1 and store.get_device("K2")["is_software"] == 0
+
+
+def test_claude_maps_ai_devices_to_conditions(env):
+    settings, store = env
+    settings = Settings(data_dir=settings.data_dir, fda_ai_list_url="", device_mapping=True,
+                        device_interval_sec=0)
+    store.insert_device_stubs([
+        {"k_number": "K260714", "submission_type": "510k", "device_name": "MammoScreen (5)"},
+        {"k_number": "K253628", "submission_type": "510k", "device_name": "Auto-Seg"},
+        {"k_number": "K999999", "submission_type": "510k", "device_name": "Skipped"}])
+    store.mark_ai(["K260714", "K253628", "K999999"], "fda_list")
+    seen = []
+
+    class Client:
+        def __init__(self):
+            self.beta = NS(messages=NS(create=self.create))
+
+        def create(self, **kw):
+            seen.append(kw["messages"][0]["content"])
+            return response([text(json.dumps({"devices": [
+                {"k_number": "K260714", "conditions": ["Breast Cancer", "pneumothorax"]},
+                {"k_number": "K253628", "conditions": []},
+                {"k_number": "K000000", "conditions": ["invented"]}]}))], "end_turn")
+
+    w = DeviceWorker(store, settings, client_factory=lambda s: Client(), session=Session())
+    assert w.step()                                   # one batch → one call
+    assert "pneumothorax" in seen[0] and "MammoScreen" in seen[0]
+    assert store.devices_to_map(10) == []             # all three marked, even the skipped one
+    assert store.get_device("K260714")["condition_sources"] == {
+        "breast cancer": "llm", "pneumothorax": "llm"}
+    assert store.get_condition("invented") is None    # unknown numbers ignored
+    assert store.list_devices("breast cancer")["total"] == 1
+    # A later openFDA name re-sync of the condition keeps Claude's mapping.
+    store.set_condition_devices("breast cancer", [], 0, 0)
+    assert store.list_devices("breast cancer")["total"] == 1
+    row = next(r for r in store.conditions_ranked() if r["name"] == "breast cancer")
+    assert row["fda_510k_count"] == 1 and row["n_ai"] == 1 and row["n_mapped"] == 1
+    while w.step():                                   # remaining work: condition syncs only
+        pass
+    assert len(seen) == 1                             # no further Claude calls
+
+
+def test_mapping_failure_backs_off(env):
+    settings, store = env
+    settings = Settings(data_dir=settings.data_dir, fda_ai_list_url="", device_mapping=True)
+    store.insert_device_stubs([{"k_number": "K1", "submission_type": "510k", "device_name": "X"}])
+    store.mark_ai(["K1"], "fda_list")
+
+    calls = []
+
+    class Boom:
+        def __init__(self):
+            self.beta = NS(messages=NS(create=self.create))
+
+        def create(self, **kw):
+            calls.append(1)
+            raise RuntimeError("503")
+
+    w = DeviceWorker(store, settings, client_factory=lambda s: Boom(), session=Session())
+    w.step()
+    assert "503" in w.last_error and w._map_paused()
+    for _ in range(3):
+        w.step()
+    assert store.devices_to_map(5)                    # still pending, retried after the pause
+    assert len(calls) == 1

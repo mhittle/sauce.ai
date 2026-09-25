@@ -313,6 +313,53 @@ def _now_iso() -> str:
     return now_iso()
 
 
+# ------------------------------------------------------------------ AI list → conditions
+MAP_BATCH = 40
+MAP_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["devices"],
+    "properties": {"devices": {"type": "array", "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["k_number", "conditions"],
+        "properties": {"k_number": {"type": "string"},
+                       "conditions": {"type": "array", "items": {"type": "string"}}}}}},
+}
+MAP_SYSTEM = """You assign FDA-cleared AI-enabled medical devices to the clinical conditions they detect, diagnose, triage, monitor or treat, so a catalog can count devices per condition.
+
+Rules:
+- Condition names are lowercase and unabbreviated ("intracranial hemorrhage", not "ICH"; "atrial fibrillation", not "AFib"). Use an existing condition name from the list whenever it fits; create a new one only when none does.
+- Use the disease or clinical finding level ("breast cancer", "pulmonary embolism", "diabetic retinopathy", "lung nodule"), not the modality or body part.
+- 0-4 conditions per device. Return [] for condition-agnostic tools (organ/anatomy segmentation, image reconstruction or denoising, workflow, PACS, dose tracking, generic measurement) and when the name and codes don't tell you — never guess.
+- Return every k_number you were given, exactly as given."""
+
+
+def map_devices_to_conditions(client, settings: Settings, devices: list[dict],
+                              known_conditions: list[str]) -> dict[str, list[str]]:
+    from .crawler import _create
+    lines = [json.dumps({k: d.get(k) for k in (
+        "k_number", "device_name", "applicant", "generic_name", "product_code",
+        "advisory_committee", "medical_specialty", "regulation_number") if d.get(k)})
+        for d in devices]
+    resp = _create(
+        client, settings, system=MAP_SYSTEM,
+        output_config={"effort": "low",
+                       "format": {"type": "json_schema", "schema": MAP_SCHEMA}},
+        messages=[{"role": "user", "content":
+                   "Existing conditions:\n" + ", ".join(known_conditions[:400])
+                   + "\n\nDevices (one JSON object per line):\n" + "\n".join(lines)}])
+    if resp.stop_reason == "refusal":
+        raise RuntimeError("mapping request declined")
+    out = json.loads(next(b.text for b in resp.content if b.type == "text"))
+    given = {d["k_number"] for d in devices}
+    mapping = {}
+    for row in out.get("devices", []):
+        if row.get("k_number") in given:
+            mapping[row["k_number"]] = [c.strip().lower() for c in row.get("conditions", [])
+                                        if isinstance(c, str) and 3 <= len(c.strip()) <= 80][:4]
+    return mapping
+
+
 # ------------------------------------------------------------------ documents
 def fetch_summary_pdf(k: str, session: Any = None) -> tuple[bytes | None, str | None, str | None]:
     """(pdf bytes, url, error). Tries each candidate location."""
@@ -468,7 +515,7 @@ def _older_than(iso: str, days: int) -> bool:
         return True
 
 
-def _days_ago_iso(days: int) -> str:
+def _days_ago_iso(days: float) -> str:
     from datetime import datetime, timedelta, timezone
     return (datetime.now(timezone.utc) - timedelta(days=days)).replace(microsecond=0).isoformat()
 
@@ -484,6 +531,7 @@ class DeviceWorker:
         self.client_factory = client_factory
         self.session = session
         self._client = None
+        self._mapper = None
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._thread: threading.Thread | None = None
@@ -540,6 +588,11 @@ class DeviceWorker:
             if not self.store.kv_get(AI_LIST_KEY):  # failed: don't retry every step
                 self.store.kv_set(AI_LIST_KEY, _days_ago_iso(6))
             return True
+        if self.settings.device_mapping and self.client_factory is not None:
+            batch = self.store.devices_to_map(MAP_BATCH)
+            if batch and not self._map_paused():
+                self.map_batch(batch)
+                return True
         cond = self.store.condition_due_for_device_sync(self.settings.lit_refresh_days)
         if cond:
             if sync_condition(self.store, cond, self.settings, self.session) is None:
@@ -552,6 +605,27 @@ class DeviceWorker:
         if job:
             return self.run_job(*job)
         return False
+
+    def _map_paused(self) -> bool:
+        until = self.store.kv_get("device_mapping_paused_until")
+        return bool(until) and not _older_than(until, days=0)
+
+    def map_batch(self, batch: list[dict]) -> None:
+        if self._mapper is None:
+            self._mapper = self.client_factory(self.settings)
+        try:
+            mapping = map_devices_to_conditions(self._mapper, self.settings, batch,
+                                                self.store.condition_names())
+        except Exception as exc:
+            # API trouble: back off an hour instead of retrying every step.
+            log.warning("device→condition mapping failed: %s", exc)
+            self.last_error = f"mapping: {type(exc).__name__}: {str(exc)[:200]}"
+            self.store.kv_set("device_mapping_paused_until", _days_ago_iso(-1 / 24))
+            return
+        # A device the model left out counts as condition-agnostic ([]), so a
+        # malformed answer can't keep the same batch coming back every step.
+        self.store.save_device_conditions({d["k_number"]: mapping.get(d["k_number"], [])
+                                           for d in batch})
 
     def _is_request(self, k: str) -> bool:
         with self.store._conn() as c:

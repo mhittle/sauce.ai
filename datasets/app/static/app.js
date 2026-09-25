@@ -319,10 +319,15 @@ async function loadDevices() {
   const cond = res.condition;
   $("#dev-title").textContent = cond ? `${cond.display}: FDA submissions` : "FDA submissions";
   $("#dev-sub").textContent = cond
-    ? `${cond.fda_510k_count ?? 0} 510(k) · ${cond.fda_denovo_count ?? 0} De Novo, matched on device names containing: ${[...new Set([cond.name, ...cond.fda_terms])].join(", ")}.`
+    ? `Submissions whose device name contains ${[...new Set([cond.name, ...cond.fda_terms])].map(t => `“${t}”`).join(", ")}, plus AI-enabled devices Claude assigned to this condition.`
       + (cond.fda_devices_capped ? " Showing the most recent submissions only." : "")
     : "All submissions stored so far: every device on FDA's AI-enabled list, those matched to directory conditions, and any opened directly.";
-  if (res.total) $("#dev-sub").textContent += ` In this view: ${res.facets.software.toLocaleString()} software · ${res.facets.ai.toLocaleString()} AI-enabled.`;
+  if (res.total) {
+    const f = res.facets;
+    $("#dev-sub").textContent += ` In this view: ${f.n_510k.toLocaleString()} 510(k) · ${f.n_denovo.toLocaleString()} De Novo`
+      + (f.n_pma ? ` · ${f.n_pma.toLocaleString()} PMA` : "")
+      + ` — ${f.software.toLocaleString()} software, ${f.ai.toLocaleString()} AI-enabled.`;
+  }
   document.querySelectorAll("#dev-type button").forEach(b => b.classList.toggle("on", b.dataset.type === dev.type));
   document.querySelectorAll("#dev-cat button").forEach(b => b.classList.toggle("on", b.dataset.cat === dev.category));
   $("#dev-q").value = dev.q;
@@ -489,8 +494,15 @@ async function loadDevice(k) {
     const p = el("div", { class: "panel" });
     p.append(el("h3", {}, "Conditions"));
     const cl = el("div", { class: "chip-links" });
-    d.conditions.forEach(c => cl.append(el("a", { href: `#/devices?condition=${encodeURIComponent(c)}` }, c)));
+    d.conditions.forEach(c => {
+      const mapped = (d.condition_sources || {})[c] === "llm";
+      cl.append(el("a", { href: `#/devices?condition=${encodeURIComponent(c)}`,
+                          title: mapped ? "Assigned by Claude from the device's name and FDA codes" : "Device name matches the condition" },
+                    mapped ? `${c} ✦` : c));
+    });
+
     p.append(cl);
+    if (Object.values(d.condition_sources || {}).includes("llm")) p.append(el("div", { class: "muted small" }, "✦ assigned by Claude"));
     right.append(p);
   }
   grid.append(left, right);
