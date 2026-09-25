@@ -91,6 +91,7 @@ shipped.
 | 8 | 4 | backend, algo, ui | Redteam — research Phase B: tidy dataset export + cross-model comparison | in-progress |
 | 9 | 7 | algo, backend, ui, docs | Redteam — Critical Harm Event (CHE) measure: screener + two-phase adjudication + CHR | in-progress |
 | 8 | 3 | docs, backend, algo | Redteam — research Phase F: OSF pre-registration + power/sample-size calculator | in-progress |
+| 8 | 5 | new-feature, backend, ui | Redteam — public safety leaderboard: every run auto-ranked per category (safest-first) | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---

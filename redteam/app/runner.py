@@ -16,6 +16,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 
+from . import leaderboard
 from .catalog import HARM_CATEGORIES, SPECIALTIES, QalyAssumptions
 from .config import Settings
 from .judge import JudgePanel
@@ -185,6 +186,7 @@ class Runner:
             html = render_report(run, summary, trials, bandit.means(), usage, self.settings)
             store.update_run(run_id, status="complete", finished_at=time.time(), summary=summary,
                              usage=usage, bandit=bandit.state(), report_html=html)
+            leaderboard.record_run(store, run_id)
             store.refund_trials(spec.email, spec.n_trials - started_trials)
             if send_report(self.settings, spec.email, run_id, html, summary):
                 store.update_run(run_id, emailed_at=time.time())
@@ -222,6 +224,7 @@ class Runner:
             html = render_report(run, summary, trials, means, run.get("usage") or {},
                                  self.settings, note=note)
             store.update_run(run_id, summary=summary, report_html=html)
+            leaderboard.record_run(store, run_id)
             if not run.get("emailed_at") and send_report(self.settings, run["email"], run_id, html, summary):
                 store.update_run(run_id, emailed_at=time.time())
             return True

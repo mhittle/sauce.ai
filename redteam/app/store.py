@@ -153,6 +153,20 @@ CREATE TABLE IF NOT EXISTS che_review_items (
     context_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_chereviewitems_set ON che_review_items(set_id);
+CREATE TABLE IF NOT EXISTS leaderboard_entries (
+    target_label TEXT NOT NULL,
+    specialty TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    run_created_at REAL,
+    updated_at REAL NOT NULL,
+    n_runs INTEGER NOT NULL DEFAULT 1,
+    trials INTEGER NOT NULL DEFAULT 0,
+    safety_score REAL,
+    critical_count INTEGER NOT NULL DEFAULT 0,
+    metrics_json TEXT NOT NULL,
+    PRIMARY KEY(target_label, specialty)
+);
+CREATE INDEX IF NOT EXISTS ix_lb_specialty ON leaderboard_entries(specialty);
 """
 
 
@@ -434,4 +448,49 @@ class Store:
                 it.pop("sample_source", None)
                 it.pop("sampling_weight", None)
             out.append(it)
+        return out
+
+    # -- leaderboard --------------------------------------------------------
+    def upsert_leaderboard_entry(self, entry: dict) -> None:
+        """Fold a completed run into the (target, specialty) board. The newest
+        run for a pair holds the displayed metrics; ``n_runs`` counts distinct
+        runs and only increments when a *different* run_id arrives (so
+        re-recording the same run is idempotent)."""
+        metrics = {k: v for k, v in entry.items()
+                   if k not in ("target_label", "specialty", "run_id", "run_created_at",
+                                "trials", "safety_score", "critical_count")}
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                prev = self._conn.execute(
+                    "SELECT run_id, n_runs FROM leaderboard_entries WHERE target_label=? AND specialty=?",
+                    (entry["target_label"], entry["specialty"])).fetchone()
+                n_runs = 1 if prev is None else (prev["n_runs"] + (1 if prev["run_id"] != entry["run_id"] else 0))
+                self._conn.execute(
+                    "INSERT INTO leaderboard_entries(target_label, specialty, run_id, run_created_at, "
+                    "updated_at, n_runs, trials, safety_score, critical_count, metrics_json) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(target_label, specialty) DO UPDATE SET run_id=excluded.run_id, "
+                    "run_created_at=excluded.run_created_at, updated_at=excluded.updated_at, "
+                    "n_runs=excluded.n_runs, trials=excluded.trials, safety_score=excluded.safety_score, "
+                    "critical_count=excluded.critical_count, metrics_json=excluded.metrics_json",
+                    (entry["target_label"], entry["specialty"], entry["run_id"], entry.get("run_created_at"),
+                     time.time(), n_runs, entry.get("trials", 0), entry.get("safety_score"),
+                     entry.get("critical_count", 0), json.dumps(metrics)))
+                self._conn.execute("COMMIT")
+            except Exception:
+                self._conn.execute("ROLLBACK")
+                raise
+
+    def leaderboard_entries(self, specialty: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM leaderboard_entries"
+        args: tuple = ()
+        if specialty:
+            sql += " WHERE specialty=?"
+            args = (specialty,)
+        out = []
+        for r in self._x(sql, args):
+            d = dict(r)
+            d.update(json.loads(d.pop("metrics_json")))
+            out.append(d)
         return out

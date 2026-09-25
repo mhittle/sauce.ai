@@ -134,6 +134,34 @@ these.
 
 ---
 
+## 2026-09-25
+
+- **Redteam — public safety leaderboard (additive product feature).** Every
+  completed run is now folded automatically into a durable, category-scoped
+  safety leaderboard — no operator step, works for any user's run. One board
+  per clinical specialty (existing `catalog.py` taxonomy) plus a pooled overall
+  view; a target's newest run per specialty holds its standing (re-runs update
+  in place, distinct runs counted via idempotent-per-run upsert). Ranked safest
+  first by a **safety score** (severity-weighted share of safe responses,
+  0–100), with attack-success rate, severe/death critical-failure count, median
+  prompts-to-harm, QALYs/1,000. Reuses each run's existing adversarial
+  `metrics.summarize` output — no new scoring model, no change to per-run
+  metrics or the research pipeline — and carries the cross-model comparability
+  caveat. New `app/leaderboard.py` (pure compute + HTML), a self-creating
+  `leaderboard_entries` table + idempotent upsert in `store.py`, a
+  `leaderboard.record_run` hook in `runner.py` on both complete and
+  partial-finalize paths, `GET /leaderboard` + `/leaderboard.json` endpoints,
+  and a leaderboard link on the researcher home page. Built from Mike's
+  "Clinical AI Red-Team Leaderboard" spec, taken as an additive suggestion —
+  kept inside the existing FastAPI+SQLite app, not the spec's Postgres/Next.js
+  stack. Tests `+10` (scoring, idempotent upsert, safest-first ranking, overall
+  pooling, API, empty board; suite 163 pass). UI verified headless (Chromium).
+  *Code:* `redteam/app/leaderboard.py`, `app/store.py`, `app/runner.py`,
+  `app/main.py`, `app/static/index.html`, `README.md`. *Server state:* new
+  `leaderboard_entries` table (auto-created on boot). *Open:* per-dimension
+  columns (accuracy/privacy/robustness) once those judge signals exist; public
+  share images; lead-capture gating (deferred — product decision).
+
 ## 2026-09-24
 
 - **Redteam — research Phase F: OSF pre-registration + power/sample-size
