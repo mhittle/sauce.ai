@@ -265,6 +265,11 @@ class Store:
             c.execute("PRAGMA journal_mode=WAL")
             c.executescript(SCHEMA)
             self._migrate(c)
+            # Identity of this catalog file: if catalog_created_at changes
+            # across deploys, the file was recreated (storage not persisting).
+            c.execute("INSERT OR IGNORE INTO kv VALUES ('catalog_created_at', ?)", (now_iso(),))
+            c.execute("INSERT INTO kv VALUES ('opens', '1') ON CONFLICT (k) DO UPDATE"
+                      " SET v = CAST(v AS INTEGER) + 1")
 
     @staticmethod
     def _migrate(c: sqlite3.Connection) -> None:
