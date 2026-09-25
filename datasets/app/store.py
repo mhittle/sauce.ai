@@ -171,6 +171,7 @@ CREATE INDEX IF NOT EXISTS devices_decision ON devices(decision_date);
 CREATE TABLE IF NOT EXISTS condition_devices (
     condition TEXT NOT NULL,
     k_number  TEXT NOT NULL REFERENCES devices(k_number) ON DELETE CASCADE,
+    source    TEXT NOT NULL DEFAULT 'name',  -- name (openFDA name match) | llm
     PRIMARY KEY (condition, k_number)
 );
 
@@ -281,9 +282,14 @@ class Store:
                 c.execute(f"ALTER TABLE conditions ADD COLUMN {col} {decl}")
         have = {r[1] for r in c.execute("PRAGMA table_info(devices)")}
         for col, decl in (("is_software", "INTEGER NOT NULL DEFAULT 0"),
-                          ("is_ai", "INTEGER NOT NULL DEFAULT 0"), ("ai_source", "TEXT")):
+                          ("is_ai", "INTEGER NOT NULL DEFAULT 0"), ("ai_source", "TEXT"),
+                          ("conditions_mapped_at", "TEXT")):
             if col not in have:
                 c.execute(f"ALTER TABLE devices ADD COLUMN {col} {decl}")
+        have = {r[1] for r in c.execute("PRAGMA table_info(condition_devices)")}
+        if "source" not in have:
+            c.execute("ALTER TABLE condition_devices ADD COLUMN source TEXT NOT NULL"
+                      " DEFAULT 'name'")
         c.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
 
     # ------------------------------------------------------------ plumbing
@@ -535,8 +541,17 @@ class Store:
         having = "HAVING n_datasets > 0" if only_with_datasets else ""
         with self._conn() as c:
             rows = c.execute(f"""
-                SELECT c.name, c.display, c.fda_510k_count, c.fda_denovo_count,
-                       c.fda_checked_at,
+                SELECT c.name, c.display, c.fda_510k_count AS openfda_510k,
+                       c.fda_denovo_count AS openfda_denovo, c.fda_checked_at,
+                       c.fda_synced_at,
+                       (SELECT COUNT(*) FROM condition_devices cd JOIN devices v
+                          ON v.k_number = cd.k_number WHERE cd.condition = c.name
+                          AND v.submission_type = '510k') AS local_510k,
+                       (SELECT COUNT(*) FROM condition_devices cd JOIN devices v
+                          ON v.k_number = cd.k_number WHERE cd.condition = c.name
+                          AND v.submission_type = 'denovo') AS local_denovo,
+                       (SELECT COUNT(*) FROM condition_devices cd WHERE cd.condition = c.name
+                          AND cd.source = 'llm') AS n_mapped,
                        (SELECT COUNT(*) FROM condition_devices cd JOIN devices v
                           ON v.k_number = cd.k_number WHERE cd.condition = c.name
                           AND v.is_software = 1 AND v.submission_type = '510k') AS sw_510k,
@@ -554,16 +569,25 @@ class Store:
                 LEFT JOIN dataset_conditions dc ON dc.condition = c.name
                 LEFT JOIN datasets d ON d.id = dc.dataset_id
                 GROUP BY c.name {having}
-                ORDER BY COALESCE(c.fda_510k_count, -1) DESC,
-                         COALESCE(c.fda_denovo_count, 0) DESC, n_datasets DESC, c.name
             """).fetchall()
         out = []
         for r in rows:
             d = dict(r)
+            # Counts = stored submissions for the condition (openFDA name matches
+            # plus Claude's AI-list mappings). Before the first sync, fall back to
+            # openFDA's own total; if openFDA matched more than we store (capped),
+            # keep its larger total.
+            known = d["fda_synced_at"] is not None or d["local_510k"] or d["local_denovo"]
+            d["fda_510k_count"] = (max(d["local_510k"], d["openfda_510k"] or 0) if known
+                                   else d["openfda_510k"])
+            d["fda_denovo_count"] = (max(d["local_denovo"], d["openfda_denovo"] or 0)
+                                     if known else d["openfda_denovo"])
             d["synonyms"] = json.loads(d["synonyms"])
             d["n_open"] = d["n_open"] or 0
             d["n_downloaded"] = d["n_downloaded"] or 0
             out.append(d)
+        out.sort(key=lambda d: (-(d["fda_510k_count"] if d["fda_510k_count"] is not None else -1),
+                                -(d["fda_denovo_count"] or 0), -d["n_datasets"], d["name"]))
         return out
 
     def match_conditions(self, q: str) -> list[str]:
@@ -888,6 +912,36 @@ class Store:
                           [(int(r["k_number"] in hits), r["k_number"]) for r in rows])
         return len(hits)
 
+    def devices_to_map(self, limit: int) -> list[dict]:
+        """AI-list devices Claude hasn't assigned to conditions yet, newest first."""
+        with self._conn() as c:
+            return [dict(r) for r in c.execute(
+                "SELECT k_number, submission_type, device_name, applicant, generic_name,"
+                " product_code, advisory_committee, medical_specialty, regulation_number"
+                " FROM devices WHERE is_ai = 1 AND conditions_mapped_at IS NULL"
+                " ORDER BY decision_date DESC LIMIT ?", (limit,))]
+
+    def condition_names(self) -> list[str]:
+        with self._conn() as c:
+            return [r["name"] for r in c.execute("SELECT name FROM conditions ORDER BY name")]
+
+    def save_device_conditions(self, mapping: dict[str, list[str]]) -> int:
+        """Record Claude's device → condition assignments (new conditions are
+        created). Every device in ``mapping`` is marked mapped, including
+        condition-agnostic ones (empty list). Returns links written."""
+        pairs = [(normalize_condition(cn), k) for k, conds in mapping.items()
+                 for cn in conds if cn and cn.strip()]
+        for cond, _ in pairs:
+            self.upsert_condition(cond)
+        with self._write() as c:
+            c.executemany("DELETE FROM condition_devices WHERE k_number = ? AND source = 'llm'",
+                          [(k,) for k in mapping])
+            c.executemany("INSERT OR IGNORE INTO condition_devices (condition, k_number, source)"
+                          " VALUES (?, ?, 'llm')", pairs)
+            c.executemany("UPDATE devices SET conditions_mapped_at = ? WHERE k_number = ?",
+                          [(now_iso(), k) for k in mapping])
+        return len(pairs)
+
     def mark_ai(self, k_numbers: list[str], source: str) -> None:
         """Flag submissions as AI-enabled (and therefore software). The FDA
         list outranks a summary-text match as the recorded source."""
@@ -921,9 +975,11 @@ class Store:
                               n_denovo: int, capped: bool = False) -> None:
         key = normalize_condition(name)
         with self._write() as c:
-            c.execute("DELETE FROM condition_devices WHERE condition = ?", (key,))
-            c.executemany("INSERT OR IGNORE INTO condition_devices VALUES (?, ?)",
-                          [(key, k) for k in k_numbers])
+            # Only name matches are replaced; Claude's mappings survive a re-sync.
+            c.execute("DELETE FROM condition_devices WHERE condition = ? AND source = 'name'",
+                      (key,))
+            c.executemany("INSERT OR IGNORE INTO condition_devices (condition, k_number, source)"
+                          " VALUES (?, ?, 'name')", [(key, k) for k in k_numbers])
             c.execute("UPDATE conditions SET fda_510k_count = ?, fda_denovo_count = ?,"
                       " fda_checked_at = ?, fda_synced_at = ?, fda_devices_capped = ?"
                       " WHERE name = ?",
@@ -976,7 +1032,11 @@ class Store:
             total = c.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
             facets = dict(c.execute(
                 f"SELECT COALESCE(SUM(d.is_software), 0) AS software,"
-                f" COALESCE(SUM(d.is_ai), 0) AS ai {base}", params).fetchone())
+                f" COALESCE(SUM(d.is_ai), 0) AS ai,"
+                f" COALESCE(SUM(d.submission_type = '510k'), 0) AS n_510k,"
+                f" COALESCE(SUM(d.submission_type = 'denovo'), 0) AS n_denovo,"
+                f" COALESCE(SUM(d.submission_type = 'pma'), 0) AS n_pma {base}",
+                params).fetchone())
             rows = c.execute(
                 f"""SELECT d.k_number, d.submission_type, d.device_name, d.applicant,
                        d.decision_date, d.date_received, d.decision_description,
@@ -999,6 +1059,8 @@ class Store:
             d["raw"] = json.loads(d["raw"]) if d["raw"] else None
             d["conditions"] = [r["condition"] for r in c.execute(
                 "SELECT condition FROM condition_devices WHERE k_number = ?", (k,))]
+            d["condition_sources"] = {r["condition"]: r["source"] for r in c.execute(
+                "SELECT condition, source FROM condition_devices WHERE k_number = ?", (k,))}
             doc = c.execute("SELECT k_number, status, requested, pdf_url, pages, predicates,"
                             " extracted, extracted_at, error, fetched_at FROM device_docs"
                             " WHERE k_number = ?", (k,)).fetchone()
@@ -1135,6 +1197,8 @@ class Store:
                 "denovo": one("SELECT COUNT(*) FROM devices WHERE submission_type = 'denovo'"),
                 "software": one("SELECT COUNT(*) FROM devices WHERE is_software = 1"),
                 "ai": one("SELECT COUNT(*) FROM devices WHERE is_ai = 1"),
+                "ai_mapped_to_conditions": one("SELECT COUNT(*) FROM devices WHERE is_ai = 1"
+                                               " AND conditions_mapped_at IS NOT NULL"),
                 "docs_read": one("SELECT COUNT(*) FROM device_docs WHERE status = 'done'"),
                 "docs_extracted": one("SELECT COUNT(*) FROM device_docs WHERE extracted IS NOT NULL"),
                 "linked": one("SELECT COUNT(DISTINCT k_number) FROM device_links"),

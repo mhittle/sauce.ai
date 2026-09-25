@@ -104,6 +104,9 @@ class Settings:
     # "all" (background, every submission — costs scale with the device count),
     # or "off".
     device_llm: str = os.environ.get("DATASETS_DEVICE_LLM", "on_demand")
+    # Claude assigns AI-list devices (brand-named, so name matching misses
+    # them) to conditions, 40 per call, once per device.
+    device_mapping: bool = _bool("DATASETS_DEVICE_MAPPING", True)
     # FDA's "AI-Enabled Medical Devices" list (xlsx); synced weekly. The media
     # id changes when FDA republishes — override here if the default 404s.
     fda_ai_list_url: str = os.environ.get(

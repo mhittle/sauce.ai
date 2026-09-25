@@ -96,6 +96,16 @@ CLI backfill: `python -m jobs.literature --minutes 30`.
   submission in the background — cost scales with the device count.
 - Submissions not yet stored (e.g. a predicate) are fetched from openFDA on
   demand when opened.
+- **AI devices → conditions (Claude):** AI-list devices are mostly brand-named
+  ("MammoScreen"), so name matching can't place them. The device worker sends
+  them to Claude in batches of 40 (name, company, generic name, product code,
+  panel, regulation + the existing condition list) and records 0–4
+  conditions per device; condition-agnostic tools (segmentation,
+  reconstruction, PACS…) get none. Runs once per device (~40 low-effort calls
+  for the current list; new list entries are mapped weekly), survives
+  openFDA re-syncs, creates new conditions when needed, and is marked ✦ on
+  device pages. Directory counts include these mappings.
+  `DATASETS_DEVICE_MAPPING=false` turns it off.
 - **Software / AI filter** (device list, and a Directory toggle that recounts
   510(k)/De Novo on software devices only, plus an AI column):
   - *AI-enabled* = on FDA's **AI-Enabled Medical Devices** list (downloaded
