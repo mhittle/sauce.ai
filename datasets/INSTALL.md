@@ -45,7 +45,7 @@ docker run -p 8000:8000 -v "$PWD/datasets/data:/data" -e ANTHROPIC_API_KEY sauce
    | Variable | Value |
    |---|---|
    | `ANTHROPIC_API_KEY` | your key (console.anthropic.com → API keys) |
-   | `DATASETS_DATA_DIR` | `/data` (already the image default; set it anyway) |
+   | `DATASETS_DATA_DIR` | leave **unset** — the app uses the attached volume (`RAILWAY_VOLUME_MOUNT_PATH`); a value outside the volume is ignored |
    | `DATASETS_MAX_CONCURRENT_CRAWLS` | `1` to start (cost control) |
    | `OPENALEX_API_KEY` | optional, free from openalex.org — improves paper linking |
    | `OPENFDA_API_KEY` | optional, free from open.fda.gov — lifts the 1,000 requests/day limit |
@@ -64,6 +64,10 @@ docker run -p 8000:8000 -v "$PWD/datasets/data:/data" -e ANTHROPIC_API_KEY sauce
    # {"status":"ok","llm_configured":true,"active_crawls":[]}
    ```
    `llm_configured: false` means the key isn't set on this service.
+   Check `storage.persistent` is `true` (a volume is attached and in use)
+   and note `storage.catalog_created_at`: after the next redeploy it must be
+   unchanged — if it changed, the catalog was recreated. The page shows a red
+   banner whenever storage isn't persistent.
 
 ---
 

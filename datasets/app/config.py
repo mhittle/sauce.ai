@@ -25,11 +25,45 @@ def _bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def resolve_data_dir() -> Path:
+    """Where the catalog lives. On Railway, an attached volume always wins:
+    if DATASETS_DATA_DIR points anywhere outside the volume (e.g. "./data"
+    pasted from .env.example, or a mount path that doesn't match), writing
+    there would land on the container's ephemeral disk and be wiped on the
+    next deploy, so we use the volume's mount path instead."""
+    raw = Path(os.environ.get("DATASETS_DATA_DIR", _ROOT / "data"))
+    vol = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if vol:
+        try:
+            inside = raw.resolve().is_relative_to(Path(vol).resolve())
+        except (OSError, ValueError):
+            inside = False
+        if not inside:
+            return Path(vol)
+    return raw
+
+
+def on_mounted_volume(path: Path) -> bool:
+    """True if path sits on a separately mounted filesystem (not the
+    container's root overlay)."""
+    p = path.resolve()
+    for candidate in (p, *p.parents):
+        if candidate == Path("/"):
+            return False
+        if os.path.ismount(candidate):
+            return True
+    return False
+
+
+def on_railway() -> bool:
+    return any(os.environ.get(k) for k in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID",
+                                           "RAILWAY_SERVICE_ID"))
+
+
 @dataclass(frozen=True)
 class Settings:
     # Storage: one SQLite catalog + a directory of downloaded flat files.
-    data_dir: Path = field(default_factory=lambda: Path(
-        os.environ.get("DATASETS_DATA_DIR", _ROOT / "data")))
+    data_dir: Path = field(default_factory=resolve_data_dir)
     anthropic_api_key: str | None = os.environ.get("ANTHROPIC_API_KEY")
     model: str = os.environ.get("DATASETS_MODEL", "claude-opus-5")
     # Effort for the planner (one call per crawl) vs the crawl workers (many).

@@ -570,7 +570,9 @@ async function refreshStats() {
     $("#stats").textContent = `${s.datasets} datasets · ${s.conditions} conditions · ${s.files} files (${fmtBytes(s.bytes)}) · ${s.papers.toLocaleString()} papers · ${s.fda_submissions.toLocaleString()} FDA submissions` +
       (s.active_crawls.length ? ` · ${s.active_crawls.length} crawl running` : "");
     $("#broad-btn").disabled = !s.llm_configured;
-    banner(s.llm_configured ? "" : "Crawling is disabled: set ANTHROPIC_API_KEY on the server. Search still works over the indexed catalog.");
+    if (s.storage && s.storage.persistent === false)
+      banner(`Storage is NOT persistent: the catalog at ${s.storage.data_dir} is on the container's disk and will be erased on the next deploy. Attach a Railway volume to this service.`);
+    else banner(s.llm_configured ? "" : "Crawling is disabled: set ANTHROPIC_API_KEY on the server. Search still works over the indexed catalog.");
   } catch (e) { banner(`API unreachable: ${e.message}`); }
 }
 

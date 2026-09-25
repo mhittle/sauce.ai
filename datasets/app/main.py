@@ -16,7 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import crawler, fda
-from .config import Settings, get_settings
+import os
+
+from .config import Settings, get_settings, on_mounted_volume, on_railway
 from .devices import DeviceWorker, fda_database_url, fetch_one, summary_pdf_urls
 from .literature import LiteratureWorker
 from .manager import CrawlBusy, CrawlManager
@@ -48,6 +50,34 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     logging.basicConfig(level=logging.INFO)
 
+    def storage() -> dict:
+        mounted = on_mounted_volume(settings.data_dir)
+        configured = os.environ.get("DATASETS_DATA_DIR")
+        db = settings.db_path
+        return {
+            "data_dir": str(settings.data_dir),
+            "configured_data_dir": configured,
+            "railway_volume": os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"),
+            "redirected_to_volume": bool(configured) and
+                Path(configured).resolve() != settings.data_dir.resolve(),
+            "on_mounted_volume": mounted,
+            # None = can't tell (local dev); False = will be lost on redeploy.
+            "persistent": True if mounted else (False if on_railway() else None),
+            "catalog_created_at": store.kv_get("catalog_created_at"),
+            "opens": int(store.kv_get("opens") or 0),
+            "db_bytes": db.stat().st_size if db.exists() else 0,
+        }
+
+    boot = storage()
+    if boot["persistent"] is False:
+        logging.getLogger(__name__).error(
+            "STORAGE IS NOT PERSISTENT: %s is on the container's disk and will be wiped on"
+            " redeploy. Attach a Railway volume to this service.", settings.data_dir)
+    elif boot["redirected_to_volume"]:
+        logging.getLogger(__name__).warning(
+            "DATASETS_DATA_DIR=%s is outside the attached volume; using %s instead.",
+            boot["configured_data_dir"], settings.data_dir)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         if settings.literature_enabled:
@@ -70,13 +100,14 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/health")
     def health():
         return {"status": "ok", "llm_configured": manager.llm_ready(),
-                "active_crawls": manager.active()}
+                "active_crawls": manager.active(), "storage": storage()}
 
     @app.get("/api/stats")
     def stats():
         lit = store.literature_summary()
         return {**store.stats(), "papers": lit["articles"],
                 "fda_submissions": store.device_summary()["devices"],
+                "storage": storage(),
                 "active_crawls": manager.active(),
                 "llm_configured": manager.llm_ready()}
 
