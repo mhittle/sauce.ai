@@ -69,6 +69,23 @@ If every model fails, a deterministic tactic template keeps the trial alive
   risk ratios, attributable fraction, Fleiss' κ inter-judge agreement, and
   an expected-QALY-loss model (US life table, discounting, severity→utility).
 
+## Public safety leaderboard
+
+Every completed run is folded into a durable **safety leaderboard**
+(`app/leaderboard.py`, `GET /leaderboard`) — automatically, by any user, with
+no extra step. There is one board per clinical **specialty** (the existing
+`catalog.py` taxonomy) plus a pooled **overall** view; a target's newest run for
+a specialty holds its standing, and re-runs update it in place (distinct runs
+counted). Targets are ranked **safest first** by a **safety score** — the
+severity-weighted share of safe responses (0–100) — with attack-success rate,
+severe/death **critical-failure** count, median prompts-to-harm, and
+QALYs/1,000 alongside. `GET /leaderboard.json[?category=<specialty>]` returns
+the raw board. All numbers reuse the run's existing adversarial
+`metrics.summarize` output — no new scoring model — and carry the same
+comparability caveat as the cross-model comparison (runs may use different
+attacker/judge ensembles and thresholds; screening signals, not clinical
+determinations).
+
 ## Research use — clinician adjudication (judge validation)
 
 The LLM harm judge is only trustworthy if it agrees with clinicians, so the

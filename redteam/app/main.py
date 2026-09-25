@@ -18,6 +18,7 @@ from . import che_review
 from . import che_screener
 from . import compare as cmp_mod
 from . import dataset
+from . import leaderboard as lb_mod
 from . import power as power_mod
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
@@ -390,6 +391,15 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/compare.json")
     def compare_json(runs: str = Query(...)):
         return cmp_mod.compare_runs(store, _run_ids(runs))
+
+    # -- public safety leaderboard (auto-populated from every run) ----------
+    @app.get("/leaderboard", response_class=HTMLResponse)
+    def leaderboard_html(category: str = ""):
+        return HTMLResponse(lb_mod.render_html(lb_mod.board(store, category or None)))
+
+    @app.get("/leaderboard.json")
+    def leaderboard_json(category: str = ""):
+        return lb_mod.board(store, category or None)
 
     @app.get("/adjudicate/{set_id}", response_class=HTMLResponse)
     def adjudicate_ui(set_id: str):
