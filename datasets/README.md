@@ -20,6 +20,7 @@ real database are later.
 | **Run 1-hour crawl** | Broad crawl: walks conditions in 510(k) order (seeded from `seed/conditions.json`, plus any condition found since), running a planned swarm per condition until the hour is up. The same thing runs from cron via `python -m jobs.crawl`. |
 | **Dataset cards** | Title, source, access type (open / free registration / credentialed / DUA / by request), conditions, modalities, labels, size, subjects, formats, license, citation, **access instructions**, direct links, and links to files we collected. |
 | **Papers** | A background worker links journal articles to every dataset: the paper(s) that introduced it, papers that **cite** those, and papers that **name** the dataset in their text. Cards show "Used in N papers", most-cited first. See *Literature linker* below. |
+| **FDA devices** | Every 510(k) and De Novo submission matched to a condition, with counts for each in the Directory. Click a count for a sortable list (date, company, device, number, product code); click a submission for its full public record, links to FDA's database page and summary PDF, predicates (clickable), the catalog datasets/papers its summary references, and a Claude-extracted review of the PDF (intended use, training/test data, performance, references). Datasets and papers referenced by a submission are flagged on their cards. See *FDA devices* below. |
 | **Downloads** | For open-access datasets, direct flat-file links (csv/tsv/json/parquet/xlsx/zip/tar.gz/nii.gz/edf/dcm/h5/…) are downloaded to `data/files/<dataset-id>/` (size-capped, sha256 recorded) and served at `/files/<id>`. Anything behind a login/DUA is marked *Manual access* with instructions. |
 
 ## How a crawl works
@@ -76,6 +77,34 @@ there). API: `GET /api/datasets/{id}/articles?relation=cites|mentions`,
 `POST /api/datasets/{id}/articles/refresh`, `GET /api/literature`.
 CLI backfill: `python -m jobs.literature --minutes 30`.
 
+## FDA devices
+
+- **Source:** openFDA `device/510k`, which also carries De Novo grants
+  (`DEN…` numbers). Each condition's submissions are matched on device name
+  (condition name + planner-proposed device terms), the same proxy as before,
+  now stored in full and split into 510(k) vs De Novo counts. Re-synced every
+  `DATASETS_LIT_REFRESH_DAYS`.
+- **Summary PDFs:** a background worker downloads each submission's public
+  510(k) Summary / De Novo decision summary from accessdata.fda.gov, extracts
+  the text, lists the K/DEN numbers it names (predicates), and matches it
+  against the catalog: dataset aliases, descriptor-paper titles, and DOIs. A
+  match marks the dataset ("Referenced in N FDA submissions") and the paper
+  ("Used in FDA submission K…").
+- **Reviews:** opening a submission queues it first; with an API key, Claude
+  turns the PDF into a structured review (cost: one low-effort call per
+  submission opened). `DATASETS_DEVICE_LLM=all` does this for every
+  submission in the background — cost scales with the device count.
+- Submissions not yet stored (e.g. a predicate) are fetched from openFDA on
+  demand when opened.
+- API: `GET /api/devices?condition=&type=510k|denovo&q=&dataset=&linked=&sort=&dir=`,
+  `GET /api/devices/{number}`, `POST /api/devices/{number}/analyze`,
+  `GET /api/devices-status`.
+- Limits: name matching includes hardware (e.g. "mammography" matches
+  display monitors) and misses brand-named software; most summaries describe
+  proprietary data, so dataset links are sparse — when they appear they're
+  strong evidence. Pre-~1996 submissions and 510(k) "Statements" have no
+  summary PDF.
+
 ## Layout
 
 ```
@@ -86,6 +115,7 @@ datasets/
 │   ├── manager.py    background crawl threads, cancel, download pool
 │   ├── store.py      SQLite catalog (datasets, files, conditions, crawls, FTS5)
 │   ├── fda.py        openFDA 510(k) counts
+│   ├── devices.py    FDA 510(k)/De Novo sync, summary-PDF reader + linker, reviews
 │   ├── literature.py background linker: papers citing / naming each dataset
 │   ├── download.py   flat-file downloader + URL probe (SSRF-guarded)
 │   ├── config.py     env settings

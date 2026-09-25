@@ -91,6 +91,18 @@ function card(ds, markNew) {
     files.append(ul);
   }
 
+  const fdaBox = $(".fda", n);
+  if (ds.devices && ds.devices.length) {
+    fdaBox.classList.remove("hidden");
+    fdaBox.append(el("b", {}, `Referenced in ${ds.devices.length} FDA submission${ds.devices.length === 1 ? "" : "s"}: `));
+    ds.devices.slice(0, 6).forEach((d, i) => {
+      if (i) fdaBox.append(document.createTextNode(", "));
+      const a = el("a", { href: `#/device/${d.k_number}`, title: `${d.device_name || ""} — ${d.applicant || ""}` }, d.k_number);
+      fdaBox.append(a);
+    });
+    if (ds.devices.length > 6) fdaBox.append(" ", el("a", { href: `#/dataset/${ds.id}` }, "all…"));
+  }
+
   setupPapers($(".papers", n), ds);
 
   $(".instructions", n).textContent = ds.access_instructions || "See the source page.";
@@ -139,6 +151,12 @@ function paper(a) {
   const meta = [a.authors && a.authors.split(",").slice(0, 3).join(",") + (a.authors.split(",").length > 3 ? " et al." : ""),
                 a.venue, a.year, `${a.cited_by_count.toLocaleString()} citations`].filter(Boolean).join(" · ");
   d.append(el("div", { class: "pmeta" }, meta));
+  if (a.devices && a.devices.length) {
+    const u = el("div", { class: "used-in" });
+    u.append(el("span", { class: "pmeta" }, "Used in FDA submission: "));
+    for (const k of a.devices) u.append(el("a", { href: `#/device/${k}` }, k));
+    d.append(u);
+  }
   return d;
 }
 
@@ -165,9 +183,12 @@ function renderSearch(data) {
   strip.className = "cond-strip";
   strip.replaceChildren(...data.conditions.map(c => {
     const p = el("div", { class: "cond-pill" });
+    const q = encodeURIComponent(c.name);
     p.append(document.createTextNode(`${c.display}: `),
-             el("b", {}, c.fda_510k_count == null ? "—" : c.fda_510k_count),
-             document.createTextNode(" FDA 510(k) clearances"));
+             countLink(c.fda_510k_count, `#/devices?condition=${q}&type=510k`),
+             document.createTextNode(" FDA 510(k) clearances · "),
+             countLink(c.fda_denovo_count, `#/devices?condition=${q}&type=denovo`),
+             document.createTextNode(" De Novo"));
     return p;
   }));
   const res = data.results;
@@ -237,8 +258,11 @@ async function loadDirectory() {
   $("#dir-body").replaceChildren(...rows.map((r, i) => {
     const tr = el("tr");
     if (r.name === dirSelected) tr.classList.add("sel");
-    tr.append(el("td", { class: "num" }, i + 1), el("td", {}, r.display),
-              el("td", { class: "num" }, r.fda_510k_count ?? "—"),
+    const q = encodeURIComponent(r.name);
+    const k510 = el("td", { class: "num" }), kden = el("td", { class: "num" });
+    k510.append(countLink(r.fda_510k_count, `#/devices?condition=${q}&type=510k`));
+    kden.append(countLink(r.fda_denovo_count, `#/devices?condition=${q}&type=denovo`));
+    tr.append(el("td", { class: "num" }, i + 1), el("td", {}, r.display), k510, kden,
               el("td", { class: "num" }, r.n_datasets), el("td", { class: "num" }, r.n_open),
               el("td", { class: "num" }, r.n_downloaded));
     tr.onclick = async () => {
@@ -250,6 +274,249 @@ async function loadDirectory() {
     return tr;
   }));
 }
+
+// ------------------------------------------------------------------ FDA devices
+function countLink(n, href) {
+  if (n == null) return el("span", { class: "muted" }, "—");
+  if (!n) return el("span", {}, "0");
+  const a = el("a", { class: "count", href }, n.toLocaleString());
+  a.onclick = e => e.stopPropagation();
+  return a;
+}
+
+const TYPE_LABEL = { "510k": "510(k)", denovo: "De Novo" };
+const typeBadge = t => el("span", { class: `type type-${t}` }, TYPE_LABEL[t] || t);
+const DEV_DEFAULTS = { condition: "", type: "", q: "", linked: "", dataset: "", sort: "decision_date", dir: "desc", offset: "0" };
+const dev = { ...DEV_DEFAULTS };
+const PAGE = 50;
+
+function devicesHash(over = {}) {
+  const p = { ...dev, ...over };
+  const qs = Object.entries(p).filter(([k, v]) => v !== "" && v !== DEV_DEFAULTS[k])
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+  return `#/devices${qs ? "?" + qs : ""}`;
+}
+
+async function loadDevices() {
+  const params = new URLSearchParams({ sort: dev.sort, dir: dev.dir, limit: PAGE, offset: dev.offset });
+  for (const k of ["condition", "type", "q", "dataset"]) if (dev[k]) params.set(k, dev[k]);
+  if (dev.linked) params.set("linked", "true");
+  const res = await api(`/api/devices?${params}`);
+  const cond = res.condition;
+  $("#dev-title").textContent = cond ? `${cond.display}: FDA submissions` : "FDA submissions";
+  $("#dev-sub").textContent = cond
+    ? `${cond.fda_510k_count ?? 0} 510(k) · ${cond.fda_denovo_count ?? 0} De Novo, matched on device names containing: ${[...new Set([cond.name, ...cond.fda_terms])].join(", ")}.`
+      + (cond.fda_devices_capped ? " Showing the most recent submissions only." : "")
+    : "All submissions stored so far (from conditions in the directory, plus any opened directly).";
+  document.querySelectorAll("#dev-type button").forEach(b => b.classList.toggle("on", b.dataset.type === dev.type));
+  $("#dev-q").value = dev.q;
+  $("#dev-linked").checked = !!dev.linked;
+  document.querySelectorAll("table.devices th[data-sort]").forEach(th => {
+    th.classList.toggle("sorted", th.dataset.sort === dev.sort);
+    th.classList.toggle("asc", th.dataset.sort === dev.sort && dev.dir === "asc");
+  });
+  $("#dev-body").replaceChildren(...res.items.map(d => {
+    const tr = el("tr");
+    const num = el("td", { class: "nowrap" }); num.append(el("a", { href: `#/device/${d.k_number}` }, d.k_number));
+    const typ = el("td"); typ.append(typeBadge(d.submission_type));
+    tr.append(num, typ, el("td", {}, d.device_name || ""), el("td", {}, d.applicant || ""),
+              el("td", { class: "nowrap" }, d.decision_date || ""), el("td", { class: "nowrap" }, d.date_received || ""),
+              el("td", {}, d.product_code || ""), el("td", { class: "num" }, d.n_links || ""));
+    tr.onclick = () => { location.hash = `#/device/${d.k_number}`; };
+    return tr;
+  }));
+  if (!res.items.length) $("#dev-body").append(Object.assign(el("tr"), { innerHTML: `<td colspan="8" class="muted">No submissions match.</td>` }));
+  const off = +dev.offset;
+  $("#dev-page").textContent = res.total ? `${off + 1}–${off + res.items.length} of ${res.total.toLocaleString()}` : "";
+  $("#dev-prev").disabled = off <= 0;
+  $("#dev-next").disabled = off + PAGE >= res.total;
+}
+
+document.querySelectorAll("#dev-type button").forEach(b => (b.onclick = () => { location.hash = devicesHash({ type: b.dataset.type, offset: "0" }); }));
+document.querySelectorAll("table.devices th[data-sort]").forEach(th => (th.onclick = () => {
+  const same = th.dataset.sort === dev.sort;
+  const defDir = ["applicant", "device_name", "product_code", "type"].includes(th.dataset.sort) ? "asc" : "desc";
+  location.hash = devicesHash({ sort: th.dataset.sort, dir: same ? (dev.dir === "asc" ? "desc" : "asc") : defDir, offset: "0" });
+}));
+let devQTimer;
+$("#dev-q").oninput = e => { clearTimeout(devQTimer); devQTimer = setTimeout(() => { location.hash = devicesHash({ q: e.target.value.trim(), offset: "0" }); }, 350); };
+$("#dev-linked").onchange = e => { location.hash = devicesHash({ linked: e.target.checked ? "1" : "", offset: "0" }); };
+$("#dev-prev").onclick = () => { location.hash = devicesHash({ offset: String(Math.max(0, +dev.offset - PAGE)) }); };
+$("#dev-next").onclick = () => { location.hash = devicesHash({ offset: String(+dev.offset + PAGE) }); };
+
+// One submission: public record, FDA links, catalog links, structured review.
+let devicePoll = null;
+async function loadDevice(k) {
+  clearTimeout(devicePoll);
+  const box = $("#device");
+  let d;
+  try { d = await api(`/api/devices/${encodeURIComponent(k)}`); }
+  catch (e) { box.replaceChildren(el("p", { class: "muted" }, `${k}: ${e.message}`)); return; }
+  if (location.hash !== `#/device/${k}`) return;
+  const doc = d.doc || {};
+  const frag = document.createDocumentFragment();
+
+  const back = el("a", { href: "#" }, "← Back"); back.onclick = e => { e.preventDefault(); history.back(); };
+  const head = el("div", { class: "dev-head" });
+  head.append(back, el("h2", {}, d.device_name || d.k_number));
+  const sub = el("div", { class: "sub" });
+  sub.append(el("b", {}, d.k_number), " ", typeBadge(d.submission_type),
+             ` · ${d.applicant || ""} · ${d.decision_description || ""} ${d.decision_date || ""}`);
+  head.append(sub);
+  const links = el("div", { class: "dev-links" });
+  links.append(el("a", { href: d.fda_url, target: "_blank", rel: "noopener" }, "FDA database record ↗"));
+  if (doc.status !== "none") links.append(el("a", { href: d.pdf_url, target: "_blank", rel: "noopener" },
+    d.submission_type === "denovo" ? "Decision summary (PDF) ↗" : "510(k) summary (PDF) ↗"));
+  if (doc.pages) links.append(el("span", { class: "muted" }, `${doc.pages} pages`));
+  head.append(links);
+  frag.append(head);
+
+  const grid = el("div", { class: "two-col" });
+  const left = el("div"), right = el("div");
+
+  // Catalog links (datasets / papers this submission's summary references)
+  if (d.links.length) {
+    const p = el("div", { class: "panel" });
+    p.append(el("h3", {}, "Catalog datasets & papers referenced"));
+    for (const l of d.links) {
+      const row = el("div", { class: "link-row" });
+      row.append(el("a", { href: `#/dataset/${l.dataset_id}` }, l.dataset_title));
+      if (l.article_title) {
+        row.append(" · paper: ");
+        row.append(l.article_url ? el("a", { href: l.article_url, target: "_blank", rel: "noopener" }, l.article_title) : el("span", {}, l.article_title));
+      }
+      row.append(el("div", { class: "pmeta" }, `matched ${l.via}: “${l.matched}”`));
+      if (l.snippet) row.append(el("div", { class: "snippet" }, `…${l.snippet}…`));
+      p.append(row);
+    }
+    left.append(p);
+  }
+
+  // Structured review of the summary PDF
+  const rev = el("div", { class: "panel review" });
+  rev.append(el("h3", {}, "Summary review"));
+  const x = doc.extracted;
+  if (x) {
+    const sec = (title, text) => { if (text) { rev.append(el("h4", {}, title), el("p", {}, text)); } };
+    sec("Overview", x.summary);
+    sec("Intended use", x.intended_use);
+    sec(`Technology${x.is_ai_ml ? " (AI/ML)" : ""}`, x.technology);
+    sec("Training data", x.training_data);
+    const t = x.test_data || {};
+    const tparts = [t.description, t.n_cases && `Cases: ${t.n_cases}`, t.n_sites && `Sites: ${t.n_sites}`,
+                    t.countries && `Countries: ${t.countries}`, t.design && `Design: ${t.design}`].filter(Boolean);
+    sec("Test data", tparts.join(" · "));
+    sec("Reference standard", x.reference_standard);
+    if (x.performance && x.performance.length) {
+      rev.append(el("h4", {}, "Reported performance"));
+      const tb = el("table");
+      tb.append(Object.assign(el("tr"), { innerHTML: "<th>Metric</th><th>Value</th><th>95% CI</th><th>Population</th>" }));
+      for (const m of x.performance) {
+        const tr = el("tr"); for (const v of [m.metric, m.value, m.ci, m.population]) tr.append(el("td", {}, v || ""));
+        tb.append(tr);
+      }
+      rev.append(tb);
+    }
+    if (x.datasets_named && x.datasets_named.length) sec("Datasets named", x.datasets_named.join("; "));
+    sec("Limitations", x.limitations);
+    if (x.references && x.references.length) {
+      rev.append(el("h4", {}, "References cited"));
+      const ul = el("ul", { class: "small" }); x.references.forEach(r => ul.append(el("li", {}, r))); rev.append(ul);
+    }
+    rev.append(el("p", { class: "pmeta" }, "Extracted by Claude from the public summary PDF — verify against the document."));
+  } else if (d.pending) {
+    const row = el("div", { class: "row" }); row.style.display = "flex"; row.style.gap = "8px"; row.style.alignItems = "center";
+    row.append(el("div", { class: "spinner" }), el("span", { class: "muted" },
+      doc.status === "done" ? "Summarizing the PDF…" : "Downloading and reading the summary PDF…"));
+    rev.append(row);
+    devicePoll = setTimeout(() => loadDevice(k), 4000);
+  } else if (doc.status === "none") {
+    rev.append(el("p", { class: "muted" }, "FDA has no public summary PDF for this submission (common for older filings and 510(k) “Statements”). The public record is on the right."));
+  } else if (doc.status === "failed") {
+    rev.append(el("p", { class: "muted" }, `Couldn't read the summary PDF (${doc.error || "error"}). Open it directly with the link above.`));
+  } else if (!d.llm_available) {
+    rev.append(el("p", { class: "muted" }, "Structured reviews need ANTHROPIC_API_KEY on the server. The summary PDF is linked above."));
+  } else {
+    rev.append(el("p", { class: "muted" }, doc.error || "No structured review yet."));
+  }
+  left.append(rev);
+
+  // Public record (openFDA) + relationships
+  const rec = el("div", { class: "panel" });
+  rec.append(el("h3", {}, "Public record (openFDA)"));
+  const kv = el("dl", { class: "kv" });
+  const fields = [["Number", d.k_number], ["Type", TYPE_LABEL[d.submission_type]], ["Device", d.device_name],
+    ["Applicant", d.applicant], ["Contact", d.contact], ["Address", d.address], ["Received", d.date_received],
+    ["Decision", [d.decision_description, d.decision_code && `(${d.decision_code})`].filter(Boolean).join(" ")],
+    ["Decision date", d.decision_date], ["Product code", d.product_code], ["Generic name", d.generic_name],
+    ["Device class", d.device_class], ["Regulation", d.regulation_number], ["Specialty", d.medical_specialty],
+    ["Review panel", d.advisory_committee], ["Clearance type", d.clearance_type],
+    ["Summary / statement", d.statement_or_summary], ["Third-party review", d.third_party_flag],
+    ["Expedited", d.expedited_review_flag]];
+  for (const [k2, v] of fields) if (v) kv.append(el("dt", {}, k2), el("dd", {}, v));
+  rec.append(kv);
+  right.append(rec);
+
+  const preds = (doc.predicates || []);
+  if (preds.length) {
+    const p = el("div", { class: "panel" });
+    p.append(el("h3", {}, "Submissions named in the summary (predicates, references)"));
+    const cl = el("div", { class: "chip-links" });
+    preds.forEach(pr => cl.append(el("a", { href: `#/device/${pr.k_number}` }, pr.k_number)));
+    p.append(cl);
+    right.append(p);
+  }
+  if (d.conditions && d.conditions.length) {
+    const p = el("div", { class: "panel" });
+    p.append(el("h3", {}, "Conditions"));
+    const cl = el("div", { class: "chip-links" });
+    d.conditions.forEach(c => cl.append(el("a", { href: `#/devices?condition=${encodeURIComponent(c)}` }, c)));
+    p.append(cl);
+    right.append(p);
+  }
+  grid.append(left, right);
+  frag.append(grid);
+  box.replaceChildren(frag);
+}
+
+async function loadDataset(id) {
+  const box = $("#dataset");
+  const ds = await api(`/api/datasets/${encodeURIComponent(id)}`);
+  const back = el("a", { href: "#" }, "← Back"); back.onclick = e => { e.preventDefault(); history.back(); };
+  const cards = el("div", { class: "cards" }); cards.append(card(ds));
+  const parts = [back, cards];
+  if (ds.devices.length) {
+    const p = el("div", { class: "panel" }); p.style.marginTop = "14px";
+    p.append(el("h3", {}, "FDA submissions whose summaries reference this dataset"));
+    for (const d of ds.devices) {
+      const row = el("div", { class: "link-row" });
+      row.append(el("a", { href: `#/device/${d.k_number}` }, d.k_number), " ", typeBadge(d.submission_type),
+                 ` ${d.device_name || ""} · ${d.applicant || ""} · ${d.decision_date || ""}`);
+      p.append(row);
+    }
+    parts.push(p);
+  }
+  box.replaceChildren(...parts);
+}
+
+// ------------------------------------------------------------------ routing
+function route() {
+  const h = location.hash;
+  if (h.startsWith("#/devices")) {
+    const params = new URLSearchParams(h.split("?")[1] || "");
+    Object.assign(dev, DEV_DEFAULTS);
+    for (const k of Object.keys(DEV_DEFAULTS)) if (params.has(k)) dev[k] = params.get(k);
+    show("devices", false);
+    loadDevices().catch(e => banner(e.message));
+  } else if (h.startsWith("#/device/")) {
+    show("device", false);
+    loadDevice(decodeURIComponent(h.slice(9))).catch(e => banner(e.message));
+  } else if (h.startsWith("#/dataset/")) {
+    show("dataset", false);
+    loadDataset(decodeURIComponent(h.slice(10))).catch(e => banner(e.message));
+  }
+}
+window.addEventListener("hashchange", route);
 
 // ------------------------------------------------------------------ crawls
 async function loadCrawls() {
@@ -281,24 +548,30 @@ async function refreshStats() {
   try {
     const s = await api("/api/stats");
     state.llm = s.llm_configured;
-    $("#stats").textContent = `${s.datasets} datasets · ${s.conditions} conditions · ${s.files} files (${fmtBytes(s.bytes)}) · ${s.papers.toLocaleString()} papers` +
+    $("#stats").textContent = `${s.datasets} datasets · ${s.conditions} conditions · ${s.files} files (${fmtBytes(s.bytes)}) · ${s.papers.toLocaleString()} papers · ${s.fda_submissions.toLocaleString()} FDA submissions` +
       (s.active_crawls.length ? ` · ${s.active_crawls.length} crawl running` : "");
     $("#broad-btn").disabled = !s.llm_configured;
     banner(s.llm_configured ? "" : "Crawling is disabled: set ANTHROPIC_API_KEY on the server. Search still works over the indexed catalog.");
   } catch (e) { banner(`API unreachable: ${e.message}`); }
 }
 
-function show(view) {
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
+function show(view, clearHash = true) {
+  if (clearHash && location.hash) history.pushState(null, "", location.pathname + location.search);
+  const tabFor = { device: "devices", dataset: "search" }[view] || view;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === tabFor));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("hidden", v.id !== `view-${view}`));
   if (view === "directory") loadDirectory();
   if (view === "crawls") loadCrawls();
 }
 
-document.querySelectorAll(".tab").forEach(t => (t.onclick = () => show(t.dataset.view)));
+document.querySelectorAll(".tab").forEach(t => (t.onclick = () => {
+  if (t.dataset.view === "devices") location.hash = "#/devices";
+  else show(t.dataset.view);
+}));
 $("#only-with").onchange = loadDirectory;
 $("#search-form").onsubmit = e => {
   e.preventDefault();
+  if (location.hash) history.pushState(null, "", location.pathname + location.search);
   const q = $("#q").value.trim();
   if (q) runSearch(q).catch(err => banner(err.message));
 };
@@ -315,4 +588,5 @@ $("#broad-btn").onclick = async () => {
   await refreshStats();
   const q = new URLSearchParams(location.search).get("q");
   if (q) { $("#q").value = q; runSearch(q, { crawl: false }).catch(err => banner(err.message)); }
+  if (location.hash) route();
 })();

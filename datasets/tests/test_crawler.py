@@ -5,7 +5,7 @@ from app import crawler, fda
 from app.config import Settings
 from app.manager import CrawlManager
 from app.store import Store
-from tests.fakes import FakeClient, response, text, tool_use
+from tests.fakes import FakeClient, fake_refresh, response, text, tool_use
 
 PLAN = {
     "summary": "MS lesion MRI",
@@ -36,7 +36,7 @@ def ctx_for(tmp_path, minutes=5, **settings_kw):
 
 
 def test_agent_records_dataset_and_returns_tool_results(tmp_path, monkeypatch):
-    monkeypatch.setattr(fda, "count_510k", lambda terms, **kw: 3)
+    monkeypatch.setattr(fda, "refresh_condition", fake_refresh(lambda n: 3))
     ctx, seen = ctx_for(tmp_path)
     client = FakeClient(PLAN, [
         response([text("found one"), tool_use("record_dataset", RECORD, "tu_a"),
@@ -61,7 +61,7 @@ def test_agent_records_dataset_and_returns_tool_results(tmp_path, monkeypatch):
 
 
 def test_agent_stops_at_deadline_and_on_cancel(tmp_path, monkeypatch):
-    monkeypatch.setattr(fda, "count_510k", lambda terms, **kw: 0)
+    monkeypatch.setattr(fda, "refresh_condition", fake_refresh(lambda n: 0))
     ctx, _ = ctx_for(tmp_path)
     ctx.deadline = time.monotonic() - 1
     client = FakeClient(PLAN)
@@ -88,8 +88,8 @@ def test_fallbacks_off(tmp_path):
 
 def test_manager_runs_broad_crawl_in_510k_order(tmp_path, monkeypatch):
     counts = {"pneumothorax": 15, "stroke": 90}
-    monkeypatch.setattr(fda, "count_510k",
-                        lambda terms, **kw: counts.get(list(terms)[0], 0))
+    monkeypatch.setattr(fda, "refresh_condition",
+                        fake_refresh(lambda n: counts.get(n.lower(), 0)))
     monkeypatch.setattr("app.manager.load_seed", lambda: [
         {"name": "pneumothorax", "fda_terms": []}, {"name": "stroke", "fda_terms": []}])
     settings = Settings(data_dir=tmp_path, swarm_size=1, download_enabled=False)

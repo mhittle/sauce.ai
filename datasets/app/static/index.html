@@ -12,6 +12,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab active" data-view="search">Search</button>
       <button class="tab" data-view="directory">Directory</button>
+      <button class="tab" data-view="devices">FDA devices</button>
       <button class="tab" data-view="crawls">Crawls</button>
     </nav>
     <div class="top-right">
@@ -40,14 +41,45 @@
     <!-- Directory -->
     <section id="view-directory" class="view hidden">
       <h2>Conditions, ranked by FDA 510(k) clearances</h2>
-      <p class="muted small">510(k) count = clearances whose device name matches the condition or its device terms (openFDA). A proxy for how active the SaMD market is for that condition.</p>
+      <p class="muted small">Counts = FDA submissions whose device name matches the condition or its device terms (openFDA): 510(k) clearances and De Novo grants. A proxy for how active the SaMD market is for that condition. Click a count to review the submissions.</p>
       <label class="small"><input id="only-with" type="checkbox"> Only conditions with datasets</label>
       <table class="dir">
-        <thead><tr><th>#</th><th>Condition</th><th class="num">510(k)</th><th class="num">Datasets</th><th class="num">Open</th><th class="num">Downloaded</th></tr></thead>
+        <thead><tr><th>#</th><th>Condition</th><th class="num">510(k)</th><th class="num">De Novo</th><th class="num">Datasets</th><th class="num">Open</th><th class="num">Downloaded</th></tr></thead>
         <tbody id="dir-body"></tbody>
       </table>
       <div id="dir-results" class="cards"></div>
     </section>
+
+    <!-- FDA devices: list -->
+    <section id="view-devices" class="view hidden">
+      <h2 id="dev-title">FDA submissions</h2>
+      <p id="dev-sub" class="muted small"></p>
+      <div class="dev-controls">
+        <div class="seg" id="dev-type">
+          <button data-type="">All</button><button data-type="510k">510(k)</button><button data-type="denovo">De Novo</button>
+        </div>
+        <input id="dev-q" type="search" placeholder="Filter by device, company, number, product code">
+        <label class="small"><input id="dev-linked" type="checkbox"> Only those referencing catalog datasets</label>
+      </div>
+      <div class="table-wrap">
+        <table class="dir devices">
+          <thead><tr>
+            <th data-sort="k_number">Number</th><th data-sort="type">Type</th>
+            <th data-sort="device_name">Device</th><th data-sort="applicant">Company</th>
+            <th data-sort="decision_date">Decision</th><th data-sort="date_received">Received</th>
+            <th data-sort="product_code">Product code</th><th data-sort="links" class="num">Datasets</th>
+          </tr></thead>
+          <tbody id="dev-body"></tbody>
+        </table>
+      </div>
+      <div class="pager"><button class="btn link" id="dev-prev">← Previous</button><span id="dev-page" class="muted small"></span><button class="btn link" id="dev-next">Next →</button></div>
+    </section>
+
+    <!-- FDA devices: one submission -->
+    <section id="view-device" class="view hidden"><div id="device"></div></section>
+
+    <!-- One dataset -->
+    <section id="view-dataset" class="view hidden"><div id="dataset"></div></section>
 
     <!-- Crawls -->
     <section id="view-crawls" class="view hidden">
@@ -71,6 +103,7 @@
       <div class="chips"></div>
       <dl class="meta"></dl>
       <div class="files"></div>
+      <div class="fda hidden"></div>
       <details class="papers"><summary></summary><div class="paper-list"></div></details>
       <details class="access-details"><summary>How to access</summary><p class="instructions"></p><ul class="links"></ul></details>
     </article>

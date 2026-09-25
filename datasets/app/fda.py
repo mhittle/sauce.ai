@@ -61,17 +61,12 @@ def count_510k(terms: Iterable[str], session: requests.Session | None = None,
 
 
 def refresh_condition(store, name: str, session: requests.Session | None = None) -> int | None:
-    """Recount one condition from its name + planner-curated fda_terms.
-
-    Synonyms are deliberately excluded: they're tuned for dataset search
-    ("MS", "collapsed lung"), not device names, and inflate the count."""
-    cond = store.get_condition(name)
-    if not cond:
-        return None
-    terms = [cond["name"], *cond["fda_terms"]]
-    # Very short terms ("ms", "ich") match unrelated device names.
-    terms = [t for t in terms if len(t) >= 4]
-    n = count_510k(terms, session=session)
-    if n is not None:
-        store.set_condition_510k(cond["name"], n)
-    return n
+    """Re-sync one condition's submissions (510(k) + De Novo) from openFDA and
+    return its 510(k) count. Matching uses the condition name + planner-curated
+    fda_terms; synonyms are excluded (tuned for dataset search — "MS",
+    "collapsed lung" — they inflate device matches), as are terms under 4
+    characters ("ms", "ich")."""
+    from .config import get_settings
+    from .devices import sync_condition
+    res = sync_condition(store, name, get_settings(), session)
+    return res["n_510k"] if res else None

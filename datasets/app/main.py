@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from . import crawler, fda
 from .config import Settings, get_settings
+from .devices import DeviceWorker, fda_database_url, fetch_one, summary_pdf_urls
 from .literature import LiteratureWorker
 from .manager import CrawlBusy, CrawlManager
 from .store import Store
@@ -33,12 +34,16 @@ class CrawlRequest(BaseModel):
 
 def create_app(settings: Settings | None = None, store: Store | None = None,
                manager: CrawlManager | None = None,
-               literature: LiteratureWorker | None = None) -> FastAPI:
+               literature: LiteratureWorker | None = None,
+               devices: DeviceWorker | None = None) -> FastAPI:
     settings = settings or get_settings()
     store = store or Store(settings.db_path)
     store.mark_stale_crawls()
     manager = manager or CrawlManager(store, settings)
     literature = literature or LiteratureWorker(
+        store, settings,
+        client_factory=crawler.make_client if settings.anthropic_api_key else None)
+    devices = devices or DeviceWorker(
         store, settings,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     logging.basicConfig(level=logging.INFO)
@@ -47,14 +52,17 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     async def lifespan(_app: FastAPI):
         if settings.literature_enabled:
             literature.start()
+        if settings.devices_enabled:
+            devices.start()
         yield
         literature.stop()
+        devices.stop()
         manager.shutdown()
 
     app = FastAPI(title="sauce.ai/datasets", lifespan=lifespan,
                   description="LLM-driven medical dataset finder", version="0.1.0")
     app.state.store, app.state.manager, app.state.settings = store, manager, settings
-    app.state.literature = literature
+    app.state.literature, app.state.devices = literature, devices
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins or ["*"],
                        allow_methods=["*"], allow_headers=["*"])
@@ -67,7 +75,9 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/api/stats")
     def stats():
         lit = store.literature_summary()
-        return {**store.stats(), "papers": lit["articles"], "active_crawls": manager.active(),
+        return {**store.stats(), "papers": lit["articles"],
+                "fda_submissions": store.device_summary()["devices"],
+                "active_crawls": manager.active(),
                 "llm_configured": manager.llm_ready()}
 
     # -------------------------------------------------------- search
@@ -86,7 +96,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             if c:
                 extra += [c["name"], *c["synonyms"]]
                 conditions.append({"name": c["name"], "display": c["display"],
-                                   "fda_510k_count": c["fda_510k_count"]})
+                                   "fda_510k_count": c["fda_510k_count"],
+                                   "fda_denovo_count": c.get("fda_denovo_count")})
         ids = list(dict.fromkeys(memo["dataset_ids"] + store.search(q, limit, extra)))
         recent = store.recent_crawl_for(q, settings.recrawl_hours)
         return {
@@ -143,10 +154,11 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
 
     @app.post("/api/conditions/{name}/refresh-510k")
     def refresh_510k(name: str):
-        n = fda.refresh_condition(store, name)
-        if n is None and not store.get_condition(name):
+        if not store.get_condition(name):
             raise HTTPException(404, "condition not found")
-        return {"name": name, "fda_510k_count": n}
+        n = fda.refresh_condition(store, name)
+        c = store.get_condition(name)
+        return {"name": name, "fda_510k_count": n, "fda_denovo_count": c["fda_denovo_count"]}
 
     @app.get("/api/datasets")
     def datasets(condition: str | None = None, limit: int = Query(100, ge=1, le=500),
@@ -167,7 +179,11 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         them, then papers naming the dataset; most-cited first."""
         if not store.get_dataset(ds_id):
             raise HTTPException(404, "dataset not found")
-        return store.dataset_articles(ds_id, relation, limit, offset)
+        res = store.dataset_articles(ds_id, relation, limit, offset)
+        used = store.devices_for_articles([a["id"] for a in res["items"]])
+        for a in res["items"]:
+            a["devices"] = used.get(a["id"], [])
+        return res
 
     @app.post("/api/datasets/{ds_id}/articles/refresh", status_code=202)
     def refresh_articles(ds_id: str):
@@ -175,6 +191,64 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             raise HTTPException(404, "dataset not found")
         store.reset_literature(ds_id)
         return {"queued": True}
+
+    # -------------------------------------------------------- FDA devices
+    @app.get("/api/devices")
+    def list_devices(condition: str | None = None,
+                     type: str | None = Query(None, pattern="^(510k|denovo)$"),
+                     q: str | None = Query(None, max_length=200),
+                     dataset: str | None = None, linked: bool = False,
+                     sort: str = "decision_date",
+                     dir: str = Query("desc", pattern="^(asc|desc)$"),
+                     limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
+        """510(k)/De Novo submissions, filterable by condition, type, text,
+        or catalog dataset referenced; sortable by date, company, name…"""
+        res = store.list_devices(condition, type, q, dataset, linked, sort, dir, limit, offset)
+        if condition:
+            res["condition"] = store.get_condition(condition)
+        return res
+
+    @app.get("/api/devices/{k}")
+    def device(k: str):
+        """Everything public about one submission: the openFDA record, links
+        to FDA's database page and summary PDF, predicates, the catalog
+        datasets/papers its summary references, and (once analysed) a
+        structured summary of the PDF. Opening it queues the analysis."""
+        k = k.upper()
+        d = store.get_device(k)
+        if not d and fetch_one(store, k, settings):
+            d = store.get_device(k)  # e.g. a predicate outside our conditions
+        if not d:
+            raise HTTPException(404, "submission not found")
+        doc = d["doc"] or {}
+        wants_llm = settings.device_llm != "off" and devices.client_factory is not None
+        if (not doc or doc.get("status") == "queued"
+                or (wants_llm and doc.get("status") == "done" and not doc.get("extracted_at"))):
+            if not doc.get("requested"):
+                store.request_device_analysis(k)
+                devices.poke()
+            d["pending"] = True
+        else:
+            d["pending"] = bool(doc.get("requested"))
+        d["fda_url"] = fda_database_url(k)
+        d["pdf_url"] = doc.get("pdf_url") or summary_pdf_urls(k)[0]
+        d["llm_available"] = wants_llm
+        return d
+
+    @app.post("/api/devices/{k}/analyze", status_code=202)
+    def analyze_device(k: str):
+        k = k.upper()
+        if not store.get_device(k):
+            raise HTTPException(404, "submission not found")
+        store.request_device_analysis(k)
+        devices.poke()
+        return {"queued": True}
+
+    @app.get("/api/devices-status")
+    def devices_status():
+        return {**store.device_summary(), "worker_running": devices.running(),
+                "enabled": settings.devices_enabled, "llm_mode": settings.device_llm,
+                "last_error": devices.last_error}
 
     @app.get("/api/literature")
     def literature_status():
