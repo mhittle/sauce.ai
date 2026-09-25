@@ -100,7 +100,7 @@ def test_devices_api(tmp_path, monkeypatch):
     assert [d["k_number"] for d in body["items"]] == ["DEN200001", "K213941"]
     assert body["condition"]["fda_denovo_count"] == 1
     assert client.get("/api/devices", params={"type": "denovo"}).json()["total"] == 1
-    assert client.get("/api/devices", params={"type": "pma"}).status_code == 422
+    assert client.get("/api/devices", params={"type": "xyz"}).status_code == 422
     # Opening a submission queues its summary PDF for the worker.
     d = client.get("/api/devices/k213941").json()
     assert d["pending"] is True and d["pdf_url"].endswith("/pdf21/K213941.pdf")

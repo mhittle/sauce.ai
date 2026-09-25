@@ -47,7 +47,8 @@ class Session:
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(devmod, "PAGE", 2)
-    settings = Settings(data_dir=tmp_path, device_interval_sec=0, openfda_api_key=None)
+    settings = Settings(data_dir=tmp_path, device_interval_sec=0, openfda_api_key=None,
+                        fda_ai_list_url="")
     store = Store(settings.db_path)
     store.upsert_condition("pneumothorax", fda_terms=["chest x-ray triage", "ms"])
     return settings, store
@@ -152,3 +153,88 @@ def test_fetch_one_predicate(env):
     assert fetch_one(store, "K190424", settings, sess) and store.get_device("K190424")
     assert not fetch_one(store, "K000000", settings, Session(pages=[[rec("K1", "x")]]))
     assert not fetch_one(store, "DROP TABLE", settings, sess)
+
+
+def test_software_heuristic_and_ai_from_text():
+    from app.devices import is_software_record, text_says_ai
+    assert is_software_record({"generic_name": "Radiological Computer-Assisted Triage And Notification Software"})
+    assert is_software_record({"device_name": "X", "regulation_number": "892.2080"})
+    assert not is_software_record({"device_name": "12MP Color Digital Mammography LCD Monitor",
+                                   "generic_name": "Display, Diagnostic Radiology"})
+    assert not is_software_record({"device_name": "BARCOVIEW MGD 521M DIGITAL MAMMOGRAPHY DISPLAY",
+                                   "generic_name": "System, Image Processing, Radiological",
+                                   "regulation_number": "892.2050"})
+    assert is_software_record({"device_name": "UNISIGHT MAMMOGRAPHY VIEWER, MODEL 4.0",
+                               "generic_name": "System, Image Processing, Radiological"})
+    assert is_software_record({"device_name": "CLIMB Mammography Viewer Software",
+                               "generic_name": "Display, Diagnostic Radiology"})
+    assert text_says_ai("A deep learning model (convolutional neural network) was trained.")
+    assert not text_says_ai("Unlike machine learning products, this device uses thresholds.")
+
+
+def ai_xlsx(rows):
+    import io
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Date of Final Decision", "Submission Number", "Device", "Company",
+               "Panel (Lead)", "Primary Product Code"])
+    for r in rows:
+        ws.append(r)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_ai_list_sync_flags_and_enriches(env):
+    from app.devices import parse_ai_list, sync_ai_list
+    settings, store = env
+    data = ai_xlsx([
+        ["06/29/2026", '=HYPERLINK("https://x/pmn.cfm?ID=K213941", "K213941")', "CXR AI", "Annalise",
+         "Radiology", "QFM"],
+        ["01/02/2020", "DEN200001", "Afib AI", "Alpha", "Cardiovascular", "QDA"],
+        ["03/03/2021", "P200002", "Mammo AI PMA", "Beta", "Radiology", "QPN"],
+        ["", "not a number", "", "", "", ""]])
+    rows = parse_ai_list(data)
+    assert [r["k_number"] for r in rows] == ["K213941", "DEN200001", "P200002"]
+    assert rows[0]["decision_date"] == "2026-06-29"
+    # K213941 already has a full openFDA record (e.g. from a condition sync).
+    store.upsert_devices([devmod._classified(normalize_record(rec("K213941", "2022-02-24",
+                                                                  name="Annalise CXR Triage")))])
+
+    class S(Session):
+        def get(self, url, **kw):
+            if url == "https://fda.test/ai.xlsx":
+                return NS(status_code=200, content=data)
+            if "k_number:(" in url:
+                self.urls.append(url)
+                return NS(status_code=200, json=lambda: {"results": [rec("DEN200001", "2020-01-02",
+                                                                         name="Afib AI")]})
+            return super().get(url, **kw)
+
+    s = S()
+    settings = Settings(data_dir=settings.data_dir, fda_ai_list_url="https://fda.test/ai.xlsx",
+                        openfda_api_key=None)
+    assert sync_ai_list(store, settings, s) == 3
+    assert s.urls == ["https://api.fda.gov/device/510k.json?search=k_number:(DEN200001)&limit=100"]
+    k = store.get_device("K213941")
+    assert k["device_name"] == "Annalise CXR Triage"      # openFDA record not overwritten
+    assert (k["is_ai"], k["is_software"], k["ai_source"]) == (1, 1, "fda_list")
+    assert store.get_device("DEN200001")["raw"] is not None  # enriched
+    assert store.get_device("P200002")["submission_type"] == "pma"
+    res = store.list_devices(category="ai")
+    assert res["total"] == 3 and res["facets"] == {"software": 3, "ai": 3}
+    store.mark_ai(["K213941"], "summary_text")             # FDA list stays the source
+    assert store.get_device("K213941")["ai_source"] == "fda_list"
+
+
+def test_reclassify_existing_rows(env):
+    from app.devices import is_software_record
+    settings, store = env
+    store.upsert_devices([{"k_number": "K1", "submission_type": "510k",
+                           "generic_name": "System, Image Processing, Radiological"},
+                          {"k_number": "K2", "submission_type": "510k", "device_name": "Chest tube"}])
+    with store._write() as c:
+        c.execute("UPDATE devices SET is_software = 0")  # as migrated from an older catalog
+    assert store.reclassify_software(is_software_record) == 1
+    assert store.get_device("K1")["is_software"] == 1 and store.get_device("K2")["is_software"] == 0

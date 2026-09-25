@@ -254,15 +254,21 @@ function watchCrawl(id) {
 let dirSelected = null;
 async function loadDirectory() {
   const only = $("#only-with").checked;
+  const sw = $("#dir-sw").checked;
+  try { localStorage.setItem("dirSw", sw ? "1" : ""); } catch {}
   const rows = await api(`/api/conditions?with_datasets=${only}`);
+  if (sw) rows.sort((a, b) => (b.sw_510k - a.sw_510k) || (b.sw_denovo - a.sw_denovo) || (b.n_datasets - a.n_datasets));
   $("#dir-body").replaceChildren(...rows.map((r, i) => {
     const tr = el("tr");
     if (r.name === dirSelected) tr.classList.add("sel");
     const q = encodeURIComponent(r.name);
-    const k510 = el("td", { class: "num" }), kden = el("td", { class: "num" });
-    k510.append(countLink(r.fda_510k_count, `#/devices?condition=${q}&type=510k`));
-    kden.append(countLink(r.fda_denovo_count, `#/devices?condition=${q}&type=denovo`));
-    tr.append(el("td", { class: "num" }, i + 1), el("td", {}, r.display), k510, kden,
+    const cat = sw ? "&category=software" : "";
+    const k510 = el("td", { class: "num" }), kden = el("td", { class: "num" }), kai = el("td", { class: "num" });
+    const synced = r.fda_510k_count != null;
+    k510.append(countLink(sw ? (synced ? r.sw_510k : null) : r.fda_510k_count, `#/devices?condition=${q}&type=510k${cat}`));
+    kden.append(countLink(sw ? (synced ? r.sw_denovo : null) : r.fda_denovo_count, `#/devices?condition=${q}&type=denovo${cat}`));
+    kai.append(countLink(synced ? r.n_ai : null, `#/devices?condition=${q}&category=ai`));
+    tr.append(el("td", { class: "num" }, i + 1), el("td", {}, r.display), k510, kden, kai,
               el("td", { class: "num" }, r.n_datasets), el("td", { class: "num" }, r.n_open),
               el("td", { class: "num" }, r.n_downloaded));
     tr.onclick = async () => {
@@ -284,9 +290,17 @@ function countLink(n, href) {
   return a;
 }
 
-const TYPE_LABEL = { "510k": "510(k)", denovo: "De Novo" };
+const TYPE_LABEL = { "510k": "510(k)", denovo: "De Novo", pma: "PMA" };
+const AI_SOURCE = { fda_list: "on FDA's AI-Enabled Medical Devices list", summary_text: "summary PDF describes a trained model",
+                    summary_review: "summary review identified AI/ML" };
+function flags(d) {
+  const f = document.createDocumentFragment();
+  if (d.is_ai) f.append(el("span", { class: "flag ai", title: AI_SOURCE[d.ai_source] || "AI-enabled" }, "AI"));
+  else if (d.is_software) f.append(el("span", { class: "flag sw", title: "Software function" }, "Software"));
+  return f;
+}
 const typeBadge = t => el("span", { class: `type type-${t}` }, TYPE_LABEL[t] || t);
-const DEV_DEFAULTS = { condition: "", type: "", q: "", linked: "", dataset: "", sort: "decision_date", dir: "desc", offset: "0" };
+const DEV_DEFAULTS = { condition: "", type: "", category: "", q: "", linked: "", dataset: "", sort: "decision_date", dir: "desc", offset: "0" };
 const dev = { ...DEV_DEFAULTS };
 const PAGE = 50;
 
@@ -299,7 +313,7 @@ function devicesHash(over = {}) {
 
 async function loadDevices() {
   const params = new URLSearchParams({ sort: dev.sort, dir: dev.dir, limit: PAGE, offset: dev.offset });
-  for (const k of ["condition", "type", "q", "dataset"]) if (dev[k]) params.set(k, dev[k]);
+  for (const k of ["condition", "type", "category", "q", "dataset"]) if (dev[k]) params.set(k, dev[k]);
   if (dev.linked) params.set("linked", "true");
   const res = await api(`/api/devices?${params}`);
   const cond = res.condition;
@@ -307,8 +321,10 @@ async function loadDevices() {
   $("#dev-sub").textContent = cond
     ? `${cond.fda_510k_count ?? 0} 510(k) · ${cond.fda_denovo_count ?? 0} De Novo, matched on device names containing: ${[...new Set([cond.name, ...cond.fda_terms])].join(", ")}.`
       + (cond.fda_devices_capped ? " Showing the most recent submissions only." : "")
-    : "All submissions stored so far (from conditions in the directory, plus any opened directly).";
+    : "All submissions stored so far: every device on FDA's AI-enabled list, those matched to directory conditions, and any opened directly.";
+  if (res.total) $("#dev-sub").textContent += ` In this view: ${res.facets.software.toLocaleString()} software · ${res.facets.ai.toLocaleString()} AI-enabled.`;
   document.querySelectorAll("#dev-type button").forEach(b => b.classList.toggle("on", b.dataset.type === dev.type));
+  document.querySelectorAll("#dev-cat button").forEach(b => b.classList.toggle("on", b.dataset.cat === dev.category));
   $("#dev-q").value = dev.q;
   $("#dev-linked").checked = !!dev.linked;
   document.querySelectorAll("table.devices th[data-sort]").forEach(th => {
@@ -319,7 +335,8 @@ async function loadDevices() {
     const tr = el("tr");
     const num = el("td", { class: "nowrap" }); num.append(el("a", { href: `#/device/${d.k_number}` }, d.k_number));
     const typ = el("td"); typ.append(typeBadge(d.submission_type));
-    tr.append(num, typ, el("td", {}, d.device_name || ""), el("td", {}, d.applicant || ""),
+    const name = el("td", {}, d.device_name || ""); name.append(flags(d));
+    tr.append(num, typ, name, el("td", {}, d.applicant || ""),
               el("td", { class: "nowrap" }, d.decision_date || ""), el("td", { class: "nowrap" }, d.date_received || ""),
               el("td", {}, d.product_code || ""), el("td", { class: "num" }, d.n_links || ""));
     tr.onclick = () => { location.hash = `#/device/${d.k_number}`; };
@@ -333,6 +350,7 @@ async function loadDevices() {
 }
 
 document.querySelectorAll("#dev-type button").forEach(b => (b.onclick = () => { location.hash = devicesHash({ type: b.dataset.type, offset: "0" }); }));
+document.querySelectorAll("#dev-cat button").forEach(b => (b.onclick = () => { location.hash = devicesHash({ category: b.dataset.cat, offset: "0" }); }));
 document.querySelectorAll("table.devices th[data-sort]").forEach(th => (th.onclick = () => {
   const same = th.dataset.sort === dev.sort;
   const defDir = ["applicant", "device_name", "product_code", "type"].includes(th.dataset.sort) ? "asc" : "desc";
@@ -360,13 +378,13 @@ async function loadDevice(k) {
   const head = el("div", { class: "dev-head" });
   head.append(back, el("h2", {}, d.device_name || d.k_number));
   const sub = el("div", { class: "sub" });
-  sub.append(el("b", {}, d.k_number), " ", typeBadge(d.submission_type),
+  sub.append(el("b", {}, d.k_number), " ", typeBadge(d.submission_type), flags(d),
              ` · ${d.applicant || ""} · ${d.decision_description || ""} ${d.decision_date || ""}`);
   head.append(sub);
   const links = el("div", { class: "dev-links" });
   links.append(el("a", { href: d.fda_url, target: "_blank", rel: "noopener" }, "FDA database record ↗"));
   if (doc.status !== "none") links.append(el("a", { href: d.pdf_url, target: "_blank", rel: "noopener" },
-    d.submission_type === "denovo" ? "Decision summary (PDF) ↗" : "510(k) summary (PDF) ↗"));
+    { denovo: "Decision summary (PDF) ↗", pma: "SSED (PDF) ↗" }[d.submission_type] || "510(k) summary (PDF) ↗"));
   if (doc.pages) links.append(el("span", { class: "muted" }, `${doc.pages} pages`));
   head.append(links);
   frag.append(head);
@@ -452,7 +470,8 @@ async function loadDevice(k) {
     ["Device class", d.device_class], ["Regulation", d.regulation_number], ["Specialty", d.medical_specialty],
     ["Review panel", d.advisory_committee], ["Clearance type", d.clearance_type],
     ["Summary / statement", d.statement_or_summary], ["Third-party review", d.third_party_flag],
-    ["Expedited", d.expedited_review_flag]];
+    ["Expedited", d.expedited_review_flag],
+    ["Software / AI", d.is_ai ? `AI-enabled — ${AI_SOURCE[d.ai_source] || ""}` : d.is_software ? "Software function" : ""]];
   for (const [k2, v] of fields) if (v) kv.append(el("dt", {}, k2), el("dd", {}, v));
   rec.append(kv);
   right.append(rec);
@@ -569,6 +588,8 @@ document.querySelectorAll(".tab").forEach(t => (t.onclick = () => {
   else show(t.dataset.view);
 }));
 $("#only-with").onchange = loadDirectory;
+$("#dir-sw").onchange = loadDirectory;
+try { $("#dir-sw").checked = !!localStorage.getItem("dirSw"); } catch {}
 $("#search-form").onsubmit = e => {
   e.preventDefault();
   if (location.hash) history.pushState(null, "", location.pathname + location.search);

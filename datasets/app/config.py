@@ -70,6 +70,10 @@ class Settings:
     # "all" (background, every submission — costs scale with the device count),
     # or "off".
     device_llm: str = os.environ.get("DATASETS_DEVICE_LLM", "on_demand")
+    # FDA's "AI-Enabled Medical Devices" list (xlsx); synced weekly. The media
+    # id changes when FDA republishes — override here if the default 404s.
+    fda_ai_list_url: str = os.environ.get(
+        "DATASETS_FDA_AI_LIST_URL", "https://www.fda.gov/media/178540/download?attachment")
 
     @property
     def db_path(self) -> Path:

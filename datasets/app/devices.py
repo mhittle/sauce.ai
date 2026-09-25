@@ -46,9 +46,57 @@ MAX_TEXT = 400_000
 LLM_TEXT = 150_000
 
 
+# ------------------------------------------------------------------ software / AI
+# Software: FDA generic names / device names / regulations that describe
+# software functions (CAD, image processing, analysis algorithms, apps).
+_SOFTWARE_RE = re.compile(
+    r"software|algorithm|computer[- ]?(aided|assisted)|\bcad[ex]?\b|image processing"
+    r"|image analysis|artificial intelligence|machine learning|deep learning|\bai\b"
+    r"|mobile medical app|\bapp\b|analysis system|decision support|triage and notification",
+    re.I)
+_SOFTWARE_REGULATIONS = {
+    "892.2050",  # medical image management and processing system
+    "892.2060", "892.2070", "892.2080", "892.2090",  # CADx, CADe, triage, CADe/x
+    "892.2100",  # radiological acquisition / optimization guidance
+    "870.2785",  # software for optimizing cardiac therapy
+    "882.1491",  # pediatric autism spectrum disorder diagnosis aid
+    "870.2345",  # ECG software for over-the-counter use
+    "870.2380",  # cardiovascular machine learning-based notification software
+}
+# AI: phrases in the summary PDF that indicate a learned model.
+_AI_TEXT_RE = re.compile(
+    r"artificial intelligence|machine[- ]learning|deep[- ]learning|neural network"
+    r"|convolutional|trained (?:model|algorithm|network)|\bAI[- ](?:based|enabled|algorithm)",
+    re.I)
+
+
+# Displays/monitors/workstations share regulation 892.2050 and the "image
+# processing system" generic name with software; they're hardware.
+_HARDWARE_RE = re.compile(r"\b(monitor|display|lcd|oled|workstation|viewing station)s?\b", re.I)
+_STRONG_SOFTWARE_RE = re.compile(
+    r"software|algorithm|artificial intelligence|machine learning|deep learning|\bai\b"
+    r"|computer[- ]?(aided|assisted)|\bcad[ex]?\b|\bapp\b", re.I)
+
+
+def is_software_record(d: dict) -> bool:
+    name = d.get("device_name") or ""
+    generic = d.get("generic_name") or ""
+    if _STRONG_SOFTWARE_RE.search(name):
+        return True
+    if _HARDWARE_RE.search(name) or _HARDWARE_RE.search(generic):
+        return False
+    return (bool(_SOFTWARE_RE.search(f"{generic} {name}"))
+            or d.get("regulation_number") in _SOFTWARE_REGULATIONS)
+
+
+def text_says_ai(text: str) -> bool:
+    return len(_AI_TEXT_RE.findall(text[:200_000])) >= 2  # one passing mention isn't enough
+
+
 # ------------------------------------------------------------------ records
 def submission_type(k: str) -> str:
-    return "denovo" if k.upper().startswith("DEN") else "510k"
+    k = k.upper()
+    return "denovo" if k.startswith("DEN") else "pma" if k.startswith("P") else "510k"
 
 
 def normalize_record(r: dict) -> dict:
@@ -76,15 +124,23 @@ def normalize_record(r: dict) -> dict:
         "statement_or_summary": r.get("statement_or_summary"),
         "third_party_flag": r.get("third_party_flag"),
         "expedited_review_flag": r.get("expedited_review_flag"),
+        "is_software": None,  # set below
         "raw": json.dumps({k2: v for k2, v in r.items() if k2 != "openfda"}
                           | {"openfda": {k2: v for k2, v in ofda.items()
                                          if k2 not in ("registration_number", "fei_number")}}),
     }
 
 
+def _classified(d: dict) -> dict:
+    d["is_software"] = is_software_record(d)
+    return d
+
+
 def fda_database_url(k: str) -> str:
-    page = "denovo.cfm" if submission_type(k) == "denovo" else "pmn.cfm"
-    return f"{FDA_DB}/{page}?ID={k}"
+    t = submission_type(k)
+    if t == "pma":
+        return f"https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfpma/pma.cfm?id={k}"
+    return f"{FDA_DB}/{'denovo.cfm' if t == 'denovo' else 'pmn.cfm'}?ID={k}"
 
 
 def summary_pdf_urls(k: str) -> list[str]:
@@ -93,6 +149,9 @@ def summary_pdf_urls(k: str) -> list[str]:
     k = k.upper()
     if k.startswith("DEN"):
         return [f"{FDA_DOCS}/reviews/{k}.pdf"]
+    if k.startswith("P"):  # PMA: Summary of Safety and Effectiveness Data ("B" file)
+        yy = int(k[1:3]) if k[1:3].isdigit() else 0
+        return [f"{FDA_DOCS}/pdf{yy}/{k}B.pdf"] if 2 <= yy < 70 else [f"{FDA_DOCS}/pdf/{k}B.pdf"]
     try:
         yy = int(k[1:3])
     except ValueError:
@@ -135,7 +194,7 @@ def sync_condition(store: Store, name: str, settings: Settings,
         skip += len(batch)
         if not batch or skip >= total or skip >= settings.fda_max_devices_per_condition:
             break
-    devices = [normalize_record(r) for r in records if r.get("k_number")]
+    devices = [_classified(normalize_record(r)) for r in records if r.get("k_number")]
     store.upsert_devices(devices)
     n_denovo = sum(d["submission_type"] == "denovo" for d in devices)
     capped = total > len(devices)
@@ -163,8 +222,95 @@ def fetch_one(store: Store, k: str, settings: Settings, session: Any = None) -> 
     results = resp.json().get("results") or []
     if not results:
         return False
-    store.upsert_devices([normalize_record(results[0])])
+    store.upsert_devices([_classified(normalize_record(results[0]))])
     return True
+
+
+# ------------------------------------------------------------------ FDA AI list
+AI_LIST_KEY = "fda_ai_list_synced_at"
+_NUM_RE = re.compile(r"\b(K\d{6}|DEN\d{6}|P\d{6}(?:/S\d+)?|H\d{6})\b")
+
+
+def parse_ai_list(data: bytes) -> list[dict]:
+    """FDA "AI-Enabled Medical Devices" spreadsheet → rows. Tolerates column
+    order changes (matched by header text) and HYPERLINK formulas."""
+    from openpyxl import load_workbook
+    ws = load_workbook(io.BytesIO(data), read_only=True).worksheets[0]
+    rows = ws.iter_rows(values_only=True)
+    header = [str(h or "").strip().lower() for h in next(rows)]
+
+    def col(*names):
+        for i, h in enumerate(header):
+            if any(n in h for n in names):
+                return i
+        return None
+    ci = {"number": col("submission"), "date": col("date"), "device": col("device"),
+          "company": col("company", "applicant"), "panel": col("panel"),
+          "product_code": col("product code")}
+    if ci["number"] is None:
+        raise ValueError("AI list: no submission-number column")
+    out = []
+    for r in rows:
+        m = _NUM_RE.search(str(r[ci["number"]] or ""))
+        if not m:
+            continue
+        get = lambda key: (str(r[ci[key]]).strip() if ci[key] is not None  # noqa: E731
+                           and r[ci[key]] is not None else None)
+        date = get("date")
+        if date and re.fullmatch(r"\d{2}/\d{2}/\d{4}", date):
+            mm, dd, yy = date.split("/")
+            date = f"{yy}-{mm}-{dd}"
+        elif date and " " in date:  # datetime cell
+            date = date.split(" ")[0]
+        out.append({"k_number": m.group(1).split("/")[0], "decision_date": date,
+                    "device_name": get("device"), "applicant": get("company"),
+                    "advisory_committee": get("panel"), "product_code": get("product_code")})
+    return out
+
+
+def sync_ai_list(store: Store, settings: Settings, session: Any = None) -> int | None:
+    """Download FDA's AI-enabled device list, add every listed submission to
+    the catalog (stub rows, then full openFDA records in batches), and flag
+    them AI. Returns the number listed, or None on failure."""
+    http = session or requests
+    try:
+        resp = http.get(settings.fda_ai_list_url, headers=_UA, timeout=60)
+        if resp.status_code != 200:
+            raise ValueError(f"HTTP {resp.status_code}")
+        entries = parse_ai_list(resp.content)
+    except Exception as exc:
+        log.warning("FDA AI list sync failed: %s", exc)
+        return None
+    stubs = []
+    for e in entries:
+        k = e["k_number"]
+        stype = ("denovo" if k.startswith("DEN") else "510k" if k.startswith("K") else "pma")
+        stubs.append({**e, "submission_type": stype, "is_software": True})
+    store.insert_device_stubs(stubs)  # never overwrites a full openFDA record
+    store.mark_ai([s["k_number"] for s in stubs], "fda_list")
+    # Enrich K/DEN numbers we don't have full records for (50 per request).
+    missing = store.missing_devices([s["k_number"] for s in stubs
+                                     if s["submission_type"] != "pma"])
+    key = f"&api_key={settings.openfda_api_key}" if settings.openfda_api_key else ""
+    for i in range(0, len(missing), 50):
+        batch = missing[i:i + 50]
+        try:
+            r = http.get(f"{fda.API}?search=k_number:({'+'.join(batch)})&limit=100{key}",
+                         headers=_UA, timeout=30)
+        except requests.RequestException:
+            break
+        if r.status_code == 200:
+            store.upsert_devices([_classified(normalize_record(x))
+                                  for x in r.json().get("results", [])])
+        elif r.status_code == 429:
+            break  # daily limit; the rest fill in on the next sync
+    store.kv_set(AI_LIST_KEY, _now_iso())
+    return len(stubs)
+
+
+def _now_iso() -> str:
+    from .store import now_iso
+    return now_iso()
 
 
 # ------------------------------------------------------------------ documents
@@ -314,6 +460,19 @@ def llm_extract(client, settings: Settings, device: dict, text: str) -> dict:
 
 
 # ------------------------------------------------------------------ worker
+def _older_than(iso: str, days: int) -> bool:
+    from datetime import datetime, timedelta, timezone
+    try:
+        return datetime.fromisoformat(iso) < datetime.now(timezone.utc) - timedelta(days=days)
+    except ValueError:
+        return True
+
+
+def _days_ago_iso(days: int) -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(days=days)).replace(microsecond=0).isoformat()
+
+
 class DeviceWorker:
     """Background loop: sync one stale condition, or read one summary PDF, or
     run one requested LLM extraction, per step."""
@@ -372,6 +531,15 @@ class DeviceWorker:
         job = self.store.next_device_doc(want_extraction=self._llm() is not None)
         if job and self._is_request(job[0]):
             return self.run_job(*job)
+        if not self.store.kv_get("software_classified_v2"):
+            self.store.reclassify_software(is_software_record)
+            self.store.kv_set("software_classified_v2", _now_iso())
+        last = self.store.kv_get(AI_LIST_KEY)
+        if self.settings.fda_ai_list_url and (not last or _older_than(last, days=7)):
+            sync_ai_list(self.store, self.settings, self.session)
+            if not self.store.kv_get(AI_LIST_KEY):  # failed: don't retry every step
+                self.store.kv_set(AI_LIST_KEY, _days_ago_iso(6))
+            return True
         cond = self.store.condition_due_for_device_sync(self.settings.lit_refresh_days)
         if cond:
             if sync_condition(self.store, cond, self.settings, self.session) is None:
@@ -424,6 +592,8 @@ class DeviceWorker:
         preds = sorted({m.group(1) for m in _SUB_RE.finditer(text)} - {k})
         self.store.save_device_doc(k, "done", pdf_url=url, pages=pages, text=text,
                                    predicates=preds)
+        if text_says_ai(text):
+            self.store.mark_ai([k], "summary_text")
         self.store.replace_device_links(k, find_links(self.store, text))
 
     def extract(self, k: str) -> None:
@@ -439,6 +609,8 @@ class DeviceWorker:
             self.store.save_device_extraction(k, None, error=f"summary failed: {type(exc).__name__}")
             return
         self.store.save_device_extraction(k, out)
+        if out.get("is_ai_ml"):
+            self.store.mark_ai([k], "summary_review")
         # Names the model found can confirm catalog links the regex missed.
         links = find_links(self.store, text, extra_names=out.get("datasets_named", []))
         self.store.replace_device_links(k, links)

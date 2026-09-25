@@ -96,6 +96,17 @@ CLI backfill: `python -m jobs.literature --minutes 30`.
   submission in the background — cost scales with the device count.
 - Submissions not yet stored (e.g. a predicate) are fetched from openFDA on
   demand when opened.
+- **Software / AI filter** (device list, and a Directory toggle that recounts
+  510(k)/De Novo on software devices only, plus an AI column):
+  - *AI-enabled* = on FDA's **AI-Enabled Medical Devices** list (downloaded
+    weekly from `DATASETS_FDA_AI_LIST_URL`; every listed submission is added
+    to the catalog, including PMAs), or the summary PDF / Claude review
+    describes a trained model. The source is shown on each device.
+  - *Software* = AI-enabled, or the device/generic name or regulation
+    describes a software function (CAD, triage, image processing/analysis,
+    algorithm, app), excluding displays/monitors/workstations that FDA files
+    under the same image-processing regulation. A heuristic: expect some
+    edge cases (e.g. hardware with embedded software).
 - API: `GET /api/devices?condition=&type=510k|denovo&q=&dataset=&linked=&sort=&dir=`,
   `GET /api/devices/{number}`, `POST /api/devices/{number}/analyze`,
   `GET /api/devices-status`.

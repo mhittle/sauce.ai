@@ -195,15 +195,18 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     # -------------------------------------------------------- FDA devices
     @app.get("/api/devices")
     def list_devices(condition: str | None = None,
-                     type: str | None = Query(None, pattern="^(510k|denovo)$"),
+                     type: str | None = Query(None, pattern="^(510k|denovo|pma)$"),
+                     category: str | None = Query(None, pattern="^(software|ai)$"),
                      q: str | None = Query(None, max_length=200),
                      dataset: str | None = None, linked: bool = False,
                      sort: str = "decision_date",
                      dir: str = Query("desc", pattern="^(asc|desc)$"),
                      limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
         """510(k)/De Novo submissions, filterable by condition, type, text,
-        or catalog dataset referenced; sortable by date, company, name…"""
-        res = store.list_devices(condition, type, q, dataset, linked, sort, dir, limit, offset)
+        software/AI category, or catalog dataset referenced; sortable by
+        date, company, name…"""
+        res = store.list_devices(condition, type, q, dataset, linked, category=category,
+                                 sort=sort, direction=dir, limit=limit, offset=offset)
         if condition:
             res["condition"] = store.get_condition(condition)
         return res
