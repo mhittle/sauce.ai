@@ -49,6 +49,8 @@ class RunSpec:
     qaly: dict = field(default_factory=dict)
     orchestration: dict = field(default_factory=dict)
     judges: list[str] = field(default_factory=list)
+    ablation_id: str = ""
+    ablation_arm: str = ""
 
     def validate(self, settings: Settings) -> None:
         if "@" not in self.email or len(self.email) > 254:

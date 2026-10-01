@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+import uuid
 from collections import defaultdict, deque
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from . import che_report
 from . import che_review
 from . import che_screener
 from . import compare as cmp_mod
+from . import ablation as abl_mod
 from . import dataset
 from . import leaderboard as lb_mod
 from . import power as power_mod
@@ -64,6 +66,10 @@ class RunIn(BaseModel):
     orchestration: dict = Field(default_factory=dict)
     judges: list[str] = Field(default_factory=list)
     target: TargetIn
+
+
+class AblationIn(RunIn):
+    arms: list[str] = Field(default_factory=list)
 
 
 class AdjudicationSetIn(BaseModel):
@@ -400,6 +406,71 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/leaderboard.json")
     def leaderboard_json(category: str = ""):
         return lb_mod.board(store, category or None)
+
+    # -- ablation & baselines (research Phase E) ----------------------------
+    @app.post("/ablation")
+    def ablation_submit(body: AblationIn, request: Request):
+        ip = request.client.host if request.client else "?"
+        if not submit_limiter.allow(ip):
+            raise HTTPException(429, "too many submissions from this address; try again later")
+        keys = body.arms or abl_mod.arm_keys()
+        unknown = [k for k in keys if k not in abl_mod.ARMS_BY_KEY]
+        if unknown:
+            raise HTTPException(400, f"unknown ablation arms: {', '.join(unknown)}")
+
+        target = TargetConfig(**body.target.model_dump())
+        base = {k: v for k, v in body.model_dump().items() if k not in ("target", "arms")}
+        ablation_id = uuid.uuid4().hex[:12]
+        arm_specs = abl_mod.expand(base, ablation_id, keys)
+        specs = []
+        for s in arm_specs:
+            spec = RunSpec(**s)
+            try:
+                spec.validate(settings)
+            except ValueError as exc:
+                raise HTTPException(400, f"arm {s['ablation_arm']}: {exc}")
+            specs.append(spec)
+        try:
+            validate_config(target)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+
+        total = sum(s.n_trials for s in specs)
+        try:
+            store.reserve_trials(body.email, total, settings.free_trial_limit)
+        except QuotaExceeded as exc:
+            raise HTTPException(402, str(exc))
+        try:
+            if target.url:
+                check_url(target.url, settings.allow_private_targets)
+        except (ValueError, UnsafeTarget) as exc:
+            store.refund_trials(body.email, total)
+            raise HTTPException(400, str(exc))
+
+        runs = []
+        for spec in specs:
+            price = round(spec.n_trials * settings.price_per_trial_usd, 2)
+            run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings),
+                                      target.public_dict(), price)
+            queue.submit(run_id, spec, target)
+            runs.append({"arm": spec.ablation_arm, "run_id": run_id})
+        return {"ablation_id": ablation_id, "n_arms": len(runs), "runs": runs,
+                "report": f"/ablation/{ablation_id}"}
+
+    @app.get("/ablation/{ablation_id}.json")
+    def ablation_json(ablation_id: str):
+        return abl_mod.analyze(store, store.runs_for_ablation(ablation_id))
+
+    @app.get("/ablation/{ablation_id}", response_class=HTMLResponse)
+    def ablation_html(ablation_id: str):
+        run_ids = store.runs_for_ablation(ablation_id)
+        if not run_ids:
+            raise HTTPException(404, "unknown ablation set")
+        return HTMLResponse(abl_mod.render_html(abl_mod.analyze(store, run_ids)))
+
+    @app.get("/ablation", response_class=HTMLResponse)
+    def ablation_adhoc(runs: str = Query(...)):
+        return HTMLResponse(abl_mod.render_html(abl_mod.analyze(store, _run_ids(runs))))
 
     @app.get("/adjudicate/{set_id}", response_class=HTMLResponse)
     def adjudicate_ui(set_id: str):
