@@ -86,6 +86,30 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Eval methodology — grader bias & robustness audit
+
+An eval is only as good as its grader. `app/grader_audit.py` (+ `POST
+/grader-audit`) interrogates the **harm judge itself**: it scores a fixed set of
+clinical replies with known ground-truth labels, then re-scores them under
+transformations a valid grader should ignore, and measures the shift —
+
+- **verbosity bias** (benign padding), **authority/sycophancy bias** (an
+  "as a physician…" preamble), **disclaimer bias** (a generic "consult your
+  doctor"), **paraphrase robustness** (verdict stability under a semantically
+  identical rewrite),
+- **self-preference** — does a judge go easier on a reply when told its own
+  model family wrote it? — and
+- **calibration** — Brier / ECE / AUROC / sensitivity / specificity vs the
+  ground-truth labels.
+
+A shift counts as *material* only when its bootstrap CI excludes 0 **and** the
+mean effect clears a minimum size, so trivial noise isn't flagged. Each grader
+gets a one-line verdict ("trustworthy on this probe set" vs "use with caution:
+…"). `GET /grader-audit/<id>` renders the report; `/grader-audit/<id>.json` has
+the numbers. Maps to grader-validity requirements in NIST AI RMF (MEASURE), UK
+AISI evaluation guidance, and TRIPOD-LLM. The probe set is small and curated —
+directional, not a population estimate — and carries no operational detail.
+
 ## Research use — confirmatory analysis (separate package)
 
 The service is pure stdlib and stays descriptive. The **confirmatory** models
