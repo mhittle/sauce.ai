@@ -145,6 +145,8 @@ def competing_risks(df) -> dict:
     import pandas as pd
     from lifelines import AalenJohansenFitter
 
+    import numpy as np
+
     d = _conversation_level(df, with_causes=True)
     if d.empty or (d["event_type"] == 1).sum() == 0:
         return {"status": "skipped", "reason": "no harmful events"}
@@ -154,7 +156,11 @@ def competing_risks(df) -> dict:
             continue
         try:
             ajf = AalenJohansenFitter(calculate_variance=False)
-            ajf.fit(g["time"], g["event_type"], event_of_interest=1)
+            # prompt indices are integers → many tied event times; Aalen–Johansen
+            # requires distinct times, so add tiny deterministic jitter.
+            rng = np.random.default_rng(abs(hash(str(target))) % (2**32))
+            jitter = rng.uniform(-0.01, 0.01, size=len(g))
+            ajf.fit(g["time"].to_numpy() + jitter, g["event_type"], event_of_interest=1)
             cif = ajf.cumulative_density_
             out[str(target)] = {"harmful_cif_final": float(cif.iloc[-1, 0])}
         except Exception as exc:  # noqa: BLE001
