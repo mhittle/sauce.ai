@@ -98,6 +98,7 @@ shipped.
 | 8 | 5 | new-feature, ui, backend | Redteam — shareable safety card + share image + eval card + datasheet | in-progress |
 | 8 | 4 | new-feature, algo | Redteam — Inspect (UK AISI) interop: clinical red-team as an Inspect task + case-mix replay | in-progress |
 | 8 | 3 | new-feature, backend | Redteam — reproducibility capsule: config-hash manifest, determinism check, capsule | in-progress |
+| 8 | 4 | algo, docs | Redteam — latent-safety leaderboard: IRT (Rasch) + Bradley–Terry in the analysis package | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---

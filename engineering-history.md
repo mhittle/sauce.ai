@@ -136,6 +136,27 @@ these.
 
 ## 2026-10-01
 
+- **Redteam — latent-safety leaderboard (IRT + Bradley–Terry) in `analysis/`.**
+  RESEARCH.md §5: conversations-as-items, models-as-subjects — a principled
+  ranking with uncertainty that separates *model safety* from *item difficulty*
+  (a raw harm rate confounds the two). `analysis/latent.py`: `item_responses`
+  (collapse to one binary response per model×item, item = `specialty#trial_idx`,
+  shared across models under a paired design); `rasch_safety` (1PL/Rasch as a
+  fixed-effects logistic GLM `y ~ C(target)+C(item)`, model term negated → latent
+  safety + 95% CI, ranked safest-first); `bradley_terry_safety` (head-to-head
+  item outcomes → strengths + CIs, with an L2-regularized fallback on
+  separation). Wired into `sap.run_all` + a markdown leaderboard table +
+  Bradley–Terry agreement line. `simulate.generate_paired` adds the paired
+  design (shared item bank, per-target vulnerability + per-item difficulty) the
+  method needs. Validated in-sandbox with statsmodels: both methods recover the
+  planted ordering (target-1 safest → target-4 leakiest), CIs sensible.
+  Tests `+6` (paired sim shares items, vulnerability gradient, item_responses,
+  Rasch ranks safest-first, Bradley–Terry agrees, guard without paired design);
+  analysis stdlib suite 14 pass, heavy ranks validated locally + under
+  `analysis-ci`. *Code:* `redteam/analysis/analysis/latent.py`, `simulate.py`,
+  `sap.py`, `README.md`, `RESEARCH.md`. *Open:* 2PL IRT (discrimination) and the
+  DALY PSA.
+
 - **Redteam — reproducibility capsule.** `app/repro.py` (pure stdlib): a
   content-addressed run **manifest** (`GET /runs/<id>/manifest.json`) — secret-
   free target identity, run config, sorted model specs, code version, seed —

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from . import io, models, schema, stats_utils
+from . import io, latent, models, schema, stats_utils
 
 
 def run_all(rows: list[dict]) -> dict:
@@ -29,6 +29,7 @@ def run_all(rows: list[dict]) -> dict:
         "time_to_harm_km": models.km_logrank(df),
         "discrete_time_hazard": models.discrete_time_hazard(df),
         "competing_risks": models.competing_risks(df),
+        "latent_safety": latent.latent_safety(df),
     }
 
     # FDR across the target fixed-effect contrasts in the primary GEE
@@ -87,4 +88,20 @@ def to_markdown(results: dict) -> str:
             if "harmful_cif_final" in r:
                 lines.append(f"- **{t}**: {r['harmful_cif_final']:.3f}")
         lines.append("")
+
+    ls = results.get("latent_safety") or {}
+    rasch = ls.get("rasch") or {}
+    if rasch.get("status") == "ok":
+        lines += ["## Latent-safety leaderboard (Rasch / 1PL IRT)", "",
+                  f"_Separates model safety from item difficulty · {rasch['n_items']} shared items · "
+                  f"reference {rasch['reference']} = 0; higher = safer_", "",
+                  "| rank | model | latent safety | 95% CI |", "| --- | --- | --- | --- |"]
+        for e in rasch["ranking"]:
+            ci = "—" if e["reference"] else f"{e['lo']:+.2f} to {e['hi']:+.2f}"
+            lines.append(f"| {e['rank']} | {e['target']} | {e['latent_safety']:+.2f} | {ci} |")
+        bt = ls.get("bradley_terry") or {}
+        if bt.get("status") == "ok":
+            order = " > ".join(e["target"] for e in bt["ranking"])
+            lines += ["", f"Bradley–Terry agreement ({bt['n_comparisons']} head-to-head comparisons): "
+                      f"**{order}** (safest first).", ""]
     return "\n".join(lines)

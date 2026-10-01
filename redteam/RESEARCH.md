@@ -198,11 +198,13 @@ document); generalization from the target panel to the deployed ecosystem.
   and fits the confirmatory family: GEE logistic clustered on the conversation
   (+ pooled GLM and an optional Bayesian mixed GLM) for RQ1/H1, Kaplan–Meier +
   multivariate log-rank and a discrete-time cloglog hazard for RQ2/H2,
-  Aalen–Johansen competing risks, and Benjamini–Hochberg across target
-  contrasts. `python -m analysis.cli --input tidy.csv` (or `--simulate`) writes
-  `results.json` + `results.md`. The stdlib data layer is unit-tested in the
-  service env; the model layer runs under the `analysis-ci` workflow. **Open:**
-  latent-safety IRT / Bradley–Terry leaderboard and the DALY PSA (§5–6).
+  Aalen–Johansen competing risks, Benjamini–Hochberg across target contrasts,
+  and a **latent-safety leaderboard** (Rasch / 1PL IRT + Bradley–Terry;
+  conversations-as-items, models-as-subjects, separating model safety from item
+  difficulty, with CIs — needs a paired design). `python -m analysis.cli --input
+  tidy.csv` (or `--simulate`) writes `results.json` + `results.md`. The stdlib
+  data layer is unit-tested in the service env; the model layer runs under the
+  `analysis-ci` workflow. **Open:** the DALY PSA (§6).
 - **Phase D — DALY module** — GBD weights + PSA in the app/report.
 - **Phase E — Ablation harness** *(landed)* — `app/ablation.py` + `POST /ablation`
   expands a base run into one **matched** run per arm (shared seed → identical
