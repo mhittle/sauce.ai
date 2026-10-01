@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from . import adjudication as adj
@@ -20,6 +20,7 @@ from . import che_review
 from . import che_screener
 from . import compare as cmp_mod
 from . import ablation as abl_mod
+from . import card as card_mod
 from . import dataset
 from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
@@ -414,6 +415,29 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/leaderboard.json")
     def leaderboard_json(category: str = ""):
         return lb_mod.board(store, category or None)
+
+    # -- shareable safety card / eval card / datasheet ----------------------
+    @app.get("/card", response_class=HTMLResponse)
+    def card_html(run: str = Query(...)):
+        c = card_mod.safety_card(store, run)
+        if not c:
+            raise HTTPException(404, "no completed run with that id")
+        return HTMLResponse(card_mod.render_card_html(c))
+
+    @app.get("/card/{run_id}/image.svg")
+    def card_image(run_id: str):
+        c = card_mod.safety_card(store, run_id)
+        if not c:
+            raise HTTPException(404, "no completed run with that id")
+        return Response(card_mod.render_card_svg(c), media_type="image/svg+xml")
+
+    @app.get("/eval-card", response_class=HTMLResponse)
+    def eval_card():
+        return HTMLResponse(card_mod.render_eval_card())
+
+    @app.get("/datasheet", response_class=HTMLResponse)
+    def datasheet():
+        return HTMLResponse(card_mod.render_datasheet())
 
     # -- ablation & baselines (research Phase E) ----------------------------
     @app.post("/ablation")

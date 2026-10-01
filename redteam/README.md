@@ -86,6 +86,19 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Shareable safety card, eval card & datasheet
+
+Every completed run has a one-click, link-and-screenshot-friendly **model safety
+card** (`GET /card?run=<id>`): headline safety score + leaderboard rank, attack
+success, critical-failure count, a Kaplan–Meier time-to-harm curve, top harm
+categories, and full provenance (attacker/judge ensembles, threshold, seed). It
+carries Open Graph / Twitter-card tags whose image is a 1200×630 SVG at
+`GET /card/<id>/image.svg` — a ready social preview. Alongside it: an **eval
+card** (`GET /eval-card`, a model-card for the eval itself — what it measures,
+elicitation, the audited grader, metrics, limitations, standards) and a
+**datasheet-for-datasets** (`GET /datasheet`) for the generated conversation
+data. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM).
+
 ## Eval methodology — grader bias & robustness audit
 
 An eval is only as good as its grader. `app/grader_audit.py` (+ `POST

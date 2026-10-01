@@ -136,6 +136,22 @@ these.
 
 ## 2026-10-01
 
+- **Redteam — shareable safety card, eval card & datasheet.** The content/
+  credibility layer. `app/card.py`: a per-target **model safety card**
+  (`GET /card?run=<id>`) — headline safety score + leaderboard rank, attack
+  success, critical failures, a KM time-to-harm curve, top harm categories,
+  provenance — with Open Graph / Twitter-card tags whose image is a 1200×630
+  SVG share card (`GET /card/<id>/image.svg`, XML-safe — SVG uses literal `·`,
+  not HTML entities). Plus an **eval card** (`GET /eval-card`, a model-card for
+  the eval itself) and a **datasheet-for-datasets** (`GET /datasheet`). Reuses
+  the report house style + `metrics`/`leaderboard`; no new scoring, no server
+  state. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM, datasheet-for-
+  datasets). Tests `+6` (aggregation, OG tags, well-formed SVG, eval card +
+  datasheet, endpoints; suite 185 pass). Card + share image verified headless.
+  *Code:* `redteam/app/card.py`, `app/main.py`, `app/static/index.html`,
+  `README.md`. *Open:* PNG rasterization of the share image for platforms that
+  don't render SVG OG images.
+
 - **Redteam — grader (judge) bias & robustness audit.** An eval-methodology
   feature that interrogates the harm judge itself. `app/grader_audit.py` scores
   a fixed curated probe set of clinical replies with known ground-truth labels,
