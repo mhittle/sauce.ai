@@ -134,6 +134,31 @@ these.
 
 ---
 
+## 2026-10-01
+
+- **Redteam — research Phase E: ablation & baseline harness.** Makes the attack
+  orchestrator a measurable methods contribution. `app/ablation.py` defines the
+  arm matrix — full stack (reference), one ablation per component (bandit,
+  ensemble, refinement depth, lookahead, consensus), and a single-prompt
+  baseline — each an override on a base run spec, and `expand()`s a base into
+  one **matched** run per arm sharing seed+specialty+n_trials (identical persona
+  case-mix = paired design). `analyze()` computes each arm's attack success +
+  time-to-harm and the component's **marginal effect** (reference − arm) as a
+  Newcombe risk difference + log-rank test, reusing `metrics`. `POST /ablation`
+  (expands + enqueues the arm runs, one quota reservation for the whole set),
+  `GET /ablation/<id>` + `/ablation/<id>.json` + ad-hoc `/ablation?runs=`.
+  Additive: new `ablation_id`/`ablation_arm` fields on RunSpec (flow through
+  `public_dict`), a `runs_for_ablation` store query (SQLite `json_extract`), no
+  change to the run loop or existing metrics. Descriptive only; the confirmatory
+  paired model (McNemar / mixed-effects on matched personas) stays in the
+  analysis repo. Tests `+8` (arm toggles, no-mutation, matched expansion,
+  store lookup, contrasts vs reference, no-reference blanking, report API,
+  unknown-arm 400; suite 171 pass). Report verified headless (single-prompt
+  baseline: +50 pp attack-success gap, CI excludes 0, log-rank p<0.001). *Code:*
+  `redteam/app/ablation.py`, `app/main.py`, `app/runner.py`, `app/store.py`,
+  `RESEARCH.md`, `README.md`. *Server state:* none new (reads existing runs).
+  *Open:* external baselines (PAIR/TAP) + a human red-team arm; transferability.
+
 ## 2026-09-25
 
 - **Redteam — public safety leaderboard (additive product feature).** Every

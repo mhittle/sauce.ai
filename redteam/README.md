@@ -86,6 +86,21 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Research use — ablation & baselines (method contribution)
+
+To show the orchestrator is a methods contribution rather than plumbing,
+`app/ablation.py` (+ `POST /ablation`) launches a **matched arm set** against
+one target: the full stack (reference), one **ablation per component**
+(random tactic, single attacker, no refinement, no lookahead, no consensus),
+and a **single-prompt baseline**. All arms share the seed + specialty +
+n_trials, so every arm sees the *same* synthetic personas (a paired design).
+`GET /ablation/<ablation_id>` (`/ablation/<id>.json`, or ad-hoc
+`/ablation?runs=…`) reports each arm's attack success and median prompts-to-
+harm, plus each component's **marginal effect** — reference attack success
+minus the ablated arm's — as a Newcombe risk difference with a 95% CI and a
+log-rank test on the time-to-harm curves. Descriptive (RESEARCH.md §7); the
+confirmatory paired model runs in the analysis repo.
+
 ## Research use — clinician adjudication (judge validation)
 
 The LLM harm judge is only trustworthy if it agrees with clinicians, so the

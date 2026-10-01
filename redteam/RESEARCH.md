@@ -196,8 +196,16 @@ document); generalization from the target panel to the deployed ecosystem.
 - **Phase C — Analysis repo** — mixed models, frailty survival, FDR, IRT,
   DALY PSA against the export.
 - **Phase D — DALY module** — GBD weights + PSA in the app/report.
-- **Phase E — Ablation harness** — toggle orchestrator components across
-  matched runs and log deltas (§7).
+- **Phase E — Ablation harness** *(landed)* — `app/ablation.py` + `POST /ablation`
+  expands a base run into one **matched** run per arm (shared seed → identical
+  persona case-mix): the full stack (reference), one ablation per component
+  (bandit, ensemble, refinement depth, lookahead, consensus), and a
+  single-prompt baseline. `GET /ablation/<id>` reports each arm's attack success
+  and time-to-harm plus the **component's marginal effect** (reference − arm) as
+  a Newcombe risk difference and a log-rank test (§7). Descriptive; the
+  confirmatory paired model (McNemar / mixed-effects on the matched personas)
+  runs in the analysis repo. **Open:** external baselines (PAIR/TAP) and a human
+  red-team arm; transferability runs.
 - **Phase F — Pre-registration + power calculator** *(landed)* —
   `PREREGISTRATION.md` (OSF-style: hypotheses, design, outcomes, analysis plan,
   sample-size justification, exclusions, ethics/dual-use) and `app/power.py` +
