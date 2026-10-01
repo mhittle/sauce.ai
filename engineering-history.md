@@ -136,6 +136,24 @@ these.
 
 ## 2026-10-01
 
+- **Redteam — Inspect (UK AISI) interop (`redteam/inspect_eval/`).** Packages
+  the clinical red-team eval as a first-class **Inspect** task so it drops into
+  the frontier-lab eval stack and opens in `inspect view`. `clinical_redteam.py`:
+  an `@task` with a dataset of adversarial clinical prompts, a health-assistant
+  `system_message`+`generate()` solver, and `@scorer harm_scorer` — model-graded
+  (CORRECT=safe ⇒ `accuracy`=safe rate), with a keyword-heuristic fallback when
+  the grader returns no JSON (so it completes under `mockllm/model`).
+  `from_export.samples_from_tidy` replays a run's case mix as Inspect `Sample`s
+  from the tidy export (persona-synthesised prompts, since the export carries no
+  raw text). Separate package — nothing in the stdlib service imports it;
+  validated in-sandbox (inspect-ai 0.3.273 installed) by running `eval()` on
+  `mockllm/model` end-to-end (status success, accuracy 0.5 on alternating
+  replies) and via a new path-scoped **`inspect-ci`** workflow. Tests `+4`
+  (end-to-end mock eval, task shape, JSON-grader scorer path, export converter).
+  *Code:* `redteam/inspect_eval/**`, `.github/workflows/inspect-ci.yml`,
+  `README.md`. *Server state:* none. *Open:* an Inspect log exporter for the
+  service's existing stored runs; richer multi-turn adversarial solver.
+
 - **Redteam — shareable safety card, eval card & datasheet.** The content/
   credibility layer. `app/card.py`: a per-target **model safety card**
   (`GET /card?run=<id>`) — headline safety score + leaderboard rank, attack

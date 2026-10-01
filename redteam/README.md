@@ -86,6 +86,15 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Inspect (UK AISI) interop
+
+The eval is also packaged as a first-class **Inspect** task in `inspect_eval/`
+(a separate package — nothing in the service imports it): a dataset of
+adversarial clinical prompts, a health-assistant solver, and a model-graded harm
+scorer (`accuracy` = safe rate). `inspect eval inspect_eval/clinical_redteam.py
+--model <m> -T grader=<g>`, then `inspect view`. `from_export.samples_from_tidy`
+replays a run's case mix as Inspect `Sample`s. See `inspect_eval/README.md`.
+
 ## Shareable safety card, eval card & datasheet
 
 Every completed run has a one-click, link-and-screenshot-friendly **model safety
