@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -20,12 +21,13 @@ from . import che_screener
 from . import compare as cmp_mod
 from . import ablation as abl_mod
 from . import dataset
+from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
 from . import power as power_mod
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
-from .providers import PROVIDERS, available_providers, model_catalog
+from .providers import PROVIDERS, available_providers, build_model, model_catalog, parse_spec
 from .runner import Runner, RunQueue, RunSpec
 from .store import QuotaExceeded, Store
 from .targets import TARGET_KINDS, TargetConfig, validate_config
@@ -70,6 +72,11 @@ class RunIn(BaseModel):
 
 class AblationIn(RunIn):
     arms: list[str] = Field(default_factory=list)
+
+
+class GraderAuditIn(BaseModel):
+    judges: list[str] = Field(default_factory=list)
+    threshold: float = 0.10
 
 
 class AdjudicationSetIn(BaseModel):
@@ -146,6 +153,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     runner = runner or Runner(settings, store)
     queue = RunQueue(runner)
     queue.recover()
+    audit_pool = ThreadPoolExecutor(max_workers=1)
     submit_limiter = SlidingWindow(limit=5, window_s=3600)
 
     app = FastAPI(title="sauce.ai/redteam", docs_url=None, redoc_url=None)
@@ -471,6 +479,60 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/ablation", response_class=HTMLResponse)
     def ablation_adhoc(runs: str = Query(...)):
         return HTMLResponse(abl_mod.render_html(abl_mod.analyze(store, _run_ids(runs))))
+
+    # -- grader (judge) bias & robustness audit -----------------------------
+    def _run_grader_audit(audit_id: str, judges: list[str], threshold: float):
+        try:
+            store.update_grader_audit(audit_id, status="running")
+            models = {s: build_model(s, settings, runner.mocks) for s in judges}
+            scorer = gaudit.build_scorer(models)
+            result = gaudit.run_audit(scorer, judges, threshold=threshold)
+            store.update_grader_audit(audit_id, status="complete", result=result,
+                                      report_html=gaudit.render_html(result))
+        except Exception as exc:  # the audit worker must fail cleanly
+            store.update_grader_audit(audit_id, status="failed", error=str(exc)[:500])
+
+    @app.post("/grader-audit")
+    def grader_audit_submit(body: GraderAuditIn, request: Request):
+        ip = request.client.host if request.client else "?"
+        if not submit_limiter.allow(ip):
+            raise HTTPException(429, "too many submissions from this address; try again later")
+        judges = body.judges or list(settings.default_judges)
+        try:
+            for spec in judges:
+                parse_spec(spec)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        if not 0.0 < body.threshold < 1.0:
+            raise HTTPException(400, "threshold must be between 0 and 1")
+        audit_id = store.create_grader_audit({"judges": judges, "threshold": body.threshold})
+        audit_pool.submit(_run_grader_audit, audit_id, judges, body.threshold)
+        return {"audit_id": audit_id, "poll": f"/grader-audit/{audit_id}.json",
+                "report": f"/grader-audit/{audit_id}"}
+
+    @app.get("/grader-audit/{audit_id}.json")
+    def grader_audit_json(audit_id: str):
+        a = store.get_grader_audit(audit_id)
+        if not a:
+            raise HTTPException(404, "unknown audit")
+        return {"audit_id": audit_id, "status": a["status"], "error": a["error"],
+                "spec": a["spec"], "result": a["result"]}
+
+    @app.get("/grader-audit/{audit_id}", response_class=HTMLResponse)
+    def grader_audit_report(audit_id: str):
+        a = store.get_grader_audit(audit_id)
+        if not a:
+            raise HTTPException(404, "unknown audit")
+        if a["status"] == "complete" and a["report_html"]:
+            return HTMLResponse(a["report_html"])
+        msg = {"queued": "Queued.", "running": "Running the grader audit…",
+               "failed": f"Failed: {a['error']}"}.get(a["status"], a["status"])
+        refresh = "" if a["status"] == "failed" else '<meta http-equiv="refresh" content="4">'
+        return HTMLResponse(
+            f'<!doctype html><meta charset=utf-8>{refresh}<title>Grader audit {audit_id}</title>'
+            f'<body style="font:16px system-ui;max-width:640px;margin:60px auto;padding:0 16px">'
+            f'<h1>Grader bias &amp; robustness audit</h1><p>{msg}</p>'
+            f'<p style="color:#666">This page refreshes automatically.</p></body>')
 
     @app.get("/adjudicate/{set_id}", response_class=HTMLResponse)
     def adjudicate_ui(set_id: str):

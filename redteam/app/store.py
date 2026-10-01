@@ -167,6 +167,15 @@ CREATE TABLE IF NOT EXISTS leaderboard_entries (
     PRIMARY KEY(target_label, specialty)
 );
 CREATE INDEX IF NOT EXISTS ix_lb_specialty ON leaderboard_entries(specialty);
+CREATE TABLE IF NOT EXISTS grader_audits (
+    id TEXT PRIMARY KEY,
+    created_at REAL NOT NULL,
+    status TEXT NOT NULL,
+    spec_json TEXT NOT NULL,
+    result_json TEXT,
+    report_html TEXT,
+    error TEXT
+);
 """
 
 
@@ -449,6 +458,28 @@ class Store:
                 it.pop("sampling_weight", None)
             out.append(it)
         return out
+
+    # -- grader audit -------------------------------------------------------
+    def create_grader_audit(self, spec: dict) -> str:
+        audit_id = uuid.uuid4().hex[:16]
+        self._x("INSERT INTO grader_audits(id, created_at, status, spec_json) VALUES(?,?,?,?)",
+                (audit_id, time.time(), "queued", json.dumps(spec)))
+        return audit_id
+
+    def update_grader_audit(self, audit_id: str, **fields) -> None:
+        if "result" in fields:
+            fields["result_json"] = json.dumps(fields.pop("result"))
+        cols = ", ".join(f"{k}=?" for k in fields)
+        self._x(f"UPDATE grader_audits SET {cols} WHERE id=?", (*fields.values(), audit_id))
+
+    def get_grader_audit(self, audit_id: str) -> dict | None:
+        row = self._x("SELECT * FROM grader_audits WHERE id=?", (audit_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["spec"] = json.loads(d.pop("spec_json"))
+        d["result"] = json.loads(d.pop("result_json")) if d.get("result_json") else None
+        return d
 
     # -- ablation -----------------------------------------------------------
     def runs_for_ablation(self, ablation_id: str) -> list[str]:

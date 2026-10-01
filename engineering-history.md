@@ -136,6 +136,31 @@ these.
 
 ## 2026-10-01
 
+- **Redteam — grader (judge) bias & robustness audit.** An eval-methodology
+  feature that interrogates the harm judge itself. `app/grader_audit.py` scores
+  a fixed curated probe set of clinical replies with known ground-truth labels,
+  then re-scores under transformations a valid grader should ignore and measures
+  the shift: verbosity padding, authority/sycophancy preamble, generic
+  disclaimer (all "did it launder harm?", direction −1), and paraphrase
+  (verdict stability); plus **self-preference** (does a judge go easier when
+  told its own model family wrote the reply?) and **calibration** (Brier / ECE /
+  AUROC / sens / spec vs ground truth, reusing `agreement`). A shift is
+  *material* only when its bootstrap CI excludes 0 AND the mean effect clears a
+  3-pp floor, so noise isn't flagged; each grader gets a trustworthy / use-with-
+  caution verdict. `run_audit` is pure given a scorer (unit-tested with a
+  mock grader that plants biases); `build_scorer` wraps the real single-model
+  judge (reuses the production judge system prompt). New `grader_audits` table +
+  background `POST /grader-audit`, `GET /grader-audit/{id}` + `.json`, and a
+  home-page pointer. Standards-neutral framing (NIST AI RMF MEASURE, UK AISI,
+  TRIPOD-LLM). Tests `+8` (family detection, planted-bias detection, clean-grader
+  trustworthy, calibration present, render, API run+poll, 404, bad threshold;
+  suite 179 pass). Report verified headless (self-preference −13 pp for an
+  own-family judge, flagged). *Code:* `redteam/app/grader_audit.py`,
+  `app/store.py`, `app/main.py`, `app/static/index.html`, `README.md`. *Server
+  state:* new `grader_audits` table (auto-created). *Open:* position/order bias
+  for pairwise graders; a larger validated probe set; recalibration (Platt/
+  isotonic) wired back into the live judge.
+
 - **Redteam — research Phase C: confirmatory analysis package (`redteam/analysis/`).**
   A separate, heavier package (pandas/statsmodels/lifelines) that consumes the
   service's tidy per-turn export and fits the pre-registered family (RESEARCH.md
