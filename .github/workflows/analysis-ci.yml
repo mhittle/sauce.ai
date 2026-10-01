@@ -1,0 +1,29 @@
+name: analysis-ci
+
+# Confirmatory-analysis package for sauce.ai/redteam. Scoped to
+# redteam/analysis/ so the heavy scientific stack (pandas/statsmodels/lifelines)
+# is installed only here, independent of the stdlib redteam-ci check.
+on:
+  push:
+    branches: [main]
+    paths: ["redteam/analysis/**", ".github/workflows/analysis-ci.yml"]
+  pull_request:
+    paths: ["redteam/analysis/**", ".github/workflows/analysis-ci.yml"]
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: redteam/analysis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Run tests
+        # Stdlib data-layer tests + the model smoke test (runs for real here,
+        # since the scientific stack is installed). No network, no API keys.
+        run: python -m pytest tests/ -q

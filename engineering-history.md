@@ -136,6 +136,28 @@ these.
 
 ## 2026-10-01
 
+- **Redteam — research Phase C: confirmatory analysis package (`redteam/analysis/`).**
+  A separate, heavier package (pandas/statsmodels/lifelines) that consumes the
+  service's tidy per-turn export and fits the pre-registered family (RESEARCH.md
+  §5 / PREREGISTRATION.md §5): GEE logistic clustered on the conversation (+
+  pooled GLM + optional Bayesian mixed GLM) for RQ1/H1, Kaplan–Meier +
+  multivariate log-rank and a discrete-time cloglog hazard for RQ2/H2,
+  Aalen–Johansen competing risks (refusal ≠ safe), and Benjamini–Hochberg across
+  target contrasts. `python -m analysis.cli --input tidy.csv` (or `--simulate`)
+  → `results.json` + `results.md`. Kept **out** of the stdlib service (nothing
+  imports it) on purpose. Split so the risky parts are validated: the data layer
+  (`schema`/`io`/`simulate`/`stats_utils`) is pure stdlib and unit-tested in this
+  env (8 tests); the model layer imports the heavy stack lazily and is exercised
+  by a new path-scoped **`analysis-ci`** workflow (installs `requirements.txt`,
+  runs a gated smoke test that `importorskip`s the stack). Validated here as far
+  as the sandbox allows: statsmodels GEE/GLM/cloglog + FDR recover the planted
+  target ordering (OR 1.5→6.2, FDR rejects all); lifelines KM/log-rank/AJ paths
+  couldn't be pip-built in the sandbox (autograd-gamma wheel) so they rely on
+  `analysis-ci` (standard lifelines APIs). *Code:* `redteam/analysis/**`,
+  `.github/workflows/analysis-ci.yml`, `RESEARCH.md`, `README.md`. *Server
+  state:* none (offline package). *Open:* IRT / Bradley–Terry latent-safety
+  leaderboard and the DALY PSA.
+
 - **Redteam — research Phase E: ablation & baseline harness.** Makes the attack
   orchestrator a measurable methods contribution. `app/ablation.py` defines the
   arm matrix — full stack (reference), one ablation per component (bandit,

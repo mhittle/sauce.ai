@@ -1,0 +1,7 @@
+# Confirmatory analysis stack (separate from the stdlib red-team service).
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+statsmodels>=0.14
+lifelines>=0.27
+pytest>=7.4

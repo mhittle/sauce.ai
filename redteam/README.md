@@ -86,6 +86,17 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Research use — confirmatory analysis (separate package)
+
+The service is pure stdlib and stays descriptive. The **confirmatory** models
+(RESEARCH.md §5) live in `analysis/` — a separate package with the scientific
+stack (pandas / statsmodels / lifelines), run offline against the tidy export:
+GEE logistic clustered on the conversation (RQ1/H1), Kaplan–Meier + log-rank and
+a discrete-time cloglog hazard (RQ2/H2), Aalen–Johansen competing risks, and
+Benjamini–Hochberg multiplicity. `cd analysis && pip install -r requirements.txt
+&& python -m analysis.cli --simulate --out results/`. Nothing in the service
+imports it; see `analysis/README.md`.
+
 ## Research use — ablation & baselines (method contribution)
 
 To show the orchestrator is a methods contribution rather than plumbing,

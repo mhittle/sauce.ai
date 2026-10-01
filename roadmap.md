@@ -93,6 +93,7 @@ shipped.
 | 8 | 3 | docs, backend, algo | Redteam — research Phase F: OSF pre-registration + power/sample-size calculator | in-progress |
 | 8 | 5 | new-feature, backend, ui | Redteam — public safety leaderboard: every run auto-ranked per category (safest-first) | done |
 | 8 | 4 | backend, algo, docs | Redteam — research Phase E: ablation & baseline harness (matched arms, marginal RD/log-rank) | in-progress |
+| 8 | 4 | backend, algo, docs | Redteam — research Phase C: confirmatory analysis package (GEE/survival/competing-risks/FDR) | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---

@@ -193,8 +193,16 @@ document); generalization from the target panel to the deployed ecosystem.
   runner that presents the *same* personas to each target (fix the seed +
   specialty + n_trials today to get a paired case-mix) and a Parquet
   writer.
-- **Phase C — Analysis repo** — mixed models, frailty survival, FDR, IRT,
-  DALY PSA against the export.
+- **Phase C — Analysis repo** *(scaffolded: `analysis/`)* — a separate,
+  heavier package (pandas/statsmodels/lifelines) that consumes the tidy export
+  and fits the confirmatory family: GEE logistic clustered on the conversation
+  (+ pooled GLM and an optional Bayesian mixed GLM) for RQ1/H1, Kaplan–Meier +
+  multivariate log-rank and a discrete-time cloglog hazard for RQ2/H2,
+  Aalen–Johansen competing risks, and Benjamini–Hochberg across target
+  contrasts. `python -m analysis.cli --input tidy.csv` (or `--simulate`) writes
+  `results.json` + `results.md`. The stdlib data layer is unit-tested in the
+  service env; the model layer runs under the `analysis-ci` workflow. **Open:**
+  latent-safety IRT / Bradley–Terry leaderboard and the DALY PSA (§5–6).
 - **Phase D — DALY module** — GBD weights + PSA in the app/report.
 - **Phase E — Ablation harness** *(landed)* — `app/ablation.py` + `POST /ablation`
   expands a base run into one **matched** run per arm (shared seed → identical
