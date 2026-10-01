@@ -136,6 +136,22 @@ these.
 
 ## 2026-10-01
 
+- **Redteam — reproducibility capsule.** `app/repro.py` (pure stdlib): a
+  content-addressed run **manifest** (`GET /runs/<id>/manifest.json`) — secret-
+  free target identity, run config, sorted model specs, code version, seed —
+  with a **config_hash** (sha256 of the canonical manifest) stable across
+  identical configs; a **determinism check** (`/runs/<id>/verify.json`) that
+  recomputes the persona case-mix from the manifest (mirroring the runner's
+  `Random(seed)`+`allocate_arms`+`make_persona`) and confirms it matches the
+  run's actual personas (`case_mix_reproducible`), flagging seed=0 runs as not
+  reproducible; and a **capsule** (`/runs/<id>/capsule.json`) bundling manifest +
+  headline + trial rows. Credentials never appear (hashes the public target
+  record only). Tests `+6` (hash present/no-secrets, hash stable+seed-sensitive,
+  reproducible for pinned seed, not reproducible without, capsule bundle, API;
+  suite 191 pass). *Code:* `redteam/app/repro.py`, `app/main.py`, `README.md`.
+  *Server state:* none (reads existing runs). *Open:* a live `POST /replay`
+  (re-run the stored config against a freshly supplied target endpoint).
+
 - **Redteam — Inspect (UK AISI) interop (`redteam/inspect_eval/`).** Packages
   the clinical red-team eval as a first-class **Inspect** task so it drops into
   the frontier-lab eval stack and opens in `inspect view`. `clinical_redteam.py`:

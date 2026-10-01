@@ -86,6 +86,18 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Reproducibility capsule
+
+Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)
+— the exact secret-free configuration (target identity, run config, model specs,
+code version, seed) plus a **`config_hash`** stable across identical configs. A
+**determinism check** (`GET /runs/<id>/verify.json`) recomputes the persona
+case-mix from the manifest and confirms it matches the run's actual personas, so
+reproducibility is *demonstrated* (it reports `case_mix_reproducible`, and flags
+runs that didn't pin a seed). The **capsule** (`GET /runs/<id>/capsule.json`)
+bundles the manifest, the headline results, and the trial-level rows into one
+record a reviewer can keep. Target credentials never appear.
+
 ## Inspect (UK AISI) interop
 
 The eval is also packaged as a first-class **Inspect** task in `inspect_eval/`

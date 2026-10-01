@@ -25,6 +25,7 @@ from . import dataset
 from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
 from . import power as power_mod
+from . import repro as repro_mod
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
@@ -276,6 +277,26 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             f'<div style="height:10px;background:#eee;border-radius:5px;overflow:hidden">'
             f'<div style="height:100%;width:{pct}%;background:#2a78d6"></div></div>'
             f'<p style="color:#666">This page refreshes automatically. The full report is emailed when the run completes.</p></body>')
+
+    @app.get("/runs/{run_id}/manifest.json")
+    def run_manifest(run_id: str):
+        run = store.get_run(run_id)
+        if not run:
+            raise HTTPException(404, "unknown run")
+        return repro_mod.manifest(run)
+
+    @app.get("/runs/{run_id}/verify.json")
+    def run_verify(run_id: str):
+        if not store.get_run(run_id):
+            raise HTTPException(404, "unknown run")
+        return repro_mod.verify(store, run_id)
+
+    @app.get("/runs/{run_id}/capsule.json")
+    def run_capsule(run_id: str):
+        c = repro_mod.capsule(store, run_id)
+        if not c:
+            raise HTTPException(404, "unknown run")
+        return c
 
     @app.get("/runs/{run_id}/export")
     def export(run_id: str):
