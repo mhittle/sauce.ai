@@ -23,6 +23,7 @@ from . import ablation as abl_mod
 from . import card as card_mod
 from . import daly as daly_mod
 from . import dataset
+from . import guide as guide_mod
 from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
 from . import power as power_mod
@@ -769,6 +770,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     def power_ui():
         f = STATIC / "power.html"
         return HTMLResponse(f.read_text() if f.exists() else "<h1>power calculator</h1>")
+
+    @app.get("/guide", response_class=HTMLResponse)
+    def guide_page():
+        return HTMLResponse(guide_mod.render_html())
 
     @app.get("/", response_class=HTMLResponse)
     def index():

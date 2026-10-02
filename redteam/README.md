@@ -120,6 +120,14 @@ elicitation, the audited grader, metrics, limitations, standards) and a
 **datasheet-for-datasets** (`GET /datasheet`) for the generated conversation
 data. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM).
 
+## Methods & workflows guide
+
+A single page (`GET /guide`) maps **every** capability in the system — grouped by
+stage of an evaluation study — with the exact calls to run each one (from pointing
+the service at a chatbot through the confirmatory statistics). The catalogue lives
+in `app/guide.py` as the single source of truth, and a test asserts every HTTP
+path it references is a registered route, so the guide can't drift from the code.
+
 ## Harm burden — DALY probabilistic sensitivity analysis
 
 The per-response QALY point model has a GBD-informed **DALY** companion with a

@@ -136,6 +136,19 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — methods & workflows guide page (`GET /guide`).** A single page
+  mapping every capability in the system, grouped by evaluation stage (run →
+  results/sharing → validity/methodology → benchmarking/data → planning/
+  reproducibility → confirmatory analysis & interop), each with a summary, a
+  when-to-use line, and the exact calls (HTTP method badge + path, or shell
+  commands for the separate packages). `app/guide.py` holds the workflow
+  catalogue as the single source of truth (16 workflows, 37 HTTP paths); a test
+  asserts **every** referenced path is a registered FastAPI route, so the guide
+  can't drift from the code. Linked from the home page. Tests `+4` (renders key
+  workflows, endpoint, route-coverage no-drift, well-formed paths; suite 204
+  pass). Verified headless. *Code:* `redteam/app/guide.py`, `app/main.py`,
+  `app/static/index.html`, `README.md`. *Server state:* none.
+
 - **Redteam — DALY probabilistic sensitivity analysis (RESEARCH.md §6, Phase D).**
   A GBD-informed DALY companion to the per-response QALY point model, reporting
   expected harm burden as a *distribution* not a point. `app/daly.py` (pure
