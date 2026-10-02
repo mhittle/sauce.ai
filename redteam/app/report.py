@@ -3,6 +3,7 @@ document renders in a browser, as an email body, and as an attachment."""
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 from html import escape
 
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, TACTICS, QalyAssumptions
@@ -11,30 +12,30 @@ from .config import Settings
 ADV = "#2a78d6"   # categorical slot 1
 CTL = "#eb6834"   # categorical slot 2
 
-CSS = """
-body{margin:0;background:#fcfcfb;color:#0b0b0b;font:15px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
-.wrap{max-width:980px;margin:0 auto;padding:24px 16px}
-h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:32px 0 8px;border-bottom:1px solid #e4e3de;padding-bottom:4px}
-h3{font-size:15px;margin:16px 0 6px}
-.muted{color:#52514e}.small{font-size:13px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
-.tile{border:1px solid #e4e3de;border-radius:8px;padding:12px;background:#fff}
-.tile .v{font-size:26px;font-weight:600}.tile .l{font-size:13px;color:#52514e}
-table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eeede8;vertical-align:top}
-th{color:#52514e;font-weight:600}td.n{text-align:right;font-variant-numeric:tabular-nums}
-.warn{background:#fff6e5;border:1px solid #f0d9a8;border-radius:8px;padding:10px 12px;font-size:13px}
-details{border:1px solid #e4e3de;border-radius:8px;margin:8px 0;background:#fff}
-summary{cursor:pointer;padding:8px 12px;font-size:14px}
-.turn{padding:8px 12px;border-top:1px solid #eeede8}
-.u{background:#f3f6fb;border-radius:6px;padding:8px}.b{background:#f7f7f5;border-radius:6px;padding:8px;white-space:pre-wrap}
-.tag{display:inline-block;font-size:12px;border:1px solid #d9d8d2;border-radius:10px;padding:0 8px;margin:2px 4px 2px 0}
-.harm{border-color:#e34948;color:#9b1c1b}
-mark{background:#ffe0df}
-.legend span{display:inline-block;margin-right:16px;font-size:13px}
-.sw{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:6px}
-@media (max-width:600px){.tile .v{font-size:22px}}
-"""
+_STATIC = Path(__file__).parent / "static"
+# One design system for every surface; inlined here so emailed reports stay self-contained.
+CSS = (_STATIC / "ui.css").read_text(encoding="utf-8")
+
+FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700'
+         '&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap">')
+
+NAV_LINKS = [("/", "Run"), ("/guide#wf-field", "Field scan"), ("/leaderboard", "Leaderboard"),
+             ("/guide#wf-epi", "Exposure analysis"), ("/guide", "Methods & workflows")]
+
+# Site chrome: injected right after <body> on every HTML page (fonts + sticky nav).
+NAV = FONTS + ('<header class="topnav"><div class="in"><a class="brand" href="/"><span class="mark"></span>'
+               '<span>sauce<span class="sep">.ai/</span>redteam</span></a><nav>'
+               + "".join(f'<a href="{h}">{t}</a>' for h, t in NAV_LINKS) +
+               '</nav><div class="cta"><a href="/#run">Start a run</a></div></div></header>'
+               '<script>(function(){var p=location.pathname,h=location.hash;document.querySelectorAll(".topnav nav a")'
+               '.forEach(function(a){var u=new URL(a.href);var on=u.pathname===p&&(!u.hash||u.hash===h);'
+               'if(on)a.classList.add("active");});})();</script>')
+
+FOOTER = ('<footer class="site"><div class="in"><span>sauce.ai/redteam · adversarial safety evaluation for clinical AI</span>'
+          '<span>Screening signals, not clinical determinations · for authorized testing only · '
+          '<a href="/eval-card">eval card</a> · <a href="/datasheet">datasheet</a></span></div></footer>')
+
 
 
 def _pct(x, d=1) -> str:
@@ -231,7 +232,7 @@ def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: di
 
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Red-team report {escape(run['id'])}</title>
-<style>{CSS}</style></head><body><div class="wrap">
+<style>{CSS}</style></head><body>{NAV}<div class="wrap">
 <h1>Clinical red-team report</h1>
 <div class="muted small">sauce.ai/redteam &middot; run {escape(run['id'])} &middot; {when} &middot; target {target_desc}</div>
 <div class="muted small">{escape(cfg['specialty'])}{(' &middot; ' + escape(cfg['condition'])) if cfg.get('condition') else ''}

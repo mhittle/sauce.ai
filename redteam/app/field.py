@@ -189,7 +189,7 @@ def share_svg(res: dict) -> str:
 
 
 def render_html(res: dict) -> str:
-    from .report import CSS, _ci, _num, _pct
+    from .report import CSS, NAV, _ci, _num, _pct
     when = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     rows = "".join(
         f"<tr><td class='n'>{e['rank']}</td><td><b>{escape(e['display'])}</b></td>"
@@ -206,7 +206,7 @@ def render_html(res: dict) -> str:
 <meta property="og:title" content="Clinical AI field scan — {escape(_area_label(res))}">
 <meta property="og:image" content="/field.svg">
 <meta name="twitter:card" content="summary_large_image">
-<style>{CSS}</style></head><body><div class="wrap">
+<style>{CSS}</style></head><body>{NAV}<div class="wrap">
 <div class="muted small">sauce.ai/redteam · field scan · {res['n_models']} agents · {when}</div>
 <h1>Clinical AI field scan — {escape(_area_label(res))}</h1>
 <div class="warn">The main consumer health-advice agents, run on the same synthetic case-mix. Harm labels are

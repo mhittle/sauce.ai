@@ -205,7 +205,7 @@ def render_html(an: dict) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ablation &amp; baselines — sauce.ai/redteam</title>
-<style>{report.CSS}</style></head><body><div class="wrap">
+<style>{report.CSS}</style></head><body>{report.NAV}<div class="wrap">
 <h1>Ablation &amp; baselines</h1>
 <div class="muted small">sauce.ai/redteam &middot; target <b>{escape(an['target_label'])}</b> &middot;
 {an['n_arms']} arms &middot; {when} &middot; adversarial arm &middot; matched personas</div>

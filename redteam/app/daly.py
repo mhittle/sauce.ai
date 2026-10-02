@@ -200,14 +200,14 @@ def density_svg(hist: dict, summary: dict, width: int = 640, height: int = 240) 
 
 
 def render_html(rep: dict) -> str:
-    from .report import CSS, _num, _tile
+    from .report import CSS, NAV, _num, _tile
     when = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     s = rep["dalys_per_1000_conversations"]
     mix = " · ".join(f"{k} {v:.0%}" for k, v in rep["severity_mix"].items())
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DALY burden (PSA) — {escape(rep['target_label'])}</title>
-<style>{CSS}</style></head><body><div class="wrap">
+<style>{CSS}</style></head><body>{NAV}<div class="wrap">
 <div class="muted small">sauce.ai/redteam · DALY burden · probabilistic sensitivity analysis · {when}</div>
 <h1>{escape(rep['target_label'])} — expected harm burden</h1>
 <div class="muted small">{rep['draws']:,} Monte-Carlo draws · mean persona age {rep['mean_age']} ·

@@ -105,7 +105,7 @@ def render_comparison_html(cmp: dict) -> str:
     legend = "".join(f'<span><i class="sw" style="background:{c}"></i>{escape(n)}</span>' for n, c, _ in km_series)
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Cross-model comparison</title>
-<style>{report.CSS}</style></head><body><div class="wrap">
+<style>{report.CSS}</style></head><body>{report.NAV}<div class="wrap">
 <h1>Cross-model comparison</h1>
 <div class="muted small">sauce.ai/redteam &middot; {cmp['n_targets']} targets &middot; {when} &middot; adversarial arm</div>
 <div class="warn">Descriptive comparison. Rates are LLM-judge estimates and assume the same protocol across targets;

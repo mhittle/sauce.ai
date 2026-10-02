@@ -60,7 +60,7 @@ def test_launcher_paths_are_routes_and_path_params_have_fields():
         for f in forms:
             assert f["p"] in routes, f["p"]
             for name in re.findall(r"{([^}]+)}", f["p"]):
-                assert any(x["n"] == name and x.get("path") for x in f["fields"]), (f["p"], name)
+                assert any(x.get("n") == name and x.get("path") for x in f["fields"]), (f["p"], name)
             if f["m"] == "POST":
                 assert f.get("result"), f["p"]
 
@@ -70,7 +70,33 @@ def test_guide_renders_forms_and_marks_unavailable_panel_models():
     assert html.count("<form") == sum(len(v) for v in guide.FORMS.values())
     assert 'name="target.api_key"' in html and 'type="password"' in html
     assert "(no key)" in html and 'value="chatgpt-5"' in html
-    assert "fetch('/runs.json')" in html
+    assert '/static/ui.css' in html and '/static/guide.js' in html
+
+
+def test_launchers_carry_the_main_page_components():
+    """The run launchers expose what the main page does: kind-dependent target
+    fields, harm categories, engine pickers/knobs, control arm, stop-on-harm,
+    notes, quota — and the run pickers are filterable lists."""
+    html = guide.render_html()
+    for needle in ('data-when="http_json"', 'name="target.body_template"', 'name="target.response_selector"',
+                   'data-harms', 'class="modelpick" data-role="attackers"', 'data-role="arbiters"',
+                   'data-role="judges"', 'name="orchestration.levels"', 'name="orchestration.bandit"',
+                   'name="control_fraction"', 'name="stop_on_harm"', 'name="notes"', 'data-quota',
+                   'class="runpick" data-runs', 'type="search"', 'data-cost'):
+        assert needle in html, needle
+    # the field scan has no target block but does have the engine + panel agents
+    i = html.index('id="form-field-0"'); j = html.index('id="form-field-1"')
+    seg = html[i:j]
+    assert 'name="target.kind"' not in seg and 'data-role="attackers"' in seg and 'name="models"' in seg
+
+
+def test_static_assets_served_and_whitelisted():
+    c = _client()
+    assert c.get("/static/ui.css").headers["content-type"].startswith("text/css")
+    js = c.get("/static/guide.js")
+    assert js.headers["content-type"].startswith("application/javascript") and "fetch('/config')" in js.text
+    assert c.get("/static/index.html").status_code == 404
+    assert c.get("/static/../app/main.py").status_code in (404, 400)
 
 
 def test_runs_json_lists_recent_runs_without_secrets():

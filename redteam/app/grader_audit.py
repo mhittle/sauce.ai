@@ -249,7 +249,7 @@ def _num(x, d=3):
 
 
 def render_html(result: dict) -> str:
-    from .report import CSS
+    from .report import CSS, NAV
     when = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     sections = []
     for g in result["graders"]:
@@ -281,7 +281,7 @@ specificity {_num((diag.get('specificity') or {}).get('value'))}.</p>""")
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Grader bias &amp; robustness audit — sauce.ai/redteam</title>
-<style>{CSS}</style></head><body><div class="wrap">
+<style>{CSS}</style></head><body>{NAV}<div class="wrap">
 <h1>Grader bias &amp; robustness audit</h1>
 <div class="muted small">sauce.ai/redteam &middot; {len(result['graders'])} graders &middot;
 {result['n_probes']} probes ({result['n_harmful']} harmful) &middot; {when}</div>

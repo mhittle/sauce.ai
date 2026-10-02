@@ -122,10 +122,15 @@ modification (Cochran's Q); the forest plot overlays a joint age × literacy
 adjusted RR. **Dose–response** takes prompts delivered as the dose: the
 discrete-time per-prompt harm hazard with a Cochran–Armitage trend test. A
 **quantitative bias analysis** propagates the LLM judge's imperfect
-sensitivity/specificity (`se=`/`sp=`, from the grader audit or clinician
-adjudication; illustrative defaults are flagged as assumed) into the effect
-measures: Rogan–Gladen correction plus a probabilistic version with a 95 %
-simulation interval. `/epi.json` has the numbers; `/epi.svg` the forest plot
+sensitivity/specificity into the effect measures: Rogan–Gladen correction plus a
+probabilistic version with a 95 % simulation interval. The judge's Se/Sp are
+**measured automatically from clinician adjudication** (`judge_validity`: every
+adjudication set covering the runs, majority-vote reference, pooled Se/Sp with
+their validation counts as the Beta pseudo-n), and where a run has enough
+adjudicated items the contrast runs **differentially** (the exposure's and the
+referent's own measured accuracy). Overrides: `se=`/`sp=`; `judge=assumed` skips
+the lookup; without adjudication the illustrative defaults are flagged as
+assumed. `/epi.json` has the numbers; `/epi.svg` the forest plot
 (`?kind=hazard` the dose–response). Pure stdlib; the labels remain screening
 signals, not clinical determinations.
 
@@ -188,17 +193,23 @@ data. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM).
 ## Methods & workflows guide — with launchers
 
 `GET /guide` is the single page mapping every capability (`app/guide.py`), grouped
-by evaluation stage, and each workflow is a **launcher**, not just a reference:
-a real form with run pickers (populated from `GET /runs.json`, newest first,
-secrets omitted, email masked), specialty/agent selectors and parameters. A GET
-launcher opens the report with the chosen query; a POST launcher submits the job
-and shows the created ids as links (run, field scan, audit, ablation,
-adjudication/review set), with skipped panel agents and errors surfaced inline.
-API keys are sent once for the run and never stored. The API reference stays
-under each card. The catalogue (`GROUPS`) and the launcher spec (`FORMS`) are the
-source of truth: tests assert every referenced and launched path is a registered
-route, every path parameter has a picker, and every workflow with an HTTP
-surface has a launcher — so the page can't drift from the service.
+by evaluation stage, and each workflow is a **launcher** with the same
+components as the main page: the target block (endpoint type with
+kind-dependent fields, custom JSON mapping, web-chat selectors, API key held
+for the run only), specialty → condition suggestions, harm-category checkboxes,
+harm threshold / control arm / stop-on-harm / seed, attacker–arbiter–judge
+model pickers with provider availability, engine knobs (levels, candidates,
+consensus rounds, bandit, lookahead), notes, quota and cost — all driven by
+`GET /config` like the main page (`app/static/guide.js`, `app/static/ui.css`,
+served at `/static/…`). Run pickers are filterable lists fed by `GET /runs.json`
+(newest first, secrets omitted, email masked). A GET launcher opens the report
+with the chosen query; a POST launcher submits the job, shows the created ids
+as links and a **live progress bar per run** (status, headline, cancel), and
+refreshes the pickers as runs complete. The API reference stays under each
+card. Tests assert every launched path is a registered route, every path
+parameter has a picker, every POST has a result link, every workflow with an
+HTTP surface has a launcher, and the run launchers carry the main page's
+components — so the page can't drift from the service.
 
 ## Harm burden — DALY probabilistic sensitivity analysis
 
@@ -358,6 +369,21 @@ in a separate repo against an analysis-ready export:
   Kaplan–Meier time-to-harm curves. `/compare.json` for the raw numbers.
   Model-vs-model significance and case-mix adjustment belong in the
   confirmatory analysis, not this table.
+
+## Design system
+
+One stylesheet, `app/static/ui.css`, styles every surface — landing, launchers,
+run reports, comparison/field/exposure/target-trial reports, leaderboard, safety
+card, clinician tools. `report.CSS` reads it at import so emailed and stored run
+reports stay self-contained, and `report.NAV` (fonts + sticky top nav with a
+"Start a run" call to action) is injected after `<body>` on every HTML render.
+Tokens (paper background, one accent, status colours, radii, shadows) with a
+dark-mode set; Inter for UI and Source Serif 4 for display headings (system
+fallbacks when fonts are unavailable); page headers as eyebrow → title → meta;
+cards, KPI tiles, framed charts, uppercase table headers with hover rows,
+focus rings, print rules. The landing page is a hero (headline, three-step
+explainer, explore cards) above the run form, which is a numbered stepper; the
+guide has a sticky stage sidebar.
 
 ## Stack
 
