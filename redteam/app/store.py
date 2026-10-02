@@ -250,6 +250,18 @@ class Store:
         cols = ", ".join(f"{k}=?" for k in fields)
         self._x(f"UPDATE runs SET {cols} WHERE id=?", (*fields.values(), run_id))
 
+    def recent_runs(self, limit: int = 200) -> list[dict]:
+        """Newest-first run summaries for pickers (no report HTML, no secrets)."""
+        rows = self._x("SELECT id, email, created_at, status, n_trials, completed_trials, config_json, "
+                       "target_json FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["config"] = json.loads(d.pop("config_json") or "{}")
+            d["target"] = json.loads(d.pop("target_json") or "{}")
+            out.append(d)
+        return out
+
     def queued_runs(self) -> list[str]:
         return [r["id"] for r in self._x("SELECT id FROM runs WHERE status='queued' ORDER BY created_at")]
 

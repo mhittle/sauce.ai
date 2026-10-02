@@ -911,7 +911,23 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
 
     @app.get("/guide", response_class=HTMLResponse)
     def guide_page():
-        return HTMLResponse(guide_mod.render_html())
+        runnable, _ = field_mod.available_panel(settings)
+        return HTMLResponse(guide_mod.render_html(available_models={p["key"] for p in runnable}))
+
+    @app.get("/runs.json")
+    def runs_list(limit: int = 200):
+        """Recent runs for the workflow launchers' run pickers (no secrets, masked email)."""
+        out = []
+        for r in store.recent_runs(min(max(limit, 1), 500)):
+            cfg = r.get("config") or {}
+            label = dataset.target_label({"target": r.get("target") or {}, "config": cfg})
+            out.append({"run_id": r["id"], "status": r["status"], "created_at": r["created_at"],
+                        "n_trials": r["n_trials"], "completed_trials": r["completed_trials"],
+                        "label": field_mod._MODEL_DISPLAY.get(label, label),
+                        "specialty": cfg.get("specialty"), "condition": cfg.get("condition"),
+                        "seed": cfg.get("seed"), "email": _mask(r["email"]),
+                        "field_scan_id": cfg.get("field_scan_id") or "", "ablation_id": cfg.get("ablation_id") or ""})
+        return {"n": len(out), "runs": out}
 
     @app.get("/", response_class=HTMLResponse)
     def index():

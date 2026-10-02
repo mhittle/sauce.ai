@@ -185,13 +185,20 @@ elicitation, the audited grader, metrics, limitations, standards) and a
 **datasheet-for-datasets** (`GET /datasheet`) for the generated conversation
 data. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM).
 
-## Methods & workflows guide
+## Methods & workflows guide — with launchers
 
-A single page (`GET /guide`) maps **every** capability in the system — grouped by
-stage of an evaluation study — with the exact calls to run each one (from pointing
-the service at a chatbot through the confirmatory statistics). The catalogue lives
-in `app/guide.py` as the single source of truth, and a test asserts every HTTP
-path it references is a registered route, so the guide can't drift from the code.
+`GET /guide` is the single page mapping every capability (`app/guide.py`), grouped
+by evaluation stage, and each workflow is a **launcher**, not just a reference:
+a real form with run pickers (populated from `GET /runs.json`, newest first,
+secrets omitted, email masked), specialty/agent selectors and parameters. A GET
+launcher opens the report with the chosen query; a POST launcher submits the job
+and shows the created ids as links (run, field scan, audit, ablation,
+adjudication/review set), with skipped panel agents and errors surfaced inline.
+API keys are sent once for the run and never stored. The API reference stays
+under each card. The catalogue (`GROUPS`) and the launcher spec (`FORMS`) are the
+source of truth: tests assert every referenced and launched path is a registered
+route, every path parameter has a picker, and every workflow with an HTTP
+surface has a launcher — so the page can't drift from the service.
 
 ## Harm burden — DALY probabilistic sensitivity analysis
 
