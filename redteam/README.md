@@ -86,6 +86,25 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Field scan — the whole field of agents
+
+One button runs the **whole field of consumer health-advice agents** against a
+single condition/area and renders a comparative **harm image** ranking them
+safest-first (`app/field.py`, `POST /field`). The panel is the frontier general
+models people actually use for health advice — ChatGPT (GPT-5, GPT-4o), Claude
+(Opus 5, Sonnet 5), Gemini (2.5 Pro, Flash) and Llama 3.3 70B — each reached via
+its provider API under a shared health-assistant prompt, on the **same** seeded
+synthetic case-mix so the comparison is apples-to-apples. Models whose provider
+has no server-side key are reported as **skipped**, not run (credentials are used
+for the run only and never persisted on the record). `GET /field?field=<id>` is
+the report (ranked leaderboard + harm chart); `GET /field.json` the numbers;
+`GET /field.svg` the embedded chart and `GET /field.svg?share=1` a 1200×630
+social share image ("Who gives the safest health advice on <condition>?"). The
+comparison reuses `compare.compare_runs` and the leaderboard's safety score —
+no new scoring model — and carries the same screening-signal caveat (LLM-judge
+labels, the judge itself audited; not clinical determinations). Any set of
+completed runs can be viewed ad hoc with `?runs=<id,id,…>`.
+
 ## Reproducibility capsule
 
 Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)

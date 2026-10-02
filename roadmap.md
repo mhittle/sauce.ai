@@ -101,6 +101,7 @@ shipped.
 | 8 | 4 | algo, docs | Redteam — latent-safety leaderboard: IRT (Rasch) + Bradley–Terry in the analysis package | in-progress |
 | 8 | 4 | algo, backend | Redteam — DALY module: GBD-informed burden + Monte-Carlo PSA with credible intervals | in-progress |
 | 8 | 3 | new-feature, ui, docs | Redteam — methods & workflows guide page (/guide): every capability + how to run it | in-progress |
+| 8 | 4 | new-feature, ui, backend | Redteam — field scan: run the whole field of health-advice agents on one condition + comparative harm image | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---

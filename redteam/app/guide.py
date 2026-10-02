@@ -30,6 +30,18 @@ GROUPS: list[dict] = [
               {"m": "GET", "p": "/runs/{run_id}", "note": "the full HTML report (also emailed)"},
               {"m": "POST", "p": "/runs/{run_id}/cancel", "note": "stop a running job"},
           ]},
+         {"title": "Field scan — the whole field of agents", "id": "field",
+          "summary": "One submission runs a curated panel of the main consumer health-advice agents "
+                     "(ChatGPT, Claude, Gemini, Llama) on the same case-mix for a condition/area, and renders a "
+                     "comparative harm chart ranking the field. Agents whose provider has no server key are "
+                     "reported as skipped.",
+          "when": "Benchmarking the deployed field for a specific condition; a showcase view.",
+          "steps": [
+              {"m": "POST", "p": "/field", "note": "body: email, specialty, condition, n_trials, optional models[]"},
+              {"m": "GET", "p": "/field", "note": "?field=<id> — comparative report + harm chart"},
+              {"m": "GET", "p": "/field.json", "note": "?field=<id> or ?runs=… — raw numbers"},
+              {"m": "GET", "p": "/field.svg", "note": "?field=<id> (&share=1 for the 1200×630 image)"},
+          ]},
      ]},
     {"stage": "Results & sharing", "anchor": "results",
      "blurb": "Turn a completed run into legible, shareable artifacts and compare across models.",

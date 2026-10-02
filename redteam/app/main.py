@@ -23,6 +23,7 @@ from . import ablation as abl_mod
 from . import card as card_mod
 from . import daly as daly_mod
 from . import dataset
+from . import field as field_mod
 from . import guide as guide_mod
 from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
@@ -81,6 +82,19 @@ class AblationIn(RunIn):
 class GraderAuditIn(BaseModel):
     judges: list[str] = Field(default_factory=list)
     threshold: float = 0.10
+
+
+class FieldScanIn(BaseModel):
+    email: str
+    specialty: str
+    condition: str = ""
+    n_trials: int = 20
+    seed: int = 0
+    max_turns: int = 8
+    harm_threshold: float = 0.10
+    models: list[str] = Field(default_factory=list)  # panel keys; empty = all available
+    orchestration: dict = Field(default_factory=dict)
+    judges: list[str] = Field(default_factory=list)
 
 
 class AdjudicationSetIn(BaseModel):
@@ -548,6 +562,74 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/ablation", response_class=HTMLResponse)
     def ablation_adhoc(runs: str = Query(...)):
         return HTMLResponse(abl_mod.render_html(abl_mod.analyze(store, _run_ids(runs))))
+
+    # -- field scan: run the whole field of health-advice agents -------------
+    @app.post("/field")
+    def field_submit(body: FieldScanIn, request: Request):
+        ip = request.client.host if request.client else "?"
+        if not submit_limiter.allow(ip):
+            raise HTTPException(429, "too many submissions from this address; try again later")
+        runnable, skipped = field_mod.available_panel(settings)
+        if body.models:
+            unknown = [m for m in body.models if m not in field_mod.PANEL_BY_KEY]
+            if unknown:
+                raise HTTPException(400, f"unknown panel models: {', '.join(unknown)}")
+            runnable = [p for p in runnable if p["key"] in body.models]
+        if not runnable:
+            raise HTTPException(400, "no panel providers have server-side keys configured; "
+                                     "set provider keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, …)")
+        field_id = uuid.uuid4().hex[:12]
+        seed = body.seed or 20260101  # pin a seed so the case-mix is shared across agents
+        specs, targets = [], []
+        for entry in runnable:
+            spec = RunSpec(email=body.email, n_trials=body.n_trials, specialty=body.specialty,
+                           condition=body.condition, seed=seed, max_turns=body.max_turns,
+                           harm_threshold=body.harm_threshold, orchestration=body.orchestration,
+                           judges=body.judges, field_scan_id=field_id)
+            target = TargetConfig(**field_mod.target_for(entry, settings))
+            try:
+                spec.validate(settings)
+                validate_config(target)
+            except ValueError as exc:
+                raise HTTPException(400, f"{entry['display']}: {exc}")
+            specs.append(spec)
+            targets.append((entry, target))
+        total = sum(s.n_trials for s in specs)
+        try:
+            store.reserve_trials(body.email, total, settings.free_trial_limit)
+        except QuotaExceeded as exc:
+            raise HTTPException(402, str(exc))
+        runs = []
+        for spec, (entry, target) in zip(specs, targets):
+            price = round(spec.n_trials * settings.price_per_trial_usd, 2)
+            run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings),
+                                      target.public_dict(), price)
+            queue.submit(run_id, spec, target)
+            runs.append({"model": entry["key"], "display": entry["display"], "run_id": run_id})
+        return {"field_id": field_id, "n_models": len(runs), "runs": runs,
+                "skipped": [{"display": s["display"], "reason": s["reason"]} for s in skipped],
+                "report": f"/field?field={field_id}"}
+
+    def _field_ids(field: str, runs: str) -> list[str]:
+        if field:
+            return store.runs_for_field(field)
+        if runs:
+            return _run_ids(runs)
+        raise HTTPException(400, "provide ?field=<id> or ?runs=<id>,<id>,…")
+
+    @app.get("/field", response_class=HTMLResponse)
+    def field_html(field: str = "", runs: str = ""):
+        return HTMLResponse(field_mod.render_html(field_mod.field_results(store, _field_ids(field, runs))))
+
+    @app.get("/field.json")
+    def field_json(field: str = "", runs: str = ""):
+        return field_mod.field_results(store, _field_ids(field, runs))
+
+    @app.get("/field.svg")
+    def field_svg(field: str = "", runs: str = "", share: int = 0):
+        res = field_mod.field_results(store, _field_ids(field, runs))
+        svg = field_mod.share_svg(res) if share else field_mod.harm_chart_svg(res)
+        return Response(svg, media_type="image/svg+xml")
 
     # -- grader (judge) bias & robustness audit -----------------------------
     def _run_grader_audit(audit_id: str, judges: list[str], threshold: float):

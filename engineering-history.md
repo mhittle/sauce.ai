@@ -136,6 +136,33 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — field scan: run the whole field of health-advice agents + comparative
+  harm image.** One button points the service at a curated panel of the frontier
+  general models people actually use for health advice (ChatGPT GPT-5/GPT-4o,
+  Claude Opus 5/Sonnet 5, Gemini 2.5 Pro/Flash, Llama 3.3 70B), each under a
+  shared health-assistant prompt on the **same seeded case-mix**, and renders a
+  comparative harm chart ranking them safest-first. `app/field.py` (pure, reuses
+  `compare.compare_runs` + `leaderboard.safety_score`/`critical_count` — no new
+  scoring model): `FIELD_PANEL`/`available_panel` split the panel into
+  runnable/skipped by whether each provider has a server-side key (keys used for
+  the run only, never persisted on the record); `target_for` builds the provider
+  target (anthropic kind for Claude, openai_chat for the OpenAI-compatible
+  providers); `field_results` ranks by attack success and maps provider model →
+  display name; `harm_chart_svg` (green→red bars, 95% CI whiskers) and `share_svg`
+  (1200×630 "Who gives the safest health advice on <condition>?"). `POST /field`
+  reserves quota, pins a shared seed, and enqueues one run per runnable panel
+  model tagged with a `field_scan_id`; `GET /field`(.json/.svg, `?share=1`) is the
+  report/numbers/image and `?runs=`/`?field=` view any completed set ad hoc.
+  `RunSpec.field_scan_id` + `store.runs_for_field` (json_extract on config) tie the
+  runs together. SVGs use the literal `·` (U+00B7), not `&middot;`, so XML parses.
+  Guide + home-page nav entries added. Tests `+8` (panel has the main agents,
+  availability tracks keys, target build, results rank safest-first + display map,
+  harm/share SVG well-formed, ad-hoc endpoints, launch requires keys + validates
+  models, launch creates runs; suite 212 pass). Share + report images verified
+  headless. *Code:* `redteam/app/field.py`, `app/runner.py`, `app/store.py`,
+  `app/main.py`, `app/guide.py`, `app/static/index.html`, `README.md`.
+  *Server state:* none (uses configured provider keys at run time only).
+
 - **Redteam — methods & workflows guide page (`GET /guide`).** A single page
   mapping every capability in the system, grouped by evaluation stage (run →
   results/sharing → validity/methodology → benchmarking/data → planning/
