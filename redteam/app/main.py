@@ -963,7 +963,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     def static_asset(name: str):
         if name not in _STATIC_OK or not (STATIC / name).exists():
             raise HTTPException(404, "no such asset")
-        return FileResponse(STATIC / name, media_type=_STATIC_OK[name])
+        # revalidate on every load (ETag/Last-Modified make it cheap) so a restyle never needs a hard refresh
+        return FileResponse(STATIC / name, media_type=_STATIC_OK[name], headers={"Cache-Control": "no-cache"})
 
     @app.get("/", response_class=HTMLResponse)
     def index():
