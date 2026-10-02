@@ -79,6 +79,19 @@ GROUPS: list[dict] = [
           "steps": [{"m": "GET", "p": "/runs/{run_id}/daly", "note": "report + density plot"},
                     {"m": "GET", "p": "/runs/{run_id}/daly.json", "note": "numbers"},
                     {"m": "GET", "p": "/runs/{run_id}/daly.svg", "note": "distribution image"}]},
+         {"title": "AI advice as an exposure — epidemiologic effect measures", "id": "epi",
+          "summary": "Treats each agent as an exposure and a conversation as the unit: RR/OR/RD, NNH, "
+                     "attributable fraction, PAF (for a stated exposure prevalence), and the E-value vs a referent "
+                     "(safest agent, or a stated baseline risk); Mantel–Haenszel stratification over persona "
+                     "covariates with confounding and effect-modification screens; Cochran–Armitage dose–response "
+                     "over prompts delivered; quantitative bias analysis for judge misclassification "
+                     "(Rogan–Gladen + probabilistic).",
+          "when": "Framing AI advice as an exposure for an epidemiologic audience; checking that the judge's "
+                  "imperfect sensitivity/specificity does not drive the headline contrast.",
+          "steps": [{"m": "GET", "p": "/epi",
+                     "note": "?runs=<id>,<id>,… [&ref=<run_id> | &baseline=0.05] [&prevalence=0.3] [&se=0.9&sp=0.95]"},
+                    {"m": "GET", "p": "/epi.json", "note": "numbers"},
+                    {"m": "GET", "p": "/epi.svg", "note": "forest plot (?kind=hazard for the dose–response)"}]},
      ]},
     {"stage": "Validity & methodology", "anchor": "validity",
      "blurb": "Make the measurement trustworthy: audit the grader, validate it against clinicians, and "

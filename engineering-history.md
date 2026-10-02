@@ -136,6 +136,33 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — AI advice as an exposure: epidemiologic effect measures (`GET /epi`).**
+  The epi-native framing: each agent is an exposure, a conversation the unit,
+  elicited unsafe advice the outcome. `app/epi.py` (pure stdlib; reuses
+  `metrics.risk_ratio`/`risk_difference`/`nnh_from_rd`/`wilson`): per agent vs a
+  referent (safest agent by default, `ref=` run, or `baseline=` stated
+  counterfactual risk) — RR, OR (Woolf), RD, NNH, AF_e, PAF (Levin, `prevalence=`),
+  E-value (VanderWeele & Ding; point and CI-limit); Mantel–Haenszel RR with
+  Greenland–Robins variance over each persona covariate (age band, literacy, sex,
+  speaker, affect, access) with a >10 % crude-vs-adjusted confounding flag and a
+  Cochran's Q effect-modification screen (needed a general `chi2_sf` — regularized
+  upper incomplete gamma, NR gser/gcf); joint age×literacy MH RR overlaid on the
+  forest plot; dose–response as discrete-time per-prompt hazard by prompt number
+  with Cochran–Armitage trend; QBA for judge misclassification — Rogan–Gladen
+  point correction + probabilistic bias analysis (Se/Sp ~ Beta with pseudo-n,
+  Jeffreys posteriors on observed risks, 95 % simulation interval; non-differential
+  assumed; `se=`/`sp=` supplied, else illustrative defaults flagged "assumed").
+  `GET /epi`(.json/.svg, `?kind=hazard`). Guide + nav entries. Forest-plot palette
+  validated with the dataviz checker (crude ● / adjusted ◆ — shape + color).
+  Tests `+14` (chi2 sf, OR/E-value/AF/PAF known values, MH recovers common RR under
+  confounding, effect-modification screen, CA trend, hazard rows, Rogan–Gladen
+  inversion, PBA interval covers truth, assembly with safest referent + ranking,
+  baseline mode, images well-formed, endpoints; suite 226 pass). Report verified
+  headless. *Code:* `redteam/app/epi.py`, `app/main.py`, `app/guide.py`,
+  `app/static/index.html`, `README.md`. *Server state:* none. *Open:* pull Se/Sp
+  from the adjudication store automatically; differential-misclassification
+  scenario; target-trial protocol + DAG page.
+
 - **Redteam — field scan: run the whole field of health-advice agents + comparative
   harm image.** One button points the service at a curated panel of the frontier
   general models people actually use for health advice (ChatGPT GPT-5/GPT-4o,

@@ -105,6 +105,30 @@ no new scoring model — and carries the same screening-signal caveat (LLM-judge
 labels, the judge itself audited; not clinical determinations). Any set of
 completed runs can be viewed ad hoc with `?runs=<id,id,…>`.
 
+## AI advice as an exposure — epidemiologic effect measures
+
+`app/epi.py` (`GET /epi?runs=…`) treats each agent as an **exposure**, a
+conversation as the unit, and elicited unsafe advice as the outcome, and brings
+the classical toolkit to the comparison. Against a **referent** — the safest
+agent in the set by default, a chosen run (`ref=`), or a stated counterfactual
+baseline risk such as usual care (`baseline=`) — it reports, per agent: risk
+ratio (Katz), odds ratio (Woolf), risk difference (Newcombe), NNH, attributable
+fraction among the exposed, population attributable fraction for a stated
+exposure prevalence (`prevalence=`, Levin), and the **E-value** for unmeasured
+confounding. A **Mantel–Haenszel** stratified analysis over persona covariates
+(age band, health literacy, sex, speaker, affect, access; Greenland–Robins
+variance) flags confounding (crude vs adjusted >10 %) and screens for effect
+modification (Cochran's Q); the forest plot overlays a joint age × literacy
+adjusted RR. **Dose–response** takes prompts delivered as the dose: the
+discrete-time per-prompt harm hazard with a Cochran–Armitage trend test. A
+**quantitative bias analysis** propagates the LLM judge's imperfect
+sensitivity/specificity (`se=`/`sp=`, from the grader audit or clinician
+adjudication; illustrative defaults are flagged as assumed) into the effect
+measures: Rogan–Gladen correction plus a probabilistic version with a 95 %
+simulation interval. `/epi.json` has the numbers; `/epi.svg` the forest plot
+(`?kind=hazard` the dose–response). Pure stdlib; the labels remain screening
+signals, not clinical determinations.
+
 ## Reproducibility capsule
 
 Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)
