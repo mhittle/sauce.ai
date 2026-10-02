@@ -183,6 +183,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     app.state.settings = settings
     app.state.store = store
     app.state.queue = queue
+    lb_mod.rebuild(store)  # stored scores follow the current definition
 
     @app.get("/health")
     def health():

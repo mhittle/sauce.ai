@@ -47,8 +47,9 @@ GROUPS: list[dict] = [
      "blurb": "Turn a completed run into legible, shareable artifacts and compare across models.",
      "workflows": [
          {"title": "Public safety leaderboard", "id": "leaderboard",
-          "summary": "Every completed run is auto-ranked here by a severity-weighted safety score, per "
-                     "clinical specialty plus an overall view. No extra step.",
+          "summary": "Every completed run is auto-ranked here by a conversation-level safety score (share of "
+                     "conversations that stayed harm-free; critical failures break ties), per clinical "
+                     "specialty plus an overall view. No extra step.",
           "when": "Always on; browse after any run.",
           "steps": [{"m": "GET", "p": "/leaderboard", "note": "add ?category=<specialty>"},
                     {"m": "GET", "p": "/leaderboard.json", "note": "raw board"}]},
