@@ -86,6 +86,61 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Reproducibility capsule
+
+Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)
+— the exact secret-free configuration (target identity, run config, model specs,
+code version, seed) plus a **`config_hash`** stable across identical configs. A
+**determinism check** (`GET /runs/<id>/verify.json`) recomputes the persona
+case-mix from the manifest and confirms it matches the run's actual personas, so
+reproducibility is *demonstrated* (it reports `case_mix_reproducible`, and flags
+runs that didn't pin a seed). The **capsule** (`GET /runs/<id>/capsule.json`)
+bundles the manifest, the headline results, and the trial-level rows into one
+record a reviewer can keep. Target credentials never appear.
+
+## Inspect (UK AISI) interop
+
+The eval is also packaged as a first-class **Inspect** task in `inspect_eval/`
+(a separate package — nothing in the service imports it): a dataset of
+adversarial clinical prompts, a health-assistant solver, and a model-graded harm
+scorer (`accuracy` = safe rate). `inspect eval inspect_eval/clinical_redteam.py
+--model <m> -T grader=<g>`, then `inspect view`. `from_export.samples_from_tidy`
+replays a run's case mix as Inspect `Sample`s. See `inspect_eval/README.md`.
+
+## Shareable safety card, eval card & datasheet
+
+Every completed run has a one-click, link-and-screenshot-friendly **model safety
+card** (`GET /card?run=<id>`): headline safety score + leaderboard rank, attack
+success, critical-failure count, a Kaplan–Meier time-to-harm curve, top harm
+categories, and full provenance (attacker/judge ensembles, threshold, seed). It
+carries Open Graph / Twitter-card tags whose image is a 1200×630 SVG at
+`GET /card/<id>/image.svg` — a ready social preview. Alongside it: an **eval
+card** (`GET /eval-card`, a model-card for the eval itself — what it measures,
+elicitation, the audited grader, metrics, limitations, standards) and a
+**datasheet-for-datasets** (`GET /datasheet`) for the generated conversation
+data. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM).
+
+## Methods & workflows guide
+
+A single page (`GET /guide`) maps **every** capability in the system — grouped by
+stage of an evaluation study — with the exact calls to run each one (from pointing
+the service at a chatbot through the confirmatory statistics). The catalogue lives
+in `app/guide.py` as the single source of truth, and a test asserts every HTTP
+path it references is a registered route, so the guide can't drift from the code.
+
+## Harm burden — DALY probabilistic sensitivity analysis
+
+The per-response QALY point model has a GBD-informed **DALY** companion with a
+Monte-Carlo PSA (`app/daly.py`, `GET /runs/<id>/daly`): it reports the expected
+harm burden as a **distribution** (DALYs per 1,000 conversations with a 95%
+credible interval), not a single speculative number. Each draw samples the
+disability weight and duration per severity and the years of life lost for a
+fatal outcome (triangular, GBD-informed), **and** the conversation harm rate from
+its Jeffreys Beta posterior — so the interval carries both statistical and
+parameter uncertainty. `GET /runs/<id>/daly.json` has the numbers;
+`GET /runs/<id>/daly.svg` is the posterior-distribution image. Explicitly framed
+as illustrative (order-of-magnitude), not a population estimate.
+
 ## Eval methodology — grader bias & robustness audit
 
 An eval is only as good as its grader. `app/grader_audit.py` (+ `POST

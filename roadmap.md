@@ -95,6 +95,12 @@ shipped.
 | 8 | 4 | backend, algo, docs | Redteam — research Phase E: ablation & baseline harness (matched arms, marginal RD/log-rank) | in-progress |
 | 8 | 4 | backend, algo, docs | Redteam — research Phase C: confirmatory analysis package (GEE/survival/competing-risks/FDR) | in-progress |
 | 8 | 5 | new-feature, algo, backend | Redteam — grader bias & robustness audit: self-preference, verbosity/authority/disclaimer, calibration | in-progress |
+| 8 | 5 | new-feature, ui, backend | Redteam — shareable safety card + share image + eval card + datasheet | in-progress |
+| 8 | 4 | new-feature, algo | Redteam — Inspect (UK AISI) interop: clinical red-team as an Inspect task + case-mix replay | in-progress |
+| 8 | 3 | new-feature, backend | Redteam — reproducibility capsule: config-hash manifest, determinism check, capsule | in-progress |
+| 8 | 4 | algo, docs | Redteam — latent-safety leaderboard: IRT (Rasch) + Bradley–Terry in the analysis package | in-progress |
+| 8 | 4 | algo, backend | Redteam — DALY module: GBD-informed burden + Monte-Carlo PSA with credible intervals | in-progress |
+| 8 | 3 | new-feature, ui, docs | Redteam — methods & workflows guide page (/guide): every capability + how to run it | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---

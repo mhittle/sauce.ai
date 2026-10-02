@@ -134,7 +134,116 @@ these.
 
 ---
 
+## 2026-10-02
+
+- **Redteam — methods & workflows guide page (`GET /guide`).** A single page
+  mapping every capability in the system, grouped by evaluation stage (run →
+  results/sharing → validity/methodology → benchmarking/data → planning/
+  reproducibility → confirmatory analysis & interop), each with a summary, a
+  when-to-use line, and the exact calls (HTTP method badge + path, or shell
+  commands for the separate packages). `app/guide.py` holds the workflow
+  catalogue as the single source of truth (16 workflows, 37 HTTP paths); a test
+  asserts **every** referenced path is a registered FastAPI route, so the guide
+  can't drift from the code. Linked from the home page. Tests `+4` (renders key
+  workflows, endpoint, route-coverage no-drift, well-formed paths; suite 204
+  pass). Verified headless. *Code:* `redteam/app/guide.py`, `app/main.py`,
+  `app/static/index.html`, `README.md`. *Server state:* none.
+
+- **Redteam — DALY probabilistic sensitivity analysis (RESEARCH.md §6, Phase D).**
+  A GBD-informed DALY companion to the per-response QALY point model, reporting
+  expected harm burden as a *distribution* not a point. `app/daly.py` (pure
+  stdlib — `random.triangular`/`betavariate`): DALY = YLD (disability weight ×
+  duration) + YLL (discounted remaining life expectancy for fatal outcomes);
+  `psa()` runs a Monte-Carlo over triangular GBD-informed weights/durations and
+  fatal YLL **and** the conversation harm rate from a Jeffreys Beta posterior,
+  returning DALYs per 1,000 conversations with mean/median/95% credible interval
+  and a histogram. `daly_report` pulls the severity mix + mean persona age from a
+  completed run. `GET /runs/<id>/daly`(.json/.svg) — HTML report with a posterior-
+  density plot (median + CrI markers), JSON, and a share SVG. Explicitly
+  illustrative (order-of-magnitude), LLM-judge screening, not a population
+  estimate. Tests `+9` (mix normalization, CI ordered+positive, severity
+  sensitivity, harm-rate scaling, seed determinism, skip w/o trials, well-formed
+  SVG, report from run data, endpoints; suite 200 pass). Report verified
+  headless. *Code:* `redteam/app/daly.py`, `app/main.py`, `README.md`,
+  `RESEARCH.md`. *Server state:* none (reads existing runs). *Open:* GBD 2019
+  weight citations table; age-weighting sensitivity.
+
 ## 2026-10-01
+
+- **Redteam — latent-safety leaderboard (IRT + Bradley–Terry) in `analysis/`.**
+  RESEARCH.md §5: conversations-as-items, models-as-subjects — a principled
+  ranking with uncertainty that separates *model safety* from *item difficulty*
+  (a raw harm rate confounds the two). `analysis/latent.py`: `item_responses`
+  (collapse to one binary response per model×item, item = `specialty#trial_idx`,
+  shared across models under a paired design); `rasch_safety` (1PL/Rasch as a
+  fixed-effects logistic GLM `y ~ C(target)+C(item)`, model term negated → latent
+  safety + 95% CI, ranked safest-first); `bradley_terry_safety` (head-to-head
+  item outcomes → strengths + CIs, with an L2-regularized fallback on
+  separation). Wired into `sap.run_all` + a markdown leaderboard table +
+  Bradley–Terry agreement line. `simulate.generate_paired` adds the paired
+  design (shared item bank, per-target vulnerability + per-item difficulty) the
+  method needs. Validated in-sandbox with statsmodels: both methods recover the
+  planted ordering (target-1 safest → target-4 leakiest), CIs sensible.
+  Tests `+6` (paired sim shares items, vulnerability gradient, item_responses,
+  Rasch ranks safest-first, Bradley–Terry agrees, guard without paired design);
+  analysis stdlib suite 14 pass, heavy ranks validated locally + under
+  `analysis-ci`. *Code:* `redteam/analysis/analysis/latent.py`, `simulate.py`,
+  `sap.py`, `README.md`, `RESEARCH.md`. *Open:* 2PL IRT (discrimination) and the
+  DALY PSA. **+ Forest plot:** `latent.forest_svg` renders the Rasch ranking as
+  a pure-SVG forest plot (point + 95% CI whiskers, safest at top, green→red by
+  safety, zero reference line; XML-safe literal `·`); the CLI writes
+  `latent_forest.svg` when the leaderboard is estimable. Tests `+2` (well-formed
+  SVG, empty when skipped); verified headless.
+
+- **Redteam — reproducibility capsule.** `app/repro.py` (pure stdlib): a
+  content-addressed run **manifest** (`GET /runs/<id>/manifest.json`) — secret-
+  free target identity, run config, sorted model specs, code version, seed —
+  with a **config_hash** (sha256 of the canonical manifest) stable across
+  identical configs; a **determinism check** (`/runs/<id>/verify.json`) that
+  recomputes the persona case-mix from the manifest (mirroring the runner's
+  `Random(seed)`+`allocate_arms`+`make_persona`) and confirms it matches the
+  run's actual personas (`case_mix_reproducible`), flagging seed=0 runs as not
+  reproducible; and a **capsule** (`/runs/<id>/capsule.json`) bundling manifest +
+  headline + trial rows. Credentials never appear (hashes the public target
+  record only). Tests `+6` (hash present/no-secrets, hash stable+seed-sensitive,
+  reproducible for pinned seed, not reproducible without, capsule bundle, API;
+  suite 191 pass). *Code:* `redteam/app/repro.py`, `app/main.py`, `README.md`.
+  *Server state:* none (reads existing runs). *Open:* a live `POST /replay`
+  (re-run the stored config against a freshly supplied target endpoint).
+
+- **Redteam — Inspect (UK AISI) interop (`redteam/inspect_eval/`).** Packages
+  the clinical red-team eval as a first-class **Inspect** task so it drops into
+  the frontier-lab eval stack and opens in `inspect view`. `clinical_redteam.py`:
+  an `@task` with a dataset of adversarial clinical prompts, a health-assistant
+  `system_message`+`generate()` solver, and `@scorer harm_scorer` — model-graded
+  (CORRECT=safe ⇒ `accuracy`=safe rate), with a keyword-heuristic fallback when
+  the grader returns no JSON (so it completes under `mockllm/model`).
+  `from_export.samples_from_tidy` replays a run's case mix as Inspect `Sample`s
+  from the tidy export (persona-synthesised prompts, since the export carries no
+  raw text). Separate package — nothing in the stdlib service imports it;
+  validated in-sandbox (inspect-ai 0.3.273 installed) by running `eval()` on
+  `mockllm/model` end-to-end (status success, accuracy 0.5 on alternating
+  replies) and via a new path-scoped **`inspect-ci`** workflow. Tests `+4`
+  (end-to-end mock eval, task shape, JSON-grader scorer path, export converter).
+  *Code:* `redteam/inspect_eval/**`, `.github/workflows/inspect-ci.yml`,
+  `README.md`. *Server state:* none. *Open:* an Inspect log exporter for the
+  service's existing stored runs; richer multi-turn adversarial solver.
+
+- **Redteam — shareable safety card, eval card & datasheet.** The content/
+  credibility layer. `app/card.py`: a per-target **model safety card**
+  (`GET /card?run=<id>`) — headline safety score + leaderboard rank, attack
+  success, critical failures, a KM time-to-harm curve, top harm categories,
+  provenance — with Open Graph / Twitter-card tags whose image is a 1200×630
+  SVG share card (`GET /card/<id>/image.svg`, XML-safe — SVG uses literal `·`,
+  not HTML entities). Plus an **eval card** (`GET /eval-card`, a model-card for
+  the eval itself) and a **datasheet-for-datasets** (`GET /datasheet`). Reuses
+  the report house style + `metrics`/`leaderboard`; no new scoring, no server
+  state. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM, datasheet-for-
+  datasets). Tests `+6` (aggregation, OG tags, well-formed SVG, eval card +
+  datasheet, endpoints; suite 185 pass). Card + share image verified headless.
+  *Code:* `redteam/app/card.py`, `app/main.py`, `app/static/index.html`,
+  `README.md`. *Open:* PNG rasterization of the share image for platforms that
+  don't render SVG OG images.
 
 - **Redteam — grader (judge) bias & robustness audit.** An eval-methodology
   feature that interrogates the harm judge itself. `app/grader_audit.py` scores

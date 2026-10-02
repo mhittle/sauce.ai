@@ -1,0 +1,27 @@
+name: inspect-ci
+
+# Inspect (UK AISI) interop for sauce.ai/redteam. Scoped to redteam/inspect_eval/
+# so inspect-ai is installed only here, independent of the stdlib redteam-ci.
+on:
+  push:
+    branches: [main]
+    paths: ["redteam/inspect_eval/**", ".github/workflows/inspect-ci.yml"]
+  pull_request:
+    paths: ["redteam/inspect_eval/**", ".github/workflows/inspect-ci.yml"]
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: redteam/inspect_eval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Run tests
+        # The task runs end-to-end against mockllm/model — no network, no keys.
+        run: python -m pytest tests/ -q

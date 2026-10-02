@@ -12,7 +12,7 @@ import argparse
 import json
 import os
 
-from . import io, sap, simulate
+from . import io, latent, sap, simulate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,7 +38,13 @@ def main(argv: list[str] | None = None) -> int:
         json.dump(results, fh, indent=2)
     with open(os.path.join(args.out, "results.md"), "w", encoding="utf-8") as fh:
         fh.write(sap.to_markdown(results))
-    print(f"wrote {args.out}/results.json and results.md  (status={results.get('status')})")
+    wrote = "results.json and results.md"
+    svg = latent.forest_svg(((results.get("latent_safety") or {}).get("rasch")) or {})
+    if svg:
+        with open(os.path.join(args.out, "latent_forest.svg"), "w", encoding="utf-8") as fh:
+            fh.write(svg)
+        wrote += " and latent_forest.svg"
+    print(f"wrote {args.out}/{wrote}  (status={results.get('status')})")
     return 0 if results.get("status") == "ok" else 1
 
 

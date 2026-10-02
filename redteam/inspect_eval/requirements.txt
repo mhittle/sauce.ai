@@ -1,0 +1,3 @@
+# Inspect interop for sauce.ai/redteam (separate from the stdlib service).
+inspect-ai>=0.3.100
+pytest>=7.4

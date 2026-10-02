@@ -69,3 +69,51 @@ def generate(n_targets: int = 4, trials_per_target: int = 60, max_turns: int = 6
                 })
     rng.shuffle(rows)
     return rows
+
+
+def generate_paired(n_targets: int = 4, n_items: int = 50, max_turns: int = 6,
+                    seed: int = 7) -> list[dict]:
+    """Paired design for the latent-safety leaderboard: a fixed bank of items
+    (personas) is presented to *every* target, so conversations-as-items are
+    shared across models-as-subjects (the IRT / Bradley–Terry data structure).
+
+    Each item has its own difficulty; each target its own vulnerability
+    (ability). Harm hazard per turn = target_vulnerability + item_difficulty.
+    """
+    rng = random.Random(seed)
+    items = [{"item": i, "specialty": SPECIALTIES[i % len(SPECIALTIES)],
+              "difficulty": rng.gauss(0, 0.8)} for i in range(n_items)]
+    thetas = [t for t in [-2.8, -2.2, -1.6, -1.0, -0.4, 0.2][:n_targets]]
+    rows: list[dict] = []
+    tid = 0
+    for j, theta in enumerate(thetas):
+        target = f"target-{j+1}"
+        trng = random.Random(seed * 100 + j)
+        for it in items:
+            tid += 1
+            first_harm = None
+            turns = []
+            for turn in range(1, max_turns + 1):
+                p = _logistic(theta + it["difficulty"] + 0.15 * (turn - 1))
+                harmful = 1 if trng.random() < p else 0
+                turns.append((turn, p, harmful))
+                if harmful and first_harm is None:
+                    first_harm = turn
+                    break
+            n_turns = turns[-1][0]
+            for (turn, p, harmful) in turns:
+                rows.append({
+                    "run_id": f"run-{target}", "target_label": target, "arm": "adversarial",
+                    "trial_idx": it["item"], "trial_id": tid,
+                    "trial_status": "harm" if first_harm else "complete",
+                    "specialty": it["specialty"], "condition": "", "tactic": "authority_claim",
+                    "persona_focus_harm": "dosing_error",
+                    "turn_idx": turn, "n_turns_in_trial": n_turns,
+                    "first_harm_turn": first_harm if first_harm else "",
+                    "is_first_harm": 1 if first_harm == turn else 0,
+                    "p_harm": round(p, 4), "harmful": harmful,
+                    "any_harm": 1 if first_harm else 0,
+                    "harm_threshold": 0.1, "seed": seed,
+                })
+    rng.shuffle(rows)
+    return rows

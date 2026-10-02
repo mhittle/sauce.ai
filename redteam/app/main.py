@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from . import adjudication as adj
@@ -20,10 +20,14 @@ from . import che_review
 from . import che_screener
 from . import compare as cmp_mod
 from . import ablation as abl_mod
+from . import card as card_mod
+from . import daly as daly_mod
 from . import dataset
+from . import guide as guide_mod
 from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
 from . import power as power_mod
+from . import repro as repro_mod
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
@@ -276,6 +280,48 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             f'<div style="height:100%;width:{pct}%;background:#2a78d6"></div></div>'
             f'<p style="color:#666">This page refreshes automatically. The full report is emailed when the run completes.</p></body>')
 
+    @app.get("/runs/{run_id}/manifest.json")
+    def run_manifest(run_id: str):
+        run = store.get_run(run_id)
+        if not run:
+            raise HTTPException(404, "unknown run")
+        return repro_mod.manifest(run)
+
+    @app.get("/runs/{run_id}/verify.json")
+    def run_verify(run_id: str):
+        if not store.get_run(run_id):
+            raise HTTPException(404, "unknown run")
+        return repro_mod.verify(store, run_id)
+
+    @app.get("/runs/{run_id}/capsule.json")
+    def run_capsule(run_id: str):
+        c = repro_mod.capsule(store, run_id)
+        if not c:
+            raise HTTPException(404, "unknown run")
+        return c
+
+    @app.get("/runs/{run_id}/daly.json")
+    def run_daly_json(run_id: str):
+        rep = daly_mod.daly_report(store, run_id)
+        if not rep:
+            raise HTTPException(404, "no completed run with that id")
+        return rep
+
+    @app.get("/runs/{run_id}/daly", response_class=HTMLResponse)
+    def run_daly_html(run_id: str):
+        rep = daly_mod.daly_report(store, run_id)
+        if not rep:
+            raise HTTPException(404, "no completed run with that id")
+        return HTMLResponse(daly_mod.render_html(rep))
+
+    @app.get("/runs/{run_id}/daly.svg")
+    def run_daly_svg(run_id: str):
+        rep = daly_mod.daly_report(store, run_id)
+        if not rep:
+            raise HTTPException(404, "no completed run with that id")
+        svg = daly_mod.density_svg(rep["hist"], rep["dalys_per_1000_conversations"])
+        return Response(svg, media_type="image/svg+xml")
+
     @app.get("/runs/{run_id}/export")
     def export(run_id: str):
         run = store.get_run(run_id)
@@ -414,6 +460,29 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/leaderboard.json")
     def leaderboard_json(category: str = ""):
         return lb_mod.board(store, category or None)
+
+    # -- shareable safety card / eval card / datasheet ----------------------
+    @app.get("/card", response_class=HTMLResponse)
+    def card_html(run: str = Query(...)):
+        c = card_mod.safety_card(store, run)
+        if not c:
+            raise HTTPException(404, "no completed run with that id")
+        return HTMLResponse(card_mod.render_card_html(c))
+
+    @app.get("/card/{run_id}/image.svg")
+    def card_image(run_id: str):
+        c = card_mod.safety_card(store, run_id)
+        if not c:
+            raise HTTPException(404, "no completed run with that id")
+        return Response(card_mod.render_card_svg(c), media_type="image/svg+xml")
+
+    @app.get("/eval-card", response_class=HTMLResponse)
+    def eval_card():
+        return HTMLResponse(card_mod.render_eval_card())
+
+    @app.get("/datasheet", response_class=HTMLResponse)
+    def datasheet():
+        return HTMLResponse(card_mod.render_datasheet())
 
     # -- ablation & baselines (research Phase E) ----------------------------
     @app.post("/ablation")
@@ -701,6 +770,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     def power_ui():
         f = STATIC / "power.html"
         return HTMLResponse(f.read_text() if f.exists() else "<h1>power calculator</h1>")
+
+    @app.get("/guide", response_class=HTMLResponse)
+    def guide_page():
+        return HTMLResponse(guide_mod.render_html())
 
     @app.get("/", response_class=HTMLResponse)
     def index():
