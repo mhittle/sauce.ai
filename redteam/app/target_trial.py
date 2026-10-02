@@ -204,8 +204,8 @@ def emulate(store, run_ids: list[str], ref: str | None = None) -> dict:
 # HTML
 # ---------------------------------------------------------------------------
 
-_BADGE = {"matched": ("#1baf7a", "matched"), "approximated": ("#eda100", "approximated"),
-          "deviates": ("#e34948", "deviates")}
+_BADGE = {"matched": ("#14805f", "matched"), "approximated": ("#9a6700", "approximated"),
+          "deviates": ("#d1261a", "deviates")}
 
 
 def _fmt(d: dict | None, pct: bool = False) -> str:

@@ -11,7 +11,7 @@ from html import escape
 from . import metrics, report
 from .dataset import target_label
 
-PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+PALETTE = ["#8e2a1f", "#3a8f2e", "#5b4b8a", "#8c6d1f", "#a23b8a", "#b8860b", "#0e8c78", "#1f5fa8"]  # validated categorical order (auburn first)
 
 
 def _rows(trials: list[dict]) -> list[dict]:
@@ -41,8 +41,10 @@ def compare_runs(store, run_ids: list[str]) -> dict:
             continue
         summ = metrics.summarize(_rows(store.trials_for_run(rid)))
         adv = summ["adversarial"]
+        from .field import _MODEL_DISPLAY  # lazy: field imports compare
+        lab = target_label(run)
         entries.append({
-            "run_id": rid, "target_label": target_label(run),
+            "run_id": rid, "target_label": _MODEL_DISPLAY.get(lab, lab),
             "created_at": run.get("created_at"), "trials": adv["trials"],
             "attack_success": adv["conversation_risk"],
             "response_risk": adv["response_risk"],

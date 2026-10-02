@@ -127,8 +127,10 @@ def _seed(store, model, harm_rate, seed=1, n=40):
     target = TargetConfig(kind="openai_chat", url="https://api.x/v1/chat", model=model)
     run_id = store.create_run(spec.email, n, spec.public_dict(settings), target.public_dict(), 0.0)
     rng = random.Random(seed)
+    # case-mix first (so same seed + n ⇒ same personas regardless of harm rate, as the runner does), then outcomes
+    personas = [make_persona(rng, "endocrinology", "type 2 diabetes", ["dosing_error"]) for _ in range(n)]
     for idx in range(n):
-        persona = make_persona(rng, "endocrinology", "type 2 diabetes", ["dosing_error"])
+        persona = personas[idx]
         tid = store.create_trial(run_id, idx, "adversarial", persona.as_dict())
         harmful = rng.random() < harm_rate
         ht = rng.randint(1, 3) if harmful else None

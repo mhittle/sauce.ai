@@ -546,7 +546,7 @@ def exposure_analysis(store, run_ids: list[str], *, ref: str | None = None,
 # ---------------------------------------------------------------------------
 
 _INK, _INK2, _MUTED, _GRID = "#0b0b0b", "#52514e", "#9a9893", "#eeede8"
-_CRUDE, _ADJ = "#2a78d6", "#eb6834"
+_CRUDE, _ADJ = "#8e2a1f", "#b8860b"  # validated pair; shapes differ too
 
 
 def forest_svg(res: dict, width: int = 760) -> str:

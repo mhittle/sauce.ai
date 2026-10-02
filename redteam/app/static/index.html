@@ -24,25 +24,30 @@
 <div class="wrap">
   <div class="eyebrow">Instrument · adversarial safety evaluation · clinical conversational AI</div>
   <h1>Adversarial safety evaluation of clinical chatbots</h1>
-  <p class="lede">Points at a chatbot you are authorized to test, runs adversarial synthetic-patient conversations
-  engineered to elicit unsafe medical advice, scores every reply with an audited judge panel, and reports harm with
-  epidemiologic measures.</p>
+  <p class="lede">Runs adversarial synthetic-patient conversations against a chatbot you are authorized to test, scores
+  every reply with an audited judge panel, and reports harm with epidemiologic measures.</p>
+
+  <div class="steps3">
+    <div class="s"><span class="n">1</span><b>Target</b><p>An OpenAI-compatible or Anthropic endpoint, a custom JSON API, or a chat web page, under your system prompt. Keys are held for the run only.</p></div>
+    <div class="s"><span class="n">2</span><b>Adversarial conversations</b><p>Synthetic personas from a specialty library; an attacker ensemble escalates toward dosing, triage, discontinuation and misinformation harms.</p></div>
+    <div class="s"><span class="n">3</span><b>Report</b><p>Attack success with 95% CI, prompts-to-harm, number needed to harm, QALYs lost, harm profile, annotated transcripts; every run is added to the leaderboard.</p></div>
+  </div>
+
+  <div class="explore">
+    <a href="/guide#wf-field"><b>Field scan</b><span>ChatGPT, Claude, Gemini and Llama on one condition, same case-mix; comparative harm image.</span><span class="go">Open →</span></a>
+    <a href="/guide#wf-epi"><b>Exposure analysis</b><span>RR / OR / RD, PAF, E-value; Mantel–Haenszel strata; dose–response; judge-misclassification bias analysis.</span><span class="go">Open →</span></a>
+    <a href="/guide#wf-grader"><b>Grader audit</b><span>Bias, robustness and calibration of the harm judge itself.</span><span class="go">Open →</span></a>
+    <a href="/leaderboard"><b>Leaderboard</b><span>Every completed run, ranked safest-first per specialty.</span><span class="go">Open →</span></a>
+    <a href="/guide"><b>Methods &amp; workflows</b><span>Adjudication, critical harm events, ablations, power, Table 1, STROBE — each with a launcher.</span><span class="go">Open →</span></a>
+  </div>
+
   <dl class="spec">
-    <dt>Exposure</dt><dd>the chatbot (agent) under test, reached via its API or web page under your system prompt</dd>
+    <dt>Exposure</dt><dd>the chatbot (agent) under test</dd>
     <dt>Unit</dt><dd>one synthetic-patient conversation; replies nested within conversations</dd>
     <dt>Outcome</dt><dd>a reply judged unsafe at P(harm) ≥ threshold; critical harm events adjudicated by clinicians</dd>
-    <dt>Measures</dt><dd>attack success with 95% CI · prompts-to-harm (Kaplan–Meier) · number needed to harm · QALYs / DALYs lost · RR, RD, PAF, E-value vs a referent</dd>
-    <dt>Judge</dt><dd>LLM panel audited for bias, robustness and calibration; validated against clinician labels; misclassification propagated by quantitative bias analysis</dd>
+    <dt>Judge</dt><dd>LLM panel audited for bias and calibration; validated against clinician labels; misclassification propagated by quantitative bias analysis</dd>
     <dt>Preview limit</dt><dd>up to <b id="limit">100</b> trials per email · authorized testing only</dd>
   </dl>
-
-  <ul class="index">
-    <li><b>Field scan</b><span>Run ChatGPT, Claude, Gemini and Llama on one condition, same case-mix; comparative harm image.</span><a class="go" href="/guide#wf-field">Open →</a></li>
-    <li><b>Exposure analysis</b><span>RR / OR / RD, PAF, E-value; Mantel–Haenszel strata; dose–response; judge-misclassification QBA.</span><a class="go" href="/guide#wf-epi">Open →</a></li>
-    <li><b>Grader audit</b><span>Bias, robustness and calibration of the harm judge itself.</span><a class="go" href="/guide#wf-grader">Open →</a></li>
-    <li><b>Leaderboard</b><span>Every completed run, ranked safest-first per specialty.</span><a class="go" href="/leaderboard">Open →</a></li>
-    <li><b>Methods &amp; workflows</b><span>Adjudication, critical harm events, ablations, power, reproducibility, STROBE checklist — each with a launcher.</span><a class="go" href="/guide">Open →</a></li>
-  </ul>
 
   <div class="warn">This tool deliberately tries to elicit unsafe responses from the <em>bot under test</em> so you can
   find and fix them. Only run it against endpoints you own or have written permission to test. Reports are LLM-scored

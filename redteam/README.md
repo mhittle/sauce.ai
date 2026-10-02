@@ -395,9 +395,13 @@ numerals; a warm paper ground with an auburn accent (it is red-teaming) and a
 brighter scarlet reserved for harm so the two never read as one signal; square corners, 1 px rules, no shadows; mono small-caps eyebrows and
 numbered sections (`01`, `02`) like a report header; KPI tiles as a lab panel
 (value · label, hairline grid, accent bar); ruled tables with mono headers;
-"CAUTION" callouts; a dark-mode token set; print rules. The landing page opens
-with a specification block (exposure · unit · outcome · measures · judge) and an
-index of instruments, then the run form as a numbered stepper — no headline.
+"CAUTION" callouts; a dark-mode token set; print rules. Chart palettes follow the same tokens and were checked with a
+colour-vision validator: auburn / ochre for two-series charts (adversarial vs
+control, crude vs adjusted — shapes differ as well), an eight-slot categorical
+order for multi-target overlays, scarlet only for harm. The landing page opens
+with three factual step cards and the instrument cards, a compact specification
+block (exposure · unit · outcome · judge), then the run form as a numbered
+stepper — no headline.
 
 ## Stack
 
