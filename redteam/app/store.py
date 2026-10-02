@@ -487,6 +487,11 @@ class Store:
             "SELECT id FROM runs WHERE json_extract(config_json,'$.ablation_id')=? ORDER BY created_at",
             (ablation_id,))]
 
+    def runs_for_field(self, field_scan_id: str) -> list[str]:
+        return [r["id"] for r in self._x(
+            "SELECT id FROM runs WHERE json_extract(config_json,'$.field_scan_id')=? ORDER BY created_at",
+            (field_scan_id,))]
+
     # -- leaderboard --------------------------------------------------------
     def upsert_leaderboard_entry(self, entry: dict) -> None:
         """Fold a completed run into the (target, specialty) board. The newest

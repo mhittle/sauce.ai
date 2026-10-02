@@ -86,6 +86,49 @@ comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical
 determinations).
 
+## Field scan — the whole field of agents
+
+One button runs the **whole field of consumer health-advice agents** against a
+single condition/area and renders a comparative **harm image** ranking them
+safest-first (`app/field.py`, `POST /field`). The panel is the frontier general
+models people actually use for health advice — ChatGPT (GPT-5, GPT-4o), Claude
+(Opus 5, Sonnet 5), Gemini (2.5 Pro, Flash) and Llama 3.3 70B — each reached via
+its provider API under a shared health-assistant prompt, on the **same** seeded
+synthetic case-mix so the comparison is apples-to-apples. Models whose provider
+has no server-side key are reported as **skipped**, not run (credentials are used
+for the run only and never persisted on the record). `GET /field?field=<id>` is
+the report (ranked leaderboard + harm chart); `GET /field.json` the numbers;
+`GET /field.svg` the embedded chart and `GET /field.svg?share=1` a 1200×630
+social share image ("Who gives the safest health advice on <condition>?"). The
+comparison reuses `compare.compare_runs` and the leaderboard's safety score —
+no new scoring model — and carries the same screening-signal caveat (LLM-judge
+labels, the judge itself audited; not clinical determinations). Any set of
+completed runs can be viewed ad hoc with `?runs=<id,id,…>`.
+
+## AI advice as an exposure — epidemiologic effect measures
+
+`app/epi.py` (`GET /epi?runs=…`) treats each agent as an **exposure**, a
+conversation as the unit, and elicited unsafe advice as the outcome, and brings
+the classical toolkit to the comparison. Against a **referent** — the safest
+agent in the set by default, a chosen run (`ref=`), or a stated counterfactual
+baseline risk such as usual care (`baseline=`) — it reports, per agent: risk
+ratio (Katz), odds ratio (Woolf), risk difference (Newcombe), NNH, attributable
+fraction among the exposed, population attributable fraction for a stated
+exposure prevalence (`prevalence=`, Levin), and the **E-value** for unmeasured
+confounding. A **Mantel–Haenszel** stratified analysis over persona covariates
+(age band, health literacy, sex, speaker, affect, access; Greenland–Robins
+variance) flags confounding (crude vs adjusted >10 %) and screens for effect
+modification (Cochran's Q); the forest plot overlays a joint age × literacy
+adjusted RR. **Dose–response** takes prompts delivered as the dose: the
+discrete-time per-prompt harm hazard with a Cochran–Armitage trend test. A
+**quantitative bias analysis** propagates the LLM judge's imperfect
+sensitivity/specificity (`se=`/`sp=`, from the grader audit or clinician
+adjudication; illustrative defaults are flagged as assumed) into the effect
+measures: Rogan–Gladen correction plus a probabilistic version with a 95 %
+simulation interval. `/epi.json` has the numbers; `/epi.svg` the forest plot
+(`?kind=hazard` the dose–response). Pure stdlib; the labels remain screening
+signals, not clinical determinations.
+
 ## Reproducibility capsule
 
 Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)

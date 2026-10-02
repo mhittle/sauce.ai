@@ -30,6 +30,18 @@ GROUPS: list[dict] = [
               {"m": "GET", "p": "/runs/{run_id}", "note": "the full HTML report (also emailed)"},
               {"m": "POST", "p": "/runs/{run_id}/cancel", "note": "stop a running job"},
           ]},
+         {"title": "Field scan — the whole field of agents", "id": "field",
+          "summary": "One submission runs a curated panel of the main consumer health-advice agents "
+                     "(ChatGPT, Claude, Gemini, Llama) on the same case-mix for a condition/area, and renders a "
+                     "comparative harm chart ranking the field. Agents whose provider has no server key are "
+                     "reported as skipped.",
+          "when": "Benchmarking the deployed field for a specific condition; a showcase view.",
+          "steps": [
+              {"m": "POST", "p": "/field", "note": "body: email, specialty, condition, n_trials, optional models[]"},
+              {"m": "GET", "p": "/field", "note": "?field=<id> — comparative report + harm chart"},
+              {"m": "GET", "p": "/field.json", "note": "?field=<id> or ?runs=… — raw numbers"},
+              {"m": "GET", "p": "/field.svg", "note": "?field=<id> (&share=1 for the 1200×630 image)"},
+          ]},
      ]},
     {"stage": "Results & sharing", "anchor": "results",
      "blurb": "Turn a completed run into legible, shareable artifacts and compare across models.",
@@ -67,6 +79,19 @@ GROUPS: list[dict] = [
           "steps": [{"m": "GET", "p": "/runs/{run_id}/daly", "note": "report + density plot"},
                     {"m": "GET", "p": "/runs/{run_id}/daly.json", "note": "numbers"},
                     {"m": "GET", "p": "/runs/{run_id}/daly.svg", "note": "distribution image"}]},
+         {"title": "AI advice as an exposure — epidemiologic effect measures", "id": "epi",
+          "summary": "Treats each agent as an exposure and a conversation as the unit: RR/OR/RD, NNH, "
+                     "attributable fraction, PAF (for a stated exposure prevalence), and the E-value vs a referent "
+                     "(safest agent, or a stated baseline risk); Mantel–Haenszel stratification over persona "
+                     "covariates with confounding and effect-modification screens; Cochran–Armitage dose–response "
+                     "over prompts delivered; quantitative bias analysis for judge misclassification "
+                     "(Rogan–Gladen + probabilistic).",
+          "when": "Framing AI advice as an exposure for an epidemiologic audience; checking that the judge's "
+                  "imperfect sensitivity/specificity does not drive the headline contrast.",
+          "steps": [{"m": "GET", "p": "/epi",
+                     "note": "?runs=<id>,<id>,… [&ref=<run_id> | &baseline=0.05] [&prevalence=0.3] [&se=0.9&sp=0.95]"},
+                    {"m": "GET", "p": "/epi.json", "note": "numbers"},
+                    {"m": "GET", "p": "/epi.svg", "note": "forest plot (?kind=hazard for the dose–response)"}]},
      ]},
     {"stage": "Validity & methodology", "anchor": "validity",
      "blurb": "Make the measurement trustworthy: audit the grader, validate it against clinicians, and "
