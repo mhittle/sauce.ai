@@ -931,6 +931,14 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
                         "field_scan_id": cfg.get("field_scan_id") or "", "ablation_id": cfg.get("ablation_id") or ""})
         return {"n": len(out), "runs": out}
 
+    _STATIC_OK = {"ui.css": "text/css", "guide.js": "application/javascript"}
+
+    @app.get("/static/{name}")
+    def static_asset(name: str):
+        if name not in _STATIC_OK or not (STATIC / name).exists():
+            raise HTTPException(404, "no such asset")
+        return FileResponse(STATIC / name, media_type=_STATIC_OK[name])
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         f = STATIC / "index.html"

@@ -136,6 +136,28 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — launchers rebuilt to main-page parity.** User: "these UIs kind of
+  suck, and lack the toggles/features we had on the main page." Replaced the
+  bare `<select multiple>` launchers with the main page's components, driven by
+  `/config`: `app/static/ui.css` (the main page's design tokens incl. dark mode +
+  launcher styles) and `app/static/guide.js` (specialty→condition datalists,
+  harm-category checkboxes, kind-dependent target fields via `data-when`,
+  attacker/arbiter/judge chip pickers with provider availability, engine knobs,
+  limits/cost/quota, filterable run pickers from `/runs.json` with all/none,
+  per-run progress bars with cancel after a launch, picker refresh on
+  completion), served by a whitelisted `GET /static/{name}` route. `guide.py`
+  FORMS now compose blocks: `_target_block` / `_eval_block` / `_engine_block` /
+  `_report_block` (run, ablation; field scan = agents + eval + engine + report;
+  grader audit = judge picker). `collect()` skips fields hidden by target kind,
+  nests dotted names, maps pickers to `orchestration.attackers/arbiters` and
+  `judges`, handles bool/number selects. Tests `+2` (launchers carry the
+  main-page components, field scan has no target block; static assets served +
+  whitelisted) and updated expectations; suite 249 pass. Verified against a live
+  uvicorn: harms, 10 model pickers, run pickers and datalists all populate.
+  Main page `index.html` left as-is (its CSS is duplicated into ui.css; a later
+  tidy can link it). *Code:* `redteam/app/guide.py`, `app/main.py`,
+  `app/static/{ui.css,guide.js}`, `README.md`. *Server state:* none.
+
 - **Redteam — /epi QBA now measures the judge from clinician adjudication
   (differential where labels allow).** Closes the loop the page itself flagged
   ("assumed Se/Sp"). `epi.judge_validity(store, run_ids)` walks every

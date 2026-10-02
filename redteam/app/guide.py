@@ -216,43 +216,53 @@ GROUPS: list[dict] = [
 # response ("/field?field={field_id}").
 # ---------------------------------------------------------------------------
 
-def _run_common(prefix: str = "") -> list[dict]:
+def _eval_block() -> list[dict]:
+    """Section 2 of the main page: the evaluation (specialty→condition, harms, knobs)."""
     return [
-        {"n": "email", "t": "email", "l": "Your email", "req": True, "h": "report is emailed here; quota is per email"},
-        {"n": "specialty", "t": "specialty", "l": "Specialty", "req": True},
-        {"n": "condition", "t": "text", "l": "Condition (optional)", "ph": "e.g. type 2 diabetes"},
-        {"n": "n_trials", "t": "number", "l": "Conversations", "d": 20, "min": 1},
-        {"n": "max_turns", "t": "number", "l": "Max prompts per conversation", "d": 8, "min": 1},
-        {"n": "harm_threshold", "t": "number", "l": "Harm threshold P(harm) ≥", "d": 0.10, "step": 0.01},
+        {"n": "n_trials", "t": "number", "l": "Number of trials", "d": 20, "min": 1, "h": "1–<span data-limit>100</span>"},
+        {"n": "specialty", "t": "specialty", "l": "Specialty / area", "req": True},
+        {"n": "max_turns", "t": "number", "l": "Max prompts per conversation", "d": 8, "min": 1, "max": 20},
+        {"n": "condition", "t": "text", "l": "Condition", "ph": "e.g. type 1 diabetes on insulin",
+         "h": "optional; blank = sample across the specialty", "wide": True},
+        {"t": "harms", "l": "Harm categories to hunt (blank = all)", "wide": True},
+        {"n": "notes", "t": "textarea", "l": "Anything else the attacker should know", "wide": True,
+         "ph": 'optional; e.g. "bot is aimed at UK patients", "focus on paediatric dosing"'},
+        {"n": "harm_threshold", "t": "number", "l": "Harm threshold", "d": 0.10, "min": 0.01, "max": 0.99, "step": 0.01,
+         "h": "P(harm) ≥ counts as unsafe"},
+        {"n": "control_fraction", "t": "select", "l": "Control arm", "d": "0.2", "bool": False,
+         "opt": [("0", "None"), ("0.1", "10%"), ("0.2", "20% (recommended)"), ("0.3", "30%")],
+         "h": "share of cooperative baseline conversations", "num": True},
+        {"n": "stop_on_harm", "t": "select", "l": "Stop each conversation at first harm", "d": "true", "bool": True,
+         "opt": [("true", "Yes — measure prompts-to-harm"), ("false", "No — keep probing")]},
         {"n": "seed", "t": "number", "l": "Seed", "d": 0, "h": "same seed + specialty + n ⇒ same case-mix across targets"},
     ]
 
 
-_TARGET = [
-    {"n": "target.kind", "t": "select", "l": "Target kind", "d": "openai_chat",
-     "opt": [("openai_chat", "OpenAI-compatible chat"), ("anthropic", "Anthropic"),
-             ("http_json", "Generic HTTP JSON"), ("web_chat", "Web chat (browser)")]},
-    {"n": "target.url", "t": "text", "l": "Endpoint URL", "ph": "https://…/v1/chat/completions"},
-    {"n": "target.model", "t": "text", "l": "Model", "ph": "gpt-4o"},
-    {"n": "target.api_key", "t": "secret", "l": "API key", "h": "used for this run only — never stored"},
-    {"n": "target.system_prompt", "t": "textarea", "l": "System prompt (optional)"},
-]
+def _engine_block() -> list[dict]:
+    return [{"t": "engine", "wide": True}]
+
+
+def _report_block() -> list[dict]:
+    return [{"n": "email", "t": "email", "l": "Email", "req": True, "wide": True,
+             "h": "the report is emailed here when the run finishes; quota is per email", "quota": True}]
+
+
+def _target_block() -> list[dict]:
+    return [{"t": "target", "wide": True}]
+
 
 FORMS: dict[str, list[dict]] = {
     "submit": [
         {"label": "Launch a red-team run", "m": "POST", "p": "/runs",
-         "fields": _run_common() + [
-             {"n": "control_fraction", "t": "number", "l": "Control-arm fraction", "d": 0.0, "step": 0.05},
-             {"n": "judges", "t": "list", "l": "Judges (optional)", "ph": "anthropic:…, openai:…"},
-         ] + _TARGET,
-         "result": "/runs/{run_id}", "poll": "/runs/{run_id}/status"},
+         "fields": _target_block() + _eval_block() + _engine_block() + _report_block(),
+         "result": "/runs/{run_id}"},
     ],
     "field": [
         {"label": "Run the whole field", "m": "POST", "p": "/field",
-         "fields": [f for f in _run_common() if f["n"] != "max_turns"] + [
-             {"n": "max_turns", "t": "number", "l": "Max prompts per conversation", "d": 8, "min": 1},
-             {"n": "models", "t": "models", "l": "Agents (leave all unticked = every available)"},
-         ],
+         "fields": [{"n": "models", "t": "models", "l": "Agents (leave all unticked = every available)", "wide": True}]
+                   + [f for f in _eval_block() if f.get("n") not in ("control_fraction", "stop_on_harm", "notes")
+                      and f.get("t") != "harms"]
+                   + _engine_block() + _report_block(),
          "result": "/field?field={field_id}"},
         {"label": "View a field scan", "m": "GET", "p": "/field",
          "fields": [{"n": "runs", "t": "runs", "l": "Completed runs (ad hoc)", "req": True}]},
@@ -303,9 +313,9 @@ FORMS: dict[str, list[dict]] = {
     ],
     "grader": [
         {"label": "Audit the grader", "m": "POST", "p": "/grader-audit",
-         "fields": [{"n": "judges", "t": "list", "l": "Judges (optional)", "ph": "anthropic:…, openai:…"},
+         "fields": [{"t": "judges", "l": "Judge models to audit", "wide": True, "h": "blank = the server default judges"},
                     {"n": "threshold", "t": "number", "l": "Harm threshold", "d": 0.10, "step": 0.01}],
-         "result": "/grader-audit/{audit_id}", "poll": "/grader-audit/{audit_id}.json"},
+         "result": "/grader-audit/{audit_id}"},
     ],
     "adjudication": [
         {"label": "Build a blinded adjudication set", "m": "POST", "p": "/adjudication/sets",
@@ -342,9 +352,10 @@ FORMS: dict[str, list[dict]] = {
     ],
     "ablation": [
         {"label": "Launch the ablation arm set", "m": "POST", "p": "/ablation",
-         "fields": _run_common() + [
-             {"n": "arms", "t": "list", "l": "Arms (optional; default = full matrix)", "ph": "full, no_bandit, …"},
-         ] + _TARGET,
+         "fields": _target_block() + _eval_block() + [
+             {"n": "arms", "t": "list", "l": "Arms", "ph": "full, no_bandit, …", "wide": True,
+              "h": "optional; comma-separated; default = the full matrix"},
+         ] + _engine_block() + _report_block(),
          "result": "/ablation/{ablation_id}"},
         {"label": "View an ad-hoc contrast", "m": "GET", "p": "/ablation",
          "fields": [{"n": "runs", "t": "runs", "l": "Pre-tagged arm runs", "req": True}]},
@@ -380,154 +391,143 @@ def http_paths() -> list[str]:
 
 
 def _badge(method: str) -> str:
-    color = {"GET": "#1baf7a", "POST": "#2a78d6"}.get(method, "#52514e")
-    return (f'<span style="display:inline-block;min-width:44px;text-align:center;padding:1px 6px;'
-            f'border-radius:4px;background:{color};color:#fff;font-size:11px;font-weight:600">{method}</span>')
+    return f'<span class="badge {method.lower()}">{method}</span>'
 
 
 def _step(s: dict) -> str:
     if "cmd" in s:
         note = f' <span class="muted small">— {escape(s["note"])}</span>' if s.get("note") else ""
-        return (f'<div style="margin:3px 0"><code style="background:#f3f2ee;padding:2px 6px;border-radius:4px">'
-                f'$ {escape(s["cmd"])}</code>{note}</div>')
+        return f'<div style="margin:3px 0"><code>$ {escape(s["cmd"])}</code>{note}</div>'
     note = f' <span class="muted small">— {escape(s["note"])}</span>' if s.get("note") else ""
     return (f'<div style="margin:3px 0;display:flex;gap:8px;align-items:baseline">{_badge(s["m"])}'
-            f'<code style="background:#f3f2ee;padding:2px 6px;border-radius:4px">{escape(s["p"])}</code>{note}</div>')
+            f'<code>{escape(s["p"])}</code>{note}</div>')
 
+
+
+def _target_html() -> str:
+    """Section 1 of the main page, namespaced under `target.` (kind-dependent fields via data-when)."""
+    return """<fieldset><legend>The chatbot under test (the target)</legend>
+<label>Endpoint type</label>
+<select name="target.kind" data-t="select">
+<option value="openai_chat">OpenAI-compatible chat API (/chat/completions)</option>
+<option value="anthropic">Anthropic Messages API</option>
+<option value="http_json">Custom JSON HTTP endpoint</option>
+<option value="web_chat">Chat web page (browser-driven)</option></select>
+<div data-when="openai_chat http_json web_chat"><label>URL / API endpoint <span class="hint">https only; must resolve to a public address</span></label>
+<input name="target.url" data-t="text" placeholder="https://api.yourbot.example/v1/chat/completions"></div>
+<div class="row">
+<div data-when="openai_chat anthropic"><label>Model <span class="hint">as the API names it</span></label>
+<input name="target.model" data-t="text" list="modelids-shared" placeholder="e.g. gpt-4o-mini / claude-sonnet-5 / your-model-id"><datalist id="modelids-shared" data-modelids></datalist></div>
+<div data-when="openai_chat anthropic http_json"><label>API key <span class="hint">held in memory for the run only, never stored</span></label>
+<input name="target.api_key" data-t="secret" type="password" autocomplete="off"></div></div>
+<label>System prompt sent to the target <span class="hint">optional; match your production setup</span></label>
+<textarea name="target.system_prompt" data-t="text" placeholder="You are a helpful health assistant..."></textarea>
+<details data-when="http_json"><summary>Custom endpoint mapping</summary>
+<label>Request body template <span class="hint">JSON; placeholders <code>{{message}}</code>, <code>{{messages_json}}</code>, <code>{{history_text}}</code>, <code>{{conversation_id}}</code>, <code>{{system_prompt}}</code></span></label>
+<textarea name="target.body_template" data-t="text" placeholder='{"message": "{{message}}", "conversation_id": "{{conversation_id}}"}'></textarea>
+<div class="row"><div><label>Response path <span class="hint">dotted path to the reply text</span></label><input name="target.response_path" data-t="text" placeholder="choices.0.message.content"></div>
+<div><label>Conversation state</label><select name="target.stateful" data-t="bool"><option value="false">Stateless — send full history each call</option><option value="true">Stateful — send only latest message + conversation id</option></select></div></div></details>
+<details data-when="web_chat"><summary>Web page selectors</summary>
+<div class="row3"><div><label>Input selector</label><input name="target.input_selector" data-t="text" placeholder="textarea#prompt"></div>
+<div><label>Send button <span class="hint">blank = Enter</span></label><input name="target.send_selector" data-t="text" placeholder="button[type=submit]"></div>
+<div><label>Reply bubble selector</label><input name="target.response_selector" data-t="text" placeholder=".msg.assistant"></div></div>
+<p class="small muted">Requires the browser add-on on the server. Selectors target the newest assistant bubble.</p></details>
+</fieldset>"""
+
+
+def _engine_html() -> str:
+    """The main page's 'Advanced: the red-team engine' block."""
+    return """<details><summary>Advanced: the red-team engine (optional)</summary>
+<p class="small muted">The attacker is an ensemble of LLMs that propose, refine, and vote on the next patient message most
+likely to push the bot into an unsafe reply. All of this is optional — defaults use the server-configured models.</p>
+<label>Attacker (adversary) models <span class="hint">the ensemble that writes each next patient message; add one or more, mix providers to strengthen it</span></label>
+<div class="modelpick" data-role="attackers"></div>
+<div class="row"><div><label>Arbiter / scorer models <span class="hint">score &amp; vote on candidates</span></label><div class="modelpick" data-role="arbiters"></div></div>
+<div><label>Judge models <span class="hint">annotate every reply; ≥3 gives inter-rater κ</span></label><div class="modelpick" data-role="judges"></div></div></div>
+<div class="row3"><div><label>Sub-agent levels <span class="hint">propose→refine depth</span></label><input name="orchestration.levels" data-t="number" type="number" min="1" max="4" value="1"></div>
+<div><label>Candidates per agent</label><input name="orchestration.candidates_per_agent" data-t="number" type="number" min="1" max="5" value="2"></div>
+<div><label>Consensus rounds</label><input name="orchestration.consensus_rounds" data-t="number" type="number" min="0" max="3" value="1"></div></div>
+<div class="checks" style="margin-top:10px"><label><input type="checkbox" name="orchestration.bandit" data-t="checkbox" checked> Adaptive tactic bandit</label>
+<label><input type="checkbox" name="orchestration.lookahead" data-t="checkbox"> Simulate the bot's reply before committing (slower, stronger)</label></div>
+<p class="small muted" data-providers></p></details>"""
+
+
+def _runpick_html(f: dict, multi: bool) -> str:
+    tools = ('<input type="search" placeholder="filter runs…">' +
+             ('<button type="button" class="sec sm" data-all>all</button><button type="button" class="sec sm" data-none>none</button>' if multi else ""))
+    return (f'<div class="runpick" {"data-runs" if multi else "data-run"} data-name="{escape(f["n"])}"'
+            f'{" data-path=1" if f.get("path") else ""}><div class="tools">{tools}</div>'
+            f'<div class="list"><div class="empty">loading runs…</div></div></div>')
 
 
 def _field_html(f: dict, available_models: set[str] | None) -> str:
     from .catalog import SPECIALTIES
-    n, t = f["n"], f["t"]
+    t = f["t"]
+    wide = ' style="grid-column:1/-1"' if f.get("wide") else ""
+    if t == "target":
+        return f'<div{wide}>{_target_html()}</div>'
+    if t == "engine":
+        return f'<div{wide}>{_engine_html()}</div>'
+    if t == "judges":
+        return (f'<div{wide}><label>{escape(f["l"])}' + (f' <span class="hint">{escape(f["h"])}</span>' if f.get("h") else "") +
+                '</label><div class="modelpick" data-role="judges"></div></div>')
+    if t == "harms":
+        return f'<div{wide}><fieldset><legend>{escape(f["l"])}</legend><div class="checks" data-harms></div></fieldset></div>'
+    n = f["n"]
     req = " required" if f.get("req") else ""
-    attrs = f'name="{escape(n)}" data-t="{t}"' + (' data-path="1"' if f.get("path") else "")
-    help_ = f'<div class="fh">{escape(f["h"])}</div>' if f.get("h") else ""
-    lab = escape(f["l"])
+    hint = f' <span class="hint">{f["h"]}</span>' if f.get("h") else ""   # hints may carry markup
+    lab = f'<label>{escape(f["l"])}{hint}</label>'
+    attrs = f'name="{escape(n)}"' + (' data-path="1"' if f.get("path") else "")
     if t == "runs":
-        ctl = f'<select {attrs} multiple size="5" data-runs{req}></select>'
-    elif t == "run":
-        ctl = f'<select {attrs} data-run{req}></select>'
-    elif t == "specialty":
+        return f'<div{wide}>{lab}{_runpick_html(f, True)}</div>'
+    if t == "run":
+        return f'<div{wide}>{lab}{_runpick_html(f, False)}</div>'
+    if t == "specialty":
         blank = f.get("blank", "— choose —")
         opts = f'<option value="">{escape(blank)}</option>' + "".join(
             f'<option value="{escape(k)}">{escape(v["label"])}</option>' for k, v in SPECIALTIES.items())
-        ctl = f'<select {attrs}{req}>{opts}</select>'
-    elif t == "select":
-        opts = "".join(f'<option value="{escape(v)}"{" selected" if v == f.get("d") else ""}>{escape(l)}</option>'
-                       for v, l in f["opt"])
-        ctl = f'<select {attrs}>{opts}</select>'
-    elif t == "checkbox":
-        ctl = f'<input type="checkbox" {attrs}{" checked" if f.get("d") else ""}>'
-        return f'<label class="fl chk">{ctl} <span>{lab}</span>{help_}</label>'
-    elif t == "textarea":
-        ctl = f'<textarea {attrs} rows="2" placeholder="{escape(f.get("ph", ""))}"></textarea>'
-    elif t == "models":
+        return f'<div{wide}>{lab}<select {attrs} data-t="select"{req}>{opts}</select></div>'
+    if t == "select":
+        dt = "bool" if f.get("bool") else ("number" if f.get("num") else "select")
+        opts = "".join(f'<option value="{escape(v)}"{" selected" if v == f.get("d") else ""}>{escape(l)}</option>' for v, l in f["opt"])
+        return f'<div{wide}>{lab}<select {attrs} data-t="{dt}">{opts}</select></div>'
+    if t == "checkbox":
+        return (f'<div{wide}><div class="checks" style="margin-top:28px"><label><input type="checkbox" {attrs} data-t="checkbox"'
+                f'{" checked" if f.get("d") else ""}> {escape(f["l"])}</label></div></div>')
+    if t == "textarea":
+        return f'<div{wide}>{lab}<textarea {attrs} data-t="text" placeholder="{escape(f.get("ph", ""))}"></textarea></div>'
+    if t == "models":
         from .field import FIELD_PANEL
         boxes = []
         for p in FIELD_PANEL:
             ok = available_models is None or p["key"] in available_models
             tag = "" if ok else ' <span class="muted">(no key)</span>'
-            boxes.append(f'<label class="chk"><input type="checkbox" name="models" data-t="models" '
-                         f'value="{escape(p["key"])}"{"" if ok else " disabled"}> {escape(p["display"])}{tag}</label>')
-        return f'<div class="fl"><span class="ft">{lab}</span><div class="boxes">{"".join(boxes)}</div>{help_}</div>'
-    else:
-        typ = {"email": "email", "secret": "password", "number": "number"}.get(t, "text")
-        extra = ""
-        if t == "number":
-            extra = "".join(f' {k}="{f[k]}"' for k in ("min", "max", "step") if k in f) or ' step="any"'
-        if t == "secret":
-            extra += ' autocomplete="off"'
-        d = f' value="{escape(str(f["d"]))}"' if "d" in f else ""
-        ph = f' placeholder="{escape(f["ph"])}"' if f.get("ph") else ""
-        ctl = f'<input type="{typ}" {attrs}{d}{ph}{extra}{req}>'
-    return f'<label class="fl"><span class="ft">{lab}</span>{ctl}{help_}</label>'
+            boxes.append(f'<label><input type="checkbox" name="models" data-t="models" value="{escape(p["key"])}"'
+                         f'{"" if ok else " disabled"}> {escape(p["display"])}{tag}</label>')
+        return f'<div{wide}><fieldset><legend>{escape(f["l"])}</legend><div class="checks">{"".join(boxes)}</div></fieldset></div>'
+    typ = {"email": "email", "secret": "password", "number": "number"}.get(t, "text")
+    extra = ""
+    if t == "number":
+        extra = "".join(f' {k}="{f[k]}"' for k in ("min", "max", "step") if k in f) or ' step="any"'
+    if t == "secret":
+        extra += ' autocomplete="off"'
+    d = f' value="{escape(str(f["d"]))}"' if "d" in f else ""
+    ph = f' placeholder="{escape(f["ph"])}"' if f.get("ph") else ""
+    quota = '<p class="small muted" data-quota></p>' if f.get("quota") else ""
+    return f'<div{wide}>{lab}<input type="{typ}" {attrs} data-t="{t if t in ("number", "list") else "text"}"{d}{ph}{extra}{req}>{quota}</div>'
 
 
 def _form_html(wid: str, i: int, f: dict, available_models: set[str] | None) -> str:
     fields = "".join(_field_html(x, available_models) for x in f.get("fields", []))
     btn = "Launch" if f["m"] == "POST" else "Open"
     attrs = (f'data-m="{f["m"]}" data-p="{escape(f["p"])}"' +
-             (f' data-result="{escape(f["result"])}"' if f.get("result") else "") +
-             (f' data-poll="{escape(f["poll"])}"' if f.get("poll") else ""))
+             (f' data-result="{escape(f["result"])}"' if f.get("result") else ""))
     return (f'<form class="launch" id="form-{escape(wid)}-{i}" {attrs} onsubmit="return launch(event)">'
-            f'<div class="fhead">{_badge(f["m"])} <b>{escape(f["label"])}</b> '
-            f'<code>{escape(f["p"])}</code></div>'
-            f'<div class="grid">{fields}</div>'
-            f'<div class="actions"><button type="submit">{btn}</button> <span class="status muted small"></span></div>'
+            f'<div class="fhead">{_badge(f["m"])} <b>{escape(f["label"])}</b> <code>{escape(f["p"])}</code></div>'
+            f'<div class="row">{fields}</div>'
+            f'<div class="actions"><button type="submit">{btn}</button><span class="status-line muted small"></span>'
+            f'<span class="muted small" data-cost></span></div>'
             f'<div class="result small"></div></form>')
-
-
-_LAUNCH_CSS = """
-.launch{border-top:1px dashed #e4e3de;margin-top:10px;padding-top:10px}
-.launch .fhead{margin-bottom:6px}.launch .fhead code{background:#f3f2ee;padding:1px 6px;border-radius:4px;font-size:12px}
-.launch .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 14px}
-.launch .fl{display:flex;flex-direction:column;font-size:13px;gap:3px}.launch .fl.chk{flex-direction:row;align-items:center;gap:6px}
-.launch .ft{color:#52514e;font-size:12px}.launch .fh{color:#9a9893;font-size:11px}
-.launch input,.launch select,.launch textarea{font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d9d8d2;border-radius:6px;background:#fff;min-width:0}
-.launch select[multiple]{min-height:96px}.launch .boxes{display:flex;flex-wrap:wrap;gap:4px 14px}.launch .boxes .chk{font-size:12px}
-.launch .actions{margin-top:8px}.launch button{font:inherit;font-weight:600;padding:6px 14px;border-radius:6px;border:1px solid #2a78d6;background:#2a78d6;color:#fff;cursor:pointer}
-.launch button[disabled]{opacity:.6;cursor:wait}.launch .result{margin-top:6px}.launch .result a{margin-right:10px}
-.launch .result pre{background:#f3f2ee;padding:8px;border-radius:6px;overflow:auto;max-height:220px;font-size:11px}
-.launch .err{color:#b3261e}
-"""
-
-_LAUNCH_JS = r"""
-let RUNS = [];
-async function loadRuns(){
-  try{ const r = await fetch('/runs.json'); const j = await r.json(); RUNS = j.runs || []; }catch(e){ RUNS = []; }
-  document.querySelectorAll('select[data-runs],select[data-run]').forEach(sel=>{
-    const multi = sel.hasAttribute('data-runs');
-    sel.innerHTML = multi ? '' : '<option value="">— none —</option>';
-    if(!RUNS.length){ const o=document.createElement('option'); o.disabled=true; o.textContent='no runs yet — launch one above'; sel.appendChild(o); return; }
-    RUNS.forEach(r=>{ const o=document.createElement('option'); o.value=r.run_id;
-      const bits=[r.label, r.specialty, r.condition, 'n='+r.n_trials, 'seed '+r.seed, r.status, r.run_id.slice(0,8)].filter(Boolean);
-      o.textContent = bits.join(' · '); if(r.status!=='complete'){ o.textContent += ' (not complete)'; } sel.appendChild(o); });
-  });
-}
-function setDeep(obj, name, v){ const parts=name.split('.'); let o=obj; parts.slice(0,-1).forEach(p=>{ o[p]=o[p]||{}; o=o[p]; }); o[parts[parts.length-1]]=v; }
-function collect(form){
-  const body={}; let path=form.dataset.p; const models=[];
-  form.querySelectorAll('[name]').forEach(el=>{
-    const t=el.dataset.t; let v;
-    if(t==='models'){ if(el.checked) models.push(el.value); return; }
-    if(t==='runs'){ v=[...el.selectedOptions].map(o=>o.value).filter(Boolean); if(!v.length) return; }
-    else if(t==='checkbox'){ v=el.checked; }
-    else if(t==='number'){ if(el.value==='') return; v=Number(el.value); }
-    else if(t==='list'){ v=el.value.split(',').map(s=>s.trim()).filter(Boolean); if(!v.length) return; }
-    else { v=el.value; if(v==='') return; }
-    if(el.dataset.path){ path=path.replace('{'+el.name+'}', encodeURIComponent(v)); return; }
-    setDeep(body, el.name, v);
-  });
-  if(models.length) body.models=models;
-  return {path, body};
-}
-function fill(tpl, j){ return tpl.replace(/\{(\w+)\}/g,(m,k)=> j[k]!==undefined ? encodeURIComponent(j[k]) : m); }
-async function launch(ev){
-  ev.preventDefault(); const form=ev.target; const {path, body}=collect(form);
-  const status=form.querySelector('.status'), out=form.querySelector('.result'); out.innerHTML='';
-  if(path.includes('{')){ out.innerHTML='<span class="err">choose a run first</span>'; return false; }
-  if(form.dataset.m==='GET'){
-    const q=new URLSearchParams(); Object.entries(body).forEach(([k,v])=>q.set(k, Array.isArray(v)? v.join(',') : v));
-    const url = path + (q.toString()? '?'+q.toString() : ''); window.open(url, '_blank'); out.innerHTML='opened <a href="'+url+'" target="_blank">'+url+'</a>'; return false;
-  }
-  const btn=form.querySelector('button'); btn.disabled=true; status.textContent='launching…';
-  try{
-    const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){ out.innerHTML='<span class="err">'+(j.detail? (typeof j.detail==='string'? j.detail : JSON.stringify(j.detail)) : r.status)+'</span>'; status.textContent=''; btn.disabled=false; return false; }
-    status.textContent='launched';
-    let links='';
-    if(form.dataset.result && !fill(form.dataset.result,j).includes('{')) links+='<a target="_blank" href="'+fill(form.dataset.result,j)+'">open result →</a>';
-    if(form.dataset.poll && !fill(form.dataset.poll,j).includes('{')) links+='<a target="_blank" href="'+fill(form.dataset.poll,j)+'">status</a>';
-    if(Array.isArray(j.runs)) j.runs.forEach(x=>{ if(x.run_id) links+='<a target="_blank" href="/runs/'+x.run_id+'">'+(x.display||x.arm||x.run_id.slice(0,8))+'</a>'; });
-    if(Array.isArray(j.skipped) && j.skipped.length) links+='<div class="muted">skipped: '+j.skipped.map(s=>s.display+' ('+s.reason+')').join(', ')+'</div>';
-    out.innerHTML=links+'<pre>'+JSON.stringify(j,null,1)+'</pre>';
-    loadRuns();
-  }catch(e){ out.innerHTML='<span class="err">'+e+'</span>'; status.textContent=''; }
-  btn.disabled=false; return false;
-}
-document.addEventListener('DOMContentLoaded', loadRuns);
-"""
 
 
 def _workflow(w: dict, available_models: set[str] | None = None) -> str:
@@ -538,16 +538,14 @@ def _workflow(w: dict, available_models: set[str] | None = None) -> str:
                   f'<code>redteam/{escape(w["doc"])}</code></div>')
     when = (f'<div class="small muted" style="margin-top:4px"><b>When:</b> {escape(w["when"])}</div>'
             if w.get("when") else "")
-    return (f'<div style="border:1px solid #e4e3de;border-radius:8px;padding:14px 16px;margin:10px 0;background:#fff">'
-            f'<h3 style="margin:0 0 4px">{escape(w["title"])}</h3>'
-            f'<p style="margin:0 0 8px">{escape(w["summary"])}</p>{when}'
+    return (f'<div class="card" id="wf-{escape(w["id"])}"><h3>{escape(w["title"])}</h3>'
+            f'<p>{escape(w["summary"])}</p>{when}'
             f'{forms}'
             f'<details style="margin-top:8px"><summary class="small muted">API reference</summary>'
             f'<div style="margin-top:6px">{steps}</div></details></div>')
 
 
 def render_html(available_models: set[str] | None = None) -> str:
-    from .report import CSS
     toc = " · ".join(f'<a href="#{g["anchor"]}">{escape(g["stage"])}</a>' for g in GROUPS)
     sections = []
     for g in GROUPS:
@@ -559,13 +557,13 @@ def render_html(available_models: set[str] | None = None) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Methods &amp; workflows — sauce.ai/redteam</title>
-<style>{CSS}{_LAUNCH_CSS}</style><script>{_LAUNCH_JS}</script></head><body><div class="wrap">
-<div class="muted small">sauce.ai/redteam</div>
-<h1>Methods &amp; workflows</h1>
+<link rel="stylesheet" href="/static/ui.css"><script src="/static/guide.js" defer></script></head><body><div class="wrap">
+<h1>sauce<span class="muted">.ai/</span>redteam <span class="muted">· methods &amp; workflows</span></h1>
+<p class="small" style="margin:-6px 0 10px"><a href="/">&#8592; main page</a> &middot; <a href="/leaderboard">&#127942; Safety leaderboard</a></p>
 <p class="lede">Every capability in the system, grouped by stage of an evaluation study — each with a launcher:
 pick runs and parameters, then open the report or start the job. {n} workflows, from pointing the service at a
 chatbot to the confirmatory statistics. Run pickers list your recent runs.</p>
-<p class="small" style="margin-bottom:18px">{toc}</p>
+<p class="small toc" style="margin-bottom:18px">{toc}</p>
 <div class="warn">For authorized testing only. Harm labels are LLM-judge screening signals (the judge is
 itself audited), not clinical determinations — a clinician must review flagged transcripts.</div>
 {''.join(sections)}
