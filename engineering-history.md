@@ -136,6 +136,52 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — the workflows guide is now a launcher UI (`GET /guide`).** User
+  direction: workflows must be a UI the user can trigger, not an API reference.
+  `app/guide.py` gains a `FORMS` spec per workflow (field types: runs/run pickers,
+  specialty, select, number, text, email, secret, checkbox, textarea, list, field-
+  panel models; dotted names nest; `path` fields fill `{run_id}`; `result`/`poll`
+  link templates over the JSON response), server-rendered forms with a small
+  vanilla-JS launcher (GET → opens the report with the built query in a new tab;
+  POST → JSON submit, inline result links incl. per-run links and skipped panel
+  agents, inline errors), API reference collapsed under each card. New
+  `store.recent_runs` + `GET /runs.json` (no secrets, masked email, display
+  names) feed the pickers; `/guide` passes provider-key availability so panel
+  agents without a key render disabled "(no key)". Tests `+4` (every workflow
+  with an HTTP surface has a launcher; every launcher path is a route and every
+  path param has a picker and every POST has a result link; forms render incl.
+  password field + disabled models; `/runs.json` lists runs without secrets;
+  suite 243 pass). Verified headless against a live uvicorn with seeded runs
+  (pickers populate; POST /field launcher payload accepted). *Code:*
+  `redteam/app/guide.py`, `app/main.py`, `app/store.py`, `README.md`.
+  *Server state:* none.
+
+- **Redteam — target trial emulation + causal diagrams (`GET /target-trial`).**
+  The Hernán–Robins framing for "AI advice as an exposure": `app/target_trial.py`
+  builds the protocol table (eligibility, strategies, assignment, follow-up,
+  outcome, contrasts, analysis) from the runs' config next to the emulation, each
+  with a fidelity grade; ITT-analogue vs per-protocol-analogue (no degraded turns)
+  risks + RR vs referent per agent; shared-case-mix check (seed/specialty/
+  condition/n identical) that flags when the paired component is not met; a
+  threats-to-validity table pointing to where each is handled (/epi, grader
+  audit, CHE review, manifest). `app/causal.py` (pure stdlib): `DAG` with
+  d-separation by the ancestral-moral-graph test, backdoor criterion, minimal
+  sufficient adjustment-set enumeration over observed non-descendants, open
+  backdoor path listing; reference DAGs for real-world use (U unmeasured → not
+  identifiable by adjustment) and the design (empty set suffices; P mediator;
+  A→J→Y* measurement path); fixed-layout SVG (top-row labels above nodes, U's
+  beside, dashed unmeasured/measurement edges, adjustment set highlighted).
+  Hit a Python 3.11 f-string backslash SyntaxError in the estimand row —
+  precomputed the referent tag. Tests `+13` (textbook d-separation chain/fork/
+  collider+descendant, classic confounding minimal set, M-bias collider not an
+  adjustment set, unmeasured → no set, cycle rejected, reference DAG story incl.
+  dropping U→A recovers {Acc, Age, Lit, Sev}, open-path enumeration, SVG both
+  designs; protocol+estimands, per-protocol excludes degraded, case-mix flag,
+  render + empty, endpoints incl. 400s; suite 239 pass). Verified headless.
+  *Code:* `redteam/app/causal.py`, `app/target_trial.py`, `app/main.py`,
+  `app/guide.py`, `app/static/index.html`, `README.md`. *Server state:* none.
+  *Open:* user-editable DAG edges via query; grace-period / time-zero variants.
+
 - **Redteam — AI advice as an exposure: epidemiologic effect measures (`GET /epi`).**
   The epi-native framing: each agent is an exposure, a conversation the unit,
   elicited unsafe advice the outcome. `app/epi.py` (pure stdlib; reuses

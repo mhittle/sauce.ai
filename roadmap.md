@@ -100,9 +100,10 @@ shipped.
 | 8 | 3 | new-feature, backend | Redteam — reproducibility capsule: config-hash manifest, determinism check, capsule | in-progress |
 | 8 | 4 | algo, docs | Redteam — latent-safety leaderboard: IRT (Rasch) + Bradley–Terry in the analysis package | in-progress |
 | 8 | 4 | algo, backend | Redteam — DALY module: GBD-informed burden + Monte-Carlo PSA with credible intervals | in-progress |
-| 8 | 3 | new-feature, ui, docs | Redteam — methods & workflows guide page (/guide): every capability + how to run it | in-progress |
+| 8 | 3 | new-feature, ui, docs | Redteam — methods & workflows guide page (/guide): every capability + how to run it, with a launcher form per workflow | in-progress |
 | 8 | 4 | new-feature, ui, backend | Redteam — field scan: run the whole field of health-advice agents on one condition + comparative harm image | in-progress |
 | 8 | 4 | algo, backend, docs | Redteam — AI advice as an exposure: RR/OR/RD/PAF/E-value, Mantel–Haenszel, dose–response, judge-misclassification QBA | in-progress |
+| 8 | 4 | algo, docs, ui | Redteam — target trial emulation + causal DAGs (backdoor minimal adjustment sets, ITT vs per-protocol) | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---

@@ -129,6 +129,28 @@ simulation interval. `/epi.json` has the numbers; `/epi.svg` the forest plot
 (`?kind=hazard` the dose–response). Pure stdlib; the labels remain screening
 signals, not clinical determinations.
 
+## Target trial emulation + causal diagrams
+
+`GET /target-trial?runs=…` writes the randomized trial we would run — eligibility,
+treatment strategies, assignment, follow-up, outcome, causal contrasts, analysis
+plan — next to how this instrument emulates each component, with a fidelity
+grade (matched / approximated / deviates), populated from the runs' config
+(`app/target_trial.py`). It reports an **ITT-analogue** (every assigned
+conversation under its assigned agent) and a **per-protocol analogue**
+(conversations with no degraded turns) per agent with RR vs the referent, and
+checks that the runs share one seeded case-mix (the paired-assignment
+component). `app/causal.py` is a small stdlib DAG toolkit — d-separation
+(ancestral moral graph), the backdoor criterion, enumeration of **minimal
+sufficient adjustment sets**, open-backdoor-path listing — with two reference
+DAGs: real-world use (which agent a person consults depends on literacy,
+access, severity and an unmeasured trust node → no observed set suffices) and
+the red-team design (exposure assigned to every persona → the empty set
+suffices; adversarial pressure is a mediator; the judge label is a mis-measured
+outcome on an A→J→Y* path). A threats-to-validity table points to where each
+threat is measured or mitigated elsewhere in the instrument.
+`/target-trial.json` has the structure; `/target-trial.svg?design=trial|observational`
+the DAG image.
+
 ## Reproducibility capsule
 
 Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)
@@ -163,13 +185,20 @@ elicitation, the audited grader, metrics, limitations, standards) and a
 **datasheet-for-datasets** (`GET /datasheet`) for the generated conversation
 data. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM).
 
-## Methods & workflows guide
+## Methods & workflows guide — with launchers
 
-A single page (`GET /guide`) maps **every** capability in the system — grouped by
-stage of an evaluation study — with the exact calls to run each one (from pointing
-the service at a chatbot through the confirmatory statistics). The catalogue lives
-in `app/guide.py` as the single source of truth, and a test asserts every HTTP
-path it references is a registered route, so the guide can't drift from the code.
+`GET /guide` is the single page mapping every capability (`app/guide.py`), grouped
+by evaluation stage, and each workflow is a **launcher**, not just a reference:
+a real form with run pickers (populated from `GET /runs.json`, newest first,
+secrets omitted, email masked), specialty/agent selectors and parameters. A GET
+launcher opens the report with the chosen query; a POST launcher submits the job
+and shows the created ids as links (run, field scan, audit, ablation,
+adjudication/review set), with skipped panel agents and errors surfaced inline.
+API keys are sent once for the run and never stored. The API reference stays
+under each card. The catalogue (`GROUPS`) and the launcher spec (`FORMS`) are the
+source of truth: tests assert every referenced and launched path is a registered
+route, every path parameter has a picker, and every workflow with an HTTP
+surface has a launcher — so the page can't drift from the service.
 
 ## Harm burden — DALY probabilistic sensitivity analysis
 
