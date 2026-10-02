@@ -536,9 +536,9 @@ def _workflow(w: dict, available_models: set[str] | None = None) -> str:
     if w.get("doc"):
         steps += (f'<div style="margin:3px 0" class="small">Repo document: '
                   f'<code>redteam/{escape(w["doc"])}</code></div>')
-    when = (f'<div class="small muted" style="margin-top:4px"><b>When:</b> {escape(w["when"])}</div>'
+    when = (f'<div class="when"><b>When:</b> {escape(w["when"])}</div>'
             if w.get("when") else "")
-    return (f'<div class="card" id="wf-{escape(w["id"])}"><h3>{escape(w["title"])}</h3>'
+    return (f'<div class="card wf" id="wf-{escape(w["id"])}"><h3>{escape(w["title"])}</h3>'
             f'<p>{escape(w["summary"])}</p>{when}'
             f'{forms}'
             f'<details style="margin-top:8px"><summary class="small muted">API reference</summary>'
@@ -552,22 +552,26 @@ def render_html(available_models: set[str] | None = None) -> str:
         cards = "".join(_workflow(w, available_models) for w in g["workflows"])
         sections.append(
             f'<h2 id="{g["anchor"]}">{escape(g["stage"])}</h2>'
-            f'<p class="muted">{escape(g["blurb"])}</p>{cards}')
+            f'<p class="muted" style="margin-bottom:4px">{escape(g["blurb"])}</p>{cards}')
     n = sum(len(g["workflows"]) for g in GROUPS)
+    from .report import NAV, FOOTER
+    side = "".join(
+        f'<div class="stage">{escape(g["stage"])}</div>' +
+        "".join(f'<a href="#wf-{escape(w["id"])}">{escape(w["title"].split(" — ")[0].split(" (")[0])}</a>' for w in g["workflows"])
+        for g in GROUPS)
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Methods &amp; workflows — sauce.ai/redteam</title>
-<link rel="stylesheet" href="/static/ui.css"><script src="/static/guide.js" defer></script></head><body><div class="wrap">
-<h1>sauce<span class="muted">.ai/</span>redteam <span class="muted">· methods &amp; workflows</span></h1>
-<p class="small" style="margin:-6px 0 10px"><a href="/">&#8592; main page</a> &middot; <a href="/leaderboard">&#127942; Safety leaderboard</a></p>
-<p class="lede">Every capability in the system, grouped by stage of an evaluation study — each with a launcher:
-pick runs and parameters, then open the report or start the job. {n} workflows, from pointing the service at a
-chatbot to the confirmatory statistics. Run pickers list your recent runs.</p>
-<p class="small toc" style="margin-bottom:18px">{toc}</p>
+<link rel="stylesheet" href="/static/ui.css"><script src="/static/guide.js" defer></script></head><body>{NAV}<div class="wrap">
+<div class="eyebrow">Methods &amp; workflows</div>
+<h1>Every capability, with a launcher.</h1>
+<p class="lede">{n} workflows grouped by stage of an evaluation study — from pointing the service at a chatbot to the
+confirmatory statistics. Pick runs and parameters, then open the report or start the job. Run pickers list your recent runs.</p>
 <div class="warn">For authorized testing only. Harm labels are LLM-judge screening signals (the judge is
 itself audited), not clinical determinations — a clinician must review flagged transcripts.</div>
+<div class="layout"><aside>{side}</aside><main>
 {''.join(sections)}
 <p class="small muted" style="margin-top:28px">Full design and statistics: <code>redteam/RESEARCH.md</code>
 and <code>redteam/PREREGISTRATION.md</code>. Separate packages: <code>redteam/analysis/</code> and
 <code>redteam/inspect_eval/</code>.</p>
-</div></body></html>"""
+</main></div></div>{FOOTER}</body></html>"""

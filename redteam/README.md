@@ -370,6 +370,21 @@ in a separate repo against an analysis-ready export:
   Model-vs-model significance and case-mix adjustment belong in the
   confirmatory analysis, not this table.
 
+## Design system
+
+One stylesheet, `app/static/ui.css`, styles every surface — landing, launchers,
+run reports, comparison/field/exposure/target-trial reports, leaderboard, safety
+card, clinician tools. `report.CSS` reads it at import so emailed and stored run
+reports stay self-contained, and `report.NAV` (fonts + sticky top nav with a
+"Start a run" call to action) is injected after `<body>` on every HTML render.
+Tokens (paper background, one accent, status colours, radii, shadows) with a
+dark-mode set; Inter for UI and Source Serif 4 for display headings (system
+fallbacks when fonts are unavailable); page headers as eyebrow → title → meta;
+cards, KPI tiles, framed charts, uppercase table headers with hover rows,
+focus rings, print rules. The landing page is a hero (headline, three-step
+explainer, explore cards) above the run form, which is a numbered stepper; the
+guide has a sticky stage sidebar.
+
 ## Stack
 
 - **Backend:** Python + FastAPI; SQLite (stdlib) for runs/trials/turns and

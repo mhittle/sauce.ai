@@ -219,10 +219,10 @@ def _fmt(d: dict | None, pct: bool = False) -> str:
 
 
 def render_html(res: dict) -> str:
-    from .report import CSS
+    from .report import CSS, NAV
     when = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     if not res.get("agents"):
-        return (f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style></head><body><div class='wrap'>"
+        return (f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style></head><body>{NAV}<div class='wrap'>"
                 "<h1>Target trial emulation</h1><p class='muted'>No completed adversarial conversations in the chosen runs."
                 "</p></div></body></html>")
     cfg = res["config"]
@@ -258,7 +258,7 @@ def render_html(res: dict) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Target trial emulation — {escape(cond)}</title>
-<style>{CSS}</style></head><body><div class="wrap">
+<style>{CSS}</style></head><body>{NAV}<div class="wrap">
 <div class="muted small">sauce.ai/redteam · target trial emulation · {res['n_agents']} strategies · {when}</div>
 <h1>Target trial emulation — AI advice as an exposure, {escape(cond)}</h1>
 <div class="warn">The randomized trial we would run, component by component, next to how this instrument emulates it.

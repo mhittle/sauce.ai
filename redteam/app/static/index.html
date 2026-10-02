@@ -3,78 +3,59 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>sauce.ai/redteam — clinical chatbot red-teaming</title>
+<title>sauce.ai/redteam — adversarial safety testing for clinical AI</title>
+<meta name="description" content="Point it at a clinical chatbot; it runs adversarial synthetic-patient conversations, scores every reply with an audited judge panel, and reports harm as an epidemiologist would.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap">
+<link rel="stylesheet" href="/static/ui.css">
 <style>
-:root{--bg:#fcfcfb;--fg:#0b0b0b;--muted:#52514e;--line:#e4e3de;--accent:#2a78d6;--card:#fff;--warn:#fff6e5;--warnline:#f0d9a8}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--fg:#f3f2ee;--muted:#a9a89f;--line:#33322e;--accent:#3987e5;--card:#232320;--warn:#2a2410;--warnline:#5c4d1c}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
-.wrap{max-width:860px;margin:0 auto;padding:28px 16px 80px}
-a{color:var(--accent)}
-h1{font-size:26px;margin:0 0 6px}
-h2{font-size:17px;margin:26px 0 8px;border-bottom:1px solid var(--line);padding-bottom:5px}
-.lede{color:var(--muted);margin:0 0 4px}
-label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
-.hint{font-weight:400;color:var(--muted);font-size:12px}
-input,select,textarea{width:100%;padding:8px 10px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:7px;font:inherit}
-textarea{min-height:60px;resize:vertical}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-@media(max-width:560px){.row,.row3{grid-template-columns:1fr}}
-fieldset{border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin:14px 0}
-legend{font-size:13px;font-weight:600;padding:0 6px}
-.checks{display:flex;flex-wrap:wrap;gap:6px 14px}
-.checks label{font-weight:400;margin:0;display:flex;gap:6px;align-items:center}
-.checks input{width:auto}
-button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer}
-button.sec{background:transparent;color:var(--accent);border:1px solid var(--accent)}
-button:disabled{opacity:.55;cursor:default}
-.warn{background:var(--warn);border:1px solid var(--warnline);border-radius:8px;padding:10px 12px;font-size:13px;margin:12px 0}
-.muted{color:var(--muted)}.small{font-size:13px}
-details summary{cursor:pointer;font-weight:600;font-size:14px;margin:6px 0}
-.pill{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px 4px 2px 0}
-.modelpick{margin-bottom:6px}
-.modelpick .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
-.chip{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:3px 6px 3px 11px;font-size:12px}
-.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0}
-.chip button:hover{color:var(--accent)}
-.modelpick .addrow{display:flex;gap:6px;align-items:center}
-.modelpick select,.modelpick .custom{flex:1;min-width:0}
-.modelpick .custom{display:none}
-.modelpick .add{white-space:nowrap;padding:8px 14px}
-.modelpick .phint{margin-top:3px}
-#status{border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:16px;background:var(--card);display:none}
-.bar{height:9px;background:var(--line);border-radius:5px;overflow:hidden;margin:8px 0}
-.bar>div{height:100%;width:0;background:var(--accent);transition:width .4s}
-.err{color:#b3261e}
-code{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px}
+#form{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:8px 26px 26px;box-shadow:var(--shadow);margin-top:18px}
+#form h2.step:first-child{margin-top:18px}
+#status{border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;margin-top:16px;background:var(--card);box-shadow:var(--shadow)}
+#status h2{border:0;margin:0 0 6px;padding:0}
+.modelpick .chips{margin-bottom:6px}
 </style>
 </head>
 <body>
+<header class="topnav"><div class="in"><a class="brand" href="/"><span class="mark"></span><span>sauce<span class="sep">.ai/</span>redteam</span></a>
+<nav><a href="/" class="active">Run</a><a href="/guide#wf-field">Field scan</a><a href="/leaderboard">Leaderboard</a><a href="/guide#wf-epi">Exposure analysis</a><a href="/guide">Methods &amp; workflows</a></nav>
+<div class="cta"><a href="#run">Start a run</a></div></div></header>
 <div class="wrap">
-  <h1>sauce<span class="muted">.ai/</span>redteam</h1>
-  <p class="small" style="margin:-6px 0 10px"><a href="/leaderboard">&#127942; Safety leaderboard</a>
-  &middot; <a href="/guide">&#128214; Methods &amp; workflows</a>
-  &middot; <a href="/guide#field">&#127760; Field scan (whole field of agents)</a>
-  &middot; <a href="/guide#epi">&#129516; AI advice as an exposure (epi measures)</a>
-  &middot; <a href="/guide#target-trial">&#9878; Target trial emulation + DAGs</a></p>
-  <p class="small" style="margin:-4px 0 10px"><span class="muted">Eval methodology:</span>
-  <code>POST /grader-audit</code> &mdash; audit the harm judge itself &middot;
-  <a href="/eval-card">eval card</a> &middot; <a href="/datasheet">datasheet</a>
-  &middot; shareable per-target safety card at <code>/card?run=&lt;id&gt;</code></p>
-  <p class="lede">Adversarial safety testing for clinical AI chatbots. Point it at your bot, pick a specialty,
-  and it runs synthetic patient conversations engineered to surface unsafe medical advice — then scores every
-  reply and emails you an epidemiological report.</p>
-  <p class="small muted">Free while in preview: up to <b id="limit">100</b> trials total per email. For use only on
-  systems you are authorized to test.</p>
+  <section class="hero">
+    <span class="kicker">Clinical AI safety · red-team as an epidemiologist would</span>
+    <h1>Find the unsafe advice your health chatbot gives <em>before a patient does.</em></h1>
+    <p class="lede">Point it at your bot. It runs adversarial synthetic-patient conversations engineered to surface unsafe
+    medical advice, scores every reply with an audited judge panel, and reports harm the way an epidemiologist would:
+    attack success with confidence intervals, prompts-to-harm, number needed to harm, QALYs lost.</p>
+    <div class="actions"><a class="btn lg" href="#run">Start a red-team run</a>
+      <a class="btn sec lg" href="/guide#wf-field">Scan the whole field of agents</a>
+      <a class="btn ghost lg" href="/leaderboard">See the leaderboard</a></div>
+    <p class="fine">Free while in preview: up to <b id="limit">100</b> trials per email. For use only on systems you are authorized to test.</p>
+  </section>
+
+  <div class="steps3">
+    <div class="s"><span class="n">1</span><b>Point it at a target</b><p>Any OpenAI-compatible or Anthropic endpoint, a custom JSON API, or a chat web page. Keys are held for the run only.</p></div>
+    <div class="s"><span class="n">2</span><b>It attacks like a patient would</b><p>An ensemble of attacker models drives synthetic personas toward unsafe advice — dosing, triage, discontinuation, misinformation.</p></div>
+    <div class="s"><span class="n">3</span><b>You get an epidemiological report</b><p>Risk with CIs, time-to-harm curves, harm profile, annotated transcripts — and every run lands on the public leaderboard.</p></div>
+  </div>
+
+  <div class="explore">
+    <a href="/guide#wf-field"><span class="ic">&#127760;</span><b>Field scan</b><span>Run ChatGPT, Claude, Gemini and Llama on one condition; get a comparative harm image.</span></a>
+    <a href="/guide#wf-epi"><span class="ic">&#129516;</span><b>AI advice as an exposure</b><span>RR, PAF, E-value, Mantel–Haenszel, dose–response, judge-misclassification bias analysis.</span></a>
+    <a href="/guide#wf-grader"><span class="ic">&#9878;</span><b>Audit the judge</b><span>Bias, robustness and calibration of the harm grader itself — before you trust a number.</span></a>
+    <a href="/guide"><span class="ic">&#128214;</span><b>Methods &amp; workflows</b><span>Every capability with a launcher: adjudication, CHE, ablations, power, reproducibility.</span></a>
+  </div>
 
   <div class="warn">This is a safety-evaluation tool. It deliberately tries to elicit unsafe responses from the
   <em>bot under test</em> so you can find and fix them. Only run it against endpoints you own or have written
   permission to test. Reports are LLM-scored screening signals, not clinical determinations — have a clinician
   review flagged transcripts.</div>
 
-  <form id="form">
-    <h2>1 · Your chatbot (the target)</h2>
+  <h2 id="run">Run an evaluation</h2>
+  <p class="lede">Three steps. Defaults are sensible; the engine is tunable under “Advanced”.</p>
+
+<form id="form">
+    <h2 class="step"><span class="n">1</span> Your chatbot — the target</h2>
     <label>Endpoint type</label>
     <select id="kind">
       <option value="openai_chat">OpenAI-compatible chat API (/chat/completions)</option>
@@ -119,7 +100,7 @@ code{background:var(--card);border:1px solid var(--line);border-radius:4px;paddi
       <p class="small muted">Requires the browser add-on on the server. Selectors target the newest assistant bubble.</p>
     </details>
 
-    <h2>2 · The evaluation</h2>
+    <h2 class="step"><span class="n">2</span> The evaluation</h2>
     <div class="row3">
       <div><label>Number of trials <span class="hint">1–<span class="lim">100</span></span></label>
         <input id="n_trials" type="number" min="1" value="20"></div>
@@ -172,12 +153,12 @@ code{background:var(--card);border:1px solid var(--line);border-radius:4px;paddi
       <p class="small muted" id="providers"></p>
     </details>
 
-    <h2>3 · Where to send the report</h2>
+    <h2 class="step"><span class="n">3</span> Where to send the report</h2>
     <label>Email <span class="hint">the report is emailed here when the run finishes</span></label>
     <input id="email" type="email" placeholder="you@lab.edu">
     <p class="small muted" id="quota"></p>
 
-    <p style="margin-top:18px"><button id="go" type="submit">Start red-team run</button>
+    <p class="actions" style="margin-top:18px"><button id="go" type="submit" class="lg">Start red-team run</button>
       <span id="cost" class="muted small" style="margin-left:10px"></span></p>
     <p id="formerr" class="err small"></p>
   </form>
@@ -192,9 +173,9 @@ code{background:var(--card);border:1px solid var(--line);border-radius:4px;paddi
     <div id="headline" class="small"></div>
   </div>
 
-  <p class="small muted" style="margin-top:40px">A <a href="/">sauce.ai</a> lab tool. Questions →
-  <a href="mailto:redteam@sauce.ai">redteam@sauce.ai</a>.</p>
 </div>
+<footer class="site"><div class="in"><span>sauce.ai/redteam · a <a href="/">sauce.ai</a> lab tool · <a href="mailto:redteam@sauce.ai">redteam@sauce.ai</a></span>
+<span>Screening signals, not clinical determinations · <a href="/eval-card">eval card</a> · <a href="/datasheet">datasheet</a></span></div></footer>
 
 <script>
 const $ = id => document.getElementById(id);

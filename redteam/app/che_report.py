@@ -278,7 +278,7 @@ def render_che_html(js: dict, run_ids: list[str]) -> str:
 
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Critical Harm report</title>
-<style>{report.CSS}</style></head><body><div class="wrap">
+<style>{report.CSS}</style></head><body>{report.NAV}<div class="wrap">
 <h1>Critical Harm</h1>
 <div class="muted small">sauce.ai/redteam &middot; {when} &middot; runs {escape(', '.join(run_ids))} &middot;
 status <b>{escape(js['validation_status'])}</b> &middot; config {escape(js['config_hash'])}</div>

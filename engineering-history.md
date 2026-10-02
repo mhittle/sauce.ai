@@ -136,6 +136,33 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — design system + landing page (pre-pilot / LinkedIn polish).** User:
+  "it's really ugly and looks a bit sloppy. Let's improve the aesthetic and UX."
+  Baseline: system font, no brand mark or nav, emoji link rows, wall-of-form
+  landing, notebook-looking reports. Built one design system in
+  `app/static/ui.css` (tokens incl. dark mode, Inter + Source Serif 4 with
+  fallbacks, sticky top nav with CTA, eyebrow/title/meta page headers, cards,
+  KPI tiles, framed charts, tables, forms with focus rings, launcher/runpick/
+  status components, print) and applied it centrally: `report.CSS` now reads
+  `ui.css` at import (emailed/stored reports stay self-contained) and a shared
+  `report.NAV` (+ `FOOTER`) is injected after `<body>` in every HTML render
+  (report, compare, ablation, che_report, leaderboard, card/eval-card/datasheet,
+  daly, field, grader_audit, epi, target_trial, guide) — one-line patch per
+  module. Landing page rewritten as hero (headline, 3-step explainer, explore
+  cards) above the run form as a numbered stepper, all ids/JS untouched. Guide
+  gets a sticky stage sidebar. power/adjudicate/che_review link the shared
+  tokens and nav (their component rules kept). Two render bugs caught by
+  screenshot: brand text split by flex `gap` (wrapped in one span — the shared
+  NAV was built from adjacent literals so the first replace missed it) and chart
+  SVGs on their own off-white panel (CSS `svg>rect:first-child{fill:var(--card)}`
+  + card frame). Every HTML route verified 200 on a live uvicorn; screenshots of
+  landing/guide/field/epi/leaderboard/card reviewed. Suite 249 pass (no test
+  changes needed). *Code:* `redteam/app/static/{ui.css,index.html,power.html,
+  adjudicate.html,che_review.html}`, `app/report.py`, `app/guide.py`, 11 render
+  modules (NAV injection), `README.md`. *Server state:* none. *Open:* card title
+  uses raw model id (display-name mapping like /field); dark-mode SVG charts stay
+  light inside the card frame.
+
 - **Redteam — launchers rebuilt to main-page parity.** User: "these UIs kind of
   suck, and lack the toggles/features we had on the main page." Replaced the
   bare `<select multiple>` launchers with the main page's components, driven by

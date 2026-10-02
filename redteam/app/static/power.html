@@ -4,18 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sample-size & power — sauce.ai/redteam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap">
+<link rel="stylesheet" href="/static/ui.css">
 <style>
-:root{--bg:#fcfcfb;--fg:#0b0b0b;--muted:#52514e;--line:#e4e3de;--accent:#2a78d6;--card:#fff}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--fg:#f3f2ee;--muted:#a9a89f;--line:#33322e;--accent:#3987e5;--card:#232320}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
-.wrap{max-width:720px;margin:0 auto;padding:24px 16px 60px}
-h1{font-size:22px;margin:0 0 4px}.muted{color:var(--muted)}.small{font-size:13px}
-label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
-.hint{font-weight:400;color:var(--muted);font-size:12px}
 select,input{width:100%;padding:8px 10px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:7px;font:inherit}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:520px){.row{grid-template-columns:1fr}}
-button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer;margin-top:16px}
 .out{margin-top:18px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px}
 .big{font-size:30px;font-weight:600}.k{color:var(--muted);font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:8px}
@@ -23,6 +16,7 @@ button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11
 </style>
 </head>
 <body>
+<header class="topnav"><div class="in"><a class="brand" href="/"><span class="mark"></span><span>sauce<span class="sep">.ai/</span>redteam</span></a><nav><a href="/">Run</a><a href="/guide#wf-field">Field scan</a><a href="/leaderboard">Leaderboard</a><a href="/guide#wf-epi">Exposure analysis</a><a href="/guide">Methods &amp; workflows</a></nav><div class="cta"><a href="/#run">Start a run</a></div></div></header>
 <div class="wrap">
   <h1>Sample-size &amp; power</h1>
   <p class="muted small">Planning for the Critical Harm study (see RESEARCH.md §4 / PREREGISTRATION.md). Design effect

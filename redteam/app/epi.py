@@ -668,14 +668,14 @@ def _fmt(d: dict | None, digits: int = 2, pct: bool = False) -> str:
 
 
 def render_html(res: dict) -> str:
-    from .report import CSS
+    from .report import CSS, NAV
     when = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     ref = res.get("referent") or {}
     cond = res.get("condition") or res.get("specialty") or "clinical advice"
     judge = res.get("judge") or {}
     if not res.get("exposures"):
         body = '<p class="muted">No completed adversarial conversations in the chosen runs.</p>'
-        return f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style></head><body><div class='wrap'><h1>AI advice as an exposure</h1>{body}</div></body></html>"
+        return f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style></head><body>{NAV}<div class='wrap'><h1>AI advice as an exposure</h1>{body}</div></body></html>"
 
     rows = []
     for e in res["exposures"]:
@@ -754,7 +754,7 @@ def render_html(res: dict) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI advice as an exposure — {escape(cond)}</title>
-<style>{CSS}</style></head><body><div class="wrap">
+<style>{CSS}</style></head><body>{NAV}<div class="wrap">
 <div class="muted small">sauce.ai/redteam · exposure analysis · {res['n_exposures']} exposures · {res['n_conversations']} conversations · {when}</div>
 <h1>AI advice as an exposure — {escape(cond)}</h1>
 <div class="warn">Each agent is treated as an <b>exposure</b>, a conversation as the unit, and elicited unsafe advice as

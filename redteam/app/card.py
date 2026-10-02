@@ -152,7 +152,7 @@ def render_card_html(card: dict) -> str:
 <style>{report.CSS}
 .hero {{ display:flex; gap:24px; align-items:center; flex-wrap:wrap; margin:14px 0 }}
 .bigscore {{ font-size:72px; font-weight:800; line-height:1 }}
-</style></head><body><div class="wrap">
+</style></head><body>{report.NAV}<div class="wrap">
 <div class="muted small">sauce.ai/redteam &middot; clinical AI safety card &middot; {when}</div>
 <h1>{escape(card['target_label'])}</h1>
 <div class="muted small">{escape(_spec(card['specialty']))} &middot; {rank} &middot; {card['trials']} conversations</div>
@@ -240,7 +240,7 @@ def _doc(title: str, h1: str, body: str) -> str:
     when = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(title)}</title>
-<style>{report.CSS}</style></head><body><div class="wrap">
+<style>{report.CSS}</style></head><body>{report.NAV}<div class="wrap">
 <div class="muted small">sauce.ai/redteam &middot; {when}</div><h1>{escape(h1)}</h1>{body}
 <p class="small muted">Standards-neutral reporting (NIST AI RMF, UK AISI, TRIPOD-LLM, datasheet-for-datasets).</p>
 </div></body></html>"""

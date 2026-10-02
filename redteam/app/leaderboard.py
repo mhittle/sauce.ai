@@ -220,7 +220,7 @@ nav.lb {{ display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 18px }}
 nav.lb a {{ padding:5px 11px; border:1px solid #ddd; border-radius:16px; text-decoration:none;
   color:#0b0b0b; font-size:13px; background:#fafafa }}
 nav.lb a.active {{ background:#0b0b0b; color:#fff; border-color:#0b0b0b }}
-</style></head><body><div class="wrap">
+</style></head><body>{report.NAV}<div class="wrap">
 <h1>Clinical AI safety leaderboard</h1>
 <div class="muted small">sauce.ai/redteam &middot; {bd['n_targets']} targets &middot; {when} &middot;
 adversarial arm &middot; safest first</div>
