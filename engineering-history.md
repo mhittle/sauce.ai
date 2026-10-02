@@ -136,6 +136,26 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — /epi QBA now measures the judge from clinician adjudication
+  (differential where labels allow).** Closes the loop the page itself flagged
+  ("assumed Se/Sp"). `epi.judge_validity(store, run_ids)` walks every
+  adjudication set covering the runs (`store.adjudication_sets_for_runs`, new),
+  forms the clinician reference by majority vote (ties dropped, mirroring
+  `adjudication.analyze_set`), and returns pooled Se/Sp **with validation counts**
+  (tp+fn, tn+fp) plus per-run Se/Sp for runs with ≥20 evaluable items; `usable`
+  false when Se+Sp−1 ≤ 0. `misclassification_pba` gains se0/sp0(+counts) for a
+  **differential** analysis (unexposed group drawn from its own Beta). Precedence:
+  supplied se/sp > measured > assumed (flagged, with reason); `judge=auto|assumed`
+  on the endpoints and a select in the launcher. Report shows provenance (pairs,
+  sets, Se/Sp CIs) and per-row Se/Sp used, "(differential)" where applicable;
+  Beta pseudo-n now the real validation counts. Reply-level accuracy applied to
+  the conversation-level label (stated). Tests `+4` (pooled + per-run extraction
+  against a judge of known Se/Sp; auto path uses measured accuracy, own counts,
+  differential; fallback/too-few-items/override/`judge=assumed`; endpoint param
+  incl. 400; suite 247 pass). *Code:* `redteam/app/epi.py`, `app/store.py`,
+  `app/main.py`, `app/guide.py`, `README.md`. *Server state:* none. *Open:*
+  CHE-outcome variant using `che_stats.screener_performance`.
+
 - **Redteam — the workflows guide is now a launcher UI (`GET /guide`).** User
   direction: workflows must be a UI the user can trigger, not an API reference.
   `app/guide.py` gains a `FORMS` spec per workflow (field types: runs/run pickers,

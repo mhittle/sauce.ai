@@ -122,10 +122,15 @@ modification (Cochran's Q); the forest plot overlays a joint age × literacy
 adjusted RR. **Dose–response** takes prompts delivered as the dose: the
 discrete-time per-prompt harm hazard with a Cochran–Armitage trend test. A
 **quantitative bias analysis** propagates the LLM judge's imperfect
-sensitivity/specificity (`se=`/`sp=`, from the grader audit or clinician
-adjudication; illustrative defaults are flagged as assumed) into the effect
-measures: Rogan–Gladen correction plus a probabilistic version with a 95 %
-simulation interval. `/epi.json` has the numbers; `/epi.svg` the forest plot
+sensitivity/specificity into the effect measures: Rogan–Gladen correction plus a
+probabilistic version with a 95 % simulation interval. The judge's Se/Sp are
+**measured automatically from clinician adjudication** (`judge_validity`: every
+adjudication set covering the runs, majority-vote reference, pooled Se/Sp with
+their validation counts as the Beta pseudo-n), and where a run has enough
+adjudicated items the contrast runs **differentially** (the exposure's and the
+referent's own measured accuracy). Overrides: `se=`/`sp=`; `judge=assumed` skips
+the lookup; without adjudication the illustrative defaults are flagged as
+assumed. `/epi.json` has the numbers; `/epi.svg` the forest plot
 (`?kind=hazard` the dose–response). Pure stdlib; the labels remain screening
 signals, not clinical determinations.
 

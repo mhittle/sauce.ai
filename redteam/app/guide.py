@@ -85,7 +85,8 @@ GROUPS: list[dict] = [
                      "(safest agent, or a stated baseline risk); Mantel–Haenszel stratification over persona "
                      "covariates with confounding and effect-modification screens; Cochran–Armitage dose–response "
                      "over prompts delivered; quantitative bias analysis for judge misclassification "
-                     "(Rogan–Gladen + probabilistic).",
+                     "(Rogan–Gladen + probabilistic, with the judge's Se/Sp measured from clinician adjudication "
+                     "when available — differential per agent where labels allow).",
           "when": "Framing AI advice as an exposure for an epidemiologic audience; checking that the judge's "
                   "imperfect sensitivity/specificity does not drive the headline contrast.",
           "steps": [{"m": "GET", "p": "/epi",
@@ -284,8 +285,12 @@ FORMS: dict[str, list[dict]] = {
              {"n": "baseline", "t": "number", "l": "…or a stated baseline risk (0–1)", "step": 0.01,
               "h": "e.g. 0.05 for usual care; overrides the referent run"},
              {"n": "prevalence", "t": "number", "l": "Exposure prevalence for PAF (0–1)", "step": 0.05},
-             {"n": "se", "t": "number", "l": "Judge sensitivity", "step": 0.01, "h": "from the grader audit / adjudication"},
-             {"n": "sp", "t": "number", "l": "Judge specificity", "step": 0.01},
+             {"n": "judge", "t": "select", "l": "Judge accuracy for the bias analysis", "d": "auto",
+              "opt": [("auto", "measure from clinician adjudication (fallback: assumed)"),
+                      ("assumed", "assumed illustrative defaults")],
+              "h": "or override with Se/Sp below"},
+             {"n": "se", "t": "number", "l": "Judge sensitivity (override)", "step": 0.01},
+             {"n": "sp", "t": "number", "l": "Judge specificity (override)", "step": 0.01},
          ]},
     ],
     "target-trial": [

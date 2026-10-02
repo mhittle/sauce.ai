@@ -332,6 +332,18 @@ class Store:
         d["run_ids"] = json.loads(d.pop("run_ids_json"))
         return d
 
+    def adjudication_sets_for_runs(self, run_ids: list[str]) -> list[dict]:
+        """Adjudication sets that sampled from any of the given runs (newest first)."""
+        want = set(run_ids)
+        out = []
+        for r in self._x("SELECT id, name, created_at, run_ids_json, n_items FROM adjudication_sets "
+                         "ORDER BY created_at DESC").fetchall():
+            ids = json.loads(r["run_ids_json"])
+            if want & set(ids):
+                out.append({"id": r["id"], "name": r["name"], "created_at": r["created_at"],
+                            "run_ids": ids, "n_items": r["n_items"]})
+        return out
+
     def adjudication_items(self, set_id: str, blinded: bool = True) -> list[dict]:
         rows = self._x("SELECT * FROM adjudication_items WHERE set_id=? ORDER BY position", (set_id,)).fetchall()
         out = []

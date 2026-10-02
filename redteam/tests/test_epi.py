@@ -202,3 +202,88 @@ def test_epi_endpoints():
     assert "hazard" in c.get(f"/epi.svg?runs={q}&kind=hazard").text.lower()
     b = c.get(f"/epi.json?runs={ids[0]}&baseline=0.05").json()
     assert b["referent"]["kind"] == "baseline"
+
+
+# -- judge validity from clinician adjudication ---------------------------------
+
+def _adjudicate(store, run_id, n_items, se_true, sp_true, raters=("dr_a", "dr_b"), seed=0, prev=0.5):
+    """Create an adjudication set over a run's replies with a judge of known Se/Sp
+    against unanimous clinician truth."""
+    rng = random.Random(seed)
+    trials = store.trials_for_run(run_id)
+    turns = [(t["id"], u["id"]) for t in trials for u in t["turns"]][:n_items]
+    items = []
+    truths = []
+    for tid, uid in turns:
+        truth = rng.random() < prev
+        judge = (rng.random() < se_true) if truth else (rng.random() >= sp_true)
+        items.append({"turn_id": uid, "run_id": run_id, "stratum": "s", "harm_bin": "mid",
+                      "inclusion_prob": 1.0, "judge_p_harm": 0.8 if judge else 0.1,
+                      "judge_harmful": judge, "context": {"reply": "x"}})
+        truths.append(truth)
+    set_id = store.create_adjudication_set("val", {}, [run_id], items)
+    for it, truth in zip(store.adjudication_items(set_id, blinded=False), truths):
+        for r in raters:
+            store.submit_label(set_id, it["id"], r, harmful=truth, severity=None, categories=[],
+                               escalated=None, confidence=None, notes=None)
+    return set_id
+
+
+def test_judge_validity_measures_pooled_and_per_run():
+    store = Store(":memory:")
+    r1 = _seed(store, "gpt-x", 0.5, seed=1, n=60)
+    r2 = _seed(store, "cl-z", 0.3, seed=2, n=60)
+    _adjudicate(store, r1, 60, 0.9, 0.8, seed=1)
+    _adjudicate(store, r2, 60, 0.7, 0.95, seed=2)
+    jv = epi.judge_validity(store, [r1, r2])
+    assert jv["usable"] and jv["n_pairs"] == 120 and len(jv["sets"]) == 2
+    assert 0.6 < jv["pooled"]["se"] < 1.0 and 0.7 < jv["pooled"]["sp"] <= 1.0
+    assert jv["pooled"]["se_n"] + jv["pooled"]["sp_n"] == 120
+    assert set(jv["per_run"]) == {r1, r2}
+    assert jv["per_run"][r1]["se"] > jv["per_run"][r2]["se"]  # judge more sensitive on r1
+    assert epi.judge_validity(store, ["nope"]) is None
+
+
+def test_exposure_analysis_auto_uses_measured_accuracy_and_differential():
+    store = Store(":memory:")
+    r_bad = _seed(store, "gpt-x", 0.5, seed=1, n=60)
+    r_safe = _seed(store, "cl-z", 0.2, seed=2, n=60)
+    _adjudicate(store, r_bad, 60, 0.9, 0.9, seed=3)
+    _adjudicate(store, r_safe, 60, 0.75, 0.95, seed=4)
+    res = epi.exposure_analysis(store, [r_bad, r_safe])
+    j = res["judge"]
+    assert j["source"] == "adjudication" and j["assumed"] is False and j["n_pairs"] == 120
+    assert j["se_n"] > 0 and j["sp_n"] > 0 and len(j["per_run"]) == 2
+    q = res["exposures"][0]["qba"]
+    assert q["differential"] is True and q["se0"] is not None
+    assert q["se_n"] + q["sp_n"] == 60  # the exposure's own validation counts
+    assert "measured against clinician adjudication" in epi.render_html(res)
+    assert "differential" in epi.render_html(res)
+
+
+def test_exposure_analysis_falls_back_and_respects_overrides():
+    store = Store(":memory:")
+    ids = [_seed(store, "gpt-x", 0.5, seed=1), _seed(store, "cl-z", 0.2, seed=2)]
+    res = epi.exposure_analysis(store, ids)
+    assert res["judge"]["source"] == "assumed" and "no clinician adjudication" in res["judge"]["note"]
+    # too few items per run → pooled only, non-differential
+    _adjudicate(store, ids[0], 10, 0.9, 0.9, seed=5)
+    res2 = epi.exposure_analysis(store, ids)
+    assert res2["judge"]["source"] == "adjudication" and res2["judge"]["per_run"] == {}
+    assert res2["exposures"][0]["qba"]["differential"] is False
+    # explicit se/sp win; judge=assumed skips the lookup
+    assert epi.exposure_analysis(store, ids, se=0.6, sp=0.99)["judge"]["source"] == "supplied"
+    assert epi.exposure_analysis(store, ids, judge="assumed")["judge"]["source"] == "assumed"
+
+
+def test_epi_endpoint_judge_param():
+    store = Store(":memory:")
+    settings = Settings(db_path=":memory:")
+    app = create_app(settings, store, Runner(settings, store, mocks={}))
+    ids = [_seed(store, "gpt-x", 0.5, seed=1), _seed(store, "cl-z", 0.2, seed=2)]
+    _adjudicate(store, ids[0], 30, 0.9, 0.9, seed=6)
+    c = TestClient(app)
+    q = ",".join(ids)
+    assert c.get(f"/epi.json?runs={q}").json()["judge"]["source"] == "adjudication"
+    assert c.get(f"/epi.json?runs={q}&judge=assumed").json()["judge"]["source"] == "assumed"
+    assert c.get(f"/epi.json?runs={q}&judge=bogus").status_code == 400

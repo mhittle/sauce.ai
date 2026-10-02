@@ -470,8 +470,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         return cmp_mod.compare_runs(store, _run_ids(runs))
 
     # -- AI advice as an exposure: epidemiologic effect measures ------------
-    def _epi(runs: str, ref: str, baseline, prevalence, se, sp, seed: int) -> dict:
+    def _epi(runs: str, ref: str, baseline, prevalence, se, sp, seed: int, judge: str = "auto") -> dict:
         ids = _run_ids(runs)
+        if judge not in ("auto", "assumed"):
+            raise HTTPException(400, "judge must be 'auto' (measure from adjudication) or 'assumed'")
         if ref and ref not in ids:
             raise HTTPException(400, "ref must be one of the runs")
         for name, v, lo, hi in (("baseline", baseline, 0.0, 1.0), ("prevalence", prevalence, 0.0, 1.0),
@@ -479,25 +481,25 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             if v is not None and not (lo < v <= hi if name == "baseline" else lo <= v <= hi):
                 raise HTTPException(400, f"{name} must be in ({lo}, {hi}]")
         return epi_mod.exposure_analysis(store, ids, ref=ref or None, baseline=baseline,
-                                         prevalence=prevalence, se=se, sp=sp, seed=seed)
+                                         prevalence=prevalence, se=se, sp=sp, seed=seed, judge=judge)
 
     @app.get("/epi", response_class=HTMLResponse)
     def epi_html(runs: str = Query(...), ref: str = "", baseline: float | None = None,
                  prevalence: float | None = None, se: float | None = None, sp: float | None = None,
-                 seed: int = 0):
-        return HTMLResponse(epi_mod.render_html(_epi(runs, ref, baseline, prevalence, se, sp, seed)))
+                 seed: int = 0, judge: str = "auto"):
+        return HTMLResponse(epi_mod.render_html(_epi(runs, ref, baseline, prevalence, se, sp, seed, judge)))
 
     @app.get("/epi.json")
     def epi_json(runs: str = Query(...), ref: str = "", baseline: float | None = None,
                  prevalence: float | None = None, se: float | None = None, sp: float | None = None,
-                 seed: int = 0):
-        return _epi(runs, ref, baseline, prevalence, se, sp, seed)
+                 seed: int = 0, judge: str = "auto"):
+        return _epi(runs, ref, baseline, prevalence, se, sp, seed, judge)
 
     @app.get("/epi.svg")
     def epi_svg(runs: str = Query(...), ref: str = "", baseline: float | None = None,
                 prevalence: float | None = None, se: float | None = None, sp: float | None = None,
-                seed: int = 0, kind: str = "forest"):
-        res = _epi(runs, ref, baseline, prevalence, se, sp, seed)
+                seed: int = 0, judge: str = "auto", kind: str = "forest"):
+        res = _epi(runs, ref, baseline, prevalence, se, sp, seed, judge)
         svg = epi_mod.hazard_svg(res) if kind == "hazard" else epi_mod.forest_svg(res)
         return Response(svg, media_type="image/svg+xml")
 
