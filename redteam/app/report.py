@@ -26,7 +26,7 @@ NAV_LINKS = [("/", "Run"), ("/guide#wf-field", "Field scan"), ("/leaderboard", "
 # A thin trace under the nav — the instrument's signature line, drawn once.
 TRACE = ('<div class="trace" aria-hidden="true"><svg viewBox="0 0 1200 14" preserveAspectRatio="none">'
          '<path d="M0 9 H300 l6-6 6 6 H420 l4-8 4 8 H560 l5-5 5 5 H700 l3-7 3 7 H860 l6-6 6 6 H1000 l4-8 4 8 H1200" '
-         'fill="none" stroke="#0b7f73" stroke-opacity=".55" stroke-width="1"/></svg></div>')
+         'fill="none" stroke="#8e2a1f" stroke-opacity=".55" stroke-width="1"/></svg></div>')
 
 # Site chrome: injected right after <body> on every HTML page (fonts + sticky nav + trace).
 NAV = FONTS + ('<header class="topnav"><div class="in"><a class="brand" href="/"><span class="mark"></span>'

@@ -140,7 +140,9 @@ these.
   Claude aesthetic… more unique, more medically focused, no marketing
   headline").** Replaced the Inter + serif + indigo + rounded-card system with a
   laboratory-report language: IBM Plex Sans/Mono (mono for labels, ids,
-  numerals), cool paper ground, surgical-teal accent, red reserved for harm,
+  numerals), warm paper ground, auburn accent (user: "red / auburn — it is red
+  teaming after all"; teal first, then retuned) with a brighter scarlet reserved
+  for harm so the two signals stay distinct,
   square corners, 1 px rules, no shadows, mono small-caps eyebrows, CSS-counter
   numbered sections (`01`, `02`), KPI tiles as a hairline lab panel, ruled tables
   with mono headers, "CAUTION" callouts, a plus-mark brand and a thin trace line

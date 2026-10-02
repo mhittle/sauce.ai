@@ -10,22 +10,22 @@
   --sans:"IBM Plex Sans",-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 
-  --bg:#f3f5f4; --card:#fbfcfb; --card-2:#eef2f0;
-  --fg:#0e1b18; --muted:#4f5f5a; --faint:#8c9995; --line:#cfd8d4; --line-2:#e1e7e4; --rule:#0e1b18;
-  --accent:#0b7f73; --accent-2:#075f56; --accent-soft:#dcefeb; --on-accent:#ffffff;
+  --bg:#f5f3f1; --card:#fcfbfa; --card-2:#efebe8;
+  --fg:#1a1412; --muted:#5e5450; --faint:#978c87; --line:#d6cfca; --line-2:#e6e0dc; --rule:#1a1412;
+  --accent:#8e2a1f; --accent-2:#6f1f16; --accent-soft:#f3e1dd; --on-accent:#ffffff;
   --ok:#14805f; --ok-soft:#dff1e9; --warn:#9a6700; --warn-bg:#fbf3dc; --warn-line:#e4c76b;
-  --err:#b42318; --err-soft:#fbe4e1;
-  --u:#e7eef3; --b:#edf0ee;
+  --err:#d1261a; --err-soft:#fde3df;
+  --u:#e9eef3; --b:#f0ece9;
   --radius:3px; --radius-sm:2px;
   --wrap:1060px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --bg:#0f1715; --card:#15201d; --card-2:#1a2622;
-  --fg:#e6ece9; --muted:#9fb0aa; --faint:#64756f; --line:#2a3a35; --line-2:#22302c; --rule:#e6ece9;
-  --accent:#3fc2b1; --accent-2:#7ad9cc; --accent-soft:#163631; --on-accent:#06201c;
+  --bg:#161211; --card:#1e1816; --card-2:#251e1b;
+  --fg:#ece6e2; --muted:#b0a39d; --faint:#746a65; --line:#3a302c; --line-2:#2e2623; --rule:#ece6e2;
+  --accent:#e2735f; --accent-2:#f0978a; --accent-soft:#3d1f19; --on-accent:#1c0c09;
   --ok:#49c08f; --ok-soft:#133127; --warn:#e0b14a; --warn-bg:#2b2410; --warn-line:#5c4d1c;
-  --err:#ff8276; --err-soft:#3a1e1a;
-  --u:#1b2a33; --b:#1b2622;
+  --err:#ff5f4e; --err-soft:#40201b;
+  --u:#1c2630; --b:#262019;
 }}
 
 /* ---- base ----------------------------------------------------------------- */
