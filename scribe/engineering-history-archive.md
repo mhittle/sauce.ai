@@ -6,6 +6,49 @@ not read during onboarding.
 
 ---
 
+## 2026-09-15 (l) — PR C: tenancy — orgs, org_id on every customer table, platform admins
+
+**Shipped (migration `0014_orgs.sql`, applies at boot).** `orgs` (name,
+`is_platform`, logo); the platform org "CabinetNow" is created and every
+existing user/takeoff/quote/customer/eval_fixture is backfilled into it,
+then `org_id` goes NOT NULL. `users.org_id / org_role (owner|member) /
+is_platform_admin` (backfilled from `role = 'admin'`). Seed puts
+`AUTH_ALLOWED_EMAILS` users in the platform org (first = platform admin).
+- **Request context:** `SessionUser` carries `orgId`, `orgRole`,
+  `isPlatformAdmin`; `req.orgId` is the org the request acts in — the
+  user's own, or for platform admins the `X-Org-Id` header (support view).
+  `requireAdmin` now means **platform admin** (pricing, sources, users,
+  invites, prospects, org-settings). `/auth/me` returns `orgId`,
+  `orgName`, `orgRole`, `isPlatformAdmin`.
+- **Scoping (`lib/scope.ts`):** `takeoffInOrg` / `quoteInOrg` replace every
+  `eq(takeoffs.id, …)` / `eq(quotes.id, …)` (18 + 6 sites); a preHandler
+  404s any `/takeoffs/:id/…` route whose takeoff is outside the org (covers
+  detections, page images, exports); `/takeoff-lines/:id` PATCH/DELETE
+  filter by `inArray(takeoff_id, <org's takeoffs>)`; `/takeoffs`, `/jobs`,
+  `/quotes`, `/customers` list per org; inserts stamp `org_id`; dashboard
+  SQL is per org (prospect counts platform-admin only); `/projects` is
+  platform-admin only. Workers copy `takeoffs.org_id` onto eval fixtures.
+- **Admin → Users:** org column, role select, platform-admin checkbox
+  (`PATCH /admin/users/:id`; you cannot un-admin yourself), last sign-in.
+  Web nav/operator menu and `TechnicalDetail` key off `isPlatformAdmin`.
+
+**Not changed (deliberate).** `org_settings` stays the single platform row
+(freight, handling, quote terms/logo, cross-validation) — per-org branding
+comes with the account screens (PR D). Pricing configs, product lines,
+export templates, sources and projects are platform-level.
+
+**Gotchas.** (1) A new tenant org has no takeoffs, so `/jobs` is empty
+until they upload — the sample job (tutorial) fills it later. (2) Machine
+users (dev bypass, signal connector) are created in the platform org via
+`getPlatformOrgId()`. (3) `X-Org-Id` is honoured only when
+`isPlatformAdmin`; the web app does not send it yet.
+
+**Manual:** MA-014 — after deploy, tick "Platform admin" for
+ridadarwish12@gmail.com in Admin → Users (the migration promotes only
+`role = 'admin'`, i.e. mhittle@gmail.com).
+
+---
+
 ## 2026-09-15 (k) — PR A: email provider + invites API + Admin invite panel
 
 **Owner:** sign-up form = email, name, phone only; "ok go" on the plan's
