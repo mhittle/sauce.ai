@@ -23,6 +23,8 @@ from . import ablation as abl_mod
 from . import card as card_mod
 from . import daly as daly_mod
 from . import epi as epi_mod
+from . import target_trial as tt_mod
+from . import causal as causal_mod
 from . import dataset
 from . import field as field_mod
 from . import guide as guide_mod
@@ -498,6 +500,27 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         res = _epi(runs, ref, baseline, prevalence, se, sp, seed)
         svg = epi_mod.hazard_svg(res) if kind == "hazard" else epi_mod.forest_svg(res)
         return Response(svg, media_type="image/svg+xml")
+
+    # -- target trial emulation + causal diagrams ----------------------------
+    def _tt(runs: str, ref: str) -> dict:
+        ids = _run_ids(runs)
+        if ref and ref not in ids:
+            raise HTTPException(400, "ref must be one of the runs")
+        return tt_mod.emulate(store, ids, ref=ref or None)
+
+    @app.get("/target-trial", response_class=HTMLResponse)
+    def target_trial_html(runs: str = Query(...), ref: str = ""):
+        return HTMLResponse(tt_mod.render_html(_tt(runs, ref)))
+
+    @app.get("/target-trial.json")
+    def target_trial_json(runs: str = Query(...), ref: str = ""):
+        return _tt(runs, ref)
+
+    @app.get("/target-trial.svg")
+    def target_trial_svg(design: str = "trial"):
+        if design not in ("trial", "observational"):
+            raise HTTPException(400, "design must be 'trial' or 'observational'")
+        return Response(causal_mod.dag_svg(causal_mod.analyze(design)), media_type="image/svg+xml")
 
     # -- public safety leaderboard (auto-populated from every run) ----------
     @app.get("/leaderboard", response_class=HTMLResponse)

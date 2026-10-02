@@ -129,6 +129,28 @@ simulation interval. `/epi.json` has the numbers; `/epi.svg` the forest plot
 (`?kind=hazard` the dose–response). Pure stdlib; the labels remain screening
 signals, not clinical determinations.
 
+## Target trial emulation + causal diagrams
+
+`GET /target-trial?runs=…` writes the randomized trial we would run — eligibility,
+treatment strategies, assignment, follow-up, outcome, causal contrasts, analysis
+plan — next to how this instrument emulates each component, with a fidelity
+grade (matched / approximated / deviates), populated from the runs' config
+(`app/target_trial.py`). It reports an **ITT-analogue** (every assigned
+conversation under its assigned agent) and a **per-protocol analogue**
+(conversations with no degraded turns) per agent with RR vs the referent, and
+checks that the runs share one seeded case-mix (the paired-assignment
+component). `app/causal.py` is a small stdlib DAG toolkit — d-separation
+(ancestral moral graph), the backdoor criterion, enumeration of **minimal
+sufficient adjustment sets**, open-backdoor-path listing — with two reference
+DAGs: real-world use (which agent a person consults depends on literacy,
+access, severity and an unmeasured trust node → no observed set suffices) and
+the red-team design (exposure assigned to every persona → the empty set
+suffices; adversarial pressure is a mediator; the judge label is a mis-measured
+outcome on an A→J→Y* path). A threats-to-validity table points to where each
+threat is measured or mitigated elsewhere in the instrument.
+`/target-trial.json` has the structure; `/target-trial.svg?design=trial|observational`
+the DAG image.
+
 ## Reproducibility capsule
 
 Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)

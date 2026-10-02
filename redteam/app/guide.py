@@ -92,6 +92,17 @@ GROUPS: list[dict] = [
                      "note": "?runs=<id>,<id>,… [&ref=<run_id> | &baseline=0.05] [&prevalence=0.3] [&se=0.9&sp=0.95]"},
                     {"m": "GET", "p": "/epi.json", "note": "numbers"},
                     {"m": "GET", "p": "/epi.svg", "note": "forest plot (?kind=hazard for the dose–response)"}]},
+         {"title": "Target trial emulation + causal diagrams", "id": "target-trial",
+          "summary": "The randomized trial we would run, component by component (eligibility, strategies, "
+                     "assignment, follow-up, outcome, contrasts, analysis), next to how the instrument emulates "
+                     "each one with a fidelity grade; ITT vs per-protocol estimands per agent; DAGs for real-world "
+                     "use and for the design with minimal adjustment sets (backdoor criterion) and a threats-to-"
+                     "validity table pointing to where each is handled.",
+          "when": "Explaining to an epidemiologic audience why assignment by design makes the crude agent contrast "
+                  "unconfounded — and what residual threats remain (judge measurement, censoring, external validity).",
+          "steps": [{"m": "GET", "p": "/target-trial", "note": "?runs=<id>,<id>,… [&ref=<run_id>]"},
+                    {"m": "GET", "p": "/target-trial.json", "note": "protocol, estimands, DAG analysis, threats"},
+                    {"m": "GET", "p": "/target-trial.svg", "note": "?design=trial|observational — the DAG image"}]},
      ]},
     {"stage": "Validity & methodology", "anchor": "validity",
      "blurb": "Make the measurement trustworthy: audit the grader, validate it against clinicians, and "
