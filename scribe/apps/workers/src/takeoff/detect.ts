@@ -40,9 +40,11 @@ import {
   extractJson,
   getAnthropic,
   imageBlock,
+  TakeoffBudget,
   textOf,
   withSocketRetry,
 } from "../lib/anthropic.js";
+import { usageContextFor } from "../lib/usage.js";
 import { salvageArrayObjects } from "./extract.js";
 import { openPdf, OpenPdf } from "./pdf.js";
 import { setProgress } from "./progress.js";
@@ -229,6 +231,16 @@ export async function detectRegion(
       );
       const tokens =
         message.usage.input_tokens + message.usage.output_tokens;
+      await new TakeoffBudget(
+        await usageContextFor(detection.takeoffId),
+        Number.POSITIVE_INFINITY
+      ).ledger(message.usage, {
+        stage: "detect",
+        model: DETECT_MODEL,
+        images: 1,
+        page,
+        pageKind: detection.kind,
+      });
       const items = processDetectionResponse(textOf(message), {
         cropPt,
         cropDpi,
@@ -963,6 +975,10 @@ export async function buildFromDetections(
           ),
         },
       ];
+      const usageBudget = new TakeoffBudget(
+        await usageContextFor(takeoffId),
+        Number.POSITIVE_INFINITY
+      );
       const callMeasure = () =>
         withSocketRetry(() =>
           client.messages
@@ -987,6 +1003,11 @@ export async function buildFromDetections(
       for (let attempt = 0; attempt < 2; attempt++) {
         const message = await callMeasure();
         tokens += message.usage.input_tokens + message.usage.output_tokens;
+        await usageBudget.ledger(message.usage, {
+          stage: "measure",
+          model: DETECT_MODEL,
+          images: sentPages.length + cropImages.length,
+        });
         // Persist the raw response — when sizing goes wrong ("everything
         // defaulted"), this is the evidence of what the model actually said.
         const responseText = textOf(message);

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { adminRoute } from "../main";
 import { apiGet, apiSend, apiUpload, formatUsd } from "../api";
+import { Usage } from "./AdminUsage";
 import {
   Badge,
   type BadgeTone,
@@ -24,9 +25,9 @@ import {
 // The admin control panel (product-plan.md §3.3): pricing, branding and
 // terms, freight and extraction settings, export mappings, users. Crawler
 // sources stay routable (?tab=sources) but off the sidebar with the
-// prospector. Stages 2–3 add orgs, invites, usage and credits here.
+// prospector. Usage is the model-cost ledger; credits land here next.
 
-type Tab = "pricing" | "branding" | "freight" | "templates" | "users" | "sources";
+type Tab = "pricing" | "branding" | "freight" | "templates" | "users" | "usage" | "sources";
 
 const TABS: { key: Tab; label: string; hint: string; hidden?: boolean }[] = [
   { key: "pricing", label: "Pricing", hint: "Rates, adders, lead times" },
@@ -34,6 +35,7 @@ const TABS: { key: Tab; label: string; hint: string; hidden?: boolean }[] = [
   { key: "freight", label: "Freight & reading", hint: "Pallet rate, handling, cross-check" },
   { key: "templates", label: "Export mappings", hint: "Mozaik / KCD columns" },
   { key: "users", label: "Users", hint: "Invites and who can sign in" },
+  { key: "usage", label: "Usage", hint: "Model cost per job, stage, page" },
   { key: "sources", label: "Crawler sources", hint: "Prospector (hidden)", hidden: true },
 ];
 
@@ -71,6 +73,7 @@ export function AdminPage() {
           {tab === "freight" && <FreightAndReading />}
           {tab === "templates" && <ExportTemplates />}
           {tab === "users" && (<><Invites /><SampleJob /><Users /></>)}
+          {tab === "usage" && <Usage />}
           {tab === "sources" && <Sources />}
         </div>
       </div>

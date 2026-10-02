@@ -6,6 +6,7 @@ import {
 } from "@scribe/shared";
 import { EXTRACT_SYSTEM, extractUserText } from "@scribe/prompts";
 import { extractJson } from "../lib/anthropic.js";
+import type { ModelUsage } from "../lib/usage.js";
 import { getOpenAI, OPENAI_VISION_MODEL } from "../lib/openai.js";
 
 export interface CrossValidationOutcome {
@@ -13,6 +14,8 @@ export interface CrossValidationOutcome {
   flags: CrossValidationFlag[];
   secondaryRaw: unknown;
   tokens: number;
+  model: string;
+  usage: ModelUsage;
 }
 
 // Runs the same extraction prompt + page image through the secondary OpenAI
@@ -45,6 +48,9 @@ export async function crossValidatePage(
     ],
   });
 
+  // OpenAI's prompt_tokens include the cached ones; split them out so they
+  // cost at the cache-read rate.
+  const cached = res.usage?.prompt_tokens_details?.cached_tokens ?? 0;
   const text = res.choices[0]?.message?.content ?? "";
   const raw = extractJson(text);
   const secondary = PageExtraction.parse(raw);
@@ -59,5 +65,11 @@ export async function crossValidatePage(
     flags,
     secondaryRaw: raw,
     tokens: res.usage?.total_tokens ?? 0,
+    model: OPENAI_VISION_MODEL,
+    usage: {
+      input_tokens: (res.usage?.prompt_tokens ?? 0) - cached,
+      output_tokens: res.usage?.completion_tokens ?? 0,
+      cache_read_input_tokens: cached,
+    },
   };
 }

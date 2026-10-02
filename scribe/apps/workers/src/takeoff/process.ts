@@ -284,11 +284,18 @@ async function runCrossValidation(
   extraction: PageExtraction,
   crossVal: CrossVal,
   warnings: string[],
-  log: Logger
+  log: Logger,
+  budget: TakeoffBudget
 ): Promise<PageExtraction> {
   try {
     const outcome = await crossValidatePage(pageNumber, png, extraction);
     crossVal.tokens += outcome.tokens;
+    await budget.ledger(outcome.usage, {
+      stage: "cross_validate",
+      model: outcome.model,
+      images: 1,
+      page: pageNumber,
+    });
     crossVal.secondaryRaws.push({ page: pageNumber, raw: outcome.secondaryRaw });
     for (const f of outcome.flags) {
       warnings.push(
@@ -321,7 +328,7 @@ export async function processTakeoff(
   // Spreadsheets skip both gates: the parsed schedule goes straight to the
   // pricing review screen (processing → review), exactly as before.
   const db = getDb();
-  const budget = new TakeoffBudget();
+  const budget = new TakeoffBudget({ orgId: takeoff.orgId, takeoffId });
   try {
     const file = await getObject(takeoff.sourceFileS3Key);
     const parsed = await parseSpreadsheet(file, budget, {
@@ -401,7 +408,7 @@ export async function prepareTakeoff(
 ): Promise<void> {
   const takeoff = await loadTakeoff(takeoffId);
   const db = getDb();
-  const budget = new TakeoffBudget();
+  const budget = new TakeoffBudget({ orgId: takeoff.orgId, takeoffId });
   try {
     if (takeoff.sourceKind !== "pdf") {
       throw new Error(`prepare stage only handles PDFs (got ${takeoff.sourceKind})`);
@@ -533,7 +540,7 @@ export async function extractTakeoff(
 ): Promise<void> {
   const takeoff = await loadTakeoff(takeoffId);
   const db = getDb();
-  const budget = new TakeoffBudget();
+  const budget = new TakeoffBudget({ orgId: takeoff.orgId, takeoffId });
   const crossVal = await loadCrossVal();
   try {
     await resetProgress(takeoffId);
@@ -559,10 +566,10 @@ export async function extractTakeoff(
         total: 1,
         message: "Reading the image",
       });
-      const { extraction, raw } = await extractPage(1, file, budget);
+      const { extraction, raw } = await extractPage(1, file, budget, { pageKind: "image" });
       raws = [raw];
       const validated = crossVal.enabled
-        ? await runCrossValidation(1, file, extraction, crossVal, summary.warnings, log)
+        ? await runCrossValidation(1, file, extraction, crossVal, summary.warnings, log, budget)
         : extraction;
       lines = validated.lines.map((l) => ({
         ...l,
@@ -1051,7 +1058,11 @@ async function readPageOnce(
   if (!needsRegioning(dims)) {
     let extraction: PageExtraction;
     try {
-      const result = await extractPage(page, fullPng, budget, { estimate, grounding });
+      const result = await extractPage(page, fullPng, budget, {
+        estimate,
+        grounding,
+        pageKind: pageClass,
+      });
       extraction = result.extraction;
       acc.raws.push({ page, raw: result.raw });
     } catch (err) {
@@ -1066,7 +1077,8 @@ async function readPageOnce(
         extraction,
         crossVal,
         acc.summary.warnings,
-        log
+        log,
+        budget
       );
     }
     const key = readKey("full");
@@ -1084,8 +1096,8 @@ async function readPageOnce(
     // cabinetry is laid out from a coherent crop. Otherwise locate drawings.
     const located =
       estimate && pageClass === "floor_plan"
-        ? await locateRooms(fullPng, fullW, fullH, budget)
-        : await locateRegions(fullPng, fullW, fullH, budget);
+        ? await locateRooms(fullPng, fullW, fullH, budget, page)
+        : await locateRegions(fullPng, fullW, fullH, budget, page);
     regions = located.regions
       .filter((r) => EXTRACTABLE_REGION_KINDS.includes(r.kind))
       .map((r) => ({
@@ -1128,6 +1140,7 @@ async function readPageOnce(
         const result = await extractPage(page, fullPng, budget, {
           estimate: true,
           grounding,
+          pageKind: pageClass,
         });
         extraction = result.extraction;
         acc.raws.push({ page, raw: result.raw });
@@ -1145,7 +1158,8 @@ async function readPageOnce(
           extraction,
           crossVal,
           acc.summary.warnings,
-          log
+          log,
+          budget
         );
       }
       const key = readKey("full");
@@ -1165,6 +1179,7 @@ async function readPageOnce(
           region: true,
           estimate: true,
           grounding,
+          pageKind: pageClass,
         });
         extraction = result.extraction;
         acc.raws.push({ page, region: region.kind, raw: result.raw });
@@ -1182,7 +1197,8 @@ async function readPageOnce(
           extraction,
           crossVal,
           acc.summary.warnings,
-          log
+          log,
+          budget
         );
       }
       const key = readKey(`r${ri}`);
@@ -1214,6 +1230,7 @@ async function readPageOnce(
         region: true,
         estimate,
         grounding: estimate ? grounding : undefined,
+        pageKind: pageClass,
       });
       extraction = result.extraction;
       acc.raws.push({ page, region: job.regionId, raw: result.raw });
@@ -1231,7 +1248,8 @@ async function readPageOnce(
         extraction,
         crossVal,
         acc.summary.warnings,
-        log
+        log,
+        budget
       );
     }
     const key = readKey(`r${job.regionId}-t${ti}`);

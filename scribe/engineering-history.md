@@ -110,11 +110,63 @@ deploys if a future session doesn't know it exists. Keep this current.
   (`GOOGLE_CLIENT_ID` unset); object storage is NOT configured, so plan and
   logo uploads fail locally by design — the invite → sign-up → account flow
   does not need them.
+- **Usage ledger needs a rate per model (2026-10-02, #309).** Every model
+  call writes a `usage_events` row costed from `model_rates`; a model id with
+  no rate row (exact or alias prefix) is skipped with a log line. Before
+  changing `VISION_MODEL` / `OPENAI_VISION_MODEL`, add its rate in a
+  migration. Rates are never updated — a price change is a new row.
 - **`ROUTER_TOLERANT_MERGE=1` is SET on `scribe-workers`** (owner, 2026-08-12)
   — the demoted-role re-admit merge is LIVE prod behavior (kit-measured 0.379
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-02 — usage ledger (step 3a): every model call costed; Admin → Usage (#309)
+
+**Context.** Owner prompt: build 3a (instrument, don't charge), report the
+measured cost, then ask the pricing question before credits.
+
+**Shipped (#309, migration `0017_usage_events.sql`).**
+- `model_rates` (versioned, never updated; seeded at list 2026-10:
+  Sonnet 4.6 300/1500/375/30, Haiku 4.5 100/500/125/10, Opus 4.8
+  500/2500/625/50, gpt-4.1 200/800/200/50 cents per MTok) and
+  `usage_events` (org, takeoff, stage, model, rate id, in/out/cache tokens,
+  images, page, `page_kind`, `cost_microcents` = tokens × cents/MTok, exact).
+- `lib/usage.ts`: `costMicrocents`, `pickRate` (exact id, else longest alias
+  prefix — dated snapshots match), `insertUsageEvent`, `usageContextFor`.
+  `TakeoffBudget(context)`: `record()` adds to the cap and writes a row,
+  `ledger()` writes without counting (OpenAI cross-check, detect, measure —
+  none were capped before). A failed insert logs `usage event insert failed`
+  and never fails a build.
+- Hooked: classify (images = batch), locate, extract (page + page class),
+  spreadsheet, cross_validate (OpenAI cached tokens split out), detect
+  (page + area kind), measure (both attempts; page null).
+- `GET /admin/usage?from&to&org_id` (`routes/usage.ts`, platform admin) +
+  Admin → Usage tab: totals, median/p90 per job and per page, by stage+model,
+  by page kind, by job. Job pages = selected pages, else PDF page count, else 1.
+- `apps/workers/scripts/kit-cost.mjs`: prices the staged kits with the free
+  `count_tokens` endpoint (inputs exact incl. re-rendered classify
+  thumbnails; outputs = stored answers re-tokenized, a floor).
+
+**Measured (18-quote kit set, Sonnet 4.6 list).** $1.75 for all 18 (32
+selected pages, 79 PDF pages). Per job median 8.7¢, p90 20¢, max 25¢. Per
+selected page median 4.1¢, p90 12.5¢. Plan-only jobs 10.7¢/page median vs
+elevation-only 3.5¢ (a plan job is usually 1 page carrying the whole
+measure pass). Stage share: measure 52%, detect 29%, classify 19%
+(classify scales with the PDF's total pages, not the selection). Re-runs
+(Find, Measure again) are not in these numbers.
+
+**Gotcha (load-bearing).** A model id with no `model_rates` row is not
+recorded (logged per call). Setting `VISION_MODEL` / `OPENAI_VISION_MODEL`
+to a new model needs a new rate row first.
+
+**Verified.** Offline gate green; on local `scribe_dev` the migration
+applied at boot, real worker inserts costed exactly, an unknown model was
+logged and skipped, `/admin/usage` and the tab rendered.
+
+**Open.** Credits (3b) wait on the owner's pricing answer; Stripe after.
 
 ---
 
@@ -315,86 +367,19 @@ ridadarwish12@gmail.com in Admin → Users (the migration promotes only
 
 ---
 
-## 2026-09-15 (k) — PR A: email provider + invites API + Admin invite panel
-
-**Owner:** sign-up form = email, name, phone only; "ok go" on the plan's
-recommendations (A → C → B → D, Google OAuth + magic link, no password).
-
-**Shipped.**
-- `packages/email`: `sendEmail` posts to Resend's REST endpoint (no SDK);
-  with `RESEND_API_KEY`/`EMAIL_FROM` unset it logs and returns
-  `sent: false` so dev/tests/prod-before-DNS all work. `inviteEmail`
-  template (text + html, escaped; tests).
-- Migration `0013_invites.sql`: `invites` (token_hash sha256, email, name,
-  org_name, org_id for PR C/D, credits_granted, invited_by, note,
-  expires_at 14 d, used_at/used_by, revoked_at, last_sent_at) and
-  `users.phone / terms_accepted_at / terms_version / terms_ip /
-  last_sign_in_at`.
-- API `routes/invites.ts`: public `GET /signup/:token` (state only for
-  non-pending; email/name/inviter/credits for pending; never the token);
-  admin `GET /admin/invites` (+ `emailConfigured`), `POST /admin/invites`
-  (409 if the email has an account; emails; returns the link once),
-  `POST /admin/invites/:id/resend` (new token, new expiry — also revives
-  expired), `DELETE /admin/invites/:id` (revoke). `lib/tokens.ts`
-  (`newToken`, `hashToken`, `inviteState`; tests).
-- Web Admin → Users: "Invite someone" (email, name, company, pages
-  included, note), copyable last link, invites list (pending by default,
-  toggle for used/expired/revoked, Resend/Revoke), warning when email is
-  not configured.
-
-**Gotchas.** (1) The raw token exists only in the email and the create/
-resend response; the DB holds the hash — a lost link means Resend, which
-rotates it. (2) `org_id`/`org_name` on invites are stored but unused until
-PR C/B. (3) `POST /signup` (creating the user) is PR B, deliberately not
-here — a pending invite cannot yet be redeemed.
-
-**Manual:** MA-013 (Resend account, `mail.` subdomain DNS, `RESEND_API_KEY`
-+ `EMAIL_FROM` on `scribe-api`).
-
----
-
-## 2026-09-15 (j) — accounts / onboarding / credits / Stripe plan written (no code)
-
-**Owner ask** (`next-session-prompt.md`): plan the invite → sign-up →
-profile flow, the onboarding tutorial, the credits data model and pricing,
-and confirm the Stripe row — then stop for decisions. **Shipped:**
-`accounts-plan.md`. Key recommendations: sign-up submit issues the session
-directly (the emailed token proves the mailbox), later sign-ins are Google
-OAuth or an email magic link, no password; Google consent screen goes
-external + published (non-sensitive scopes → no review, but terms/privacy
-URLs are required); Resend on a `mail.` subdomain with SPF/DKIM/DMARC as
-manual actions; tenancy = `orgs` + `org_id` on takeoffs/quotes/customers/
-eval_fixtures, `is_platform_admin`, `requirePlatformAdmin` /
-`requireOrgOwner`, 54 routes audited; PR order **A → C → B → D** (tenancy
-before any sign-up). Credits: `model_rates` / `usage_events` (microcents)
-/ `credit_ledger` (hold → settle | release) / `platform_settings`; hook is
-`TakeoffBudget.record` plus the two hand-summed sites in `detect.ts`;
-pricing proposal $1/page, 5-page minimum, 20-page grant, re-runs included,
-`credits_enforced=false` until Stripe. **Open:** the six decisions in
-`accounts-plan.md` §5. Nothing built; no prod state touched.
-
----
-
-## 2026-09-15 (i) — session wrap-up: SCR-013/014 shipped, plan awaiting decision, next = sign-up + credits
-
-**Shipped:** #274 (parse hardening, salvage evidence, review error banner),
-#276 (customer-facing copy, admin technical toggle, parser accepts the
-markdown preamble), #275 (measurement plan, docs). Prod verification of
-#274/#276 on MOLLY_CHARLEY is still the owner's to click (steps in (f)/(h)).
-**Owner decided:** accept the current measuring behaviour as is; the
-measurement plan's Option A/B/C choice stays open, nothing built.
-**New roadmap rows:** sign-up flow + tutorial (next session, prompt in
-`next-session-prompt.md`), credits ledger + pricing, Stripe payments, door/
-drawer-front counts (SCR-015 open). **Cost evidence for pricing:** prod
-`tokens_used` = 13k–23k per 4-page kitchen set, 66k for a 4-page office set
-→ 1–5¢ per page at Sonnet rates; $1/page is margin-safe, needs a per-job
-minimum. **Manual actions:** MA-006/007/008/009/011 still open (not asked).
-
----
-
----
-
 ## Condensed history
+
+### 2026-09-15 (k) — PR A: email provider + invites API (archived verbatim)
+`packages/email` (Resend REST, logs without the key), migration 0013
+`invites` (hashed token, 14-day expiry, credits_granted), admin invite API +
+Admin → Users panel. A lost link means Resend, which rotates the token.
+
+### 2026-09-15 (j) — accounts/credits/Stripe plan written (archived verbatim)
+`accounts-plan.md`: sign-in = Google + magic link, PR order A → C → B → D,
+credits schema + $1/page proposal. No code.
+
+### 2026-09-15 (i) — wrap-up: SCR-013/014 shipped (archived verbatim)
+#274/#276/#275 merged; prod `tokens_used` put reading at 1–5¢/page.
 
 ### 2026-09-15 (h) — customer-facing copy for pipeline errors and notes (archived verbatim)
 `apps/web/src/messages.ts` (`friendlyError`, `friendlyNote(s)`, `friendlyAreaError`)
