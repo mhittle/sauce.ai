@@ -6,6 +6,83 @@ not read during onboarding.
 
 ---
 
+## 2026-09-15 (k) — PR A: email provider + invites API + Admin invite panel
+
+**Owner:** sign-up form = email, name, phone only; "ok go" on the plan's
+recommendations (A → C → B → D, Google OAuth + magic link, no password).
+
+**Shipped.**
+- `packages/email`: `sendEmail` posts to Resend's REST endpoint (no SDK);
+  with `RESEND_API_KEY`/`EMAIL_FROM` unset it logs and returns
+  `sent: false` so dev/tests/prod-before-DNS all work. `inviteEmail`
+  template (text + html, escaped; tests).
+- Migration `0013_invites.sql`: `invites` (token_hash sha256, email, name,
+  org_name, org_id for PR C/D, credits_granted, invited_by, note,
+  expires_at 14 d, used_at/used_by, revoked_at, last_sent_at) and
+  `users.phone / terms_accepted_at / terms_version / terms_ip /
+  last_sign_in_at`.
+- API `routes/invites.ts`: public `GET /signup/:token` (state only for
+  non-pending; email/name/inviter/credits for pending; never the token);
+  admin `GET /admin/invites` (+ `emailConfigured`), `POST /admin/invites`
+  (409 if the email has an account; emails; returns the link once),
+  `POST /admin/invites/:id/resend` (new token, new expiry — also revives
+  expired), `DELETE /admin/invites/:id` (revoke). `lib/tokens.ts`
+  (`newToken`, `hashToken`, `inviteState`; tests).
+- Web Admin → Users: "Invite someone" (email, name, company, pages
+  included, note), copyable last link, invites list (pending by default,
+  toggle for used/expired/revoked, Resend/Revoke), warning when email is
+  not configured.
+
+**Gotchas.** (1) The raw token exists only in the email and the create/
+resend response; the DB holds the hash — a lost link means Resend, which
+rotates it. (2) `org_id`/`org_name` on invites are stored but unused until
+PR C/B. (3) `POST /signup` (creating the user) is PR B, deliberately not
+here — a pending invite cannot yet be redeemed.
+
+**Manual:** MA-013 (Resend account, `mail.` subdomain DNS, `RESEND_API_KEY`
++ `EMAIL_FROM` on `scribe-api`).
+
+---
+
+## 2026-09-15 (j) — accounts / onboarding / credits / Stripe plan written (no code)
+
+**Owner ask** (`next-session-prompt.md`): plan the invite → sign-up →
+profile flow, the onboarding tutorial, the credits data model and pricing,
+and confirm the Stripe row — then stop for decisions. **Shipped:**
+`accounts-plan.md`. Key recommendations: sign-up submit issues the session
+directly (the emailed token proves the mailbox), later sign-ins are Google
+OAuth or an email magic link, no password; Google consent screen goes
+external + published (non-sensitive scopes → no review, but terms/privacy
+URLs are required); Resend on a `mail.` subdomain with SPF/DKIM/DMARC as
+manual actions; tenancy = `orgs` + `org_id` on takeoffs/quotes/customers/
+eval_fixtures, `is_platform_admin`, `requirePlatformAdmin` /
+`requireOrgOwner`, 54 routes audited; PR order **A → C → B → D** (tenancy
+before any sign-up). Credits: `model_rates` / `usage_events` (microcents)
+/ `credit_ledger` (hold → settle | release) / `platform_settings`; hook is
+`TakeoffBudget.record` plus the two hand-summed sites in `detect.ts`;
+pricing proposal $1/page, 5-page minimum, 20-page grant, re-runs included,
+`credits_enforced=false` until Stripe. **Open:** the six decisions in
+`accounts-plan.md` §5. Nothing built; no prod state touched.
+
+---
+
+## 2026-09-15 (i) — session wrap-up: SCR-013/014 shipped, plan awaiting decision, next = sign-up + credits
+
+**Shipped:** #274 (parse hardening, salvage evidence, review error banner),
+#276 (customer-facing copy, admin technical toggle, parser accepts the
+markdown preamble), #275 (measurement plan, docs). Prod verification of
+#274/#276 on MOLLY_CHARLEY is still the owner's to click (steps in (f)/(h)).
+**Owner decided:** accept the current measuring behaviour as is; the
+measurement plan's Option A/B/C choice stays open, nothing built.
+**New roadmap rows:** sign-up flow + tutorial (next session, prompt in
+`next-session-prompt.md`), credits ledger + pricing, Stripe payments, door/
+drawer-front counts (SCR-015 open). **Cost evidence for pricing:** prod
+`tokens_used` = 13k–23k per 4-page kitchen set, 66k for a 4-page office set
+→ 1–5¢ per page at Sonnet rates; $1/page is margin-safe, needs a per-job
+minimum. **Manual actions:** MA-006/007/008/009/011 still open (not asked).
+
+---
+
 ## 2026-09-14 (b) — one flow: the wizard is the pipeline
 
 **Owner:** "make the beta flow the default, I don't want 2 modes." Until now

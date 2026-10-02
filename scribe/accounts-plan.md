@@ -304,7 +304,12 @@ LOE 4 (seed clone 2, coachmarks + copy 2). Ships as its own PR after B.
 
 ## 3. Credits — data model and pricing (plan only)
 
-### 3.1 Schema (migration `0015_usage_credits.sql`)
+### 3.1 Schema
+
+**Built 2026-10-02 (#309, migration `0017_usage_events.sql`):** `model_rates`
+and `usage_events` as below, plus a `page_kind` column (plan / elevation /
+page class) so cost splits by drawing kind. The credit tables are the next
+migration.
 
 ```sql
 CREATE TABLE model_rates (               -- versioned; rows are never updated

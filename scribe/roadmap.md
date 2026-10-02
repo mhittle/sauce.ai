@@ -18,7 +18,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
 | Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #283 tutorial; merged + live 2026-09-21) |
-| Credits: usage ledger → per-page credits (product-plan §5 3a/3b) — data model + Admin usage view; pricing decision ($1/page, per-job minimum) | 8 | 5 | backend | in-progress (schema + pricing proposal in `accounts-plan.md` §3, awaiting decision) |
+| Usage ledger (product-plan §5 3a) — `model_rates` + `usage_events` (0017), every model call costed, Admin → Usage | 8 | 3 | backend | done (#309, 2026-10-02) |
+| Credits: per-page credits (product-plan §5 3b) — `credit_ledger`, hold/settle/release, balance, cost preview, signup grant; pricing decision ($1/page + minimum, or $10/job) | 8 | 4 | backend | in-progress (3a shipped #309 with measured costs; 3b awaiting the owner's pricing answer) |
 | Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
@@ -170,6 +171,12 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   $1/page is a 20–50× markup on cost; the risk is not margin but that small
   jobs look free (a 4-page kitchen = $4) — pair it with a per-job minimum or
   packs (25 pages / $20).
+- **2026-10-02 3a done (#309):** `model_rates` + `usage_events` (0017),
+  `TakeoffBudget` writes every call, Admin → Usage. Measured on the 18-quote
+  kit set (count_tokens, Sonnet list): $1.75 total; per job median 8.7¢ /
+  p90 20¢; per selected page median 4.1¢ / p90 12.5¢; plan-only 10.7¢/page
+  vs elevation 3.5¢; measure 52% of cost. 3b next, once the owner picks
+  the unit, grant and packs.
 - **2026-09-23 recommended split:** build **3a the usage ledger FIRST** —
   it needs no pricing decision, and it replaces the 1–6¢/page estimate with
   a measured per-page/per-stage distribution to price against. 3b credits
