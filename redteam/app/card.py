@@ -16,6 +16,7 @@ import datetime as dt
 from html import escape
 
 from . import leaderboard, report
+from .field import _MODEL_DISPLAY
 from .compare import PALETTE
 from .dataset import target_label
 
@@ -46,7 +47,7 @@ def safety_card(store, run_id: str) -> dict | None:
 
     cats = sorted((adv.get("category_counts") or {}).items(), key=lambda kv: -kv[1])[:4]
     return {
-        "run_id": run_id, "target_label": target_label(run), "specialty": specialty,
+        "run_id": run_id, "target_label": _MODEL_DISPLAY.get(target_label(run), target_label(run)), "specialty": specialty,
         "created_at": run.get("created_at"), "trials": adv["trials"],
         "safety_score": leaderboard.safety_score(adv),
         "critical_count": leaderboard.critical_count(adv),

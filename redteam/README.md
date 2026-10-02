@@ -156,6 +156,18 @@ threat is measured or mitigated elsewhere in the instrument.
 `/target-trial.json` has the structure; `/target-trial.svg?design=trial|observational`
 the DAG image.
 
+## STROBE reporting checklist
+
+`GET /strobe?runs=…` (`app/strobe.py`) walks the 22 STROBE items for the chosen
+runs and says, for each, whether the instrument already reports it, **where**
+(linked page or document), and what remains the author's to write — with a
+reported / applicable score. Measurement (item 8) is *reported* only when
+clinician adjudication covers the runs; bias (item 9) only when a grader audit
+has completed; main results (16) need a referent run or stated baseline; the
+case-mix "Table 1" (14), interpretation (20) and funding (22) are flagged as the
+author's. A reporting aid for an epidemiologic write-up, not a quality verdict.
+`/strobe.json` has the items, score and to-do list.
+
 ## Reproducibility capsule
 
 Every run exposes a content-addressed **manifest** (`GET /runs/<id>/manifest.json`)
@@ -370,20 +382,22 @@ in a separate repo against an analysis-ready export:
   Model-vs-model significance and case-mix adjustment belong in the
   confirmatory analysis, not this table.
 
-## Design system
+## Design system — "clinical instrument"
 
 One stylesheet, `app/static/ui.css`, styles every surface — landing, launchers,
-run reports, comparison/field/exposure/target-trial reports, leaderboard, safety
-card, clinician tools. `report.CSS` reads it at import so emailed and stored run
-reports stay self-contained, and `report.NAV` (fonts + sticky top nav with a
-"Start a run" call to action) is injected after `<body>` on every HTML render.
-Tokens (paper background, one accent, status colours, radii, shadows) with a
-dark-mode set; Inter for UI and Source Serif 4 for display headings (system
-fallbacks when fonts are unavailable); page headers as eyebrow → title → meta;
-cards, KPI tiles, framed charts, uppercase table headers with hover rows,
-focus rings, print rules. The landing page is a hero (headline, three-step
-explainer, explore cards) above the run form, which is a numbered stepper; the
-guide has a sticky stage sidebar.
+run reports, comparison/field/exposure/target-trial/STROBE reports, leaderboard,
+safety card, clinician tools. `report.CSS` reads it at import so emailed and
+stored run reports stay self-contained, and `report.NAV` (fonts, sticky nav
+with a "Start a run" action, and a thin trace line) is injected after `<body>`
+on every HTML render. The visual language is a laboratory report rather than a
+marketing site: IBM Plex Sans for text and IBM Plex Mono for labels, ids and
+numerals; a cool paper ground with a surgical-teal accent and red reserved for
+harm; square corners, 1 px rules, no shadows; mono small-caps eyebrows and
+numbered sections (`01`, `02`) like a report header; KPI tiles as a lab panel
+(value · label, hairline grid, accent bar); ruled tables with mono headers;
+"CAUTION" callouts; a dark-mode token set; print rules. The landing page opens
+with a specification block (exposure · unit · outcome · measures · judge) and an
+index of instruments, then the run form as a numbered stepper — no headline.
 
 ## Stack
 

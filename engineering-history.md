@@ -136,6 +136,40 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — restyle to a "clinical instrument" language (user: "typical generic
+  Claude aesthetic… more unique, more medically focused, no marketing
+  headline").** Replaced the Inter + serif + indigo + rounded-card system with a
+  laboratory-report language: IBM Plex Sans/Mono (mono for labels, ids,
+  numerals), cool paper ground, surgical-teal accent, red reserved for harm,
+  square corners, 1 px rules, no shadows, mono small-caps eyebrows, CSS-counter
+  numbered sections (`01`, `02`), KPI tiles as a hairline lab panel, ruled tables
+  with mono headers, "CAUTION" callouts, a plus-mark brand and a thin trace line
+  under the nav (`report.TRACE`). Same selectors as before, so every page
+  restyled from `ui.css` alone. Landing page: hero removed; opens with a
+  specification block (exposure · unit · outcome · measures · judge · preview
+  limit) and a ruled index of instruments, then the form. Guide title made
+  neutral. One test adjusted (the trace SVG bumped an `<svg` count; now counts
+  DAGs by aria-label). Suite 253 pass; landing/field/guide/card screenshots
+  reviewed. *Code:* `redteam/app/static/{ui.css,index.html,power.html,
+  adjudicate.html,che_review.html}`, `app/report.py`, `app/guide.py`,
+  `tests/test_target_trial.py`, `README.md`. *Server state:* none.
+
+- **Redteam — STROBE reporting checklist (`GET /strobe`) + card display names.**
+  `app/strobe.py` (pure stdlib): the 22 STROBE items checked automatically
+  against the instrument's artifacts for the chosen runs — status (reported /
+  partial / not reported / n/a), where it is reported (linked), and what remains
+  the author's; reported ÷ applicable score; to-do list. Detection: adjudication
+  sets covering the runs (item 8), completed grader audits via new
+  `store.recent_grader_audits` (item 9), PREREGISTRATION.md presence (3, 10),
+  ≥2 runs for contrasts (16, 17), completed runs (1, 15, 18); 14/20/22 are
+  honestly partial or n/a. Endpoints `/strobe`, `/strobe.json`; guide entry +
+  launcher (runs picker). Safety card and STROBE labels now use the field panel's
+  display names (`claude-opus-5` → "Claude (Opus 5)"). Tests `+4` (22 items and
+  applicable-only scoring; measurement/bias items track artifacts; single-run
+  main-results partial; render + endpoints incl. 404). Suite 253 pass. Verified
+  headless. *Code:* `redteam/app/strobe.py`, `app/store.py`, `app/main.py`,
+  `app/guide.py`, `app/card.py`, `README.md`. *Server state:* none.
+
 - **Redteam — design system + landing page (pre-pilot / LinkedIn polish).** User:
   "it's really ugly and looks a bit sloppy. Let's improve the aesthetic and UX."
   Baseline: system font, no brand mark or nav, emoji link rows, wall-of-form

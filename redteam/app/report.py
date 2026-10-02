@@ -17,17 +17,22 @@ _STATIC = Path(__file__).parent / "static"
 CSS = (_STATIC / "ui.css").read_text(encoding="utf-8")
 
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700'
-         '&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap">')
+         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600'
+         '&family=IBM+Plex+Mono:wght@400;500&display=swap">')
 
 NAV_LINKS = [("/", "Run"), ("/guide#wf-field", "Field scan"), ("/leaderboard", "Leaderboard"),
-             ("/guide#wf-epi", "Exposure analysis"), ("/guide", "Methods & workflows")]
+             ("/guide#wf-epi", "Exposure"), ("/guide", "Methods")]
 
-# Site chrome: injected right after <body> on every HTML page (fonts + sticky nav).
+# A thin trace under the nav — the instrument's signature line, drawn once.
+TRACE = ('<div class="trace" aria-hidden="true"><svg viewBox="0 0 1200 14" preserveAspectRatio="none">'
+         '<path d="M0 9 H300 l6-6 6 6 H420 l4-8 4 8 H560 l5-5 5 5 H700 l3-7 3 7 H860 l6-6 6 6 H1000 l4-8 4 8 H1200" '
+         'fill="none" stroke="#0b7f73" stroke-opacity=".55" stroke-width="1"/></svg></div>')
+
+# Site chrome: injected right after <body> on every HTML page (fonts + sticky nav + trace).
 NAV = FONTS + ('<header class="topnav"><div class="in"><a class="brand" href="/"><span class="mark"></span>'
                '<span>sauce<span class="sep">.ai/</span>redteam</span></a><nav>'
                + "".join(f'<a href="{h}">{t}</a>' for h, t in NAV_LINKS) +
-               '</nav><div class="cta"><a href="/#run">Start a run</a></div></div></header>'
+               '</nav><div class="cta"><a href="/#run">Start a run</a></div></div></header>' + TRACE +
                '<script>(function(){var p=location.pathname,h=location.hash;document.querySelectorAll(".topnav nav a")'
                '.forEach(function(a){var u=new URL(a.href);var on=u.pathname===p&&(!u.hash||u.hash===h);'
                'if(on)a.classList.add("active");});})();</script>')
