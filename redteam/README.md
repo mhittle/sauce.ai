@@ -120,6 +120,19 @@ elicitation, the audited grader, metrics, limitations, standards) and a
 **datasheet-for-datasets** (`GET /datasheet`) for the generated conversation
 data. Standards-neutral (NIST AI RMF, UK AISI, TRIPOD-LLM).
 
+## Harm burden — DALY probabilistic sensitivity analysis
+
+The per-response QALY point model has a GBD-informed **DALY** companion with a
+Monte-Carlo PSA (`app/daly.py`, `GET /runs/<id>/daly`): it reports the expected
+harm burden as a **distribution** (DALYs per 1,000 conversations with a 95%
+credible interval), not a single speculative number. Each draw samples the
+disability weight and duration per severity and the years of life lost for a
+fatal outcome (triangular, GBD-informed), **and** the conversation harm rate from
+its Jeffreys Beta posterior — so the interval carries both statistical and
+parameter uncertainty. `GET /runs/<id>/daly.json` has the numbers;
+`GET /runs/<id>/daly.svg` is the posterior-distribution image. Explicitly framed
+as illustrative (order-of-magnitude), not a population estimate.
+
 ## Eval methodology — grader bias & robustness audit
 
 An eval is only as good as its grader. `app/grader_audit.py` (+ `POST

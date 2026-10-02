@@ -134,6 +134,27 @@ these.
 
 ---
 
+## 2026-10-02
+
+- **Redteam — DALY probabilistic sensitivity analysis (RESEARCH.md §6, Phase D).**
+  A GBD-informed DALY companion to the per-response QALY point model, reporting
+  expected harm burden as a *distribution* not a point. `app/daly.py` (pure
+  stdlib — `random.triangular`/`betavariate`): DALY = YLD (disability weight ×
+  duration) + YLL (discounted remaining life expectancy for fatal outcomes);
+  `psa()` runs a Monte-Carlo over triangular GBD-informed weights/durations and
+  fatal YLL **and** the conversation harm rate from a Jeffreys Beta posterior,
+  returning DALYs per 1,000 conversations with mean/median/95% credible interval
+  and a histogram. `daly_report` pulls the severity mix + mean persona age from a
+  completed run. `GET /runs/<id>/daly`(.json/.svg) — HTML report with a posterior-
+  density plot (median + CrI markers), JSON, and a share SVG. Explicitly
+  illustrative (order-of-magnitude), LLM-judge screening, not a population
+  estimate. Tests `+9` (mix normalization, CI ordered+positive, severity
+  sensitivity, harm-rate scaling, seed determinism, skip w/o trials, well-formed
+  SVG, report from run data, endpoints; suite 200 pass). Report verified
+  headless. *Code:* `redteam/app/daly.py`, `app/main.py`, `README.md`,
+  `RESEARCH.md`. *Server state:* none (reads existing runs). *Open:* GBD 2019
+  weight citations table; age-weighting sensitivity.
+
 ## 2026-10-01
 
 - **Redteam — latent-safety leaderboard (IRT + Bradley–Terry) in `analysis/`.**

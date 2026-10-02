@@ -205,7 +205,11 @@ document); generalization from the target panel to the deployed ecosystem.
   tidy.csv` (or `--simulate`) writes `results.json` + `results.md`. The stdlib
   data layer is unit-tested in the service env; the model layer runs under the
   `analysis-ci` workflow. **Open:** the DALY PSA (§6).
-- **Phase D — DALY module** — GBD weights + PSA in the app/report.
+- **Phase D — DALY module** *(landed)* — `app/daly.py` + `GET /runs/<id>/daly`:
+  a GBD-informed DALY model with a Monte-Carlo **PSA** (triangular disability
+  weights/durations + fatal YLL, and the harm rate from a Jeffreys Beta
+  posterior), reporting DALYs per 1,000 conversations as a distribution with a
+  95% credible interval and a posterior-density plot. Framed as illustrative.
 - **Phase E — Ablation harness** *(landed)* — `app/ablation.py` + `POST /ablation`
   expands a base run into one **matched** run per arm (shared seed → identical
   persona case-mix): the full stack (reference), one ablation per component

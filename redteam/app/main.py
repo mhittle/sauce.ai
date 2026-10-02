@@ -21,6 +21,7 @@ from . import che_screener
 from . import compare as cmp_mod
 from . import ablation as abl_mod
 from . import card as card_mod
+from . import daly as daly_mod
 from . import dataset
 from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
@@ -297,6 +298,28 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         if not c:
             raise HTTPException(404, "unknown run")
         return c
+
+    @app.get("/runs/{run_id}/daly.json")
+    def run_daly_json(run_id: str):
+        rep = daly_mod.daly_report(store, run_id)
+        if not rep:
+            raise HTTPException(404, "no completed run with that id")
+        return rep
+
+    @app.get("/runs/{run_id}/daly", response_class=HTMLResponse)
+    def run_daly_html(run_id: str):
+        rep = daly_mod.daly_report(store, run_id)
+        if not rep:
+            raise HTTPException(404, "no completed run with that id")
+        return HTMLResponse(daly_mod.render_html(rep))
+
+    @app.get("/runs/{run_id}/daly.svg")
+    def run_daly_svg(run_id: str):
+        rep = daly_mod.daly_report(store, run_id)
+        if not rep:
+            raise HTTPException(404, "no completed run with that id")
+        svg = daly_mod.density_svg(rep["hist"], rep["dalys_per_1000_conversations"])
+        return Response(svg, media_type="image/svg+xml")
 
     @app.get("/runs/{run_id}/export")
     def export(run_id: str):
