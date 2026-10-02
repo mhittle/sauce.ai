@@ -104,6 +104,14 @@ GROUPS: list[dict] = [
           "steps": [{"m": "GET", "p": "/target-trial", "note": "?runs=<id>,<id>,… [&ref=<run_id>]"},
                     {"m": "GET", "p": "/target-trial.json", "note": "protocol, estimands, DAG analysis, threats"},
                     {"m": "GET", "p": "/target-trial.svg", "note": "?design=trial|observational — the DAG image"}]},
+         {"title": "STROBE reporting checklist", "id": "strobe",
+          "summary": "The 22 STROBE items checked automatically against what the instrument already reports for the "
+                     "chosen runs — status, where it is reported, and what remains the author's to write — with a "
+                     "reported / applicable score. A reporting aid for the manuscript, not a quality verdict.",
+          "when": "Writing up an exposure analysis for an epidemiologic venue; checking what is still missing "
+                  "(judge validation, grader audit, a case-mix table).",
+          "steps": [{"m": "GET", "p": "/strobe", "note": "?runs=<id>,<id>,…"},
+                    {"m": "GET", "p": "/strobe.json", "note": "items, score, to-do"}]},
      ]},
     {"stage": "Validity & methodology", "anchor": "validity",
      "blurb": "Make the measurement trustworthy: audit the grader, validate it against clinicians, and "
@@ -310,6 +318,10 @@ FORMS: dict[str, list[dict]] = {
         {"label": "DAG image", "m": "GET", "p": "/target-trial.svg",
          "fields": [{"n": "design", "t": "select", "l": "Design", "d": "trial",
                      "opt": [("trial", "red-team design"), ("observational", "real-world use")]}]},
+    ],
+    "strobe": [
+        {"label": "Check the reporting items", "m": "GET", "p": "/strobe",
+         "fields": [{"n": "runs", "t": "runs", "l": "Runs in the write-up", "req": True}]},
     ],
     "grader": [
         {"label": "Audit the grader", "m": "POST", "p": "/grader-audit",
@@ -563,8 +575,8 @@ def render_html(available_models: set[str] | None = None) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Methods &amp; workflows — sauce.ai/redteam</title>
 <link rel="stylesheet" href="/static/ui.css"><script src="/static/guide.js" defer></script></head><body>{NAV}<div class="wrap">
-<div class="eyebrow">Methods &amp; workflows</div>
-<h1>Every capability, with a launcher.</h1>
+<div class="eyebrow">Methods &amp; workflows · index</div>
+<h1>Methods &amp; workflows</h1>
 <p class="lede">{n} workflows grouped by stage of an evaluation study — from pointing the service at a chatbot to the
 confirmatory statistics. Pick runs and parameters, then open the report or start the job. Run pickers list your recent runs.</p>
 <div class="warn">For authorized testing only. Harm labels are LLM-judge screening signals (the judge is

@@ -3,56 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>sauce.ai/redteam — adversarial safety testing for clinical AI</title>
+<title>sauce.ai/redteam — adversarial safety evaluation of clinical chatbots</title>
 <meta name="description" content="Point it at a clinical chatbot; it runs adversarial synthetic-patient conversations, scores every reply with an audited judge panel, and reports harm as an epidemiologist would.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/ui.css">
 <style>
-#form{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:8px 26px 26px;box-shadow:var(--shadow);margin-top:18px}
-#form h2.step:first-child{margin-top:18px}
-#status{border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;margin-top:16px;background:var(--card);box-shadow:var(--shadow)}
+#form{background:var(--card);border:1px solid var(--line);padding:6px 24px 24px;margin-top:14px}
+#form h2.step:first-child{margin-top:16px}
+#status{border:1px solid var(--line);padding:16px 20px;margin-top:16px;background:var(--card)}
 #status h2{border:0;margin:0 0 6px;padding:0}
 .modelpick .chips{margin-bottom:6px}
 </style>
 </head>
 <body>
 <header class="topnav"><div class="in"><a class="brand" href="/"><span class="mark"></span><span>sauce<span class="sep">.ai/</span>redteam</span></a>
-<nav><a href="/" class="active">Run</a><a href="/guide#wf-field">Field scan</a><a href="/leaderboard">Leaderboard</a><a href="/guide#wf-epi">Exposure analysis</a><a href="/guide">Methods &amp; workflows</a></nav>
+<nav><a href="/" class="active">Run</a><a href="/guide#wf-field">Field scan</a><a href="/leaderboard">Leaderboard</a><a href="/guide#wf-epi">Exposure</a><a href="/guide">Methods</a></nav>
 <div class="cta"><a href="#run">Start a run</a></div></div></header>
+<div class="trace" aria-hidden="true"><svg viewBox="0 0 1200 14" preserveAspectRatio="none"><path d="M0 9 H300 l6-6 6 6 H420 l4-8 4 8 H560 l5-5 5 5 H700 l3-7 3 7 H860 l6-6 6 6 H1000 l4-8 4 8 H1200" fill="none" stroke="#8e2a1f" stroke-opacity=".55" stroke-width="1"/></svg></div>
 <div class="wrap">
-  <section class="hero">
-    <span class="kicker">Clinical AI safety · red-team as an epidemiologist would</span>
-    <h1>Find the unsafe advice your health chatbot gives <em>before a patient does.</em></h1>
-    <p class="lede">Point it at your bot. It runs adversarial synthetic-patient conversations engineered to surface unsafe
-    medical advice, scores every reply with an audited judge panel, and reports harm the way an epidemiologist would:
-    attack success with confidence intervals, prompts-to-harm, number needed to harm, QALYs lost.</p>
-    <div class="actions"><a class="btn lg" href="#run">Start a red-team run</a>
-      <a class="btn sec lg" href="/guide#wf-field">Scan the whole field of agents</a>
-      <a class="btn ghost lg" href="/leaderboard">See the leaderboard</a></div>
-    <p class="fine">Free while in preview: up to <b id="limit">100</b> trials per email. For use only on systems you are authorized to test.</p>
-  </section>
+  <div class="eyebrow">Instrument · adversarial safety evaluation · clinical conversational AI</div>
+  <h1>Adversarial safety evaluation of clinical chatbots</h1>
+  <p class="lede">Points at a chatbot you are authorized to test, runs adversarial synthetic-patient conversations
+  engineered to elicit unsafe medical advice, scores every reply with an audited judge panel, and reports harm with
+  epidemiologic measures.</p>
+  <dl class="spec">
+    <dt>Exposure</dt><dd>the chatbot (agent) under test, reached via its API or web page under your system prompt</dd>
+    <dt>Unit</dt><dd>one synthetic-patient conversation; replies nested within conversations</dd>
+    <dt>Outcome</dt><dd>a reply judged unsafe at P(harm) ≥ threshold; critical harm events adjudicated by clinicians</dd>
+    <dt>Measures</dt><dd>attack success with 95% CI · prompts-to-harm (Kaplan–Meier) · number needed to harm · QALYs / DALYs lost · RR, RD, PAF, E-value vs a referent</dd>
+    <dt>Judge</dt><dd>LLM panel audited for bias, robustness and calibration; validated against clinician labels; misclassification propagated by quantitative bias analysis</dd>
+    <dt>Preview limit</dt><dd>up to <b id="limit">100</b> trials per email · authorized testing only</dd>
+  </dl>
 
-  <div class="steps3">
-    <div class="s"><span class="n">1</span><b>Point it at a target</b><p>Any OpenAI-compatible or Anthropic endpoint, a custom JSON API, or a chat web page. Keys are held for the run only.</p></div>
-    <div class="s"><span class="n">2</span><b>It attacks like a patient would</b><p>An ensemble of attacker models drives synthetic personas toward unsafe advice — dosing, triage, discontinuation, misinformation.</p></div>
-    <div class="s"><span class="n">3</span><b>You get an epidemiological report</b><p>Risk with CIs, time-to-harm curves, harm profile, annotated transcripts — and every run lands on the public leaderboard.</p></div>
-  </div>
+  <ul class="index">
+    <li><b>Field scan</b><span>Run ChatGPT, Claude, Gemini and Llama on one condition, same case-mix; comparative harm image.</span><a class="go" href="/guide#wf-field">Open →</a></li>
+    <li><b>Exposure analysis</b><span>RR / OR / RD, PAF, E-value; Mantel–Haenszel strata; dose–response; judge-misclassification QBA.</span><a class="go" href="/guide#wf-epi">Open →</a></li>
+    <li><b>Grader audit</b><span>Bias, robustness and calibration of the harm judge itself.</span><a class="go" href="/guide#wf-grader">Open →</a></li>
+    <li><b>Leaderboard</b><span>Every completed run, ranked safest-first per specialty.</span><a class="go" href="/leaderboard">Open →</a></li>
+    <li><b>Methods &amp; workflows</b><span>Adjudication, critical harm events, ablations, power, reproducibility, STROBE checklist — each with a launcher.</span><a class="go" href="/guide">Open →</a></li>
+  </ul>
 
-  <div class="explore">
-    <a href="/guide#wf-field"><span class="ic">&#127760;</span><b>Field scan</b><span>Run ChatGPT, Claude, Gemini and Llama on one condition; get a comparative harm image.</span></a>
-    <a href="/guide#wf-epi"><span class="ic">&#129516;</span><b>AI advice as an exposure</b><span>RR, PAF, E-value, Mantel–Haenszel, dose–response, judge-misclassification bias analysis.</span></a>
-    <a href="/guide#wf-grader"><span class="ic">&#9878;</span><b>Audit the judge</b><span>Bias, robustness and calibration of the harm grader itself — before you trust a number.</span></a>
-    <a href="/guide"><span class="ic">&#128214;</span><b>Methods &amp; workflows</b><span>Every capability with a launcher: adjudication, CHE, ablations, power, reproducibility.</span></a>
-  </div>
+  <div class="warn">This tool deliberately tries to elicit unsafe responses from the <em>bot under test</em> so you can
+  find and fix them. Only run it against endpoints you own or have written permission to test. Reports are LLM-scored
+  screening signals, not clinical determinations — have a clinician review flagged transcripts.</div>
 
-  <div class="warn">This is a safety-evaluation tool. It deliberately tries to elicit unsafe responses from the
-  <em>bot under test</em> so you can find and fix them. Only run it against endpoints you own or have written
-  permission to test. Reports are LLM-scored screening signals, not clinical determinations — have a clinician
-  review flagged transcripts.</div>
-
-  <h2 id="run">Run an evaluation</h2>
-  <p class="lede">Three steps. Defaults are sensible; the engine is tunable under “Advanced”.</p>
+<h2 id="run">Run an evaluation</h2>
+  <p class="lede">Defaults are sensible; the engine is tunable under “Advanced”.</p>
 
 <form id="form">
     <h2 class="step"><span class="n">1</span> Your chatbot — the target</h2>

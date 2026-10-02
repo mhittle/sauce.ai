@@ -496,6 +496,13 @@ class Store:
         cols = ", ".join(f"{k}=?" for k in fields)
         self._x(f"UPDATE grader_audits SET {cols} WHERE id=?", (*fields.values(), audit_id))
 
+    def recent_grader_audits(self, limit: int = 50) -> list[dict]:
+        """Newest-first grader audits (id, status, created_at, spec) — no report HTML."""
+        rows = self._x("SELECT id, created_at, status, spec_json, error FROM grader_audits "
+                       "ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        return [{"id": r["id"], "created_at": r["created_at"], "status": r["status"],
+                 "spec": json.loads(r["spec_json"] or "{}"), "error": r["error"]} for r in rows]
+
     def get_grader_audit(self, audit_id: str) -> dict | None:
         row = self._x("SELECT * FROM grader_audits WHERE id=?", (audit_id,)).fetchone()
         if not row:

@@ -64,7 +64,7 @@ def test_render_html_and_empty_case():
     ids = [_seed(store, "gpt-x", 0.6, seed=1), _seed(store, "cl-z", 0.1, seed=1)]
     html = tt.render_html(tt.emulate(store, ids))
     assert "Target trial emulation" in html and "Per-protocol" in html and "Minimal adjustment sets" in html
-    assert html.count("<svg") == 2
+    assert html.count('aria-label="Causal diagram') == 2  # both DAGs (the nav trace is also an svg)
     assert "No completed" in tt.render_html({"agents": [], "n_agents": 0})
 
 

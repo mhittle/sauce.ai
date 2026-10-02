@@ -24,6 +24,7 @@ from . import card as card_mod
 from . import daly as daly_mod
 from . import epi as epi_mod
 from . import target_trial as tt_mod
+from . import strobe as strobe_mod
 from . import causal as causal_mod
 from . import dataset
 from . import field as field_mod
@@ -517,6 +518,15 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/target-trial.json")
     def target_trial_json(runs: str = Query(...), ref: str = ""):
         return _tt(runs, ref)
+
+    # -- STROBE-style reporting checklist ------------------------------------
+    @app.get("/strobe", response_class=HTMLResponse)
+    def strobe_html(runs: str = Query(...)):
+        return HTMLResponse(strobe_mod.render_html(strobe_mod.checklist(store, _run_ids(runs))))
+
+    @app.get("/strobe.json")
+    def strobe_json(runs: str = Query(...)):
+        return strobe_mod.checklist(store, _run_ids(runs))
 
     @app.get("/target-trial.svg")
     def target_trial_svg(design: str = "trial"):

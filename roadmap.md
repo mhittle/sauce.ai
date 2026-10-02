@@ -104,6 +104,7 @@ shipped.
 | 8 | 4 | new-feature, ui, backend | Redteam — field scan: run the whole field of health-advice agents on one condition + comparative harm image | in-progress |
 | 8 | 4 | algo, backend, docs | Redteam — AI advice as an exposure: RR/OR/RD/PAF/E-value, Mantel–Haenszel, dose–response, judge-misclassification QBA (Se/Sp measured from adjudication, differential) | in-progress |
 | 8 | 4 | algo, docs, ui | Redteam — target trial emulation + causal DAGs (backdoor minimal adjustment sets, ITT vs per-protocol) | in-progress |
+| 7 | 2 | docs, ui | Redteam — STROBE reporting checklist auto-populated from the instrument's artifacts | in-progress |
 | 8 | 6 | new-feature, backend, algo, ui | Phenotype — validated EHR phenotyping algorithms, spelled out and ranked (sauce.ai/phenotype) | done |
 
 ---
