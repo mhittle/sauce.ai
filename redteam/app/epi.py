@@ -738,8 +738,8 @@ def render_html(res: dict) -> str:
                       f"({judge['n_pairs']} judge-vs-clinician pairs across {len(judge.get('sets', []))} set(s): {sets}); "
                       f"Se 95% CI {judge['se_ci'][0]:.2f}–{judge['se_ci'][1]:.2f}, Sp {judge['sp_ci'][0]:.2f}–{judge['sp_ci'][1]:.2f}. "
                       + (f"Per-agent accuracy available for {len(judge['per_run'])} run(s) (≥{judge['min_per_run']} items) — "
-                         f"those contrasts use a <b>differential</b> analysis." if judge.get("per_run")
-                         else "Non-differential (pooled accuracy applied to every agent)."))
+                         f"those contrasts use a <b>differential</b> analysis" if judge.get("per_run")
+                         else "Non-differential (pooled accuracy applied to every agent)"))
     elif judge.get("assumed"):
         judge_note = (f"<b>assumed</b> Se {judge['se']:.2f} / Sp {judge['sp']:.2f} (illustrative — {escape(judge.get('note', ''))}; "
                       f"build an adjudication set from the guide, or pass <code>se=</code>/<code>sp=</code>)")
