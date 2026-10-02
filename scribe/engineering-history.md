@@ -115,6 +115,10 @@ deploys if a future session doesn't know it exists. Keep this current.
   no rate row (exact or alias prefix) is skipped with a log line. Before
   changing `VISION_MODEL` / `OPENAI_VISION_MODEL`, add its rate in a
   migration. Rates are never updated — a price change is a new row.
+- **Credits are RECORD-ONLY (2026-10-02, #310).** `platform_settings.
+  credits_enforced = false`: every job holds/settles pages and balances can
+  go negative, but nothing is blocked. Turn it on (Admin → Credits) only
+  after Stripe lets customers buy pages, and after the open-hold sweep.
 - **`ROUTER_TOLERANT_MERGE=1` is SET on `scribe-workers`** (owner, 2026-08-12)
   — the demoted-role re-admit merge is LIVE prod behavior (kit-measured 0.379
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
@@ -167,6 +171,35 @@ applied at boot, real worker inserts costed exactly, an unknown model was
 logged and skipped, `/admin/usage` and the tab rendered.
 
 **Open.** Credits (3b) wait on the owner's pricing answer; Stripe after.
+## 2026-10-02 (b) — credits (step 3b): $1/page ledger, first job free, record-only (#310)
+
+**Owner pricing (2026-10-02):** $1 per page read, **no minimum**, **first
+job free** (any size; replaces the page grant), packs 25 / 100 / 500
+(Stripe). Invites that already promised "Pages included" keep them.
+
+**Shipped (#310, migration `0018_credits.sql`).** `credit_ledger`
+(unique close per hold; unique purchase ref for Stripe), `orgs.credit_balance`
+(cache, written only under the org row lock), `takeoffs.credit_hold_id /
+pages_charged`, `platform_settings` (min 1, first_job_free on,
+credits_enforced off). Backfill: used invites' `credits_granted` became
+`signup_grant` rows. `@scribe/db` `credits.ts` (`writeLedger`, `quoteJob`,
+`openHold`, `closeHold`); `@scribe/shared` `jobCharge` / `chargeBlocked`
+(same formula for hold and preview). Hold on Pages submit (PDF) or at
+upload (image/sheet, 1 page); settle when the job reaches review (both
+review writers in `process.ts`); release in `failTakeoff`. Free first job =
+a 0-page hold; it stays available while every earlier hold was released.
+Re-runs (Find, Build, Measure again) never charge. Web: top-bar balance,
+Pages cost preview, Account → Pages ledger, Admin → Credits (rules,
+balances, ledger, adjust). Invite "Pages included" now defaults to 0.
+
+**Gotchas.** (1) Enforcement off = balances can go negative; that is the
+record of what would have been charged. (2) A job abandoned before review
+keeps its hold open (no sweep yet) — fine while not enforced; add the
+24 h sweep before turning enforcement on. (3) Not exercised locally: the
+upload-time hold (no object storage) and the queue add (Redis down).
+
+**Next.** Stripe (Task 3): Checkout for 25/100/500 → webhook → `purchase`
+row; then turn `credits_enforced` on.
 
 ---
 
