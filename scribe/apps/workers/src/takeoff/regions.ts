@@ -23,7 +23,8 @@ async function locate(
   system: string,
   userText: string,
   pageImage: Uint8Array,
-  budget: TakeoffBudget
+  budget: TakeoffBudget,
+  page: number | null
 ): Promise<PageRegions> {
   const client = getAnthropic();
   const message = await withSocketRetry(() =>
@@ -42,7 +43,12 @@ async function locate(
       ],
     })
   );
-  budget.record(message.usage);
+  await budget.record(message.usage, {
+    stage: "locate",
+    model: SONNET_MODEL,
+    images: 1,
+    page,
+  });
   return parsePageRegionsLenient(extractJson(textOf(message)));
 }
 
@@ -50,13 +56,15 @@ export function locateRegions(
   pageImage: Uint8Array,
   imageWidthPx: number,
   imageHeightPx: number,
-  budget: TakeoffBudget
+  budget: TakeoffBudget,
+  page: number | null = null
 ): Promise<PageRegions> {
   return locate(
     LOCATE_REGIONS_SYSTEM,
     locateRegionsUserText(imageWidthPx, imageHeightPx),
     pageImage,
-    budget
+    budget,
+    page
   );
 }
 
@@ -66,12 +74,14 @@ export function locateRooms(
   pageImage: Uint8Array,
   imageWidthPx: number,
   imageHeightPx: number,
-  budget: TakeoffBudget
+  budget: TakeoffBudget,
+  page: number | null = null
 ): Promise<PageRegions> {
   return locate(
     LOCATE_ROOMS_SYSTEM,
     locateRoomsUserText(imageWidthPx, imageHeightPx),
     pageImage,
-    budget
+    budget,
+    page
   );
 }

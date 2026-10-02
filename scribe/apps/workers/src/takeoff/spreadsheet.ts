@@ -119,7 +119,7 @@ async function modelAssistMapping(
       ],
     })
   );
-  budget.record(message.usage);
+  await budget.record(message.usage, { stage: "spreadsheet", model: HAIKU_MODEL });
   const parsed = ModelMapping.parse(extractJson(textOf(message)));
   const mapping: Partial<Record<number, FieldName>> = {};
   const valid = new Set(Object.keys(HEADER_SYNONYMS));

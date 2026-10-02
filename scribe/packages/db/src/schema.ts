@@ -1,5 +1,6 @@
 import {
   bigint,
+  bigserial,
   boolean,
   date,
   integer,
@@ -8,6 +9,7 @@ import {
   pgTable,
   primaryKey,
   real,
+  serial,
   text,
   timestamp,
   uuid,
@@ -303,3 +305,33 @@ export const tokenSpend = pgTable(
   },
   (t) => [primaryKey({ columns: [t.day, t.bucket] })]
 );
+
+// migrations/0017 — usage ledger. model_rates rows are never updated; a price
+// change is a new row. Costs are integer microcents (cents × 1e6).
+export const modelRates = pgTable("model_rates", {
+  id: serial("id").primaryKey(),
+  model: text("model").notNull(),
+  inputCentsPerMtok: integer("input_cents_per_mtok").notNull(),
+  outputCentsPerMtok: integer("output_cents_per_mtok").notNull(),
+  cacheWriteCentsPerMtok: integer("cache_write_cents_per_mtok").notNull(),
+  cacheReadCentsPerMtok: integer("cache_read_cents_per_mtok").notNull(),
+  effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const usageEvents = pgTable("usage_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
+  takeoffId: uuid("takeoff_id").references(() => takeoffs.id),
+  stage: text("stage").notNull(),
+  model: text("model").notNull(),
+  modelRateId: integer("model_rate_id").notNull().references(() => modelRates.id),
+  inputTokens: integer("input_tokens").notNull(),
+  outputTokens: integer("output_tokens").notNull(),
+  cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+  cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+  imageCount: integer("image_count").notNull().default(0),
+  pageNumber: integer("page_number"),
+  pageKind: text("page_kind"),
+  costMicrocents: bigint("cost_microcents", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

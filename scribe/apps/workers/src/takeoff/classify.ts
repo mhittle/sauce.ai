@@ -48,7 +48,11 @@ export async function classifyPages(
         ],
       })
     );
-    budget.record(message.usage);
+    await budget.record(message.usage, {
+      stage: "classify",
+      model: SONNET_MODEL,
+      images: batch.length,
+    });
 
     const parsed = z
       .array(PageClassification)

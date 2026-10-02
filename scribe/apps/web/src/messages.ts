@@ -141,3 +141,6 @@ export function friendlyNotes(
   }
   return [...byText.entries()].map(([text, details]) => ({ text, details }));
 }
+
+// Admin → Usage could not be fetched (admin-only screen).
+export const USAGE_LOAD_FAILED = "Usage couldn't be loaded. Try again in a moment.";

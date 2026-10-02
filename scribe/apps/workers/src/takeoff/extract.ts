@@ -95,7 +95,12 @@ export async function extractPage(
   pageNumber: number,
   png: Uint8Array,
   budget: TakeoffBudget,
-  opts: { region?: boolean; estimate?: boolean; grounding?: string } = {}
+  opts: {
+    region?: boolean;
+    estimate?: boolean;
+    grounding?: string;
+    pageKind?: string;
+  } = {}
 ): Promise<{ extraction: PageExtraction; raw: unknown }> {
   const client = getAnthropic();
   const baseUserText = opts.estimate
@@ -134,7 +139,13 @@ export async function extractPage(
       })
       .finalMessage()
   );
-  budget.record(message.usage);
+  await budget.record(message.usage, {
+    stage: "extract",
+    model: READ_MODEL,
+    images: 1,
+    page: pageNumber,
+    pageKind: opts.pageKind ?? null,
+  });
 
   return processExtractionResponse(textOf(message), pageNumber, opts, {
     truncated: message.stop_reason === "max_tokens",

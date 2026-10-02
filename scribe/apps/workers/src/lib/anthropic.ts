@@ -1,6 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "drizzle-orm";
 import { getDb, tokenSpend } from "@scribe/db";
+import {
+  type CallMeta,
+  insertUsageEvent,
+  type ModelUsage,
+  type UsageContext,
+} from "./usage.js";
 
 let client: Anthropic | null = null;
 
@@ -55,18 +61,41 @@ export async function withSocketRetry<T>(
   throw lastErr;
 }
 
-// Per-takeoff hard cap (PRD §9 cost guardrails).
+// Per-takeoff hard cap (PRD §9 cost guardrails). With a context it also writes
+// every call to the usage ledger; a failed write is logged and never fails the
+// build (the cap still applies).
 export class TakeoffBudget {
   used = 0;
   constructor(
-    readonly capTokens = Number(process.env.TAKEOFF_TOKEN_BUDGET ?? 2_000_000)
+    readonly context: UsageContext | null = null,
+    readonly capTokens = Number(process.env.TAKEOFF_TOKEN_BUDGET ?? 2_000_000),
+    private readonly sink: typeof insertUsageEvent = insertUsageEvent
   ) {}
 
-  record(usage: { input_tokens: number; output_tokens: number }): void {
+  async record(usage: ModelUsage, meta: CallMeta): Promise<void> {
     this.used += usage.input_tokens + usage.output_tokens;
+    await this.ledger(usage, meta);
     if (this.used > this.capTokens) {
       throw new BudgetExceededError(
         `takeoff token budget exceeded: ${this.used} > ${this.capTokens}`
+      );
+    }
+  }
+
+  // Ledger only, outside the cap (the OpenAI cross-check never counted
+  // toward it).
+  async ledger(usage: ModelUsage, meta: CallMeta): Promise<void> {
+    if (!this.context) return;
+    try {
+      await this.sink(this.context, usage, meta);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          msg: "usage event insert failed",
+          takeoff: this.context.takeoffId,
+          stage: meta.stage,
+          err: err instanceof Error ? err.message : String(err),
+        })
       );
     }
   }
