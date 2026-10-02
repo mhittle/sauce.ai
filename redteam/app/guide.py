@@ -439,8 +439,8 @@ def _target_html() -> str:
 <option value="anthropic">Anthropic Messages API</option>
 <option value="http_json">Custom JSON HTTP endpoint</option>
 <option value="web_chat">Chat web page (browser-driven)</option></select>
-<div data-when="openai_chat http_json web_chat"><label>URL / API endpoint <span class="hint">https only; must resolve to a public address</span></label>
-<input name="target.url" data-t="text" placeholder="https://api.yourbot.example/v1/chat/completions"></div>
+<div data-when="openai_chat http_json web_chat"><label>URL / API endpoint <span class="hint">leave blank for OpenAI (api.openai.com); set it for Azure, Groq, vLLM, Gemini-compat or your own host &middot; https only, public address</span></label>
+<input name="target.url" data-t="text" placeholder="blank = https://api.openai.com/v1/chat/completions"></div>
 <div class="row">
 <div data-when="openai_chat anthropic"><label>Model <span class="hint">as the API names it</span></label>
 <input name="target.model" data-t="text" list="modelids-shared" placeholder="e.g. gpt-4o-mini / claude-sonnet-5 / your-model-id"><datalist id="modelids-shared" data-modelids></datalist></div>

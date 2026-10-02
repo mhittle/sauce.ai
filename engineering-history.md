@@ -156,6 +156,15 @@ these.
   the card, share image, leaderboard caution, guide and README say what the
   number is. Tests: 261 pass.
 
+- **Redteam — vendor URL implicit for OpenAI.** User: "shouldn't that just be
+  implicit when OpenAI is selected? Same for Claude." `TargetConfig` now
+  defaults a blank `openai_chat` URL to
+  `https://api.openai.com/v1/chat/completions` (`DEFAULT_URLS`,
+  `__post_init__`, so the resolved URL is what gets persisted, SSRF-checked
+  and shown in provenance); `anthropic` already treated a blank URL as the
+  SDK default. Form hint on both launchers says blank = OpenAI, set it for
+  Azure/Groq/vLLM/Gemini-compat. The "URL required" API test moved to
+  `http_json`, which has no default.
 - **Redteam — cards back, blue out; Table 1.** User: "step too far — I liked the
   cards at top, just not the cheesy marketing text. Plus it's still blue."
   Landing: three step cards and the instrument cards restored in the clinical
