@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CreditBalance } from "../components/Credits";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiGet, apiPublic, apiSend, ApiError, clearSession } from "../api";
@@ -99,6 +100,7 @@ export function Layout() {
             )}
           </nav>
           <div className="ml-auto flex items-center gap-1">
+            <CreditBalance />
             <ThemeToggle />
             <AccountMenu user={user} />
           </div>

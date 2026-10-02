@@ -10,6 +10,7 @@ import { quoteRoutes } from "./routes/quotes.js";
 import { projectRoutes } from "./routes/projects.js";
 import { adminRoutes } from "./routes/admin.js";
 import { usageRoutes } from "./routes/usage.js";
+import { adminCreditRoutes, creditRoutes } from "./routes/credits.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { inviteRoutes } from "./routes/invites.js";
 import { signupRoutes } from "./routes/signup.js";
@@ -46,6 +47,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(inviteRoutes);
   await app.register(signupRoutes);
   await app.register(accountRoutes);
+  await app.register(creditRoutes);
+  await app.register(adminCreditRoutes);
 
   return app;
 }

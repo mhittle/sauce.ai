@@ -13,6 +13,9 @@ import {
   takeoffDetections,
   takeoffLines,
   takeoffs,
+  lockOrg,
+  openHold,
+  quoteJob,
 } from "@scribe/db";
 import {
   BETA_DISPLAY_DPI,
@@ -30,6 +33,7 @@ import {
   SelectedPage,
   SourceKind,
   type TakeoffStatus,
+  chargeBlocked,
 } from "@scribe/shared";
 import { matchLine, materialStats, priceQuoteTiers } from "@scribe/pricing";
 import { exportCsv, type ExportableLine } from "@scribe/export";
@@ -256,6 +260,16 @@ async function refreshDerivedFaces(
   }
 }
 
+// 402 body when enforced credits do not cover a job; the web maps `code`.
+function notEnoughCredits(needed: number, balance: number) {
+  return {
+    error: `not enough credits: this job needs ${needed} pages, the balance is ${balance}`,
+    code: "credits_insufficient",
+    needed,
+    balance,
+  };
+}
+
 export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.requireUser);
   app.addHook("preHandler", async (req, reply) => {
@@ -312,18 +326,37 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       projectId = doc.projectId;
     }
 
-    const [takeoff] = await db
-      .insert(takeoffs)
-      .values({
-        orgId: req.orgId,
-        projectId,
-        uploadedBy: req.user!.id,
-        sourceFileS3Key: s3Key,
-        sourceFilename: filename,
-        sourceKind: kind,
-        status: "processing",
-      })
-      .returning();
+    // An image or spreadsheet has no Pages step: it is one page, charged at
+    // upload. A PDF is charged when its pages are submitted.
+    const created = await db.transaction(async (tx) => {
+      let charge = null;
+      if (kind !== "pdf") {
+        await lockOrg(tx, req.orgId);
+        const q = await quoteJob(tx, req.orgId, 1);
+        if (chargeBlocked(q.charge, q.balance, q.settings)) {
+          return { blocked: notEnoughCredits(q.charge.credits, q.balance) };
+        }
+        charge = q.charge;
+      }
+      const [row] = await tx
+        .insert(takeoffs)
+        .values({
+          orgId: req.orgId,
+          projectId,
+          uploadedBy: req.user!.id,
+          sourceFileS3Key: s3Key,
+          sourceFilename: filename,
+          sourceKind: kind,
+          status: "processing",
+        })
+        .returning();
+      if (charge) {
+        await openHold(tx, { orgId: req.orgId, takeoffId: row.id, charge, actorUserId: req.user!.id });
+      }
+      return { takeoff: row };
+    });
+    if ("blocked" in created) return reply.code(402).send(created.blocked);
+    const takeoff = created.takeoff;
 
     // Two-gate flow: PDFs stop at the page picker first; single images have
     // nothing to pick and go straight to extraction (then the box gate);
@@ -918,18 +951,35 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           .send({ error: `page out of range (document has ${pageCount} pages)` });
       }
 
-      const [updated] = await db
-        .update(takeoffs)
-        .set({
-          selectedPages: body.pages,
-          status: "processing",
-          error: null,
-          updatedAt: new Date(),
-        })
-        .where(takeoffInOrg(req.orgId, req.params.id))
-        .returning();
+      // The hold is the job's price (accounts-plan.md §3.2): opened here,
+      // settled when the job reaches review, released if it fails.
+      const result = await db.transaction(async (tx) => {
+        await lockOrg(tx, req.orgId);
+        const q = await quoteJob(tx, req.orgId, body.pages.length);
+        if (chargeBlocked(q.charge, q.balance, q.settings)) {
+          return { blocked: notEnoughCredits(q.charge.credits, q.balance) };
+        }
+        const [row] = await tx
+          .update(takeoffs)
+          .set({
+            selectedPages: body.pages,
+            status: "processing",
+            error: null,
+            updatedAt: new Date(),
+          })
+          .where(takeoffInOrg(req.orgId, req.params.id))
+          .returning();
+        await openHold(tx, {
+          orgId: req.orgId,
+          takeoffId: row.id,
+          charge: q.charge,
+          actorUserId: req.user!.id,
+        });
+        return { updated: row };
+      });
+      if ("blocked" in result) return reply.code(402).send(result.blocked);
       await getTakeoffQueue().add("extract", { takeoff_id: req.params.id });
-      return updated;
+      return result.updated;
     }
   );
 

@@ -19,8 +19,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
 | Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #283 tutorial; merged + live 2026-09-21) |
 | Usage ledger (product-plan §5 3a) — `model_rates` + `usage_events` (0017), every model call costed, Admin → Usage | 8 | 3 | backend | done (#309, 2026-10-02) |
-| Credits: per-page credits (product-plan §5 3b) — `credit_ledger`, hold/settle/release, balance, cost preview, signup grant; pricing decision ($1/page + minimum, or $10/job) | 8 | 4 | backend | in-progress (3a shipped #309 with measured costs; 3b awaiting the owner's pricing answer) |
-| Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (dependencies confirmed, `accounts-plan.md` §4) |
+| Credits: per-page credits (product-plan §5 3b) — $1/page, no minimum, first job free; ledger, hold/settle/release, balance, cost preview, Admin → Credits (record-only) | 8 | 4 | backend | done (#310, 2026-10-02; usage ledger 3a is #309) |
+| Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog (unblocked by #310; packs 25 / 100 / 500 pages) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
@@ -177,6 +177,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
   p90 20¢; per selected page median 4.1¢ / p90 12.5¢; plan-only 10.7¢/page
   vs elevation 3.5¢; measure 52% of cost. 3b next, once the owner picks
   the unit, grant and packs.
+- **2026-10-02 3b done (#310):** owner chose $1/page, no minimum, first
+  job free, packs 25/100/500. Ledger + holds + balance + preview shipped
+  record-only (`credits_enforced` off until Stripe + an open-hold sweep).
 - **2026-09-23 recommended split:** build **3a the usage ledger FIRST** —
   it needs no pricing decision, and it replaces the 1–6¢/page estimate with
   a measured per-page/per-stage distribution to price against. 3b credits

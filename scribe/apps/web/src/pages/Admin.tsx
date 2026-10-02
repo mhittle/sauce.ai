@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { adminRoute } from "../main";
 import { apiGet, apiSend, apiUpload, formatUsd } from "../api";
 import { Usage } from "./AdminUsage";
+import { Credits } from "./AdminCredits";
 import {
   Badge,
   type BadgeTone,
@@ -27,7 +28,7 @@ import {
 // sources stay routable (?tab=sources) but off the sidebar with the
 // prospector. Usage is the model-cost ledger; credits land here next.
 
-type Tab = "pricing" | "branding" | "freight" | "templates" | "users" | "usage" | "sources";
+type Tab = "pricing" | "branding" | "freight" | "templates" | "users" | "usage" | "credits" | "sources";
 
 const TABS: { key: Tab; label: string; hint: string; hidden?: boolean }[] = [
   { key: "pricing", label: "Pricing", hint: "Rates, adders, lead times" },
@@ -36,6 +37,7 @@ const TABS: { key: Tab; label: string; hint: string; hidden?: boolean }[] = [
   { key: "templates", label: "Export mappings", hint: "Mozaik / KCD columns" },
   { key: "users", label: "Users", hint: "Invites and who can sign in" },
   { key: "usage", label: "Usage", hint: "Model cost per job, stage, page" },
+  { key: "credits", label: "Credits", hint: "Balances, grants, rules" },
   { key: "sources", label: "Crawler sources", hint: "Prospector (hidden)", hidden: true },
 ];
 
@@ -74,6 +76,7 @@ export function AdminPage() {
           {tab === "templates" && <ExportTemplates />}
           {tab === "users" && (<><Invites /><SampleJob /><Users /></>)}
           {tab === "usage" && <Usage />}
+          {tab === "credits" && <Credits />}
           {tab === "sources" && <Sources />}
         </div>
       </div>
@@ -779,7 +782,7 @@ function Invites() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [orgName, setOrgName] = useState("");
-  const [credits, setCredits] = useState(20);
+  const [credits, setCredits] = useState(0);
   const [note, setNote] = useState("");
   const [lastLink, setLastLink] = useState<{ email: string; link: string; sent: boolean } | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -846,7 +849,7 @@ function Invites() {
           <Field label="Company (optional)" className="min-w-40">
             <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="Pat's Cabinets" />
           </Field>
-          <Field label="Pages included" hint="Credits granted at sign-up">
+          <Field label="Pages included" hint="On top of the free first job">
             <NumberInput value={credits} onChange={(e) => setCredits(Number(e.target.value))} min={0} max={10000} className="w-24" />
           </Field>
           <Field label="Note (admins only)" className="min-w-48 flex-1">

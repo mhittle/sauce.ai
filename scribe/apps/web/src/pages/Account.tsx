@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { LedgerTable, useCredits } from "../components/Credits";
+import { creditsShort } from "../messages";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiSend, apiUpload } from "../api";
 import {
@@ -53,6 +55,7 @@ export function AccountPage() {
       <PageTitle>Account</PageTitle>
       <Profile me={a.me} onSaved={refresh} />
       <Org org={a.org} owner={owner} onSaved={refresh} />
+      <Pages />
       <Members account={a} owner={owner} onChanged={refresh} toast={toast} />
     </div>
   );
@@ -288,6 +291,26 @@ function Members({
           )}
         </form>
       )}
+    </Card>
+  );
+}
+
+// The org's page credits: balance and the ledger behind it.
+function Pages() {
+  const q = useCredits();
+  if (!q.data) return null;
+  const { balance, firstJobFree, ledger } = q.data;
+  return (
+    <Card className="p-0">
+      <div className="flex items-baseline justify-between px-4 pt-4">
+        <SectionLabel>Pages</SectionLabel>
+        <span className="font-mono text-sm tabular-nums">{creditsShort(balance, firstJobFree)}</span>
+      </div>
+      <p className="px-4 pb-2 text-xs text-muted">
+        Every page Scribe reads takes one from this balance. Finding, building or measuring
+        again on the same job costs nothing extra, and a job that fails gives its pages back.
+      </p>
+      <LedgerTable rows={ledger} />
     </Card>
   );
 }

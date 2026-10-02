@@ -402,7 +402,12 @@ should cost more; verify). Plus the org's `credit_ledger` and an "Adjust
 credits" action (writes `adjust` with a note). The 18-kit corpus can be
 replayed into `usage_events` for a first distribution before any customer.
 
-### 3.4 Pricing — **DECIDE**
+### 3.4 Pricing — **DECIDED 2026-10-02**
+
+**Owner:** $1 per page read, **no per-job minimum**, **first job free**
+(any size, instead of a page grant), packs **25 / 100 / 500** pages.
+Invites that already promised "Pages included" keep them. Built in #310
+(record-only until Stripe). The proposal below is kept for the record.
 
 Measured cost (history (i), Sonnet 4.6 at $3/$15 per MTok, mostly input):
 a 4-page kitchen set is 13k–23k tokens → 5–9¢; a 4-page office set 66k →

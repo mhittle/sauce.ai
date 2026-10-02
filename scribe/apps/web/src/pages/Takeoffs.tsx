@@ -15,7 +15,7 @@ import {
 import { UploadZone } from "../components/UploadZone";
 import { Tour } from "../components/Tour";
 import { TechnicalDetail } from "../components/TechnicalDetail";
-import { friendlyError } from "../messages";
+import { friendlyError, submitErrorText } from "../messages";
 import type { Progress } from "../components/ReadingProgress";
 
 // One row per job: the takeoff plus its latest quote (GET /jobs).
@@ -115,9 +115,10 @@ export function TakeoffsPage() {
 
   const upload = useMutation({
     mutationFn: (file: File) => apiUpload<Takeoff>("/takeoffs", file),
-    onError: (e) => toast.error("Upload failed", errorMessage(e)),
+    onError: (e) => toast.error("Upload failed", submitErrorText(e)),
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["credits"] });
       // PDFs stop at the page-picker gate first; everything else lands on the
       // takeoff page, which forwards to whichever gate the status demands.
       if (t.sourceKind === "pdf") {

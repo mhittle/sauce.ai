@@ -12,6 +12,9 @@ real secret *values* here — document var names only.
 
 > **2026-10-02:** the usage ledger (#309) needs no manual action — migration
 > 0017 applies at api boot. Every Open item below is still unconfirmed.
+> **2026-10-02:** credits (#310) need no manual action — migration 0018
+> applies at api boot and enforcement ships OFF. Do not tick "Block jobs the
+> balance can't cover" (Admin → Credits) until Stripe is live.
 
 > **Status 2026-09-23:** MA-013/014/015/016 all landed with the accounts
 > work merged on 2026-09-21 and are **untouched** — none has been confirmed

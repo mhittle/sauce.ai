@@ -115,11 +115,47 @@ deploys if a future session doesn't know it exists. Keep this current.
   no rate row (exact or alias prefix) is skipped with a log line. Before
   changing `VISION_MODEL` / `OPENAI_VISION_MODEL`, add its rate in a
   migration. Rates are never updated — a price change is a new row.
+- **Credits are RECORD-ONLY (2026-10-02, #310).** `platform_settings.
+  credits_enforced = false`: every job holds/settles pages and balances can
+  go negative, but nothing is blocked. Turn it on (Admin → Credits) only
+  after Stripe lets customers buy pages, and after the open-hold sweep.
 - **`ROUTER_TOLERANT_MERGE=1` is SET on `scribe-workers`** (owner, 2026-08-12)
   — the demoted-role re-admit merge is LIVE prod behavior (kit-measured 0.379
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-02 (b) — credits (step 3b): $1/page ledger, first job free, record-only (#310)
+
+**Owner pricing (2026-10-02):** $1 per page read, **no minimum**, **first
+job free** (any size; replaces the page grant), packs 25 / 100 / 500
+(Stripe). Invites that already promised "Pages included" keep them.
+
+**Shipped (#310, migration `0018_credits.sql`).** `credit_ledger`
+(unique close per hold; unique purchase ref for Stripe), `orgs.credit_balance`
+(cache, written only under the org row lock), `takeoffs.credit_hold_id /
+pages_charged`, `platform_settings` (min 1, first_job_free on,
+credits_enforced off). Backfill: used invites' `credits_granted` became
+`signup_grant` rows. `@scribe/db` `credits.ts` (`writeLedger`, `quoteJob`,
+`openHold`, `closeHold`); `@scribe/shared` `jobCharge` / `chargeBlocked`
+(same formula for hold and preview). Hold on Pages submit (PDF) or at
+upload (image/sheet, 1 page); settle when the job reaches review (both
+review writers in `process.ts`); release in `failTakeoff`. Free first job =
+a 0-page hold; it stays available while every earlier hold was released.
+Re-runs (Find, Build, Measure again) never charge. Web: top-bar balance,
+Pages cost preview, Account → Pages ledger, Admin → Credits (rules,
+balances, ledger, adjust). Invite "Pages included" now defaults to 0.
+
+**Gotchas.** (1) Enforcement off = balances can go negative; that is the
+record of what would have been charged. (2) A job abandoned before review
+keeps its hold open (no sweep yet) — fine while not enforced; add the
+24 h sweep before turning enforcement on. (3) Not exercised locally: the
+upload-time hold (no object storage) and the queue add (Redis down).
+
+**Next.** Stripe (Task 3): Checkout for 25/100/500 → webhook → `purchase`
+row; then turn `credits_enforced` on.
 
 ---
 
@@ -167,9 +203,6 @@ applied at boot, real worker inserts costed exactly, an unknown model was
 logged and skipped, `/admin/usage` and the tab rendered.
 
 **Open.** Credits (3b) wait on the owner's pricing answer; Stripe after.
-
----
-
 ## 2026-09-23 — session wrap-up: accounts + tutorial merged and live; billing still unbuilt
 
 **Context.** Session 2026-09-15→23. The owner's four tasks were: plan the
@@ -324,50 +357,12 @@ MA-013 the magic link is only in the api log (`magic link not emailed`).
 
 ---
 
-## 2026-09-15 (l) — PR C: tenancy — orgs, org_id on every customer table, platform admins
-
-**Shipped (migration `0014_orgs.sql`, applies at boot).** `orgs` (name,
-`is_platform`, logo); the platform org "CabinetNow" is created and every
-existing user/takeoff/quote/customer/eval_fixture is backfilled into it,
-then `org_id` goes NOT NULL. `users.org_id / org_role (owner|member) /
-is_platform_admin` (backfilled from `role = 'admin'`). Seed puts
-`AUTH_ALLOWED_EMAILS` users in the platform org (first = platform admin).
-- **Request context:** `SessionUser` carries `orgId`, `orgRole`,
-  `isPlatformAdmin`; `req.orgId` is the org the request acts in — the
-  user's own, or for platform admins the `X-Org-Id` header (support view).
-  `requireAdmin` now means **platform admin** (pricing, sources, users,
-  invites, prospects, org-settings). `/auth/me` returns `orgId`,
-  `orgName`, `orgRole`, `isPlatformAdmin`.
-- **Scoping (`lib/scope.ts`):** `takeoffInOrg` / `quoteInOrg` replace every
-  `eq(takeoffs.id, …)` / `eq(quotes.id, …)` (18 + 6 sites); a preHandler
-  404s any `/takeoffs/:id/…` route whose takeoff is outside the org (covers
-  detections, page images, exports); `/takeoff-lines/:id` PATCH/DELETE
-  filter by `inArray(takeoff_id, <org's takeoffs>)`; `/takeoffs`, `/jobs`,
-  `/quotes`, `/customers` list per org; inserts stamp `org_id`; dashboard
-  SQL is per org (prospect counts platform-admin only); `/projects` is
-  platform-admin only. Workers copy `takeoffs.org_id` onto eval fixtures.
-- **Admin → Users:** org column, role select, platform-admin checkbox
-  (`PATCH /admin/users/:id`; you cannot un-admin yourself), last sign-in.
-  Web nav/operator menu and `TechnicalDetail` key off `isPlatformAdmin`.
-
-**Not changed (deliberate).** `org_settings` stays the single platform row
-(freight, handling, quote terms/logo, cross-validation) — per-org branding
-comes with the account screens (PR D). Pricing configs, product lines,
-export templates, sources and projects are platform-level.
-
-**Gotchas.** (1) A new tenant org has no takeoffs, so `/jobs` is empty
-until they upload — the sample job (tutorial) fills it later. (2) Machine
-users (dev bypass, signal connector) are created in the platform org via
-`getPlatformOrgId()`. (3) `X-Org-Id` is honoured only when
-`isPlatformAdmin`; the web app does not send it yet.
-
-**Manual:** MA-014 — after deploy, tick "Platform admin" for
-ridadarwish12@gmail.com in Admin → Users (the migration promotes only
-`role = 'admin'`, i.e. mhittle@gmail.com).
-
----
-
 ## Condensed history
+
+### 2026-09-15 (l) — PR C: tenancy (archived verbatim)
+Migration 0014 `orgs` + `org_id` on takeoffs/quotes/customers/eval_fixtures,
+`is_platform_admin`, `req.orgId` (+ `X-Org-Id` for platform admins),
+`lib/scope.ts` on every id lookup, per-org lists. Closed the cross-org leak.
 
 ### 2026-09-15 (k) — PR A: email provider + invites API (archived verbatim)
 `packages/email` (Resend REST, logs without the key), migration 0013

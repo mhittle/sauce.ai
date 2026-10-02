@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { friendlyError, friendlyNote, friendlyNotes } from "./messages";
+import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText } from "./messages";
 
 describe("friendlyError", () => {
   it("hides the SQL behind a plain sentence and keeps it as detail", () => {
@@ -83,5 +83,30 @@ describe("friendlyNotes", () => {
     const notes = friendlyNotes(raws, true);
     expect(notes).toHaveLength(4);
     expect(notes.some((n) => n.text.startsWith("(developer note)"))).toBe(true);
+  });
+});
+
+describe("credits copy", () => {
+  it("shows the free first job until there is a balance", () => {
+    expect(creditsShort(0, true)).toBe("First job free");
+    expect(creditsShort(5, true)).toBe("5 pages left");
+    expect(creditsShort(1, false)).toBe("1 page left");
+  });
+
+  it("previews the job's cost against the balance", () => {
+    expect(creditCostLine({ pages: 3, credits: 0, free: true }, 0)).toMatch(/first job is free/);
+    expect(creditCostLine({ pages: 3, credits: 3, free: false }, 20)).toBe(
+      "Reading 3 pages uses 3 from your balance. 17 left after this job."
+    );
+    expect(creditCostLine({ pages: 2, credits: 5, free: false }, 1)).toBe(
+      "Reading 2 pages uses 5 from your balance (5-page minimum per job). Your balance is 1."
+    );
+  });
+
+  it("maps a 402 to the plain credits line", () => {
+    expect(submitErrorText(Object.assign(new Error("not enough credits: …"), { status: 402 }))).toBe(
+      CREDITS_INSUFFICIENT
+    );
+    expect(submitErrorText(new Error("boom"))).toBe("boom");
   });
 });
