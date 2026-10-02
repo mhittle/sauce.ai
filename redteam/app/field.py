@@ -179,7 +179,7 @@ def share_svg(res: dict) -> str:
                         f'<text x="{bar_l + bar_w * v + 12:.0f}" y="{cy + 6}" font-size="24" fill="#52514e">{v*100:.0f}%</text>')
     return f"""<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,Arial">
 <rect width="{W}" height="{H}" fill="#fcfcfb"/>
-<rect x="0" y="0" width="{W}" height="12" fill="#e34948"/>
+<rect x="0" y="0" width="{W}" height="12" fill="#8e2a1f"/>
 <text x="60" y="70" font-size="30" fill="#52514e">sauce.ai/redteam · clinical AI field scan</text>
 <text x="60" y="135" font-size="50" font-weight="800" fill="#0b0b0b">Who gives the safest health advice</text>
 <text x="60" y="190" font-size="50" font-weight="800" fill="#0b0b0b">on {escape(_area_label(res))[:40]}?</text>

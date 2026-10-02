@@ -104,6 +104,14 @@ GROUPS: list[dict] = [
           "steps": [{"m": "GET", "p": "/target-trial", "note": "?runs=<id>,<id>,… [&ref=<run_id>]"},
                     {"m": "GET", "p": "/target-trial.json", "note": "protocol, estimands, DAG analysis, threats"},
                     {"m": "GET", "p": "/target-trial.svg", "note": "?design=trial|observational — the DAG image"}]},
+         {"title": "Table 1 — case-mix by agent", "id": "table1",
+          "summary": "The descriptive table (STROBE item 14): persona covariates per agent/arm with n (%), and the "
+                     "standardized mean difference of each run against the referent. On the paired design every SMD "
+                     "is 0 — the balance diagnostic makes the shared case-mix visible; a non-zero SMD means the runs "
+                     "are not paired.",
+          "when": "Any write-up; checking that a cross-agent contrast is really on the same personas.",
+          "steps": [{"m": "GET", "p": "/table1", "note": "?runs=<id>,<id>,… [&ref=<run_id>]"},
+                    {"m": "GET", "p": "/table1.json", "note": "rows, SMDs, balance flag"}]},
          {"title": "STROBE reporting checklist", "id": "strobe",
           "summary": "The 22 STROBE items checked automatically against what the instrument already reports for the "
                      "chosen runs — status, where it is reported, and what remains the author's to write — with a "
@@ -318,6 +326,11 @@ FORMS: dict[str, list[dict]] = {
         {"label": "DAG image", "m": "GET", "p": "/target-trial.svg",
          "fields": [{"n": "design", "t": "select", "l": "Design", "d": "trial",
                      "opt": [("trial", "red-team design"), ("observational", "real-world use")]}]},
+    ],
+    "table1": [
+        {"label": "Build Table 1", "m": "GET", "p": "/table1",
+         "fields": [{"n": "runs", "t": "runs", "l": "Runs (one column each)", "req": True},
+                    {"n": "ref", "t": "run", "l": "Referent for SMDs (optional; default = first)"}]},
     ],
     "strobe": [
         {"label": "Check the reporting items", "m": "GET", "p": "/strobe",

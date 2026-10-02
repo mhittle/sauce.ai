@@ -255,7 +255,7 @@ def render_html(result: dict) -> str:
     for g in result["graders"]:
         verdict = ('<span style="color:#008300;font-weight:600">trustworthy on this probe set</span>'
                    if g["trustworthy"] else
-                   '<span style="color:#e34948;font-weight:600">use with caution: '
+                   '<span style="color:#d1261a;font-weight:600">use with caution: '
                    + escape(", ".join(g["flags"])) + "</span>")
         trows = "".join(
             f"<tr><td>{escape(t['label'])}</td><td class='n'>{_pct(t['mean_delta'])}"

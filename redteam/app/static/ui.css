@@ -63,6 +63,21 @@ h1+.muted.small,.meta{font:13px/1.5 var(--mono);color:var(--muted);margin-bottom
 .index li a.go{font:500 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 @media(max-width:720px){.index li{grid-template-columns:1fr}.spec{grid-template-columns:1fr}.spec dt{line-height:1.3;margin-top:6px}}
 
+/* landing: step cards + instrument cards (ruled, square, no shadows) */
+.steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin:18px 0 12px;background:var(--line);border:1px solid var(--line)}
+.steps3 .s{background:var(--card);padding:14px 16px}
+.steps3 .s .n{font:500 11px/1 var(--mono);letter-spacing:.1em;color:var(--accent)}
+.steps3 .s .n:before{content:"0"}
+.steps3 .s b{display:block;font-size:14px;margin:8px 0 4px}
+.steps3 .s p{font-size:13px;color:var(--muted);margin:0}
+.explore{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;margin:0 0 6px}
+.explore a{display:block;background:var(--card);padding:14px 16px;color:var(--fg);border:1px solid var(--line);margin:0 -1px -1px 0;box-shadow:inset 0 3px 0 transparent;transition:box-shadow .12s,background .12s}
+.explore a:hover{text-decoration:none;box-shadow:inset 0 3px 0 var(--accent);background:var(--card-2)}
+.explore a b{display:block;font-size:14px;margin-bottom:4px}
+.explore a span{font-size:12.5px;color:var(--muted);display:block}
+.explore a .go{display:block;margin-top:10px;font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+@media(max-width:720px){.steps3{grid-template-columns:1fr}}
+
 /* ---- chrome: nav / trace / footer ------------------------------------------- */
 .topnav{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
 .topnav .in{max-width:var(--wrap);margin:0 auto;padding:0 22px;height:52px;display:flex;align-items:center;gap:22px}

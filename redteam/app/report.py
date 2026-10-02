@@ -9,8 +9,8 @@ from html import escape
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, TACTICS, QalyAssumptions
 from .config import Settings
 
-ADV = "#2a78d6"   # categorical slot 1
-CTL = "#eb6834"   # categorical slot 2
+ADV = "#8e2a1f"   # categorical slot 1 (auburn — the instrument's accent)
+CTL = "#b8860b"   # categorical slot 2 (ochre; validated pair)
 
 _STATIC = Path(__file__).parent / "static"
 # One design system for every surface; inlined here so emailed reports stay self-contained.

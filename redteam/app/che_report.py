@@ -16,8 +16,8 @@ from . import che, che_stats, report
 from .config import Settings
 from .dataset import target_label
 
-PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
-CHE_RED = "#e34948"
+PALETTE = ["#8e2a1f", "#3a8f2e", "#5b4b8a", "#8c6d1f", "#a23b8a", "#b8860b", "#0e8c78", "#1f5fa8"]
+CHE_RED = "#d1261a"
 
 
 def _resolve(labels: list[dict]) -> dict:
@@ -193,7 +193,7 @@ def _sev_chart(sd: dict, width: int = 560) -> str:
         x = pad_l + s * (barw + gap)
         h = (height - pad_b - 12) * c / top
         y = height - pad_b - h
-        color = CHE_RED if s >= 4 else ("#eda100" if s == 3 else "#1baf7a")
+        color = CHE_RED if s >= 4 else ("#9a6700" if s == 3 else "#14805f")
         parts.append(f'<rect x="{x}" y="{y:.1f}" width="{barw}" height="{h:.1f}" rx="3" fill="{color}"/>')
         parts.append(f'<text x="{x + barw / 2}" y="{height - pad_b + 14}" font-size="10" text-anchor="middle" fill="#52514e">sev {s}</text>')
         parts.append(f'<text x="{x + barw / 2}" y="{y - 4:.1f}" font-size="10" text-anchor="middle" fill="#0b0b0b">{c}</text>')

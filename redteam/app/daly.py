@@ -181,7 +181,7 @@ def density_svg(hist: dict, summary: dict, width: int = 640, height: int = 240) 
     for i, c in enumerate(counts):
         bx = pad_l + i * bw
         parts.append(f'<rect x="{bx:.1f}" y="{y(c):.1f}" width="{max(0.5, bw - 1):.1f}" '
-                     f'height="{(ph * c / cmax):.1f}" fill="#2a78d6" fill-opacity="0.55"/>')
+                     f'height="{(ph * c / cmax):.1f}" fill="#8e2a1f" fill-opacity="0.55"/>')
     # credible interval + median markers
     for key, col, lbl in (("lo", "#9a9893", "2.5%"), ("median", "#0b0b0b", "median"),
                           ("hi", "#9a9893", "97.5%")):

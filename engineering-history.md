@@ -136,6 +136,29 @@ these.
 
 ## 2026-10-02
 
+- **Redteam — cards back, blue out; Table 1.** User: "step too far — I liked the
+  cards at top, just not the cheesy marketing text. Plus it's still blue."
+  Landing: three step cards and the instrument cards restored in the clinical
+  language (hairline grid, mono `01` chips, factual copy), spec block kept
+  compact below; the 5-card explore grid now lets each card carry its own
+  border (no empty hairline cell). The remaining blue was the chart palettes,
+  never retuned: comparison/CHE 8-slot categorical (`PALETTE`), KM
+  adversarial/control (`report.ADV/CTL`), forest crude/adjusted (`epi`), DALY
+  histogram, DAG exposure node, run-status progress bar, plus stale status
+  colours (badges, CHE severity, caution text, adjudicate "yes"). Replaced with
+  auburn / ochre pairs and an 8-slot order found by a permutation search against
+  the dataviz validator (adjacent-pair CVD separation was the failing check;
+  slate and teal-green failed the chroma floor), scarlet only for harm.
+  **Table 1** (`app/table1.py`, `GET /table1`): persona covariates per
+  agent with n (%), and a multi-level standardized mean difference (Yang &
+  Dalton; Gauss–Jordan with diagonal fallback) vs the referent; balance flag at
+  SMD < 0.10; STROBE item 14 now reported via it. Test helper `_seed` draws all
+  personas before outcomes so same seed + n ⇒ same case-mix (as the runner does)
+  — two Table 1 tests exposed that. Tests `+4`; suite 257 pass. *Code:*
+  `redteam/app/table1.py`, `app/strobe.py`, `app/main.py`, `app/guide.py`,
+  `app/static/{ui.css,index.html,adjudicate.html}`, chart modules (colours),
+  `tests/test_epi.py`, `README.md`. *Server state:* none.
+
 - **Redteam — restyle to a "clinical instrument" language (user: "typical generic
   Claude aesthetic… more unique, more medically focused, no marketing
   headline").** Replaced the Inter + serif + indigo + rounded-card system with a

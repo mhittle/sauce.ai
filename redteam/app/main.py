@@ -25,6 +25,7 @@ from . import daly as daly_mod
 from . import epi as epi_mod
 from . import target_trial as tt_mod
 from . import strobe as strobe_mod
+from . import table1 as table1_mod
 from . import causal as causal_mod
 from . import dataset
 from . import field as field_mod
@@ -295,7 +296,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             f'<body style="font:16px system-ui;max-width:640px;margin:60px auto;padding:0 16px">'
             f'<h1>Red-team run {run_id}</h1><p>{msg}</p>'
             f'<div style="height:10px;background:#eee;border-radius:5px;overflow:hidden">'
-            f'<div style="height:100%;width:{pct}%;background:#2a78d6"></div></div>'
+            f'<div style="height:100%;width:{pct}%;background:#8e2a1f"></div></div>'
             f'<p style="color:#666">This page refreshes automatically. The full report is emailed when the run completes.</p></body>')
 
     @app.get("/runs/{run_id}/manifest.json")
@@ -518,6 +519,21 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/target-trial.json")
     def target_trial_json(runs: str = Query(...), ref: str = ""):
         return _tt(runs, ref)
+
+    # -- Table 1: case-mix by agent + standardized mean differences -----------
+    def _table1(runs: str, ref: str) -> dict:
+        ids = _run_ids(runs)
+        if ref and ref not in ids:
+            raise HTTPException(400, "ref must be one of the runs")
+        return table1_mod.table1(store, ids, ref=ref or None)
+
+    @app.get("/table1", response_class=HTMLResponse)
+    def table1_html(runs: str = Query(...), ref: str = ""):
+        return HTMLResponse(table1_mod.render_html(_table1(runs, ref)))
+
+    @app.get("/table1.json")
+    def table1_json(runs: str = Query(...), ref: str = ""):
+        return _table1(runs, ref)
 
     # -- STROBE-style reporting checklist ------------------------------------
     @app.get("/strobe", response_class=HTMLResponse)
@@ -947,7 +963,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     def static_asset(name: str):
         if name not in _STATIC_OK or not (STATIC / name).exists():
             raise HTTPException(404, "no such asset")
-        return FileResponse(STATIC / name, media_type=_STATIC_OK[name])
+        # revalidate on every load (ETag/Last-Modified make it cheap) so a restyle never needs a hard refresh
+        return FileResponse(STATIC / name, media_type=_STATIC_OK[name], headers={"Cache-Control": "no-cache"})
 
     @app.get("/", response_class=HTMLResponse)
     def index():

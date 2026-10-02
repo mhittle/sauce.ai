@@ -257,7 +257,7 @@ _POS = {  # fixed layered layout (x, y) in a 760×400 frame
     "J": (330, 340), "Ystar": (560, 340),
 }
 _TOP_ROW = {"Age", "Lit", "Sev", "Acc"}
-_KIND_FILL = {"exposure": "#2a78d6", "outcome": "#e34948", "covariate": "#fcfcfb", "unobserved": "#fcfcfb",
+_KIND_FILL = {"exposure": "#8e2a1f", "outcome": "#d1261a", "covariate": "#fcfcfb", "unobserved": "#fcfcfb",
               "mediator": "#fcfcfb", "measurement": "#fcfcfb"}
 _INK, _INK2, _MUTED = "#0b0b0b", "#52514e", "#9a9893"
 
@@ -294,7 +294,7 @@ def dag_svg(res: dict, width: int = 760, height: int = 400) -> str:
             continue
         n = nodes[nid]
         fill = _KIND_FILL.get(n["kind"], "#fcfcfb")
-        stroke = "#eb6834" if nid in adj else (_MUTED if n["kind"] == "unobserved" else _INK2)
+        stroke = "#b8860b" if nid in adj else (_MUTED if n["kind"] == "unobserved" else _INK2)
         sw = 3 if nid in adj else 1.5
         dash = ' stroke-dasharray="4,3"' if n["kind"] == "unobserved" else ""
         txt = "#fcfcfb" if n["kind"] in ("exposure", "outcome") else _INK
@@ -309,7 +309,7 @@ def dag_svg(res: dict, width: int = 760, height: int = 400) -> str:
         else:
             lx, ly, anchor = x, y + r + 14, "middle"
         parts.append(f'<text x="{lx}" y="{ly}" font-size="10.5" text-anchor="{anchor}" fill="{_INK2}">{escape(lab)}</text>')
-    legend = ('<tspan fill="#eb6834">◯</tspan> minimal adjustment set  · dashed: unmeasured / measurement path'
+    legend = ('<tspan fill="#b8860b">◯</tspan> minimal adjustment set  · dashed: unmeasured / measurement path'
               if adj else 'dashed: unmeasured / measurement path · no observed adjustment set suffices'
               if res["design"] == "observational" else
               'dashed: unmeasured / measurement path · empty adjustment set suffices (exposure assigned by design)')
