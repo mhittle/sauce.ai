@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
+  closeHold,
   evalFixtures,
   getDb,
   orgSettings,
@@ -144,6 +145,23 @@ async function failTakeoff(
       updatedAt: new Date(),
     })
     .where(eq(takeoffs.id, takeoffId));
+  await closeCreditHold(takeoffId, "release");
+}
+
+// Settle on review, release on failure (accounts-plan.md §3.2). Credits are
+// bookkeeping: a ledger fault is logged and never fails or blocks the job.
+async function closeCreditHold(takeoffId: string, kind: "settle" | "release"): Promise<void> {
+  try {
+    await closeHold(getDb(), takeoffId, kind);
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        msg: `credit ${kind} failed`,
+        takeoff: takeoffId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
 }
 
 function avgConfidence(lines: { confidence: number }[]): number | null {
@@ -385,6 +403,7 @@ export async function processTakeoff(
         updatedAt: new Date(),
       })
       .where(eq(takeoffs.id, takeoffId));
+    await closeCreditHold(takeoffId, "settle");
 
     log.info(
       { takeoffId, lines: lines.length, tokens: budget.used },
@@ -763,6 +782,7 @@ export async function priceAndExpand(
       updatedAt: new Date(),
     })
     .where(eq(takeoffs.id, takeoffId));
+  await closeCreditHold(takeoffId, "settle");
 
   log.info(
     { takeoffId, boxes: rows.length, faces: faceCount, scoped },

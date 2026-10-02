@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { getDb, invites, loginTokens, orgs, users } from "@scribe/db";
+import { getDb, invites, loginTokens, orgs, users, writeLedger } from "@scribe/db";
 import { magicLinkEmail, sendEmail } from "@scribe/email";
 import { SESSION_COOKIE, signSession } from "../auth.js";
 import { hashToken, inviteState, newToken } from "../lib/tokens.js";
@@ -57,6 +57,16 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
           .returning();
         orgId = org.id;
         orgRole = "owner";
+        // "Pages included" on the invite, as promised in its email.
+        if (invite.creditsGranted > 0) {
+          await writeLedger(tx, {
+            orgId,
+            delta: invite.creditsGranted,
+            reason: "signup_grant",
+            externalRef: invite.id,
+            note: "pages included on the invite",
+          });
+        }
       }
       const [u] = await tx
         .insert(users)

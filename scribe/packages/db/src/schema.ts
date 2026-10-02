@@ -23,6 +23,8 @@ export const orgs = pgTable("orgs", {
   name: text("name").notNull(),
   isPlatform: boolean("is_platform").notNull().default(false),
   logoS3Key: text("logo_s3_key"),
+  // migrations/0018 — cache of sum(credit_ledger.delta), pages.
+  creditBalance: integer("credit_balance").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -159,6 +161,9 @@ export const takeoffs = pgTable("takeoffs", {
   // takeoff whose objects (pages, reads) this row displays.
   isSample: boolean("is_sample").notNull().default(false),
   storageId: uuid("storage_id"),
+  // migrations/0018 — the credit hold opened when the job was submitted.
+  creditHoldId: bigint("credit_hold_id", { mode: "number" }),
+  pagesCharged: integer("pages_charged"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -334,4 +339,28 @@ export const usageEvents = pgTable("usage_events", {
   pageKind: text("page_kind"),
   costMicrocents: bigint("cost_microcents", { mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// migrations/0018 — credits. delta is pages; settle is 0 (the hold already
+// took them), release gives a hold back.
+export const creditLedger = pgTable("credit_ledger", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id),
+  delta: integer("delta").notNull(),
+  reason: text("reason").notNull(),
+  takeoffId: uuid("takeoff_id"),
+  holdId: bigint("hold_id", { mode: "number" }),
+  balanceAfter: integer("balance_after").notNull(),
+  actorUserId: uuid("actor_user_id"),
+  externalRef: text("external_ref"),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const platformSettings = pgTable("platform_settings", {
+  id: integer("id").primaryKey().default(1),
+  minPagesPerJob: integer("min_pages_per_job").notNull().default(1),
+  firstJobFree: boolean("first_job_free").notNull().default(true),
+  creditsEnforced: boolean("credits_enforced").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

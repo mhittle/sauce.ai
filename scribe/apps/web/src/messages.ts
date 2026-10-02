@@ -144,3 +144,51 @@ export function friendlyNotes(
 
 // Admin → Usage could not be fetched (admin-only screen).
 export const USAGE_LOAD_FAILED = "Usage couldn't be loaded. Try again in a moment.";
+
+// --- Credits (one page read = one credit) ---
+
+const plural = (n: number, one: string, many: string) => `${n} ${Math.abs(n) === 1 ? one : many}`;
+
+// Top-bar balance.
+export function creditsShort(balance: number, firstJobFree: boolean): string {
+  if (firstJobFree && balance <= 0) return "First job free";
+  return plural(balance, "page left", "pages left");
+}
+
+// Cost preview where a job is submitted.
+export function creditCostLine(
+  charge: { pages: number; credits: number; free: boolean },
+  balance: number
+): string {
+  if (charge.free) return `Your first job is free — reading ${plural(charge.pages, "page", "pages")} uses nothing from your balance.`;
+  const left = balance - charge.credits;
+  const minimum = charge.credits > charge.pages ? ` (${charge.credits}-page minimum per job)` : "";
+  return `Reading ${plural(charge.pages, "page", "pages")} uses ${charge.credits} from your balance${minimum}. ${
+    left >= 0 ? `${left} left after this job.` : `Your balance is ${balance}.`
+  }`;
+}
+
+// Shown when enforced credits don't cover a job (API 402).
+export const CREDITS_INSUFFICIENT =
+  "You don't have enough pages left for this job. Buy more pages, or select fewer pages.";
+
+// Toast body for a failed job submit: the plain credits line for a 402,
+// else the server's text.
+export function submitErrorText(err: unknown): string {
+  if ((err as { status?: number })?.status === 402) return CREDITS_INSUFFICIENT;
+  return err instanceof Error ? err.message : String(err);
+}
+
+export const CREDIT_REASON_LABEL: Record<string, string> = {
+  signup_grant: "Included with your account",
+  admin_grant: "Pages added",
+  purchase: "Pages bought",
+  hold: "Job submitted",
+  settle: "Job finished",
+  release: "Job failed — pages returned",
+  refund: "Refund",
+  adjust: "Correction",
+};
+
+// Admin → Credits could not be fetched (admin-only screen).
+export const CREDITS_LOAD_FAILED = "Credits couldn't be loaded. Try again in a moment.";

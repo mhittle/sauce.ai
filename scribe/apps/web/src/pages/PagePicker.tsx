@@ -6,12 +6,13 @@ import { apiGet, apiSend } from "../api";
 import {
   Button,
   Card,
-  errorMessage,
   PageTitle,
   StatusPill,
   useToast,
 } from "../ui";
 import { Tour } from "../components/Tour";
+import { useJobCost } from "../components/Credits";
+import { CREDITS_INSUFFICIENT, submitErrorText } from "../messages";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 
 interface PageClassification {
@@ -121,12 +122,17 @@ export function PagePickerPage() {
           })
           .sort((a, b) => a.page - b.page),
       }),
-    onError: (e) => toast.error("Couldn't start reading", errorMessage(e)),
+    onError: (e) => toast.error("Couldn't start reading", submitErrorText(e)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["takeoff", takeoffId] });
+      qc.invalidateQueries({ queryKey: ["credits"] });
       navigate({ to: "/takeoffs/$takeoffId/detect", params: { takeoffId }, search: { pages: undefined } });
     },
   });
+
+  // Every submitted page is charged, readable or not (the server holds
+  // body.pages.length).
+  const cost = useJobCost(Object.keys(picked).length);
 
   // Counts per suggested type, for the "all elevations" shortcuts.
   const byType = useMemo(() => {
@@ -166,7 +172,7 @@ export function PagePickerPage() {
             <Button
               variant="primary"
               loading={submit.isPending}
-              disabled={readableCount === 0}
+              disabled={readableCount === 0 || cost.blocked}
               onClick={() => submit.mutate()}
             >
               {`Find the drawings on ${readableCount} page${readableCount === 1 ? "" : "s"} →`}
@@ -186,6 +192,11 @@ export function PagePickerPage() {
         />
       ) : (
         <>
+          {cost.line && (
+            <p className={`mb-3 text-sm ${cost.blocked ? "text-bad" : "text-ink"}`} data-tour="pages-cost">
+              {cost.blocked ? CREDITS_INSUFFICIENT : cost.line}
+            </p>
+          )}
           <p className="mb-3 max-w-3xl text-sm text-muted">
             The pages that look like cabinet drawings are already selected. Click
             a page to add or remove it, and correct its type where the guess is
