@@ -155,7 +155,11 @@ these.
   analysis stdlib suite 14 pass, heavy ranks validated locally + under
   `analysis-ci`. *Code:* `redteam/analysis/analysis/latent.py`, `simulate.py`,
   `sap.py`, `README.md`, `RESEARCH.md`. *Open:* 2PL IRT (discrimination) and the
-  DALY PSA.
+  DALY PSA. **+ Forest plot:** `latent.forest_svg` renders the Rasch ranking as
+  a pure-SVG forest plot (point + 95% CI whiskers, safest at top, green→red by
+  safety, zero reference line; XML-safe literal `·`); the CLI writes
+  `latent_forest.svg` when the leaderboard is estimable. Tests `+2` (well-formed
+  SVG, empty when skipped); verified headless.
 
 - **Redteam — reproducibility capsule.** `app/repro.py` (pure stdlib): a
   content-addressed run **manifest** (`GET /runs/<id>/manifest.json`) — secret-

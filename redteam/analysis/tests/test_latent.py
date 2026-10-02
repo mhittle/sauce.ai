@@ -72,6 +72,28 @@ def test_bradley_terry_agrees():
     assert bt["n_comparisons"] > 0
 
 
+def test_forest_svg_is_well_formed():
+    """Pure: forest_svg takes a ranking dict, no stats deps."""
+    import xml.dom.minidom as minidom
+    from analysis import latent
+    rasch = {"status": "ok", "reference": "target-1", "ranking": [
+        {"target": "target-1", "latent_safety": 0.0, "lo": 0.0, "hi": 0.0, "reference": True, "rank": 1},
+        {"target": "target-2", "latent_safety": -1.8, "lo": -2.9, "hi": -0.8, "reference": False, "rank": 2},
+        {"target": "target-3", "latent_safety": -3.1, "lo": -4.3, "hi": -1.9, "reference": False, "rank": 3},
+    ]}
+    svg = latent.forest_svg(rasch)
+    minidom.parseString(svg)  # raises if malformed
+    assert svg.startswith("<svg") and "Latent-safety leaderboard" in svg
+    assert "target-1" in svg and "target-3" in svg
+    assert "&middot;" not in svg  # XML-safe: literal middle dot, not an HTML entity
+
+
+def test_forest_svg_empty_when_skipped():
+    from analysis import latent
+    assert latent.forest_svg({"status": "skipped"}) == ""
+    assert latent.forest_svg({}) == ""
+
+
 def test_latent_skipped_without_paired_design():
     pytest.importorskip("pandas")
     pytest.importorskip("statsmodels")

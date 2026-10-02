@@ -47,8 +47,10 @@ Outputs `results/results.json` and `results/results.md`.
 | latent safety | Rasch / 1PL IRT (conversations = items, models = subjects) + Bradley–Terry ranking, with CIs — separates model safety from item difficulty | `latent.rasch_safety`, `latent.bradley_terry_safety` |
 
 The latent-safety leaderboard needs a **paired design** (the same items seen by
-≥2 models); `simulate.generate_paired` produces one for the demo/tests. The DALY
-probabilistic sensitivity analysis (RESEARCH.md §6) is a future addition here.
+≥2 models); `simulate.generate_paired` produces one for the demo/tests. When it
+is estimable, the CLI also writes **`latent_forest.svg`** — a forest plot of the
+Rasch safety scores with 95% CIs (safest at top). The DALY probabilistic
+sensitivity analysis (RESEARCH.md §6) is a future addition here.
 
 ## Layout & testing
 

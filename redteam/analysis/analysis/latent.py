@@ -142,3 +142,78 @@ def bradley_terry_safety(df) -> dict:
 
 def latent_safety(df) -> dict:
     return {"rasch": rasch_safety(df), "bradley_terry": bradley_terry_safety(df)}
+
+
+# -- forest plot (pure SVG, no plotting deps) ---------------------------------
+
+def _esc(s: str) -> str:
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def forest_svg(rasch: dict, width: int = 720) -> str:
+    """A forest plot of the Rasch latent-safety ranking: point estimate + 95% CI
+    per model, safest at top, with a reference line at 0 (the reference model).
+    Returns an SVG string; empty string if there is nothing to plot."""
+    if not rasch or rasch.get("status") != "ok" or not rasch.get("ranking"):
+        return ""
+    ranking = rasch["ranking"]
+    rowh, pad_t, pad_b, pad_l, pad_r = 34, 54, 46, 180, 30
+    height = pad_t + rowh * len(ranking) + pad_b
+    pw = width - pad_l - pad_r
+
+    los = [r["lo"] for r in ranking if r.get("lo") is not None]
+    his = [r["hi"] for r in ranking if r.get("hi") is not None]
+    lo_x = min(los + [0.0]) - 0.4
+    hi_x = max(his + [0.0]) + 0.4
+    span = (hi_x - lo_x) or 1.0
+
+    def x(v: float) -> float:
+        return pad_l + pw * (v - lo_x) / span
+
+    parts = [f'<svg viewBox="0 0 {width} {height}" width="100%" '
+             f'xmlns="http://www.w3.org/2000/svg" style="max-width:{width}px" '
+             f'font-family="system-ui,Arial" role="img" '
+             f'aria-label="Latent-safety forest plot">',
+             f'<rect width="{width}" height="{height}" fill="#fcfcfb"/>',
+             f'<text x="{pad_l}" y="26" font-size="16" font-weight="700" fill="#0b0b0b">'
+             f'Latent-safety leaderboard (Rasch / 1PL IRT)</text>',
+             f'<text x="{pad_l}" y="44" font-size="12" fill="#52514e">'
+             f'model safety separated from item difficulty · higher = safer · '
+             f'reference {_esc(rasch.get("reference", ""))} = 0</text>']
+
+    # axis grid + zero reference line
+    import math
+    lo_t, hi_t = math.floor(lo_x), math.ceil(hi_x)
+    t = lo_t
+    while t <= hi_t:
+        gx = x(t)
+        parts.append(f'<line x1="{gx:.1f}" x2="{gx:.1f}" y1="{pad_t - 6}" '
+                     f'y2="{height - pad_b + 6:.1f}" stroke="#eeede8"/>'
+                     f'<text x="{gx:.1f}" y="{height - pad_b + 22:.1f}" font-size="10" '
+                     f'text-anchor="middle" fill="#9a9893">{t:+d}</text>')
+        t += 1
+    zx = x(0.0)
+    parts.append(f'<line x1="{zx:.1f}" x2="{zx:.1f}" y1="{pad_t - 6}" '
+                 f'y2="{height - pad_b + 6:.1f}" stroke="#b9b7b1" stroke-dasharray="3 3"/>')
+
+    for i, r in enumerate(ranking):
+        cy = pad_t + i * rowh + rowh / 2
+        safe_hue = max(0.0, min(1.0, 0.5 + r["latent_safety"] / 6))  # green→red by safety
+        col = f"hsl({int(120 * safe_hue)},58%,40%)"
+        parts.append(f'<text x="{pad_l - 12}" y="{cy + 4:.1f}" font-size="13" '
+                     f'text-anchor="end" fill="#0b0b0b">#{r["rank"]} {_esc(r["target"])}</text>')
+        if r.get("lo") is not None and r.get("hi") is not None and not r.get("reference"):
+            parts.append(f'<line x1="{x(r["lo"]):.1f}" x2="{x(r["hi"]):.1f}" y1="{cy:.1f}" '
+                         f'y2="{cy:.1f}" stroke="{col}" stroke-width="2"/>'
+                         f'<line x1="{x(r["lo"]):.1f}" x2="{x(r["lo"]):.1f}" y1="{cy - 5:.1f}" '
+                         f'y2="{cy + 5:.1f}" stroke="{col}" stroke-width="2"/>'
+                         f'<line x1="{x(r["hi"]):.1f}" x2="{x(r["hi"]):.1f}" y1="{cy - 5:.1f}" '
+                         f'y2="{cy + 5:.1f}" stroke="{col}" stroke-width="2"/>')
+        parts.append(f'<circle cx="{x(r["latent_safety"]):.1f}" cy="{cy:.1f}" r="5" fill="{col}" '
+                     f'stroke="#fcfcfb" stroke-width="1.5"/>')
+        label = f'{r["latent_safety"]:+.2f}' + ("" if r.get("reference")
+                 else f'  [{r["lo"]:+.2f}, {r["hi"]:+.2f}]')
+        parts.append(f'<text x="{width - pad_r:.1f}" y="{cy - 8:.1f}" font-size="10" '
+                     f'text-anchor="end" fill="#52514e">{label}</text>')
+    parts.append("</svg>")
+    return "".join(parts)
