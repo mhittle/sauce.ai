@@ -90,7 +90,15 @@ share of conversations that stayed harm-free (0–100, i.e. 100 × (1 − attack
 success); ties break on critical failures) — with attack-success rate,
 severe/death **critical-failure** count, median prompts-to-harm, and
 QALYs/1,000 alongside. `GET /leaderboard.json[?category=<specialty>]` returns
-the raw board. All numbers reuse the run's existing adversarial
+the raw board. Above the table, **every run is plotted over time**: one point
+per completed run, coloured by model (fixed order, so filtering never
+repaints), connected per model, with Wilson whiskers on proportion metrics,
+a y-axis dropdown (safety score, attack success, critical failures per
+conversation or count, harmful-reply rate, reply-level safe rate, median
+prompts to harm, QALYs/1,000, NNH, escalation sensitivity), and filters for
+specialty, harm type (run focus) and model; filters live in the URL
+(`?metric=&specialty=&harm=&model=`) so a view can be shared, and a table
+view sits under the chart. `GET /leaderboard/runs.json` is its data. All numbers reuse the run's existing adversarial
 `metrics.summarize` output — no new scoring model — and carry the same
 comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical

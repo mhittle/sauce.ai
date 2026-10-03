@@ -151,6 +151,25 @@ these.
   estimate" paragraph (`report.ARMS_NOTE`), the KM legend says "Ordinary use
   (control)", and the README has a "Two arms, one chatbot" bullet. No
   internals renamed (`control_fraction`, arm key `control`). Tests: 261 pass.
+- **Redteam — leaderboard: every run over time.** User: "we need a graph that
+  displays these, and over time; each test plotted, coloured and annotated by
+  LLM version; y-axis dropdown for the metric; default all runs, filter by harm
+  type / specialty." The board table keeps only each target's latest run per
+  specialty, so a new `leaderboard.run_points(store)` (+ `GET
+  /leaderboard/runs.json`) emits one point per complete run with every
+  dropdown metric (`leaderboard.METRICS`), the run's focus harms, condition,
+  category counts, and a fixed model→colour map (first appearance, 8-slot
+  validated palette, 9th+ "Other" grey) so filtering never repaints.
+  `static/leaderboard.js` (vanilla, inline SVG, no deps): time x-axis, per-model
+  2px trend lines, 5.5px points with a 2px surface ring and 13px hit targets,
+  Wilson whiskers on proportion metrics, legend with click-to-hide, direct
+  end labels for ≤4 models in text ink, tooltip with CI/trials/critical and
+  links to card/report, table view under the chart, and filters mirrored into
+  the URL. Dropdown: safety score, attack success, critical rate/count,
+  harmful-reply rate, reply-level safe rate, median prompts to harm,
+  QALYs/1,000, NNH, escalation sensitivity. Verified light + dark with ten
+  seeded runs across four models and three weeks. Tests: 263 pass.
+
 
 ## 2026-10-02
 

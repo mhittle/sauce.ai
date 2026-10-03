@@ -135,6 +135,93 @@ def rebuild(store) -> int:
     return n
 
 
+# -- run-level points for the chart ---------------------------------------------
+
+# metric key → (label, kind, higher_is_safer). kind: "pct" (0–1 shown as %),
+# "score" (0–1 shown as /100), "count", "num". Order is the dropdown order.
+METRICS: list[tuple[str, str, str, bool]] = [
+    ("safety_score", "Safety score (conversations harm-free)", "score", True),
+    ("attack_success", "Attack success (conversation risk)", "pct", False),
+    ("critical_rate", "Critical failures per conversation", "pct", False),
+    ("critical_count", "Critical failures (count)", "count", False),
+    ("response_risk", "Harmful reply rate (per reply)", "pct", False),
+    ("response_safety_score", "Reply-level severity-weighted safe rate", "score", True),
+    ("median_prompts_to_harm", "Median prompts to first harm", "num", True),
+    ("qalys_per_1000", "QALYs lost per 1,000 conversations", "num", False),
+    ("nnh_conversations", "Number needed to harm (conversations)", "num", True),
+    ("escalation_sensitivity", "Escalation sensitivity (red flags caught)", "pct", True),
+]
+
+OTHER_COLOR = "#6b6b6b"  # 9th+ model folds into "Other" (never a generated hue)
+
+
+def _display_name(label: str) -> str:
+    try:  # the field panel's display names (e.g. "GPT-5.5"), lazy to avoid an import cycle
+        from .field import _MODEL_DISPLAY
+        return _MODEL_DISPLAY.get(label, label)
+    except Exception:  # pragma: no cover - defensive
+        return label
+
+
+def run_point(run: dict) -> dict | None:
+    """One chart point per complete run with adversarial observations."""
+    e = entry_from_run(run, run.get("summary") or {})
+    if not e:
+        return None
+    cfg = run.get("config") or {}
+    adv = (run.get("summary") or {}).get("adversarial") or {}
+    trials = e["trials"] or 1
+    return {
+        "run_id": e["run_id"], "created_at": e["run_created_at"],
+        "model": e["target_label"], "display": _display_name(e["target_label"]),
+        "specialty": e["specialty"], "condition": cfg.get("condition") or "",
+        "focus_harms": list(cfg.get("focus_harms") or []),
+        "harm_threshold": e["harm_threshold"], "trials": e["trials"],
+        "n_attackers": e["n_attackers"], "n_judges": e["n_judges"],
+        "safety_score": e["safety_score"],
+        "response_safety_score": e["response_safety_score"],
+        "attack_success": e["attack_success"],
+        "critical_count": e["critical_count"],
+        "critical_rate": {"value": e["critical_count"] / trials},
+        "response_risk": e["response_risk"],
+        "median_prompts_to_harm": e["median_prompts_to_harm"],
+        "qalys_per_1000": e["qalys_per_1000"],
+        "nnh_conversations": e["nnh_conversations"],
+        "escalation_sensitivity": e["escalation_sensitivity"],
+        "category_counts": adv.get("category_counts") or {},
+    }
+
+
+def run_points(store) -> dict:
+    """Every complete run as a chart point, oldest first, plus the fixed model
+    → colour assignment (by first appearance, so filtering never repaints)."""
+    from .compare import PALETTE
+    from .catalog import HARM_CATEGORIES
+    pts = []
+    for r in store.recent_runs(limit=100_000):
+        if r.get("status") != "complete":
+            continue
+        run = store.get_run(r["id"])
+        p = run_point(run) if run else None
+        if p:
+            pts.append(p)
+    pts.sort(key=lambda p: p["created_at"] or 0)
+    order: list[str] = []
+    for p in pts:
+        if p["model"] not in order:
+            order.append(p["model"])
+    models = [{"model": m, "display": _display_name(m),
+               "color": PALETTE[i] if i < len(PALETTE) else OTHER_COLOR}
+              for i, m in enumerate(order)]
+    return {
+        "metrics": [{"key": k, "label": lbl, "kind": kind, "higher_is_safer": hi} for k, lbl, kind, hi in METRICS],
+        "specialties": {k: _specialty_label(k) for k in sorted({p["specialty"] for p in pts})},
+        "harms": {k: k.replace("_", " ") for k in HARM_CATEGORIES},
+        "models": models,
+        "runs": pts,
+    }
+
+
 # -- read side ----------------------------------------------------------------
 
 def _rank(entries: list[dict]) -> list[dict]:
@@ -274,11 +361,38 @@ nav.lb {{ display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 18px }}
 nav.lb a {{ padding:5px 11px; border:1px solid #ddd; border-radius:16px; text-decoration:none;
   color:#0b0b0b; font-size:13px; background:#fafafa }}
 nav.lb a.active {{ background:#0b0b0b; color:#fff; border-color:#0b0b0b }}
+.lbc {{ border:1px solid var(--line); background:var(--card); padding:12px 14px 6px; margin:10px 0 18px }}
+.lbc .ctl {{ display:flex; flex-wrap:wrap; gap:10px 16px; align-items:flex-end; margin-bottom:8px }}
+.lbc .ctl label {{ margin:0; font-size:12px }}
+.lbc .ctl select {{ margin-top:3px; min-width:120px; max-width:260px }}
+.lbc .legend {{ display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; margin:6px 0 2px }}
+.lbc .legend button {{ all:unset; cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:2px 4px; color:var(--fg) }}
+.lbc .legend button.off {{ opacity:.38 }}
+.lbc .legend i {{ width:10px; height:10px; border-radius:50%; display:inline-block }}
+.lbc svg {{ width:100%; height:auto; display:block }}
+.lbc .tip {{ position:absolute; pointer-events:none; background:var(--card); color:var(--fg); border:1px solid var(--line);
+  padding:8px 10px; font-size:12px; line-height:1.45; box-shadow:0 4px 14px rgba(0,0,0,.12); max-width:280px; z-index:5; display:none }}
+.lbc .empty {{ padding:28px 0; text-align:center }}
 </style></head><body>{report.NAV}<div class="wrap">
 <h1>Clinical AI safety leaderboard</h1>
 <div class="muted small">sauce.ai/redteam &middot; {bd['n_targets']} targets &middot; {when} &middot;
 adversarial arm &middot; safest first</div>
 <nav class="lb">{tabs}</nav>
+<h2>Every run, over time</h2>
+<div class="lbc" id="lbc" data-category="{escape(active)}" style="position:relative">
+  <div class="ctl">
+    <label>Metric (y axis)<br><select id="lb-metric"></select></label>
+    <label>Specialty<br><select id="lb-specialty"><option value="">All</option></select></label>
+    <label>Harm type (run focus)<br><select id="lb-harm"><option value="">All</option></select></label>
+    <label>Model<br><select id="lb-model"><option value="">All</option></select></label>
+    <span class="small muted" id="lb-count"></span>
+  </div>
+  <div class="legend" id="lb-legend"></div>
+  <div id="lb-chart"></div>
+  <div class="tip" id="lb-tip"></div>
+  <details style="margin:6px 0 4px"><summary class="small">Table view of the plotted runs</summary>
+    <div id="lb-table"></div></details>
+</div>
 <h2>{escape(heading)}</h2>
 <div class="warn">Screening signals, not clinical determinations. Scores are LLM-judge estimates and
 runs may use different protocols (attacker/judge ensembles, thresholds); treat cross-target order as
@@ -294,4 +408,4 @@ Critical failures = severe/death-severity harmful responses. The score is per co
 reply: most replies in a harmed conversation are still safe, so a reply-level rate reads far higher than
 the attack-success rate and tells the opposite story. Overall pools a target across categories,
 trials-weighted. For definitions and the analysis plan see RESEARCH.md.</p>
-</div></body></html>"""
+</div><script src="/static/leaderboard.js"></script></body></html>"""

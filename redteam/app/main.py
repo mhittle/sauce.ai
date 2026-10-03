@@ -560,6 +560,11 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     def leaderboard_json(category: str = ""):
         return lb_mod.board(store, category or None)
 
+    @app.get("/leaderboard/runs.json")
+    def leaderboard_runs_json():
+        """Every complete run as a chart point (the board keeps only each target's latest)."""
+        return lb_mod.run_points(store)
+
     # -- shareable safety card / eval card / datasheet ----------------------
     @app.get("/card", response_class=HTMLResponse)
     def card_html(run: str = Query(...)):
@@ -958,7 +963,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
                         "field_scan_id": cfg.get("field_scan_id") or "", "ablation_id": cfg.get("ablation_id") or ""})
         return {"n": len(out), "runs": out}
 
-    _STATIC_OK = {"ui.css": "text/css", "guide.js": "application/javascript"}
+    _STATIC_OK = {"ui.css": "text/css", "guide.js": "application/javascript",
+                  "leaderboard.js": "application/javascript"}
 
     @app.get("/static/{name}")
     def static_asset(name: str):

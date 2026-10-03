@@ -51,8 +51,9 @@ GROUPS: list[dict] = [
                      "conversations that stayed harm-free; critical failures break ties), per clinical "
                      "specialty plus an overall view. No extra step.",
           "when": "Always on; browse after any run.",
-          "steps": [{"m": "GET", "p": "/leaderboard", "note": "add ?category=<specialty>"},
-                    {"m": "GET", "p": "/leaderboard.json", "note": "raw board"}]},
+          "steps": [{"m": "GET", "p": "/leaderboard", "note": "add ?category=<specialty>; the chart takes ?metric=&specialty=&harm=&model="},
+                    {"m": "GET", "p": "/leaderboard.json", "note": "raw board"},
+                    {"m": "GET", "p": "/leaderboard/runs.json", "note": "every complete run as a chart point"}]},
          {"title": "Model safety card + share image", "id": "card",
           "summary": "A per-target card: safety score, rank, attack success, critical failures, a "
                      "time-to-harm curve, top harm categories, and provenance — with Open Graph tags and "
