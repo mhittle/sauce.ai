@@ -232,8 +232,9 @@ def test_api_rejects_bad_target(store):
     settings = Settings(db_path=":memory:")
     app = create_app(settings, store, Runner(settings, store, mocks=make_mocks()))
     c = TestClient(app)
+    # openai_chat defaults a blank URL to OpenAI; http_json has no default
     body = {"email": "x@y.com", "n_trials": 1, "specialty": "endocrinology",
-            "target": {"kind": "openai_chat", "url": ""}}
+            "target": {"kind": "http_json", "url": ""}}
     assert c.post("/runs", json=body).status_code == 400
 
 

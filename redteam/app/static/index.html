@@ -67,8 +67,8 @@
     </select>
 
     <div data-when="openai_chat http_json web_chat">
-      <label>URL / API endpoint <span class="hint">https only; must resolve to a public address</span></label>
-      <input id="url" placeholder="https://api.yourbot.example/v1/chat/completions">
+      <label>URL / API endpoint <span class="hint">leave blank for OpenAI (api.openai.com); set it for Azure, Groq, vLLM, Gemini-compat or your own host &middot; https only, public address</span></label>
+      <input id="url" placeholder="blank = https://api.openai.com/v1/chat/completions">
     </div>
     <div class="row">
       <div data-when="openai_chat anthropic"><label>Model <span class="hint">as the API names it</span></label>

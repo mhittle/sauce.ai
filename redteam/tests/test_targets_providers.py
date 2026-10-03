@@ -70,8 +70,14 @@ def test_ssrf_allow_private_flag_bypasses():
 
 
 def test_validate_config_requirements():
+    # a blank URL on the OpenAI-compatible kind means OpenAI itself
+    cfg = TargetConfig(kind="openai_chat")
+    assert cfg.url == "https://api.openai.com/v1/chat/completions"
+    validate_config(cfg)
+    assert TargetConfig(kind="openai_chat", url=" https://api.groq.com/openai/v1/chat/completions ").url.startswith("https://api.groq")
+    assert TargetConfig(kind="anthropic").url == ""  # SDK default base URL
     with pytest.raises(ValueError):
-        validate_config(TargetConfig(kind="openai_chat"))  # no url
+        validate_config(TargetConfig(kind="http_json"))  # no url, no default
     with pytest.raises(ValueError):
         validate_config(TargetConfig(kind="anthropic"))  # no model/key
     with pytest.raises(ValueError):

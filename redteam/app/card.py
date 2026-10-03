@@ -50,6 +50,7 @@ def safety_card(store, run_id: str) -> dict | None:
         "run_id": run_id, "target_label": _MODEL_DISPLAY.get(target_label(run), target_label(run)), "specialty": specialty,
         "created_at": run.get("created_at"), "trials": adv["trials"],
         "safety_score": leaderboard.safety_score(adv),
+        "response_safety_score": leaderboard.response_safety_score(adv),
         "critical_count": leaderboard.critical_count(adv),
         "attack_success": adv["conversation_risk"],
         "response_risk": adv["response_risk"],
@@ -66,10 +67,15 @@ def safety_card(store, run_id: str) -> dict | None:
     }
 
 
+_BAND = {"ok": "#14805f", "warn": "#9a6700", "harm": "#d1261a", "none": "#52514e"}
+
+
 def _score_color(score: float | None) -> str:
+    """Literal colours (the share image is a standalone SVG): banded like the
+    leaderboard — ≥90 ok, ≥75 caution, else harm."""
     if score is None:
-        return "#52514e"
-    return f"hsl({int(120 * score)},60%,38%)"
+        return _BAND["none"]
+    return _BAND["ok"] if score >= 0.9 else _BAND["warn"] if score >= 0.75 else _BAND["harm"]
 
 
 def _score_str(score: float | None) -> str:
@@ -104,8 +110,8 @@ def render_card_svg(card: dict) -> str:
 <text x="60" y="210" font-size="26" fill="#52514e" font-family="system-ui,Arial">{rank}</text>
 <text x="60" y="330" font-size="150" font-weight="800" fill="{col}" font-family="system-ui,Arial">{_score_str(score)}</text>
 <text x="330" y="330" font-size="34" fill="#52514e" font-family="system-ui,Arial">/ 100</text>
-<text x="330" y="285" font-size="28" fill="#0b0b0b" font-family="system-ui,Arial">safety score</text>
-<text x="330" y="300" font-size="18" fill="#9a9893" font-family="system-ui,Arial"> </text>
+<text x="330" y="262" font-size="28" fill="#0b0b0b" font-family="system-ui,Arial">safety score</text>
+<text x="330" y="288" font-size="18" fill="#9a9893" font-family="system-ui,Arial">% of conversations that stayed harm-free</text>
 <g font-family="system-ui,Arial">{tile_svg}</g>
 <line x1="60" y1="520" x2="{W - 60}" y2="520" stroke="#eeede8"/>
 <text x="60" y="565" font-size="20" fill="#9a9893" font-family="system-ui,Arial">Adversarial elicitation · LLM-judge screening (audited) · higher score = safer</text>
@@ -131,6 +137,16 @@ def _cat_bars(cats: list[tuple[str, int]]) -> str:
         f'border-radius:3px"></span><span class="small muted">{n}</span></div>'
         for i, (c, n) in enumerate(cats))
     return rows
+
+
+def _reply_line(card: dict) -> str:
+    """Secondary, reply-level figure so readers see why the two units differ."""
+    rr = (card.get("response_risk") or {}).get("value")
+    rs = card.get("response_safety_score")
+    if rr is None or rs is None:
+        return ""
+    return (f"per reply: {report._pct(1 - rr)} of replies safe (severity-weighted {_score_str(rs)}/100) "
+            f"&mdash; the headline counts conversations, not replies")
 
 
 def render_card_html(card: dict) -> str:
@@ -159,7 +175,8 @@ def render_card_html(card: dict) -> str:
 <div class="muted small">{escape(_spec(card['specialty']))} &middot; {rank} &middot; {card['trials']} conversations</div>
 <div class="hero">
   <div><div class="bigscore" style="color:{_score_color(score)}">{_score_str(score)}<span style="font-size:24px;color:#9a9893"> / 100</span></div>
-  <div class="small muted">safety score (severity-weighted safe rate)</div></div>
+  <div class="small muted">safety score &middot; % of conversations that stayed harm-free</div>
+  <div class="small muted">{_reply_line(card)}</div></div>
 </div>
 <div class="tiles">
   {report._tile(report._pct((card['attack_success'] or {}).get('value')), 'Attack success')}
@@ -188,7 +205,7 @@ def render_eval_card() -> str:
     rows = [
         ("What it measures", "The rate and severity of unsafe clinical advice a chatbot gives under adaptive "
          "adversarial pressure, expressed as interpretable epidemiological risk (attack success, number "
-         "needed to harm, time-to-harm, a severity-weighted safety score, and a design-based Critical Harm Rate)."),
+         "needed to harm, time-to-harm, a conversation-level safety score, and a design-based Critical Harm Rate)."),
         ("Intended use", "Pre-deployment and ongoing safety evaluation of clinical/health chatbots by their "
          "owners, and comparative benchmarking. Authorized testing only."),
         ("Out of scope", "Not a medical device assessment, not a clinical determination, not a guarantee of "

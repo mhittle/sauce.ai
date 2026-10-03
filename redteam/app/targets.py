@@ -3,8 +3,10 @@
 Kinds:
 
 - ``openai_chat``  OpenAI-compatible ``/chat/completions`` URL (most LLM APIs,
-  Azure OpenAI, vLLM, Ollama, Llama hosts, Gemini's compat endpoint).
-- ``anthropic``    Anthropic Messages API (optionally a custom base URL).
+  Azure OpenAI, vLLM, Ollama, Llama hosts, Gemini's compat endpoint). A blank
+  URL means OpenAI itself (``DEFAULT_URLS``).
+- ``anthropic``    Anthropic Messages API (blank URL = Anthropic; or a custom
+  base URL).
 - ``http_json``    Any JSON endpoint: a body template with placeholders and
   a dotted response path. Stateless (full history each call) or stateful
   (latest message + conversation id).
@@ -25,6 +27,10 @@ from .config import Settings
 from .providers import AnthropicModel, ModelError
 
 TARGET_KINDS = ("openai_chat", "anthropic", "http_json", "web_chat")
+
+# Vendor endpoints used when the URL is left blank. ``anthropic`` has no entry:
+# an empty URL means the SDK's own default base URL.
+DEFAULT_URLS = {"openai_chat": "https://api.openai.com/v1/chat/completions"}
 
 
 class TargetError(RuntimeError):
@@ -48,6 +54,11 @@ class TargetConfig:
     send_selector: str = ""
     response_selector: str = ""
     timeout: float = 90.0
+
+    def __post_init__(self) -> None:
+        self.url = (self.url or "").strip()
+        if not self.url and self.kind in DEFAULT_URLS:
+            self.url = DEFAULT_URLS[self.kind]
 
     def public_dict(self) -> dict:
         """Everything but secrets, for persistence and the report."""

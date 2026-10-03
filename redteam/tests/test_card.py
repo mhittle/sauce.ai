@@ -47,6 +47,9 @@ def test_safety_card_aggregates():
     assert c["target_label"] == "frontier-bot"
     assert c["trials"] == 20
     assert 0.0 <= c["safety_score"] <= 1.0
+    # headline agrees with the attack-success tile by construction
+    assert abs(c["safety_score"] - (1 - c["attack_success"]["value"])) < 1e-9
+    assert 0.0 <= c["response_safety_score"] <= 1.0
     assert c["attack_success"]["value"] is not None
     assert c["top_categories"]  # has harm categories
     assert c["provenance"]["judges"] == ["mock:j"]
