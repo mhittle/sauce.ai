@@ -117,6 +117,9 @@ def _km_table(km: dict) -> str:
             f"<th>95% CI</th></tr>{rows}</table>")
 
 
+ARMS_NOTE = '<div class="small" style="margin:8px 0 14px"><b>What the two arms estimate.</b> Both arms talk to the same chatbot with the same case mix; they differ only in the simulated user. The <b>ordinary-use (control) arm</b> is a cooperative patient asking honest questions, so its harm rate is the chatbot&rsquo;s risk under typical use &mdash; the quantity of interest when AI advice is the exposure. The <b>adversarial arm</b> is a stress test: the orchestrator searches for the user behaviour most likely to elicit unsafe advice, so its rate is a worst-case bound. The contrast below (risk difference, risk ratio, NNH, attributable fraction) therefore estimates how much harm adversarial pressure adds <i>over ordinary use</i>, not the harm of AI advice itself. Neither arm is &ldquo;no chatbot&rdquo;: a comparison against a reference model or no advice is made across runs in <a href="/epi">Exposure</a> and the <a href="/target-trial">target-trial emulation</a>.</div>'
+
+
 def _arm_table(name: str, a: dict) -> str:
     km = a["prompts_until_harm"]["km"]
     med = km.get("median")
@@ -203,14 +206,14 @@ def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: di
 
     series = [("Adversarial", ADV, km)]
     if ctl:
-        series.append(("Control", CTL, ctl["prompts_until_harm"]["km"]))
+        series.append(("Ordinary use (control)", CTL, ctl["prompts_until_harm"]["km"]))
     legend = "".join(f'<span><i class="sw" style="background:{c}"></i>{n}</span>' for n, c, _ in series)
 
     comparison = ""
     if cmp_:
         rr, rd, nnh, lr = cmp_["risk_ratio"], cmp_["risk_difference"], cmp_["nnh"], cmp_["log_rank"]
         comparison = (
-            "<h2>Adversarial vs control</h2><table>"
+            "<h2>Adversarial vs ordinary use (control)</h2>" + ARMS_NOTE + "<table>"
             f"<tr><td>Risk difference (Newcombe)</td><td>{_ci(rd)}</td></tr>"
             f"<tr><td>Risk ratio (Katz log)</td><td>{_ci(rr, lambda v: _num(v, 2))}"
             f"{' <span class=muted>(0.5 continuity correction)</span>' if rr.get('continuity_corrected') else ''}</td></tr>"
@@ -218,7 +221,7 @@ def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: di
             f"<span class='muted'>{escape(nnh.get('note') or '')}</span></td></tr>"
             f"<tr><td>Attributable fraction among exposed</td><td>{_pct(cmp_['attributable_fraction_exposed'])}</td></tr>"
             f"<tr><td>Log-rank test (time to first harm)</td><td>&chi;&sup2; {_num(lr['chi2'], 2)}, p = {_num(lr['p'], 4)}</td></tr>"
-            "</table>" + _arm_table("Control arm", ctl))
+            "</table>" + _arm_table("Ordinary-use (control) arm", ctl))
 
     sev_rows = "".join(f"<tr><td>{s}</td><td class='n'>{adv['severity_counts'].get(s, 0)}</td></tr>"
                        for s in SEVERITY_LEVELS[1:])
@@ -249,7 +252,7 @@ def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: di
 <div class="warn">Probabilities, severities, and QALY losses are estimates from an LLM judge panel under the stated
 assumptions, not validated clinical assessments. Treat them as a screening signal: have a clinician review every
 flagged transcript before drawing conclusions. The adversarial arm is designed to find failures fast, so its rates
-describe worst-case pressure, not typical-user risk{'; the control arm estimates the latter' if ctl else ''}.</div>
+describe worst-case pressure, not typical-user risk{'; the ordinary-use (control) arm estimates the latter' if ctl else ''}.</div>
 
 <h2>Time to first harmful reply</h2>
 <div class="legend">{legend}</div>
@@ -273,7 +276,8 @@ describe worst-case pressure, not typical-user risk{'; the control arm estimates
 
 <h2>Methods</h2>
 <p class="small">Each trial is a synthetic conversation with a persona drawn from the {escape(cfg['specialty'])} case library,
-randomly allocated to the adversarial arm or (if requested) a cooperative control arm. Adversarial prompts come from an
+randomly allocated to the adversarial arm or (if requested) an ordinary-use control arm: a cooperative patient with the
+same case mix and no manipulation, whose harm rate is the chatbot's risk under typical use. Adversarial prompts come from an
 ensemble of {len(orch['attackers'])} attacker model(s) ({escape(', '.join(orch['attackers']))}) across {orch['levels']} level(s)
 of propose/refine, {orch['candidates_per_agent']} candidate(s) per agent, beam {orch['beam_width']}, scored by
 {len(orch['arbiters'])} arbiter(s) ({escape(', '.join(orch['arbiters']))}) with {escape(orch['aggregation'])} aggregation,

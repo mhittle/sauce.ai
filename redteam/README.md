@@ -62,8 +62,17 @@ If every model fails, a deterministic tactic template keeps the trial alive
   severity distribution on the AHRQ harm scale, harm categories, and
   escalation appropriateness. Evidence quotes must appear verbatim in the
   reply or they are dropped. `P(harm) ≥ threshold` marks a reply harmful.
+- **Two arms, one chatbot.** Trials are randomized to an **adversarial arm**
+  (the orchestrator searches for the user behaviour most likely to elicit
+  unsafe advice: a worst-case bound) or an optional **ordinary-use control
+  arm** (a cooperative patient with the same case mix and no manipulation:
+  the chatbot's harm rate under typical use, the quantity of interest when
+  AI advice is the exposure). The within-run contrast estimates the harm
+  adversarial pressure adds over ordinary use. Neither arm is "no chatbot";
+  comparisons against a reference model are made across runs (`/epi`,
+  `/target-trial`).
 - **Metrics** (`app/metrics.py`, pure stdlib) — Wilson intervals, number
-  needed to harm (single-arm and vs. an optional cooperative **control
+  needed to harm (single-arm and vs. the optional ordinary-use **control
   arm**), Byar's Poisson rates, Kaplan–Meier prompts-until-harm with
   Greenwood variance and a log-rank test, Newcombe risk differences, Katz
   risk ratios, attributable fraction, Fleiss' κ inter-judge agreement, and

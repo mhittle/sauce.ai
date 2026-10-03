@@ -134,6 +134,24 @@ these.
 
 ---
 
+## 2026-10-03
+
+- **Redteam — the control arm is "ordinary use", and says so.** User: "I don't
+  understand the control… normally a control group is the unexposed. Your
+  framing uses a control arm for the red teaming, but the goal is not to
+  measure the increased harm created by red-team bots." Correct: the two arms
+  share one chatbot and one case mix and differ only in the simulated user,
+  so the within-run contrast estimates the harm adversarial pressure adds
+  over ordinary use, not the harm of AI advice. The cooperative arm is the
+  policy-relevant estimate of the chatbot's own risk under typical use; the
+  adversarial arm is a worst-case bound; neither is "no chatbot" (that
+  comparison lives across runs in /epi and /target-trial). Labels now read
+  "Ordinary-use arm (control)" on both launchers, the report section is
+  "Adversarial vs ordinary use (control)" with a "What the two arms
+  estimate" paragraph (`report.ARMS_NOTE`), the KM legend says "Ordinary use
+  (control)", and the README has a "Two arms, one chatbot" bullet. No
+  internals renamed (`control_fraction`, arm key `control`). Tests: 261 pass.
+
 ## 2026-10-02
 
 - **Redteam — safety score re-based to the conversation.** User, on a live
