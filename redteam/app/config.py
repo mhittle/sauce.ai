@@ -83,6 +83,8 @@ class Settings:
     smtp_pass: str | None = os.environ.get("SMTP_PASS")
     smtp_from: str = os.environ.get("SMTP_FROM", "redteam@sauce.ai")
     smtp_starttls: bool = _bool("SMTP_STARTTLS", True)
+    # copied on every report (and test) send, e.g. the operator's own inbox; comma-separated
+    smtp_cc: tuple[str, ...] = tuple(a.strip() for a in os.environ.get("SMTP_CC", "").split(",") if a.strip())
 
 
 def get_settings() -> Settings:

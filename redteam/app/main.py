@@ -200,6 +200,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             "providers": list(PROVIDERS),
             "available_providers": available_providers(settings),
             "model_catalog": model_catalog(settings),
+            "email_enabled": bool(settings.smtp_host),
             "defaults": {
                 "attackers": list(settings.default_attackers),
                 "arbiters": [settings.default_arbiter],
@@ -266,6 +267,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             "email": _mask(run["email"]),
             "error": run["error"],
             "emailed": bool(run["emailed_at"]),
+            "email_error": run.get("email_error"),
             "headline": None if not adv else {
                 "conversation_risk": adv["conversation_risk"]["value"],
                 "trials_with_harm": adv["trials_with_harm"],
@@ -298,7 +300,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             f'<h1>Red-team run {run_id}</h1><p>{msg}</p>'
             f'<div style="height:10px;background:#eee;border-radius:5px;overflow:hidden">'
             f'<div style="height:100%;width:{pct}%;background:#8e2a1f"></div></div>'
-            f'<p style="color:#666">This page refreshes automatically. The full report is emailed when the run completes.</p></body>')
+            f'<p style="color:#666">This page refreshes automatically. '
+            + ('The full report is emailed when the run completes.' if settings.smtp_host else
+               'Email is not configured on this server; the full report will appear at this URL when the run completes.')
+            + '</p></body>')
 
     @app.get("/runs/{run_id}/manifest.json")
     def run_manifest(run_id: str):

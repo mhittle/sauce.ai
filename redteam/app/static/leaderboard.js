@@ -5,19 +5,26 @@
   const $ = (id) => document.getElementById(id);
   const root = $('lbc');
   if (!root) return;
-  let DATA = null, metricKey = 'safety_score', hidden = new Set();
+  let DATA = null, metricKey = 'safety_score', arm = 'adversarial', hidden = new Set();
   const W = 960, H = 340, M = { t: 18, r: 150, b: 44, l: 56 };
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmtDate = (t) => new Date(t * 1000).toISOString().slice(0, 10);
-  const metric = () => DATA.metrics.find((m) => m.key === metricKey);
+  const metric = () => {
+    const m = DATA.metrics.find((x) => x.key === metricKey);
+    return arm === 'control' && m.key === 'attack_success' ? { ...m, label: 'Harm rate under ordinary use (conversation risk)' } : m;
+  };
+  // the adversarial arm's metrics sit on the run; the ordinary-use (control) arm's under run.control
+  const armOf = (run) => arm === 'control' ? run.control : run;
   const val = (run, key) => {
-    const v = run[key];
+    const a = armOf(run); if (!a) return null;
+    const v = a[key];
     if (v === null || v === undefined) return null;
     return typeof v === 'object' ? (v.value ?? null) : v;
   };
   const ci = (run, key) => {
-    const v = run[key];
+    const a = armOf(run); if (!a) return null;
+    const v = a[key];
     return v && typeof v === 'object' && v.lo != null && v.hi != null ? [v.lo, v.hi] : null;
   };
   const fmt = (v, kind) => {
@@ -32,6 +39,7 @@
   function filtered() {
     const sp = $('lb-specialty').value, harm = $('lb-harm').value, model = $('lb-model').value;
     return DATA.runs.filter((r) =>
+      (arm !== 'control' || r.control) &&
       (!sp || r.specialty === sp) &&
       (!harm || (r.focus_harms || []).includes(harm)) &&
       (!model || r.model === model) &&
@@ -49,10 +57,13 @@
   function draw() {
     const m = metric(), runs = filtered(), colorOf = Object.fromEntries(DATA.models.map((x) => [x.model, x.color]));
     const dispOf = Object.fromEntries(DATA.models.map((x) => [x.model, x.display]));
-    $('lb-count').textContent = `${runs.length} of ${DATA.runs.length} runs`;
+    const withCtl = DATA.runs.filter((r) => r.control).length;
+    $('lb-count').textContent = arm === 'control'
+      ? `${runs.length} of ${withCtl} runs with an ordinary-use arm (${DATA.runs.length - withCtl} had none)`
+      : `${runs.length} of ${DATA.runs.length} runs`;
     const chart = $('lb-chart');
     if (!runs.length) {
-      chart.innerHTML = '<div class="empty small muted">No completed runs match these filters.</div>';
+      chart.innerHTML = `<div class="empty small muted">${arm === 'control' && !withCtl ? 'No run has an ordinary-use (control) arm yet; set "Ordinary-use arm" above 0 when launching.' : 'No completed runs match these filters.'}</div>`;
       $('lb-table').innerHTML = ''; return;
     }
     // scales
@@ -72,7 +83,7 @@
       `<text x="${M.l - 8}" y="${Y(v) + 4}" text-anchor="end">${yFmt(v)}</text>`;
     for (const t of xT) if (t >= t0 && t <= t1) g += `<text x="${X(t)}" y="${H - M.b + 18}" text-anchor="middle">${fmtDate(t)}</text>`;
     g += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/>`;
-    g += `<text x="${M.l}" y="${H - 6}" fill="var(--muted)">run date (UTC) · ${m.higher_is_safer ? 'higher is safer' : 'lower is safer'}</text></g>`;
+    g += `<text x="${M.l}" y="${H - 6}" fill="var(--muted)">run date (UTC) · ${arm === 'control' ? 'ordinary-use (control) arm' : 'adversarial arm'} · ${m.higher_is_safer ? 'higher is safer' : 'lower is safer'}</text></g>`;
 
     // per-model trend lines (2px, recessive) and end labels
     const byModel = {};
@@ -113,7 +124,7 @@
         tip.innerHTML = `<b>${esc(r.display)}</b> <span class="muted">${esc(r.model)}</span><br>` +
           `${fmtDate(r.created_at)} · ${esc(DATA.specialties[r.specialty] || r.specialty)}${r.condition ? ' · ' + esc(r.condition) : ''}<br>` +
           `<b>${esc(m.label)}: ${fmt(val(r, metricKey), m.kind)}</b>${c ? ` <span class="muted">(${fmt(c[0], m.kind)} to ${fmt(c[1], m.kind)})</span>` : ''}<br>` +
-          `${r.trials} conversations · attack success ${fmt(val(r, 'attack_success'), 'pct')} · ${r.critical_count} critical<br>` +
+          `${armOf(r).trials} conversations (${arm === 'control' ? 'ordinary use' : 'adversarial'}) · ${arm === 'control' ? 'harm rate' : 'attack success'} ${fmt(val(r, 'attack_success'), 'pct')} · ${armOf(r).critical_count} critical<br>` +
           `<a href="/card?run=${esc(r.run_id)}">safety card</a> · <a href="/runs/${esc(r.run_id)}">report</a>`;
         tip.style.display = 'block';
       });
@@ -129,11 +140,11 @@
     // table view
     const rows = runs.slice().sort((a, b) => b.created_at - a.created_at).map((r) =>
       `<tr><td>${fmtDate(r.created_at)}</td><td><b>${esc(r.display)}</b><br><span class="muted small">${esc(r.model)}</span></td>` +
-      `<td>${esc(DATA.specialties[r.specialty] || r.specialty)}</td><td class="n">${r.trials}</td>` +
+      `<td>${esc(DATA.specialties[r.specialty] || r.specialty)}</td><td class="n">${armOf(r).trials}</td>` +
       `<td class="n">${fmt(val(r, metricKey), m.kind)}</td><td class="n">${fmt(val(r, 'attack_success'), 'pct')}</td>` +
-      `<td class="n">${r.critical_count}</td><td><a href="/card?run=${esc(r.run_id)}">card</a></td></tr>`).join('');
+      `<td class="n">${armOf(r).critical_count}</td><td><a href="/card?run=${esc(r.run_id)}">card</a></td></tr>`).join('');
     $('lb-table').innerHTML = `<table><tr><th>Date</th><th>Model</th><th>Specialty</th><th>Conv.</th><th>${esc(m.label)}</th>` +
-      `<th>Attack success</th><th>Critical</th><th></th></tr>${rows}</table>`;
+      `<th>${arm === 'control' ? 'Harm rate' : 'Attack success'}</th><th>Critical</th><th></th></tr>${rows}</table>`;
   }
 
   function legend() {
@@ -156,6 +167,7 @@
     if (root.dataset.category && DATA.specialties[root.dataset.category]) sp.value = root.dataset.category;
     const hs = $('lb-harm');
     for (const [k, v] of Object.entries(DATA.harms)) hs.insertAdjacentHTML('beforeend', `<option value="${esc(k)}">${esc(v)}</option>`);
+    const am = $('lb-arm');
     const mdl = $('lb-model');
     for (const x of DATA.models) mdl.insertAdjacentHTML('beforeend', `<option value="${esc(x.model)}">${esc(x.display)}</option>`);
     // filters live in the URL so a view can be shared
@@ -164,15 +176,19 @@
     if (q.get('specialty') && DATA.specialties[q.get('specialty')]) sp.value = q.get('specialty');
     if (q.get('harm') && DATA.harms[q.get('harm')]) hs.value = q.get('harm');
     if (q.get('model') && DATA.models.some((x) => x.model === q.get('model'))) mdl.value = q.get('model');
-    metricKey = ms.value;
+    if (q.get('arm') === 'control') am.value = 'control';
+    metricKey = ms.value; arm = am.value;
     const sync = () => {
-      metricKey = ms.value;
+      metricKey = ms.value; arm = am.value;
+      ms.querySelector('option[value="attack_success"]').textContent =
+        arm === 'control' ? 'Harm rate under ordinary use (conversation risk)' : 'Attack success (conversation risk)';
       const u = new URL(location.href);
       for (const [k, el] of [['metric', ms], ['specialty', sp], ['harm', hs], ['model', mdl]]) el.value ? u.searchParams.set(k, el.value) : u.searchParams.delete(k);
+      arm === 'control' ? u.searchParams.set('arm', 'control') : u.searchParams.delete('arm');
       history.replaceState(null, '', u);
       draw();
     };
-    for (const id of ['lb-metric', 'lb-specialty', 'lb-harm', 'lb-model']) $(id).addEventListener('change', sync);
+    for (const id of ['lb-metric', 'lb-arm', 'lb-specialty', 'lb-harm', 'lb-model']) $(id).addEventListener('change', sync);
     legend(); draw();
   }
   boot().catch((e) => { $('lb-chart').innerHTML = `<div class="empty small muted">Could not load runs: ${esc(e.message)}</div>`; });

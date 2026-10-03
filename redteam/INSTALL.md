@@ -28,8 +28,35 @@ providers for the attacker/judge ensembles, also set `OPENAI_API_KEY`,
 behind these keys must hold credits; a run makes many model calls.
 
 To email reports, set `SMTP_HOST` (+ `SMTP_USER`/`SMTP_PASS` if the relay
-needs auth). Without SMTP the report is not emailed but stays available at
-`/runs/<id>`.
+needs auth; `SMTP_PORT` defaults to 587 with STARTTLS, set `SMTP_STARTTLS=0`
+for an implicit-TLS or plaintext relay; `SMTP_FROM` defaults to
+`redteam@sauce.ai`). Without SMTP the report is not emailed but stays
+available at `/runs/<id>`, the run form says so next to the email field, and
+`GET /config` reports `email_enabled: false`. When a send fails, the reason is
+stored on the run (`email_error`), shown on the run status and returned by
+`GET /runs/<id>/status`. To test the relay from the server:
+
+```
+python -m app.mailer you@lab.edu
+```
+
+It prints the SMTP settings in effect and either `sent` or the exact failure.
+`SMTP_CC` (comma-separated) copies every report and test send to the
+operator's own inbox.
+
+**Sending as `@sauce.ai`.** The domain publishes no MX or SPF record and a
+DMARC policy of `p=quarantine`, so a message with a `@sauce.ai` From address
+is quarantined unless it is DKIM-signed for the domain. Use a transactional
+relay that signs for the domain (Resend is the simplest: free tier, SMTP
+interface): add the domain in the provider, create the DNS records it gives
+you (a DKIM TXT such as `resend._domainkey`, plus an SPF TXT and MX on its
+bounce subdomain), wait for the provider to show the domain verified, then
+set `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USER=resend`,
+`SMTP_PASS=<API key>`, `SMTP_FROM=redteam@sauce.ai`. The existing DMARC
+record (relaxed alignment) already accepts a DKIM signature for `sauce.ai`.
+Replies to `redteam@sauce.ai` go nowhere unless the domain also has a
+mailbox; set `SMTP_FROM` to a display form such as
+`"sauce.ai redteam <redteam@sauce.ai>"` and give people the report link.
 
 `PUBLIC_BASE_URL` should be the externally reachable base (used in the email
 link).

@@ -20,7 +20,7 @@ from . import leaderboard
 from .catalog import HARM_CATEGORIES, SPECIALTIES, QalyAssumptions
 from .config import Settings
 from .judge import JudgePanel
-from .mailer import send_report
+from .mailer import send_report_detailed
 from .metrics import summarize
 from .netguard import UnsafeTarget, check_url
 from .orchestrator import Orchestrator, OrchestratorConfig, TacticBandit
@@ -191,8 +191,8 @@ class Runner:
                              usage=usage, bandit=bandit.state(), report_html=html)
             leaderboard.record_run(store, run_id)
             store.refund_trials(spec.email, spec.n_trials - started_trials)
-            if send_report(self.settings, spec.email, run_id, html, summary):
-                store.update_run(run_id, emailed_at=time.time())
+            ok, err = send_report_detailed(self.settings, spec.email, run_id, html, summary)
+            store.update_run(run_id, emailed_at=time.time() if ok else None, email_error=err)
             pool.shutdown(wait=False)
         except (ValueError, ModelError, TargetError, UnsafeTarget) as exc:
             self._fail(run_id, spec, started_trials, str(exc))
@@ -228,8 +228,9 @@ class Runner:
                                  self.settings, note=note)
             store.update_run(run_id, summary=summary, report_html=html)
             leaderboard.record_run(store, run_id)
-            if not run.get("emailed_at") and send_report(self.settings, run["email"], run_id, html, summary):
-                store.update_run(run_id, emailed_at=time.time())
+            if not run.get("emailed_at"):
+                ok, err = send_report_detailed(self.settings, run["email"], run_id, html, summary)
+                store.update_run(run_id, emailed_at=time.time() if ok else None, email_error=err)
             return True
         except Exception:
             log.error("partial report for %s failed: %s", run_id, traceback.format_exc())

@@ -156,7 +156,7 @@
     </details>
 
     <h2 class="step"><span class="n">3</span> Where to send the report</h2>
-    <label>Email <span class="hint">the report is emailed here when the run finishes</span></label>
+    <label>Email <span class="hint" id="email-hint">the report is emailed here when the run finishes</span></label>
     <input id="email" type="email" placeholder="you@lab.edu">
     <p class="small muted" id="quota"></p>
 
@@ -188,6 +188,7 @@ async function boot(){
   $('limit').textContent = CFG.limits.free_trial_limit;
   document.querySelectorAll('.lim').forEach(e => e.textContent = CFG.limits.free_trial_limit);
   $('n_trials').max = CFG.limits.free_trial_limit;
+  if(CFG.email_enabled===false) $('email-hint').textContent = 'identifies your free-trial quota; this server has no outgoing mail, so the report is shown here and kept at its link';
   $('max_turns').max = CFG.limits.max_turns_cap;
   const sp = $('specialty');
   CFG.specialties.forEach(s => sp.add(new Option(s.label, s.key)));
@@ -338,7 +339,7 @@ function watch(id){
     const pct = Math.round(100*s.completed_trials/Math.max(1,s.n_trials));
     $('progress').style.width = pct+'%';
     $('statusmsg').innerHTML = {queued:'Queued…', running:`Running — ${s.completed_trials}/${s.n_trials} trials (${pct}%)`,
-      complete:'Complete. '+(s.emailed?'Report emailed.':'Report ready (email not configured).'),
+      complete:'Complete. '+(s.emailed?`Report emailed to ${s.email}.`:s.email_error?`<span class=err>Not emailed: ${s.email_error}</span> The report is at the link above.`:'Report ready at the link above.'),
       failed:`<span class=err>Failed: ${s.error||''}</span>`}[s.status] || s.status;
     if(s.headline) $('headline').innerHTML =
       `Conversations reaching a harmful reply: <b>${s.headline.trials_with_harm}</b> · harmful replies: <b>${s.headline.harmful_responses}</b>`;

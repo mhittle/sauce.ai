@@ -163,8 +163,32 @@ def _display_name(label: str) -> str:
         return label
 
 
+def arm_metrics(arm: dict | None) -> dict | None:
+    """The chart metrics for one arm's ``metrics.arm_summary`` output (the
+    adversarial and ordinary-use/control arms share the shape)."""
+    if not arm or not arm.get("trials"):
+        return None
+    trials = arm["trials"]
+    return {
+        "trials": trials,
+        "safety_score": safety_score(arm),
+        "response_safety_score": response_safety_score(arm),
+        "attack_success": arm.get("conversation_risk"),
+        "critical_count": critical_count(arm),
+        "critical_rate": {"value": critical_count(arm) / trials},
+        "response_risk": arm.get("response_risk"),
+        "median_prompts_to_harm": ((arm.get("prompts_until_harm") or {}).get("km") or {}).get("median"),
+        "qalys_per_1000": (arm.get("expected_qalys_lost_per_1000_conversations") or {}).get("mean"),
+        "nnh_conversations": (arm.get("nnh_conversations") or {}).get("value"),
+        "escalation_sensitivity": (arm.get("escalation_sensitivity") or {}).get("value"),
+        "category_counts": arm.get("category_counts") or {},
+    }
+
+
 def run_point(run: dict) -> dict | None:
-    """One chart point per complete run with adversarial observations."""
+    """One chart point per complete run with adversarial observations. The
+    adversarial arm's metrics sit at the top level (the board's view); the
+    ordinary-use (control) arm's, when the run had one, under ``control``."""
     e = entry_from_run(run, run.get("summary") or {})
     if not e:
         return None
@@ -172,6 +196,7 @@ def run_point(run: dict) -> dict | None:
     adv = (run.get("summary") or {}).get("adversarial") or {}
     trials = e["trials"] or 1
     return {
+        "control": arm_metrics((run.get("summary") or {}).get("control")),
         "run_id": e["run_id"], "created_at": e["run_created_at"],
         "model": e["target_label"], "display": _display_name(e["target_label"]),
         "specialty": e["specialty"], "condition": cfg.get("condition") or "",
@@ -382,6 +407,8 @@ adversarial arm &middot; safest first</div>
 <div class="lbc" id="lbc" data-category="{escape(active)}" style="position:relative">
   <div class="ctl">
     <label>Metric (y axis)<br><select id="lb-metric"></select></label>
+    <label>Arm<br><select id="lb-arm"><option value="adversarial">Adversarial (red-team pressure)</option>
+      <option value="control">Ordinary use (control)</option></select></label>
     <label>Specialty<br><select id="lb-specialty"><option value="">All</option></select></label>
     <label>Harm type (run focus)<br><select id="lb-harm"><option value="">All</option></select></label>
     <label>Model<br><select id="lb-model"><option value="">All</option></select></label>

@@ -196,6 +196,13 @@ class Store:
         if path != ":memory:":
             self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Additive columns for databases created before they existed."""
+        have = {r["name"] for r in self._conn.execute("PRAGMA table_info(runs)")}
+        if "email_error" not in have:
+            self._conn.execute("ALTER TABLE runs ADD COLUMN email_error TEXT")
 
     def _x(self, sql: str, args: tuple = ()):
         with self._lock:
