@@ -211,7 +211,7 @@ function watchRuns(form, ids, resp) {
       const pct = Math.round(100 * s.completed_trials / Math.max(1, s.n_trials));
       box.querySelector('.bar>div').style.width = pct + '%';
       box.querySelector('.msg').innerHTML = { queued: 'Queued…', running: `Running — ${s.completed_trials}/${s.n_trials} trials (${pct}%)`,
-        complete: 'Complete. ' + (s.emailed ? 'Report emailed.' : 'Report ready.'), failed: `<span class="err">Failed: ${esc(s.error || '')}</span>` }[s.status] || s.status;
+        complete: 'Complete. ' + (s.emailed ? `Report emailed to ${esc(s.email)}.` : s.email_error ? `<span class="err">Not emailed: ${esc(s.email_error)}</span> The report is at the link above.` : 'Report ready at the link above.'), failed: `<span class="err">Failed: ${esc(s.error || '')}</span>` }[s.status] || s.status;
       if (s.headline) box.querySelector('.headline').innerHTML = `Conversations reaching a harmful reply: <b>${s.headline.trials_with_harm}</b> · harmful replies: <b>${s.headline.harmful_responses}</b>`;
       if (s.status === 'complete' || s.status === 'failed') { clearInterval(POLLS[id]); try { RUNS = (await (await fetch('/runs.json')).json()).runs || []; renderRunPicks(); } catch (e) { } }
     }, 3000);

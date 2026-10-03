@@ -28,8 +28,21 @@ providers for the attacker/judge ensembles, also set `OPENAI_API_KEY`,
 behind these keys must hold credits; a run makes many model calls.
 
 To email reports, set `SMTP_HOST` (+ `SMTP_USER`/`SMTP_PASS` if the relay
-needs auth). Without SMTP the report is not emailed but stays available at
-`/runs/<id>`.
+needs auth; `SMTP_PORT` defaults to 587 with STARTTLS, set `SMTP_STARTTLS=0`
+for an implicit-TLS or plaintext relay; `SMTP_FROM` defaults to
+`redteam@sauce.ai`). Without SMTP the report is not emailed but stays
+available at `/runs/<id>`, the run form says so next to the email field, and
+`GET /config` reports `email_enabled: false`. When a send fails, the reason is
+stored on the run (`email_error`), shown on the run status and returned by
+`GET /runs/<id>/status`. To test the relay from the server:
+
+```
+python -m app.mailer you@lab.edu
+```
+
+It prints the SMTP settings in effect and either `sent` or the exact failure.
+Choose a `SMTP_FROM` on a domain whose SPF/DKIM records authorize the relay,
+or the message lands in spam.
 
 `PUBLIC_BASE_URL` should be the externally reachable base (used in the email
 link).

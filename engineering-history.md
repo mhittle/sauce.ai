@@ -169,6 +169,21 @@ these.
   harmful-reply rate, reply-level safe rate, median prompts to harm,
   QALYs/1,000, NNH, escalation sensitivity. Verified light + dark with ten
   seeded runs across four models and three weeks. Tests: 263 pass.
+- **Redteam — "I'm not getting any emails."** The live run shows
+  `emailed: false`; `send_report` logged and returned False both when SMTP
+  was unconfigured and when a send failed, and the UI said only "email not
+  configured". Now `mailer.deliver`/`send_report_detailed` return
+  `(ok, reason)` with user-safe reasons (unset host, unreachable host:port,
+  login rejected, recipient refused, server error); the runner stores the
+  reason in a new `runs.email_error` column (additive migration in
+  `Store._migrate`); `GET /runs/<id>/status` returns it and both launchers
+  show "Report emailed to …" / "Not emailed: <reason>" / "Report ready at the
+  link"; `GET /config` has `email_enabled`, and the run form's email hint says
+  when the server has no outgoing mail. `python -m app.mailer you@lab.edu`
+  sends a test message with the server's SMTP_* and prints the exact failure.
+  INSTALL.md documents SMTP_PORT/STARTTLS/FROM and the SPF/DKIM caveat. Most
+  likely cause on Railway: `SMTP_HOST` was never set (marked optional in the
+  deploy notes). Tests: 267 pass.
 
 
 ## 2026-10-02
