@@ -184,6 +184,15 @@ these.
   INSTALL.md documents SMTP_PORT/STARTTLS/FROM and the SPF/DKIM caveat. Most
   likely cause on Railway: `SMTP_HOST` was never set (marked optional in the
   deploy notes). Tests: 267 pass.
+- **Redteam — leaderboard chart: Arm dropdown.** User: "there should be a drop
+  down for control prompts as well." `leaderboard.arm_metrics(arm_summary)`
+  computes the chart metrics for either arm (same shape), and each run point
+  now carries `control` (the ordinary-use arm's metrics, or null when the run
+  had none). The chart's Arm select (adversarial / ordinary use) reads from
+  the chosen arm, relabels attack success as "harm rate under ordinary use",
+  drops runs without that arm (count line says how many), explains the empty
+  state, and rides the URL as `?arm=control`. Verified with seeded runs.
+  Tests: 268 pass.
 
 
 ## 2026-10-02

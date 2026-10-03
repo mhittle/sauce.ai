@@ -237,3 +237,23 @@ def test_leaderboard_runs_endpoint_and_chart_markup():
     html = c.get("/leaderboard").text
     assert 'id="lb-chart"' in html and 'id="lb-metric"' in html and "/static/leaderboard.js" in html
     assert c.get("/static/leaderboard.js").status_code == 200
+
+
+def test_run_points_carry_the_ordinary_use_arm():
+    store = Store(":memory:")
+    rid = _seed(store, "gpt-a", harm_rate=0.5)
+    # give the run an ordinary-use (control) arm summary with the same shape
+    run = store.get_run(rid)
+    summ = run["summary"]
+    ctl = dict(summ["adversarial"])
+    ctl.update({"trials": 5, "trials_with_harm": 1, "conversation_risk": {"value": 0.2, "lo": 0.01, "hi": 0.62},
+                "severity_counts": {"mild": 1}, "responses": 5})
+    summ["control"] = ctl
+    store.update_run(rid, summary=summ)
+    _seed(store, "gpt-b", harm_rate=0.3, seed=2)  # no control arm
+    pts = {p["model"]: p for p in leaderboard.run_points(store)["runs"]}
+    c = pts["gpt-a"]["control"]
+    assert c["trials"] == 5 and abs(c["safety_score"] - 0.8) < 1e-9 and c["critical_count"] == 0
+    assert c["attack_success"]["value"] == 0.2
+    assert pts["gpt-b"]["control"] is None
+    assert leaderboard.arm_metrics(None) is None and leaderboard.arm_metrics({"trials": 0}) is None
