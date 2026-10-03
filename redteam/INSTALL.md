@@ -41,8 +41,22 @@ python -m app.mailer you@lab.edu
 ```
 
 It prints the SMTP settings in effect and either `sent` or the exact failure.
-Choose a `SMTP_FROM` on a domain whose SPF/DKIM records authorize the relay,
-or the message lands in spam.
+`SMTP_CC` (comma-separated) copies every report and test send to the
+operator's own inbox.
+
+**Sending as `@sauce.ai`.** The domain publishes no MX or SPF record and a
+DMARC policy of `p=quarantine`, so a message with a `@sauce.ai` From address
+is quarantined unless it is DKIM-signed for the domain. Use a transactional
+relay that signs for the domain (Resend is the simplest: free tier, SMTP
+interface): add the domain in the provider, create the DNS records it gives
+you (a DKIM TXT such as `resend._domainkey`, plus an SPF TXT and MX on its
+bounce subdomain), wait for the provider to show the domain verified, then
+set `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USER=resend`,
+`SMTP_PASS=<API key>`, `SMTP_FROM=redteam@sauce.ai`. The existing DMARC
+record (relaxed alignment) already accepts a DKIM signature for `sauce.ai`.
+Replies to `redteam@sauce.ai` go nowhere unless the domain also has a
+mailbox; set `SMTP_FROM` to a display form such as
+`"sauce.ai redteam <redteam@sauce.ai>"` and give people the report link.
 
 `PUBLIC_BASE_URL` should be the externally reachable base (used in the email
 link).

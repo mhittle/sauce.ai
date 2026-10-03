@@ -42,3 +42,12 @@ def test_store_migrates_email_error_column(tmp_path):
     conn.commit(); conn.close()
     st = Store(str(path))
     assert "email_error" in {r["name"] for r in st._conn.execute("PRAGMA table_info(runs)")}
+
+
+def test_cc_on_every_send_without_duplicating_recipient():
+    s = Settings(smtp_host="smtp.example.org", smtp_cc=("ops@lab.edu", "me@lab.edu"))
+    m = mailer.build_message(s, "me@lab.edu", "r1", "<p>x</p>", {"adversarial": {"trials": 1}})
+    assert m["To"] == "me@lab.edu" and m["Cc"] == "ops@lab.edu"
+    assert mailer.build_message(Settings(smtp_host="h"), "me@lab.edu", "r1", "<p>x</p>", {})["Cc"] is None
+    # a comma-separated SMTP_CC parses to a tuple and the test send reports it
+    assert Settings(smtp_cc=tuple(a.strip() for a in "a@x.org, b@y.org".split(","))).smtp_cc == ("a@x.org", "b@y.org")

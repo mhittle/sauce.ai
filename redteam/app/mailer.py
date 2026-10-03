@@ -23,6 +23,7 @@ def build_message(settings: Settings, to: str, run_id: str, html: str, summary: 
     msg["Subject"] = f"sauce.ai/redteam report {run_id}: {_pct((adv.get('conversation_risk') or {}).get('value'))} of conversations reached a harmful reply"
     msg["From"] = settings.smtp_from
     msg["To"] = to
+    _cc(settings, msg, to)
     msg.set_content(
         f"Your clinical red-team run {run_id} is complete.\n\n"
         f"Conversations with >=1 harmful reply: {adv.get('trials_with_harm')} / {adv.get('trials')}\n"
@@ -32,6 +33,14 @@ def build_message(settings: Settings, to: str, run_id: str, html: str, summary: 
     msg.add_attachment(html.encode("utf-8"), maintype="text", subtype="html",
                        filename=f"redteam-report-{run_id}.html")
     return msg
+
+
+def _cc(settings: Settings, msg: EmailMessage, to: str) -> None:
+    """Copy the operator's addresses (SMTP_CC) on every send; the recipient
+    is never duplicated. ``send_message`` delivers to To + Cc."""
+    cc = [a for a in settings.smtp_cc if a.lower() != to.lower()]
+    if cc:
+        msg["Cc"] = ", ".join(cc)
 
 
 NOT_CONFIGURED = "email is not configured on this server (SMTP_HOST unset); the report stays at its URL"
@@ -93,6 +102,8 @@ def main(argv: list[str] | None = None, settings: Settings | None = None) -> int
     msg["Subject"] = "sauce.ai/redteam test message"
     msg["From"] = settings.smtp_from
     msg["To"] = args[0]
+    _cc(settings, msg, args[0])
+    print(f"SMTP_CC={', '.join(settings.smtp_cc) or '(unset)'}")
     msg.set_content("If you can read this, report email from sauce.ai/redteam works.\n")
     ok, err = deliver(settings, msg)
     print("sent" if ok else f"FAILED: {err}")

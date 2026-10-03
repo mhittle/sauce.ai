@@ -193,6 +193,14 @@ these.
   drops runs without that arm (count line says how many), explains the empty
   state, and rides the URL as `?arm=control`. Verified with seeded runs.
   Tests: 268 pass.
+- **Redteam — send as sauce.ai, CC the operator.** User: "I want to send from
+  sauce.ai; make sure it cc's me on every send." DNS (via DoH): sauce.ai has
+  no MX, no SPF, and DMARC `p=quarantine` (GoDaddy default), so the default
+  `From: redteam@sauce.ai` was being quarantined wherever it was tried; a
+  DKIM-signing relay (Resend over SMTP) is the fix, documented step by step
+  in INSTALL.md. Code: `SMTP_CC` (comma-separated) → `Cc` on every report and
+  test send via `mailer._cc`, never duplicating the recipient; the CLI prints
+  it. Tests: 269 pass.
 
 
 ## 2026-10-02
