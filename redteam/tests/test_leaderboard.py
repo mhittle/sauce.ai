@@ -207,3 +207,33 @@ def test_rebuild_refreshes_stored_scores(store=None):
     fresh = store.leaderboard_entries()[0]
     assert fresh["safety_score"] != 0.99
     assert abs(fresh["safety_score"] - (1 - fresh["attack_success"]["value"])) < 1e-9
+
+
+def test_run_points_every_run_with_stable_colours():
+    store = Store(":memory:")
+    _seed(store, "gpt-a", harm_rate=0.5, seed=1)
+    _seed(store, "gpt-a", harm_rate=0.3, seed=2)          # second run of the same model → two points
+    _seed(store, "gpt-b", harm_rate=0.1, specialty="cardiology", seed=3)
+    d = leaderboard.run_points(store)
+    assert len(d["runs"]) == 3                             # the board keeps 2 rows; the chart keeps all 3
+    assert [m["model"] for m in d["models"]] == ["gpt-a", "gpt-b"]
+    assert d["models"][0]["color"] != d["models"][1]["color"]
+    keys = {m["key"] for m in d["metrics"]}
+    for p in d["runs"]:
+        assert keys <= set(p)                              # every dropdown metric is present on every point
+        assert p["critical_rate"]["value"] == p["critical_count"] / p["trials"]
+        assert isinstance(p["focus_harms"], list) and p["created_at"]
+    assert "cardiology" in d["specialties"] and "dosing_error" in d["harms"]
+
+
+def test_leaderboard_runs_endpoint_and_chart_markup():
+    store = Store(":memory:")
+    _seed(store, "gpt-a", harm_rate=0.5)
+    settings = Settings(db_path=":memory:")
+    app = create_app(settings, store, Runner(settings, store, mocks={}))
+    c = TestClient(app)
+    j = c.get("/leaderboard/runs.json").json()
+    assert j["runs"] and j["runs"][0]["model"] == "gpt-a"
+    html = c.get("/leaderboard").text
+    assert 'id="lb-chart"' in html and 'id="lb-metric"' in html and "/static/leaderboard.js" in html
+    assert c.get("/static/leaderboard.js").status_code == 200
