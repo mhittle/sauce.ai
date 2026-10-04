@@ -9,6 +9,7 @@ target's background rate, not just an attack success rate.
 from __future__ import annotations
 
 import logging
+import math
 import random
 import threading
 import time
@@ -107,6 +108,20 @@ def allocate_arms(n: int, control_fraction: float, rng: random.Random) -> list[s
     return arms
 
 
+def excluded_trials(trials: list[dict]) -> dict:
+    """Conversations that errored (status ``error``) and so count in no rate:
+    how many, how many of those had already exchanged prompts, and the error
+    reasons (prefix-grouped)."""
+    err = [t for t in trials if t["status"] == "error"]
+    reasons: dict[str, int] = {}
+    for t in err:
+        key = (t.get("error") or "unknown")[:80]
+        reasons[key] = reasons.get(key, 0) + 1
+    return {"n": len(err), "n_with_prompts": sum(1 for t in err if t.get("n_turns")),
+            "by_arm": {arm: sum(1 for t in err if t["arm"] == arm) for arm in ("adversarial", "control")},
+            "reasons": dict(sorted(reasons.items(), key=lambda kv: -kv[1])[:8])}
+
+
 def trial_metrics_rows(trials: list[dict]) -> list[dict]:
     """Shape stored trials into the dicts ``metrics.summarize`` expects."""
     out = []
@@ -180,12 +195,21 @@ class Runner:
                 list(tp.map(run_trial, plans))
 
             trials = store.trials_for_run(run_id)
-            if not any(t["status"] in ("complete", "harm") for t in trials):
+            valid = sum(1 for t in trials if t["status"] in ("complete", "harm"))
+            if not valid:
                 errs = {t["error"] for t in trials if t["error"]}
                 raise TargetError("no trial completed: " + "; ".join(sorted(errs))[:500])
+            need = math.ceil(self.settings.min_trial_completion * started_trials)
+            if valid < need:
+                # too few conversations survived to score the target: fail the run
+                # (the partial report is still built from the valid ones)
+                errs = {(t["error"] or "")[:160] for t in trials if t["status"] == "error"}
+                raise TargetError(f"only {valid} of {started_trials} conversations completed "
+                                  f"(need {need}); errors: " + "; ".join(sorted(errs))[:600])
 
             usage = {s: m.usage.as_dict(s) for s, m in models.items()}
             summary = summarize(trial_metrics_rows(trials))
+            summary["excluded_trials"] = excluded_trials(trials)
             run = store.get_run(run_id)
             html = render_report(run, summary, trials, bandit.means(), usage, self.settings)
             store.update_run(run_id, status="complete", finished_at=time.time(), summary=summary,
@@ -208,6 +232,56 @@ class Runner:
             run_id, f"This run did not finish ({msg[:200]}). The metrics below cover only the "
                     "trials that completed.")
 
+    def rescore_interrupted(self) -> int:
+        """One-time repair for runs scored before interrupted conversations were
+        excluded: a trial stored as ``complete`` with an error and no harm was a
+        conversation the target cut short, counted as safe. Relabel it ``error``,
+        re-summarize the run from its valid trials, rebuild its report, and fail
+        the run when fewer than ``min_trial_completion`` of its conversations
+        remain. Returns the number of runs rescored. Never raises."""
+        store = self.store
+        n = 0
+        try:
+            rows = store._q("SELECT DISTINCT run_id FROM trials WHERE status='complete' AND error IS NOT NULL "
+                            "AND first_harm_turn IS NULL", ())
+            run_ids = [r[0] for r in rows]
+            if not run_ids:
+                return 0
+            store._x("UPDATE trials SET status='error' WHERE status='complete' AND error IS NOT NULL "
+                     "AND first_harm_turn IS NULL", ())
+            for run_id in run_ids:
+                run = store.get_run(run_id)
+                if not run or run.get("status") not in ("complete", "failed"):
+                    continue
+                trials = store.trials_for_run(run_id)
+                rows = trial_metrics_rows(trials)
+                started = sum(1 for t in trials if t["status"] != "queued")
+                valid = len(rows)
+                need = math.ceil(self.settings.min_trial_completion * started)
+                fields: dict = {}
+                if rows:
+                    summary = summarize(rows)
+                    summary["excluded_trials"] = excluded_trials(trials)
+                    state = run.get("bandit") or {}
+                    means = {a: ab[0] / (ab[0] + ab[1]) for a, ab in state.items() if (ab[0] + ab[1])}
+                    note = ""
+                    if run["status"] == "complete" and valid < need:
+                        err = f"only {valid} of {started} conversations completed (need {need}); rescored after deploy"
+                        fields.update(status="failed", error=err)
+                        note = f"This run did not finish ({err}). The metrics below cover only the trials that completed."
+                    elif run.get("error"):
+                        note = f"This run did not finish ({run['error'][:200]}). The metrics below cover only the trials that completed."
+                    fields.update(summary=summary, report_html=render_report(
+                        run, summary, trials, means, run.get("usage") or {}, self.settings, note=note))
+                elif run["status"] == "complete":
+                    fields.update(status="failed", error="no conversation completed; rescored after deploy")
+                if fields:
+                    store.update_run(run_id, **fields)
+                    n += 1
+        except Exception:  # pragma: no cover - defensive; start-up must not die on a repair
+            log.exception("rescore_interrupted failed")
+        return n
+
     def finalize_partial_report(self, run_id: str, note: str) -> bool:
         """Best-effort: build and email a report from whatever trials completed
         before an interrupt or failure. A no-op when no trial completed or a
@@ -223,6 +297,7 @@ class Runner:
             if not rows:
                 return False
             summary = summarize(rows)
+            summary["excluded_trials"] = excluded_trials(trials)
             state = run.get("bandit") or {}
             means = {a: ab[0] / (ab[0] + ab[1]) for a, ab in state.items() if (ab[0] + ab[1])}
             html = render_report(run, summary, trials, means, run.get("usage") or {},
@@ -273,8 +348,10 @@ class Runner:
                                n_turns=n_turns, first_harm_turn=first_harm)
             return n_turns > 0
         except (TargetError, UnsafeTarget, ModelError) as exc:
-            # Turns completed before the failure are still valid observations.
-            status = ("harm" if first_harm else "complete") if n_turns else "error"
+            # A conversation the target or a model cut short is not a safe
+            # conversation: unless harm was already observed it is an error,
+            # excluded from every rate (its turns stay readable in the report).
+            status = "harm" if first_harm else "error"
             store.finish_trial(trial_id, status=status, n_turns=n_turns, first_harm_turn=first_harm,
                                error=str(exc)[:500])
             return n_turns > 0

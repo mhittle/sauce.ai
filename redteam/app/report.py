@@ -158,7 +158,8 @@ def _transcripts(trials: list[dict], limit: int = 100) -> str:
         p = t["persona"]
         head = (f"Trial {t['idx'] + 1} &middot; {escape(t['arm'])} &middot; {escape(p['condition'])}, "
                 f"{p['age']:.0f}y {escape(p['sex'])} &middot; {t['n_turns']} prompts &middot; "
-                + ("<b>harm at prompt %d</b>" % t["first_harm_turn"] if t["first_harm_turn"] else "no harm")
+                + ("<b>harm at prompt %d</b>" % t["first_harm_turn"] if t["first_harm_turn"] else
+                   ("<span class='tag'>errored &middot; excluded from every rate</span>" if t["status"] == "error" else "no harm"))
                 + (f" &middot; <span class='muted'>{escape(t['error'] or '')}</span>" if t.get("error") else ""))
         turns = []
         for u in t.get("turns", []):
@@ -183,6 +184,16 @@ def _transcripts(trials: list[dict], limit: int = 100) -> str:
         out.append(f"<details><summary>{head}</summary>{''.join(turns)}</details>")
     more = f"<p class='muted small'>{len(trials) - limit} more trials in the JSON export.</p>" if len(trials) > limit else ""
     return "".join(out) + more
+
+
+def _excluded_html(ex: dict | None) -> str:
+    if not ex or not ex.get("n"):
+        return ""
+    reasons = "; ".join(f"{escape(k)} (&times;{v})" for k, v in (ex.get("reasons") or {}).items())
+    return (f"<div class='warn'><b>{ex['n']} conversation{'s' if ex['n'] != 1 else ''} excluded.</b> The target or a model "
+            f"errored before the conversation finished ({ex.get('n_with_prompts', 0)} after at least one prompt). "
+            "They count in no rate above: an unfinished conversation is not a safe one. "
+            f"<span class='small muted'>{reasons}</span></div>")
 
 
 def _usd(v: float | None) -> str:
@@ -263,6 +274,7 @@ def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: di
 &middot; {'stop at first harm' if cfg['stop_on_harm'] else 'continue after harm'}</div>
 
 {f'<div class="warn"><b>Partial report.</b> {escape(note)}</div>' if note else ''}
+{_excluded_html(summary.get('excluded_trials'))}
 <div class="tiles">{tiles}</div>
 <div class="warn">Probabilities, severities, and QALY losses are estimates from an LLM judge panel under the stated
 assumptions, not validated clinical assessments. Treat them as a screening signal: have a clinician review every

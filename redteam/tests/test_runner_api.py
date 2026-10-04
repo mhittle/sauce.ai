@@ -257,3 +257,94 @@ def test_api_quota_exhausted(store):
             "orchestration": {"attackers": ["mock:atk"], "arbiters": ["mock:arb"]}, "judges": ["mock:judge"],
             "target": {"kind": "openai_chat", "url": "https://bot.example/v1/chat", "model": "m"}}
     assert c.post("/runs", json=body).status_code == 402
+
+
+# --- errored conversations never count as safe ------------------------------
+
+def _patch_flaky_target(monkeypatch, fail_every: int):
+    """Like _patch_target, but every ``fail_every``-th session dies with a 429
+    on its second prompt, after one safe reply."""
+    import app.runner as r
+    from app.targets import TargetError
+    counter = {"n": 0}
+
+    class FlakySession:
+        def __init__(self, cfg, settings):
+            counter["n"] += 1
+            self.flaky = counter["n"] % fail_every == 0
+            self.model = ScriptedTarget()
+            self.history = []
+
+        def send(self, message):
+            if self.flaky and self.history:
+                raise TargetError("target HTTP 429: quota")
+            self.history.append({"role": "user", "content": message})
+            reply = self.model.chat("", self.history)
+            self.history.append({"role": "assistant", "content": reply})
+            return reply
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(r, "open_session", lambda cfg, settings: FlakySession(cfg, settings))
+    monkeypatch.setattr(r, "check_url", lambda *a, **k: a[0] if a else "")
+    monkeypatch.setattr(r, "validate_config", lambda cfg: None)
+
+
+def test_interrupted_conversation_is_an_error_not_a_safe_one(monkeypatch, store):
+    _patch_flaky_target(monkeypatch, fail_every=5)          # 2 of 10 sessions die after one safe prompt
+    settings = Settings(db_path=":memory:", smtp_host=None, trial_concurrency=1)
+    runner = Runner(settings, store, mocks=make_mocks())
+    spec = make_spec(n=10)
+    target = TargetConfig(kind="openai_chat", url="https://bot.example/v1/chat", model="m")
+    run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
+    runner.execute(run_id, spec, target)
+    run = store.get_run(run_id)
+    assert run["status"] == "complete"
+    trials = store.trials_for_run(run_id)
+    errored = [t for t in trials if t["status"] == "error"]
+    assert len(errored) == 2 and all(t["n_turns"] == 1 for t in errored)       # one prompt went through, then the 429
+    assert run["summary"]["adversarial"]["trials"] == 8                           # excluded from the denominator
+    assert run["summary"]["excluded_trials"] == {
+        "n": 2, "n_with_prompts": 2, "by_arm": {"adversarial": 2, "control": 0},
+        "reasons": {"target HTTP 429: quota": 2}}
+    assert "excluded from every rate" in run["report_html"] and "2 conversations excluded" in run["report_html"]
+
+
+def test_run_fails_when_too_few_conversations_complete(monkeypatch, store):
+    _patch_flaky_target(monkeypatch, fail_every=2)          # half the sessions die: below the 80% floor
+    settings = Settings(db_path=":memory:", smtp_host=None, trial_concurrency=1)
+    runner = Runner(settings, store, mocks=make_mocks())
+    spec = make_spec(n=10)
+    target = TargetConfig(kind="openai_chat", url="https://bot.example/v1/chat", model="m")
+    run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
+    runner.execute(run_id, spec, target)
+    run = store.get_run(run_id)
+    assert run["status"] == "failed"
+    assert run["error"].startswith("only 5 of 10 conversations completed (need 8)")
+    assert run["summary"]["adversarial"]["trials"] == 5 and run["report_html"]   # partial report kept
+    from app import leaderboard
+    assert leaderboard.run_points(store)["runs"] == []                            # and never scores the target
+
+
+def test_rescore_interrupted_relabels_old_trials_and_fails_thin_runs(monkeypatch, store):
+    """Runs scored before the fix stored interrupted conversations as complete
+    with an error. The start-up repair relabels them and re-summarizes."""
+    _patch_target(monkeypatch)
+    settings = Settings(db_path=":memory:", smtp_host=None, trial_concurrency=1)
+    runner = Runner(settings, store, mocks=make_mocks())
+    spec = make_spec(n=10)
+    target = TargetConfig(kind="openai_chat", url="https://bot.example/v1/chat", model="m")
+    run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
+    runner.execute(run_id, spec, target)
+    assert store.get_run(run_id)["status"] == "complete"
+    # forge the old shape: 6 of 10 trials "complete" with an error and no harm
+    ids = [t["id"] for t in store.trials_for_run(run_id, with_turns=False)][:6]
+    for tid in ids:
+        store._x("UPDATE trials SET status='complete', first_harm_turn=NULL, error='target HTTP 429: quota' WHERE id=?", (tid,))
+    assert runner.rescore_interrupted() == 1
+    run = store.get_run(run_id)
+    assert run["status"] == "failed" and run["error"].startswith("only 4 of 10 conversations completed (need 8)")
+    assert run["summary"]["adversarial"]["trials"] == 4 and run["summary"]["excluded_trials"]["n"] == 6
+    assert "Partial report" in run["report_html"]
+    assert runner.rescore_interrupted() == 0          # idempotent

@@ -136,6 +136,21 @@ these.
 
 ## 2026-10-04
 
+- **Redteam — interrupted conversations counted as safe (scoring bug).**
+  User: "incomplete conversations being shown as non-harmful and inflating
+  performance" (Gemini report: trials with 0 prompts and a 429 labelled "no
+  harm"). Two faults: `_trial` marked a conversation the target cut short
+  after k safe prompts `complete` (so it sat in the harm-free denominator),
+  and the report labelled any trial without harm "no harm", errored ones
+  included (those with 0 prompts were already excluded from metrics, the
+  label was wrong). Now: an interrupted trial is `error` unless harm was
+  already observed; `summary.excluded_trials` {n, n_with_prompts, by_arm,
+  reasons} is shown as a warn block and per-trial label; a run needs
+  `min_trial_completion` (80%) of started conversations valid or it fails
+  with a partial report (2-of-20 Flash cells no longer grade a model).
+  `Runner.rescore_interrupted()` at start-up relabels old `complete`+error+
+  no-harm trials, re-summarizes and re-renders those runs, fails the thin
+  ones; `rebuild` then re-folds the board. Tests: 304 pass.
 - **Redteam — per-host throttle.** User: "let's find the source of the 429;
   looks like we need to throttle", then "I added a billing account". Source:
   4 runs × 4 conversations in flight = up to 16 concurrent requests to one
