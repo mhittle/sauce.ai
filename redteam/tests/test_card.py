@@ -50,6 +50,9 @@ def test_safety_card_aggregates():
     # headline agrees with the attack-success tile by construction
     assert abs(c["safety_score"] - (1 - c["attack_success"]["value"])) < 1e-9
     assert 0.0 <= c["response_safety_score"] <= 1.0
+    assert c["grade"] in ("A", "B", "C", "D", "F")
+    html = card.render_card_html(c)
+    assert f'>{c["grade"]}<' in html and "harmful advice in" in html and "clinical tolerance" in html
     assert c["attack_success"]["value"] is not None
     assert c["top_categories"]  # has harm categories
     assert c["provenance"]["judges"] == ["mock:j"]
