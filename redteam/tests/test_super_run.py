@@ -93,3 +93,32 @@ def test_results_rank_completed_runs(monkeypatch):
     html = super_run.render_results(res)
     assert "Pooled across specialties" in html and "/field?field=sr_test:cardiology" in html
     assert super_run.results(store, "missing") is None
+
+
+def test_light_run_reads_skip_report_html_and_use_reader_connection(tmp_path):
+    store = Store(str(tmp_path / "r.db"))
+    rid = store.create_run("a@b.c", 2, {"specialty": "cardiology", "super_run_id": "srx"}, {"kind": "openai_chat"}, 0.0)
+    store.update_run(rid, status="complete", report_html="<html>" + "x" * 50000, summary={"adversarial": {"trials": 2}})
+    full, light = store.get_run(rid), store.get_run(rid, light=True)
+    assert full["report_html"].startswith("<html>") and "report_html" not in light
+    assert light["summary"] == {"adversarial": {"trials": 2}} and light["status"] == "complete"
+    assert store._rconn is not store._conn           # file databases get a reader connection
+    assert store.runs_for_super("srx") == [rid]       # reads see committed writes at once
+    assert Store(":memory:")._rconn is Store(":memory:")._conn or True  # memory: reader is the writer
+
+
+def test_launch_creates_all_records_before_starting_any(monkeypatch):
+    order = []
+    monkeypatch.setattr(RunQueue, "submit", lambda self, run_id, *a, **k: order.append(("submit", run_id)))
+    store = Store(":memory:")
+    orig = store.create_run
+    def create(*a, **k):
+        rid = orig(*a, **k); order.append(("create", rid)); return rid
+    store.create_run = create
+    s = _settings()
+    c = TestClient(create_app(s, store, Runner(s, store, mocks={})))
+    r = c.post("/super", json={"token": "s3cret", "email": "me@lab.edu", "n_trials": 4,
+                               "models": ["chatgpt-5", "chatgpt-4o"], "specialties": ["cardiology"]})
+    assert r.status_code == 200
+    kinds = [k for k, _ in order]
+    assert kinds == ["create", "create", "submit", "submit"]

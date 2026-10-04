@@ -167,6 +167,23 @@ these.
   map covering both ids, and the catalogue gains two OpenRouter Llama ids.
   The user pasted a live Gemini key in chat; advised rotation, never stored.
   Tests: 275 pass.
+- **Redteam — first live Super Run: reads starved behind writes.** The user
+  launched the full matrix; the launcher sat on "launching…". Live probes:
+  `/health` and `/config` instant, `/runs/<id>/status` 55 s, `/runs.json` 90 s
+  or timed out. Locally the single-connection RLock showed no starvation on
+  SSD (143k writes/s), so the culprit is the Railway volume: WAL with
+  `synchronous=FULL` fsyncs every autocommit over network storage, 30+ trial
+  threads keep the lock queue full, and the unfair RLock lets page reads wait
+  a minute. Fixes: a second **reader connection** with its own lock (`_q`,
+  WAL readers run beside the writer; `:memory:` keeps one connection),
+  `synchronous=NORMAL` + `busy_timeout`, `get_run(light=True)` without
+  `report_html` for status/boards/batch pages (`leaderboard.rebuild/run_points`,
+  `super_run.results/recent`, `/runs/<id>/status`), the Super Run launch
+  creates every record before submitting any, and the launcher JS survives a
+  non-JSON/timeout response. The live batch `sr94657c3e2f` is running (25
+  runs created, 16 running, 50/500 trials at probe time) — merging/redeploying
+  mid-batch would fail every in-flight run (`RunQueue.recover`), so the PR
+  waits for the batch. Tests: 277 pass.
 
 
 ## 2026-10-03
