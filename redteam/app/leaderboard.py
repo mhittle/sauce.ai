@@ -462,10 +462,10 @@ def render_html(bd: dict) -> str:
         rows = "".join(
             f"<tr><td class='n'>{e['rank']}</td>"
             f"<td><b>{escape(_display(e['target_label']))}</b>"
-            + (f" <span class='badge' title='interrupted run; the trials it finished count until a complete run supersedes it'>partial"
+            + f"<br><span class='muted small'>{escape(e['target_label'])}</span>"
+            + (f"<br><span class='badge' title='interrupted run; the trials it finished count until a complete run supersedes it'>partial"
                f"{'' if is_overall else ' ' + str(e['trials']) + '/' + str(e.get('n_trials_planned') or e['trials'])}</span>"
                if e.get("partial") else "")
-            + f"<br><span class='muted small'>{escape(e['target_label'])}</span>"
             + (f"<br><span class='muted small'>{e.get('n_specialties', 0)} "
                f"{'category' if e.get('n_specialties') == 1 else 'categories'}"
                f"{', ' + str(e['n_partial']) + ' partial' if e.get('n_partial') else ''}</span>"
