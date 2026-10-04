@@ -10,7 +10,8 @@ A model is addressed by a spec string ``provider:model``:
     mock:<name>                      deterministic test double
 
 Every model exposes ``chat(system, messages, max_tokens) -> str`` where
-messages are ``[{"role": "user"|"assistant", "content": str}]``.
+messages are ``[{"role": "user"|"assistant", "content": str | [text blocks]}]``
+(see ``blocks`` / ``anthropic_payload`` for why callers pass block lists).
 """
 from __future__ import annotations
 
@@ -34,27 +35,129 @@ class ModelRefusal(ModelError):
     """The provider declined the request (safety classifier / refusal)."""
 
 
+# List prices in USD per million tokens: (input, output, cache read, cache write).
+# Matched by longest prefix of the ``provider:model`` spec. A spec with no row
+# gets no cost estimate (None), never a guess. Cache write is the 5-minute TTL
+# premium (1.25x) on Anthropic; OpenAI caches prefixes automatically at no
+# write premium (cached input is billed at the cache-read rate).
+PRICES_PER_M: dict[str, tuple[float, float, float, float]] = {
+    "anthropic:claude-opus-5": (5.0, 25.0, 0.5, 6.25),
+    "anthropic:claude-sonnet-5": (2.0, 10.0, 0.2, 2.5),
+    "anthropic:claude-haiku-4-5": (1.0, 5.0, 0.1, 1.25),
+    "openai:gpt-5": (1.25, 10.0, 0.125, 1.25),
+    "openai:gpt-4o-mini": (0.15, 0.60, 0.075, 0.15),
+    "openai:gpt-4o": (2.5, 10.0, 1.25, 2.5),
+    "llama:meta-llama/llama-3.3-70b-instruct": (0.12, 0.30, 0.12, 0.12),
+}
+
+
+def price_row(spec: str) -> tuple[float, float, float, float] | None:
+    best = None
+    for k, v in PRICES_PER_M.items():
+        if spec.startswith(k) and (best is None or len(k) > len(best[0])):
+            best = (k, v)
+    return best[1] if best else None
+
+
+def cost_usd(spec: str, usage: dict) -> float | None:
+    """Estimated spend for one model's usage record at list prices; None when
+    the model has no price row. Cached input is billed at the cache-read rate,
+    cache writes at the write rate, the rest of the input at the base rate."""
+    row = price_row(spec)
+    if not row:
+        return None
+    inp, out, cr, cw = row
+    read = usage.get("cache_read_tokens", 0) or 0
+    write = usage.get("cache_write_tokens", 0) or 0
+    fresh = max(0, (usage.get("input_tokens", 0) or 0) - read - write)
+    return (fresh * inp + read * cr + write * cw + (usage.get("output_tokens", 0) or 0) * out) / 1e6
+
+
+def usage_cost(usage: dict[str, dict]) -> tuple[float, bool]:
+    """(total estimated USD, every model priced?) for a run's ``usage`` map."""
+    total, complete = 0.0, True
+    for spec, u in (usage or {}).items():
+        c = u.get("cost_usd")
+        if c is None:
+            c = cost_usd(spec, u)
+        if c is None:
+            complete = False
+        else:
+            total += c
+    return total, complete
+
+
 @dataclass
 class Usage:
     calls: int = 0
-    input_tokens: int = 0
+    input_tokens: int = 0          # all input tokens, cached ones included
     output_tokens: int = 0
+    cache_read_tokens: int = 0     # input served from the prompt cache
+    cache_write_tokens: int = 0    # input written to the cache this call (Anthropic)
     refusals: int = 0
     errors: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    def add(self, *, inp: int = 0, out: int = 0, refusal: bool = False, error: bool = False) -> None:
+    def add(self, *, inp: int = 0, out: int = 0, cache_read: int = 0, cache_write: int = 0,
+            refusal: bool = False, error: bool = False) -> None:
         with self._lock:
             self.calls += 1
             self.input_tokens += inp
             self.output_tokens += out
+            self.cache_read_tokens += cache_read
+            self.cache_write_tokens += cache_write
             self.refusals += int(refusal)
             self.errors += int(error)
 
-    def as_dict(self) -> dict:
-        return {"calls": self.calls, "input_tokens": self.input_tokens,
-                "output_tokens": self.output_tokens, "refusals": self.refusals,
-                "errors": self.errors}
+    def as_dict(self, spec: str = "") -> dict:
+        d = {"calls": self.calls, "input_tokens": self.input_tokens,
+             "output_tokens": self.output_tokens, "cache_read_tokens": self.cache_read_tokens,
+             "cache_write_tokens": self.cache_write_tokens, "refusals": self.refusals,
+             "errors": self.errors}
+        d["cost_usd"] = cost_usd(spec, d) if spec else None
+        return d
+
+
+# -- prompt shape --------------------------------------------------------------
+# A message's content is a string or a list of text blocks
+# ``[{"type": "text", "text": ...}, ...]``. Callers build block lists so that
+# the stable part of a prompt (persona, transcript so far) comes first and the
+# part that changes every turn comes last: on Anthropic the last block is a
+# cache breakpoint and the API matches the longest earlier prefix, so each
+# turn of a conversation re-reads the previous turn's prefix from cache; on
+# OpenAI-compatible hosts the same ordering lets their automatic prefix cache
+# hit. Providers that take plain strings get the blocks joined.
+
+def blocks(*parts: str) -> list[dict]:
+    """Text blocks from strings, dropping empty ones."""
+    return [{"type": "text", "text": p} for p in parts if p]
+
+
+def flatten(content) -> str:
+    if isinstance(content, str):
+        return content
+    return "\n\n".join(b.get("text", "") for b in content if isinstance(b, dict))
+
+
+def flatten_messages(messages: list[dict]) -> list[dict]:
+    return [{**m, "content": flatten(m["content"])} for m in messages]
+
+
+def anthropic_payload(system: str, messages: list[dict]) -> dict:
+    """``system`` and ``messages`` for the Anthropic Messages API with two cache
+    breakpoints: the system prompt and the last block of the last user
+    message. Short prompts fall below the model's cacheable minimum and are
+    simply not cached (no error, no cost)."""
+    marker = {"type": "ephemeral"}
+    msgs = []
+    for m in messages:
+        c = m["content"]
+        msgs.append({"role": m["role"], "content": [dict(b) for b in c] if isinstance(c, list) else [{"type": "text", "text": c}]})
+    for m in reversed(msgs):
+        if m["role"] == "user" and m["content"]:
+            m["content"][-1]["cache_control"] = marker
+            break
+    return {"system": [{"type": "text", "text": system, "cache_control": marker}], "messages": msgs}
 
 
 class ChatModel:
@@ -88,18 +191,19 @@ class AnthropicModel(ChatModel):
             kwargs["extra_body"] = {"fallbacks": "default"}
         try:
             resp = self.client.messages.create(
-                model=self.model, max_tokens=max_tokens, system=system,
-                messages=messages, **kwargs)
+                model=self.model, max_tokens=max_tokens, **anthropic_payload(system, messages), **kwargs)
         except anthropic.APIError as exc:
             self.usage.add(error=True)
             raise ModelError(f"{self.spec}: {exc}") from exc
         u = getattr(resp, "usage", None)
-        inp = getattr(u, "input_tokens", 0) or 0
+        read = getattr(u, "cache_read_input_tokens", 0) or 0
+        write = getattr(u, "cache_creation_input_tokens", 0) or 0
+        inp = (getattr(u, "input_tokens", 0) or 0) + read + write   # the API reports the three disjointly
         out = getattr(u, "output_tokens", 0) or 0
         if resp.stop_reason == "refusal":
-            self.usage.add(inp=inp, out=out, refusal=True)
+            self.usage.add(inp=inp, out=out, cache_read=read, cache_write=write, refusal=True)
             raise ModelRefusal(f"{self.spec} refused")
-        self.usage.add(inp=inp, out=out)
+        self.usage.add(inp=inp, out=out, cache_read=read, cache_write=write)
         return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
 
 
@@ -118,7 +222,7 @@ class OpenAICompatModel(ChatModel):
 
     def _body(self, system: str, messages: list[dict], max_tokens: int) -> dict:
         body: dict = {"model": self.model,
-                      "messages": [{"role": "system", "content": system}, *messages]}
+                      "messages": [{"role": "system", "content": system}, *flatten_messages(messages)]}
         # OpenAI's current models reject max_tokens in favour of max_completion_tokens.
         body["max_completion_tokens" if self.provider == "openai" else "max_tokens"] = max_tokens
         return body
@@ -146,12 +250,14 @@ class OpenAICompatModel(ChatModel):
                 raise ModelError(f"{self.spec}: HTTP {r.status_code} {r.text[:300]}")
             data = r.json()
             u = data.get("usage") or {}
+            cached = ((u.get("prompt_tokens_details") or {}).get("cached_tokens") or 0)   # OpenAI's automatic prefix cache
             choice = (data.get("choices") or [{}])[0]
             msg = choice.get("message") or {}
             if msg.get("refusal") or choice.get("finish_reason") == "content_filter":
-                self.usage.add(inp=u.get("prompt_tokens", 0), out=u.get("completion_tokens", 0), refusal=True)
+                self.usage.add(inp=u.get("prompt_tokens", 0) or 0, out=u.get("completion_tokens", 0) or 0,
+                               cache_read=cached, refusal=True)
                 raise ModelRefusal(f"{self.spec} refused")
-            self.usage.add(inp=u.get("prompt_tokens", 0) or 0, out=u.get("completion_tokens", 0) or 0)
+            self.usage.add(inp=u.get("prompt_tokens", 0) or 0, out=u.get("completion_tokens", 0) or 0, cache_read=cached)
             return (msg.get("content") or "").strip()
         self.usage.add(error=True)
         raise ModelError(f"{self.spec}: retries exhausted ({last})")
@@ -170,7 +276,7 @@ class MockModel(ChatModel):
 
     def chat(self, system: str, messages: list[dict], max_tokens: int = 1024) -> str:
         self.usage.add()
-        return self.responder(system, messages)
+        return self.responder(system, flatten_messages(messages))
 
 
 PROVIDERS = ("anthropic", "openai", "llama", "gemini", "mock")

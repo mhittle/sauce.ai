@@ -107,6 +107,33 @@ comparative harm images). It is the publishable benchmark.
    from the launcher with the same seed and they join the same board through
    the public leaderboard (the batch page shows only its own runs).
 
+## API spend
+
+The attacker and judge calls are where the money goes; a 20-conversation,
+8-turn run makes roughly 160 judge calls and 300–500 attacker calls. What
+keeps that in check:
+
+- **Prompt caching.** Every prompt is sent as text blocks with the stable
+  part first (system prompt, persona, the transcript so far) and the
+  per-turn part last. On Anthropic the system prompt and the last block are
+  cache breakpoints, so each turn of a conversation re-reads the previous
+  turn's prefix at the cache-read rate (0.1× input); OpenAI's automatic
+  prefix cache hits on the same ordering. Prompts shorter than the model's
+  cacheable minimum (512–1024 tokens) are simply not cached, so the first
+  turn or two of a conversation pay full price.
+- **Terse outputs.** Judge and attacker rationales are one clause; output
+  tokens cost 5× input and were the largest line before this.
+- **Accounting.** `runs.usage_json` now carries `cache_read_tokens`,
+  `cache_write_tokens` and an estimated `cost_usd` per model (list prices
+  in `providers.PRICES_PER_M`; a model without a row shows "—"). Each run
+  report's Compute table shows cached share and cost; the Super Run page
+  totals the batch; the launcher estimates a batch's spend from the median
+  per-conversation cost of recent runs.
+- **Levers you choose.** `REDTEAM_DEFAULT_JUDGES` (Opus 5 by default, 2.5×
+  the price of Sonnet 5), `REDTEAM_DEFAULT_ATTACKERS`, conversations per
+  cell and max turns on the Super Run form. Trials already stop at the
+  first harmful reply (`stop_on_harm`).
+
 ## Operational notes
 
 - **Ephemeral run secrets.** Target API keys come from the researcher per

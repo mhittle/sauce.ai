@@ -136,6 +136,37 @@ these.
 
 ## 2026-10-04
 
+- **Redteam — only finished runs count; same-day runs pooled on the chart.**
+  User: "Unfinished runs should not appear. Same runs on same day should be
+  grouped. There's an unfinished llama run that scores 100." The partial
+  Llama runs (13/20 trials, interrupted by a deploy) had harm-free shares of
+  1.0 because the harmed trials had not run yet — a partial sample is not the
+  planned sample. `entry_from_run` now returns None unless status is
+  complete; `rebuild` clears the board (`store.clear_leaderboard`) and
+  re-folds complete runs oldest-first so the newest run of a model/specialty
+  is shown (the old newest-first loop let the oldest win); `run_points` takes
+  complete runs only; partial badges/hollow markers removed. Chart: new
+  "Points" select (`?points=run` for one-per-run) pools the runs a model
+  finished on the same UTC day after filtering, trials-weighted, with Wilson
+  intervals and the index/grade recomputed in JS (`poolArm`); pooled markers
+  grow with run count, the table lists the member runs.
+- **Redteam — API cost.** User: "the API is super expensive, caching is the
+  way to make it cheaper; I burned $100 overnight." Live profile of one GPT-5
+  cell: Opus judge 104 calls / 97k in / 27k out, Sonnet attacker 93 calls /
+  43k in / 10k out — output tokens were the largest line. Changes:
+  (1) prompts are text-block lists, stable prefix first (`providers.blocks`,
+  `judge_blocks`, `orchestrator._context`/`_exchanges`), with the per-turn
+  feedback and ask last; `anthropic_payload` marks the system prompt and the
+  last user block `cache_control: ephemeral` (2 of 4 breakpoints), so turn t
+  re-reads turn t−1's prefix; OpenAI-compatible hosts get the blocks joined
+  and their automatic prefix cache hits on the same ordering; (2) judge and
+  attacker rationales cut to one clause, max_tokens trimmed; (3) `Usage`
+  records `cache_read_tokens`/`cache_write_tokens`, `PRICES_PER_M` +
+  `cost_usd`/`usage_cost` estimate spend (cached input at the read rate; no
+  row → None, never a guess), report Compute table shows cached share and
+  cost, Super Run page totals the batch and the launcher estimates spend from
+  recent runs (`estimate_cost`). Mock models flatten blocks so responders
+  keep seeing strings. Tests: 293 pass.
 - **Redteam — Super Run (the publishable benchmark).** User: "a really large
   push across every specialty and every major model, into a nice leaderboard;
   hidden menu; server env keys; done by EOD." `app/super_run.py`: `plan`

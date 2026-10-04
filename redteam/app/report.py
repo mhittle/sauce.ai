@@ -185,6 +185,15 @@ def _transcripts(trials: list[dict], limit: int = 100) -> str:
     return "".join(out) + more
 
 
+def _usd(v: float | None) -> str:
+    return "—" if v is None else f"${v:,.2f}"
+
+
+def _cache_cell(u: dict) -> str:
+    read, inp = u.get("cache_read_tokens", 0) or 0, u.get("input_tokens", 0) or 0
+    return f"{read:,} ({100 * read / inp:.0f}%)" if inp and read else "0"
+
+
 def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: dict,
                   usage: dict, settings: Settings, note: str = "") -> str:
     cfg, target = run["config"], run["target"]
@@ -233,9 +242,15 @@ def render_report(run: dict, summary: dict, trials: list[dict], bandit_means: di
         f"<td class='n'>{_num(bandit_means.get(r['tactic']), 3)}</td></tr>" for r in adv["tactics"])
     ja = summary["judge_agreement"]
     kappa = "n/a (single judge)" if ja["fleiss_kappa"] is None else f"{ja['fleiss_kappa']:.2f} over {ja['items']} replies, {ja['judges']} judges"
+    from .providers import cost_usd, usage_cost
     usage_rows = "".join(f"<tr><td>{escape(s)}</td><td class='n'>{u['calls']}</td><td class='n'>{u['input_tokens']:,}</td>"
-                         f"<td class='n'>{u['output_tokens']:,}</td><td class='n'>{u['refusals']}</td><td class='n'>{u['errors']}</td></tr>"
+                         f"<td class='n'>{_cache_cell(u)}</td>"
+                         f"<td class='n'>{u['output_tokens']:,}</td><td class='n'>{_usd(u.get('cost_usd', cost_usd(s, u)))}</td>"
+                         f"<td class='n'>{u['refusals']}</td><td class='n'>{u['errors']}</td></tr>"
                          for s, u in usage.items())
+    total_cost, priced = usage_cost(usage)
+    cost_line = (f"Estimated API spend {_usd(total_cost)}{'' if priced else ' (models without a price row excluded)'} at list prices; "
+                 "cached input billed at the cache-read rate." if usage else "")
     target_desc = escape(f"{target.get('kind')} {target.get('url') or ''} {target.get('model') or ''}".strip())
 
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -293,6 +308,6 @@ of remaining discounted QALYs, death all remaining discounted QALYs (US period l
 log(&minus;log) intervals, censored at the last prompt sent. NNH is 1/risk (single arm) or 1/risk difference (vs control).</p>
 
 <h2>Compute</h2>
-<table><tr><th>Model</th><th>Calls</th><th>Input tokens</th><th>Output tokens</th><th>Refusals</th><th>Errors</th></tr>{usage_rows}</table>
-<p class="small muted">Price: {'free tier' if not run.get('price_usd') else f"${run['price_usd']:.2f}"}.</p>
+<table><tr><th>Model</th><th>Calls</th><th>Input tokens</th><th>of which cached</th><th>Output tokens</th><th>Est. cost</th><th>Refusals</th><th>Errors</th></tr>{usage_rows}</table>
+<p class="small muted">{cost_line} Price to the requester: {'free tier' if not run.get('price_usd') else f"${run['price_usd']:.2f}"}.</p>
 </div></body></html>"""

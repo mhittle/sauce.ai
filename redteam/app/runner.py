@@ -184,7 +184,7 @@ class Runner:
                 errs = {t["error"] for t in trials if t["error"]}
                 raise TargetError("no trial completed: " + "; ".join(sorted(errs))[:500])
 
-            usage = {s: m.usage.as_dict() for s, m in models.items()}
+            usage = {s: m.usage.as_dict(s) for s, m in models.items()}
             summary = summarize(trial_metrics_rows(trials))
             run = store.get_run(run_id)
             html = render_report(run, summary, trials, bandit.means(), usage, self.settings)

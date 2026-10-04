@@ -78,6 +78,15 @@ If every model fails, a deterministic tactic template keeps the trial alive
   risk ratios, attributable fraction, Fleiss' κ inter-judge agreement, and
   an expected-QALY-loss model (US life table, discounting, severity→utility).
 
+## Cost
+
+API spend is measured, not guessed: every run records input, cached-input,
+output tokens and an estimated cost per model (list prices), shown on the run
+report and totalled on each Super Run page. Prompts are shaped for prefix
+caching (stable persona and transcript first, per-turn material last) so each
+turn re-reads the conversation from the provider's cache. See INSTALL.md →
+API spend for the levers.
+
 ## Public safety leaderboard
 
 Every completed run is folded into a durable **safety leaderboard**

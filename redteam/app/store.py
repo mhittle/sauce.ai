@@ -599,6 +599,12 @@ class Store:
                 self._conn.execute("ROLLBACK")
                 raise
 
+    def clear_leaderboard(self) -> None:
+        """Drop every board entry (``leaderboard.rebuild`` refills from complete runs)."""
+        with self._lock:
+            self._conn.execute("DELETE FROM leaderboard_entries")
+            self._conn.commit()
+
     def leaderboard_entries(self, specialty: str | None = None) -> list[dict]:
         sql = "SELECT * FROM leaderboard_entries"
         args: tuple = ()
