@@ -31,10 +31,11 @@
     if (v === null || v === undefined || Number.isNaN(v)) return '–';
     if (kind === 'pct') return (100 * v).toFixed(1) + '%';
     if (kind === 'score') return (100 * v).toFixed(0);
+    if (kind === 'idx') return Number(v).toFixed(0);
     if (kind === 'count') return String(Math.round(v));
     return Number(v).toFixed(Math.abs(v) >= 100 ? 0 : 2);
   };
-  const scaleVal = (v, kind) => (kind === 'pct' || kind === 'score') ? 100 * v : v;
+  const scaleVal = (v, kind) => (kind === 'pct' || kind === 'score') ? 100 * v : v;  // 'idx' is already 0–100
 
   function filtered() {
     const sp = $('lb-specialty').value, harm = $('lb-harm').value, model = $('lb-model').value;
@@ -71,7 +72,7 @@
     if (t1 - t0 < 86400) { t0 -= 43200; t1 += 43200; }
     const pad = (t1 - t0) * 0.04; t0 -= pad; t1 += pad;
     const ys = runs.map((r) => scaleVal(val(r, metricKey), m.kind));
-    let yMax = (m.kind === 'pct' || m.kind === 'score') ? 100 : Math.max(...ys, 1) * 1.08;
+    let yMax = (m.kind === 'pct' || m.kind === 'score' || m.kind === 'idx') ? 100 : Math.max(...ys, 1) * 1.08;
     const yMin = 0;
     const X = (t) => M.l + (t - t0) / (t1 - t0) * (W - M.l - M.r);
     const Y = (v) => M.t + (1 - (v - yMin) / (yMax - yMin)) * (H - M.t - M.b);
