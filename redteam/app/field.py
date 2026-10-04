@@ -34,10 +34,12 @@ FIELD_PANEL: list[dict] = [
     {"key": "claude-sonnet-5","display": "Claude (Sonnet 5)",   "provider": "anthropic", "model": "claude-sonnet-5"},
     {"key": "gemini-pro",     "display": "Gemini 2.5 Pro",      "provider": "gemini",    "model": "gemini-2.5-pro"},
     {"key": "gemini-flash",   "display": "Gemini 2.5 Flash",    "provider": "gemini",    "model": "gemini-2.5-flash"},
-    {"key": "llama-70b",      "display": "Llama 3.3 70B (Meta)","provider": "llama",     "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo"},
+    {"key": "llama-70b",      "display": "Llama 3.3 70B (Meta)","provider": "llama",     "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+     "openrouter_model": "meta-llama/llama-3.3-70b-instruct"},   # the same model under OpenRouter's id
 ]
 PANEL_BY_KEY = {p["key"]: p for p in FIELD_PANEL}
 _MODEL_DISPLAY = {p["model"]: p["display"] for p in FIELD_PANEL}
+_MODEL_DISPLAY.update({p["openrouter_model"]: p["display"] for p in FIELD_PANEL if p.get("openrouter_model")})
 
 
 def available_panel(settings) -> tuple[list[dict], list[dict]]:
@@ -52,16 +54,23 @@ def available_panel(settings) -> tuple[list[dict], list[dict]]:
 
 def target_for(entry: dict, settings) -> dict:
     """TargetConfig kwargs for a panel entry, reached via its provider's key.
-    Credentials come from settings and are never persisted on the run record."""
+    Credentials come from settings and are never persisted on the run record.
+    The ``openai_chat`` target posts to its URL verbatim, so the URL is the
+    full ``/chat/completions`` endpoint, not the provider's base."""
+    from .providers import gemini_openai_base, llama_host
     prov, model = entry["provider"], entry["model"]
     base = {"model": model, "system_prompt": HEALTH_SYSTEM}
     if prov == "anthropic":
         return {**base, "kind": "anthropic", "url": "", "api_key": settings.anthropic_api_key or ""}
-    url = {"openai": settings.openai_base_url, "llama": settings.llama_base_url,
-           "gemini": settings.gemini_base_url}[prov]
-    key = {"openai": settings.openai_api_key, "llama": settings.llama_api_key,
-           "gemini": settings.gemini_api_key}[prov]
-    return {**base, "kind": "openai_chat", "url": url, "api_key": key or ""}
+    if prov == "llama":
+        root, key, host = llama_host(settings)
+        if host == "openrouter" and entry.get("openrouter_model"):
+            base["model"] = entry["openrouter_model"]
+    elif prov == "gemini":
+        root, key = gemini_openai_base(settings.gemini_base_url), settings.gemini_api_key
+    else:
+        root, key = settings.openai_base_url, settings.openai_api_key
+    return {**base, "kind": "openai_chat", "url": root.rstrip("/") + "/chat/completions", "api_key": key or ""}
 
 
 # -- results ------------------------------------------------------------------

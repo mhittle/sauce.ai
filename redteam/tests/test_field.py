@@ -149,3 +149,21 @@ def test_field_launch_creates_runs(monkeypatch):
     body = r.json()
     assert body["n_models"] == 1 and body["runs"][0]["display"] == "ChatGPT (GPT-5)"
     assert len(store.runs_for_field(body["field_id"])) == 1
+
+
+def test_target_for_posts_to_the_chat_completions_endpoint():
+    s = Settings(db_path=":memory:", openai_api_key="ok", gemini_api_key="gk",
+                 gemini_base_url="https://generativelanguage.googleapis.com/v1beta/models/",
+                 llama_api_key=None, openrouter_api_key="ork", llama_base_url="https://api.together.xyz/v1")
+    gpt = field.target_for(field.PANEL_BY_KEY["chatgpt-5"], s)
+    assert gpt["url"] == "https://api.openai.com/v1/chat/completions"
+    # a pasted native Gemini URL is mapped to the OpenAI-compatible endpoint
+    gem = field.target_for(field.PANEL_BY_KEY["gemini-pro"], s)
+    assert gem["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert gem["api_key"] == "gk" and gem["model"] == "gemini-2.5-pro"
+    # no LLAMA key but an OpenRouter key: the llama panel entry goes through OpenRouter with its id
+    ll = field.target_for(field.PANEL_BY_KEY["llama-70b"], s)
+    assert ll["url"] == "https://openrouter.ai/api/v1/chat/completions" and ll["api_key"] == "ork"
+    assert ll["model"] == "meta-llama/llama-3.3-70b-instruct"
+    assert field._MODEL_DISPLAY[ll["model"]] == "Llama 3.3 70B (Meta)"
+    assert {p["provider"] for p in field.available_panel(s)[0]} == {"openai", "gemini", "llama"}

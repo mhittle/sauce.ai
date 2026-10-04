@@ -153,6 +153,21 @@ these.
   `super_runs`. INSTALL.md has the operator runbook (keys, worker threads,
   sizing, relaunching failures). Verified both pages with a seeded batch.
   Tests: 273 pass.
+- **Redteam — panel targets hit the wrong URL; Gemini native URL; OpenRouter.**
+  While wiring the user's Gemini/OpenRouter variables: `field.target_for` set the
+  target URL to the provider *base* (`…/v1`) but `OpenAIChatSession` posts to
+  the URL verbatim, so every non-Anthropic field-scan / Super Run row would
+  have 404'd. Now `…/chat/completions` is appended. `providers.gemini_openai_base`
+  maps a pasted native URL (`…/v1beta/models/`) to the OpenAI-compatible
+  `…/v1beta/openai` the service speaks (used by `build_model` and
+  `target_for`). `OPENROUTER_API_KEY`: `providers.llama_host` routes the llama
+  provider through OpenRouter when `LLAMA_API_KEY` is unset (base
+  `https://openrouter.ai/api/v1`), the panel's Llama entry carries
+  `openrouter_model` (`meta-llama/llama-3.3-70b-instruct`) with the display
+  map covering both ids, and the catalogue gains two OpenRouter Llama ids.
+  The user pasted a live Gemini key in chat; advised rotation, never stored.
+  Tests: 275 pass.
+
 
 ## 2026-10-03
 

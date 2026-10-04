@@ -58,6 +58,8 @@ class Settings:
     openai_base_url: str = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
     llama_api_key: str | None = os.environ.get("LLAMA_API_KEY")
     llama_base_url: str = os.environ.get("LLAMA_BASE_URL", "https://api.together.xyz/v1")
+    # OpenRouter (OpenAI-compatible, many models): used for the llama provider when LLAMA_API_KEY is unset
+    openrouter_api_key: str | None = os.environ.get("OPENROUTER_API_KEY")
     gemini_api_key: str | None = os.environ.get("GEMINI_API_KEY")
     gemini_base_url: str = os.environ.get(
         "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")

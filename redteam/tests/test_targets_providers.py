@@ -129,3 +129,26 @@ def test_http_json_error_status_raises(monkeypatch):
     with pytest.raises(TargetError):
         sess.send("x")
     assert sess.history == []  # failed user turn rolled back
+
+
+def test_gemini_base_normalization_and_openrouter_fallback():
+    from app.providers import gemini_openai_base, llama_host, available_providers, build_model, OpenAICompatModel
+    assert gemini_openai_base("https://generativelanguage.googleapis.com/v1beta/models/") == \
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+    assert gemini_openai_base("https://generativelanguage.googleapis.com/v1beta") == \
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+    assert gemini_openai_base("https://generativelanguage.googleapis.com/v1beta/openai/") == \
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+    assert gemini_openai_base("https://proxy.example/v1") == "https://proxy.example/v1"
+    assert gemini_openai_base("") == "https://generativelanguage.googleapis.com/v1beta/openai"
+    s = Settings(llama_api_key=None, openrouter_api_key="ork", llama_base_url="https://api.together.xyz/v1",
+                 gemini_api_key="gk", gemini_base_url="https://generativelanguage.googleapis.com/v1beta/models/")
+    assert llama_host(s) == ("https://openrouter.ai/api/v1", "ork", "openrouter")
+    assert "llama" in available_providers(s)
+    m = build_model("llama:meta-llama/llama-3.3-70b-instruct", s)
+    assert isinstance(m, OpenAICompatModel) and m.base_url == "https://openrouter.ai/api/v1" and m.api_key == "ork"
+    g = build_model("gemini:gemini-2.5-flash", s)
+    assert g.base_url == "https://generativelanguage.googleapis.com/v1beta/openai"
+    # an explicit LLAMA key wins over OpenRouter
+    s2 = Settings(llama_api_key="lk", openrouter_api_key="ork", llama_base_url="https://api.groq.com/openai/v1")
+    assert llama_host(s2) == ("https://api.groq.com/openai/v1", "lk", "llama")

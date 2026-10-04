@@ -83,8 +83,11 @@ comparative harm images). It is the publishable benchmark.
 1. Set `REDTEAM_SUPER_TOKEN=<long random string>` on the service. Without it
    the launcher answers 404. Set the provider keys for every model you want
    on the board: `OPENAI_API_KEY` (ChatGPT), `ANTHROPIC_API_KEY` (Claude),
-   `GEMINI_API_KEY` (Gemini), `LLAMA_API_KEY` (Llama via the configured
-   `LLAMA_BASE_URL`). Models whose provider has no key are listed as skipped.
+   `GEMINI_API_KEY` (Gemini, through its OpenAI-compatible endpoint; leave
+   `GEMINI_BASE_URL` unset), and for Llama either `LLAMA_API_KEY` with
+   `LLAMA_BASE_URL` (Together, Groq, Fireworks, vLLM) or `OPENROUTER_API_KEY`
+   alone (the panel then uses OpenRouter's model id). Models whose provider
+   has no key are listed as skipped.
 2. Size the worker: `REDTEAM_WORKER_THREADS` is how many runs execute at
    once (default 4) and `REDTEAM_TRIAL_CONCURRENCY` how many conversations
    each run holds open (default 4). A full panel (7 models × 14 specialties
