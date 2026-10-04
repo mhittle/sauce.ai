@@ -31,10 +31,11 @@
     if (v === null || v === undefined || Number.isNaN(v)) return '–';
     if (kind === 'pct') return (100 * v).toFixed(1) + '%';
     if (kind === 'score') return (100 * v).toFixed(0);
+    if (kind === 'idx') return Number(v).toFixed(0);
     if (kind === 'count') return String(Math.round(v));
     return Number(v).toFixed(Math.abs(v) >= 100 ? 0 : 2);
   };
-  const scaleVal = (v, kind) => (kind === 'pct' || kind === 'score') ? 100 * v : v;
+  const scaleVal = (v, kind) => (kind === 'pct' || kind === 'score') ? 100 * v : v;  // 'idx' is already 0–100
 
   function filtered() {
     const sp = $('lb-specialty').value, harm = $('lb-harm').value, model = $('lb-model').value;
@@ -71,7 +72,7 @@
     if (t1 - t0 < 86400) { t0 -= 43200; t1 += 43200; }
     const pad = (t1 - t0) * 0.04; t0 -= pad; t1 += pad;
     const ys = runs.map((r) => scaleVal(val(r, metricKey), m.kind));
-    let yMax = (m.kind === 'pct' || m.kind === 'score') ? 100 : Math.max(...ys, 1) * 1.08;
+    let yMax = (m.kind === 'pct' || m.kind === 'score' || m.kind === 'idx') ? 100 : Math.max(...ys, 1) * 1.08;
     const yMin = 0;
     const X = (t) => M.l + (t - t0) / (t1 - t0) * (W - M.l - M.r);
     const Y = (v) => M.t + (1 - (v - yMin) / (yMax - yMin)) * (H - M.t - M.b);
@@ -83,7 +84,7 @@
       `<text x="${M.l - 8}" y="${Y(v) + 4}" text-anchor="end">${yFmt(v)}</text>`;
     for (const t of xT) if (t >= t0 && t <= t1) g += `<text x="${X(t)}" y="${H - M.b + 18}" text-anchor="middle">${fmtDate(t)}</text>`;
     g += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/>`;
-    g += `<text x="${M.l}" y="${H - 6}" fill="var(--muted)">run date (UTC) · ${arm === 'control' ? 'ordinary-use (control) arm' : 'adversarial arm'} · ${m.higher_is_safer ? 'higher is safer' : 'lower is safer'}</text></g>`;
+    g += `<text x="${M.l}" y="${H - 6}" fill="var(--muted)">run date (UTC) · ${arm === 'control' ? 'ordinary-use (control) arm' : 'adversarial arm'} · ${m.higher_is_safer ? 'higher is safer' : 'lower is safer'}${runs.some((r) => r.partial) ? ' · hollow marker = interrupted (partial) run' : ''}</text></g>`;
 
     // per-model trend lines (2px, recessive) and end labels
     const byModel = {};
@@ -102,7 +103,9 @@
     for (const r of runs) {
       const v = scaleVal(val(r, metricKey), m.kind), c = ci(r, metricKey), x = X(r.created_at), y = Y(v);
       if (c) g += `<line x1="${x}" x2="${x}" y1="${Y(scaleVal(c[0], m.kind))}" y2="${Y(scaleVal(c[1], m.kind))}" stroke="${colorOf[r.model]}" stroke-opacity=".45" stroke-width="1.5"/>`;
-      g += `<circle cx="${x}" cy="${y}" r="5.5" fill="${colorOf[r.model]}" stroke="var(--card)" stroke-width="2"/>` +
+      g += (r.partial
+        ? `<circle cx="${x}" cy="${y}" r="5" fill="var(--card)" stroke="${colorOf[r.model]}" stroke-width="2.5"/>`   // hollow = partial run
+        : `<circle cx="${x}" cy="${y}" r="5.5" fill="${colorOf[r.model]}" stroke="var(--card)" stroke-width="2"/>`) +
         `<circle cx="${x}" cy="${y}" r="13" fill="transparent" data-run="${esc(r.run_id)}" style="cursor:pointer"/>`;
     }
     // direct labels at the right edge, nudged apart (text ink, never series colour)
@@ -124,7 +127,8 @@
         tip.innerHTML = `<b>${esc(r.display)}</b> <span class="muted">${esc(r.model)}</span><br>` +
           `${fmtDate(r.created_at)} · ${esc(DATA.specialties[r.specialty] || r.specialty)}${r.condition ? ' · ' + esc(r.condition) : ''}<br>` +
           `<b>${esc(m.label)}: ${fmt(val(r, metricKey), m.kind)}</b>${c ? ` <span class="muted">(${fmt(c[0], m.kind)} to ${fmt(c[1], m.kind)})</span>` : ''}<br>` +
-          `${armOf(r).trials} conversations (${arm === 'control' ? 'ordinary use' : 'adversarial'}) · ${arm === 'control' ? 'harm rate' : 'attack success'} ${fmt(val(r, 'attack_success'), 'pct')} · ${armOf(r).critical_count} critical<br>` +
+          `${armOf(r).trials} conversations (${arm === 'control' ? 'ordinary use' : 'adversarial'}) · ${arm === 'control' ? 'harm rate' : 'attack success'} ${fmt(val(r, 'attack_success'), 'pct')} · ${armOf(r).critical_count} critical` +
+          (r.partial ? `<br><b>partial run</b>: interrupted after ${r.trials} of ${r.n_trials_planned} conversations (hollow marker)` : '') + `<br>` +
           `<a href="/card?run=${esc(r.run_id)}">safety card</a> · <a href="/runs/${esc(r.run_id)}">report</a>`;
         tip.style.display = 'block';
       });

@@ -50,6 +50,9 @@ def test_safety_card_aggregates():
     # headline agrees with the attack-success tile by construction
     assert abs(c["safety_score"] - (1 - c["attack_success"]["value"])) < 1e-9
     assert 0.0 <= c["response_safety_score"] <= 1.0
+    assert c["grade"] in ("A", "B", "C", "D", "F")
+    html = card.render_card_html(c)
+    assert f'>{c["grade"]}<' in html and "harmful advice in" in html and "clinical safety index" in html
     assert c["attack_success"]["value"] is not None
     assert c["top_categories"]  # has harm categories
     assert c["provenance"]["judges"] == ["mock:j"]
@@ -66,14 +69,14 @@ def test_render_card_html_has_og_tags():
     html = card.render_card_html(card.safety_card(store, rid))
     assert 'property="og:image"' in html and f"/card/{rid}/image.svg" in html
     assert 'name="twitter:card"' in html
-    assert "safety score" in html
+    assert "safety index" in html
 
 
 def test_render_card_svg_is_svg():
     store = Store(":memory:")
     rid = _seed(store)
     svg = card.render_card_svg(card.safety_card(store, rid))
-    assert svg.startswith("<svg") and "safety score" in svg and "viewBox" in svg
+    assert svg.startswith("<svg") and "safety index" in svg and "viewBox" in svg
 
 
 def test_eval_card_and_datasheet_render():
