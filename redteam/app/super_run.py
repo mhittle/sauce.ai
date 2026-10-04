@@ -48,6 +48,24 @@ def plan(settings, *, specialties: list[str] | None = None, models: list[str] | 
     }
 
 
+def estimate_cost(store, n_runs: int, n_trials: int) -> float | None:
+    """USD estimate for a batch from the median per-trial API spend of recent
+    complete runs (list prices, cached input at the cache-read rate). ``None``
+    with no priced history."""
+    from .providers import usage_cost
+    per_trial = []
+    for r in store.recent_runs(limit=50):
+        if r.get("status") != "complete":
+            continue
+        run = store.get_run(r["id"], light=True)
+        if not run or not run.get("completed_trials"):
+            continue
+        cost, ok = usage_cost(run.get("usage") or {})
+        if ok and cost > 0:
+            per_trial.append(cost / run["completed_trials"])
+    return statistics.median(per_trial) * n_trials * n_runs if per_trial else None
+
+
 def estimate_minutes(store, n_runs: int, n_trials: int, worker_threads: int) -> float | None:
     """Wall-clock estimate from the median per-trial duration of recent complete
     runs, with ``worker_threads`` runs in flight at once. ``None`` with no history."""
@@ -119,7 +137,17 @@ def results(store, super_id: str) -> dict | None:
             "completed_trials": r.get("completed_trials") or 0, "n_trials": r.get("n_trials") or 0,
             "error": r.get("error"),
         })
+    from .providers import usage_cost
+    spend, priced = 0.0, True
+    for r in runs:
+        c, ok = usage_cost(r.get("usage") or {})
+        spend += c
+        priced = priced and ok
+    cache_read = sum((u.get("cache_read_tokens") or 0) for r in runs for u in (r.get("usage") or {}).values())
+    cache_in = sum((u.get("input_tokens") or 0) for r in runs for u in (r.get("usage") or {}).values())
     return {
+        "spend_usd": round(spend, 2), "spend_complete": priced,
+        "cache_hit_share": (cache_read / cache_in) if cache_in else None,
         "super_id": super_id, "created_at": min(r.get("created_at") or 0 for r in runs),
         "n_runs": len(runs), "n_trials_each": cfg0.get("n_trials"), "seed": cfg0.get("seed"),
         "harm_threshold": cfg0.get("harm_threshold"),
@@ -209,6 +237,8 @@ def render_results(res: dict) -> str:
 <h1>Clinical AI safety benchmark</h1>
 <div class="muted small">{len(res['models'])} models &times; {len(res['specialties'])} specialties &middot; {res['n_runs']} runs &middot;
 {sc.get('complete', 0)} complete, {sc.get('running', 0)} running, {sc.get('queued', 0)} queued, {sc.get('failed', 0)} failed
+&middot; estimated API spend so far ${res['spend_usd']:,.2f}{'' if res.get('spend_complete', True) else ' (some models unpriced)'}
+{'' if res.get('cache_hit_share') is None else f"&middot; {100 * res['cache_hit_share']:.0f}% of input tokens served from cache"}
 {'' if res['done'] else '&middot; this page refreshes every 30 s'}</div>
 <div style="height:6px;background:var(--card-2);margin:10px 0 16px"><div style="height:100%;width:{done_pct}%;background:var(--accent)"></div></div>
 <div class="warn">Every model runs on the same synthetic case-mix (shared seed) under a health-assistant prompt, reached
@@ -264,6 +294,8 @@ def render_launcher(settings, store, recent_runs: list[dict], token: str) -> str
         f"{escape(_spec_label(k))}</label>" for k in SPECIALTIES)
     est = estimate_minutes(store, len(runnable) * len(SPECIALTIES), 20, settings.worker_threads)
     est_s = f"about {est / 60:.1f} h at {settings.worker_threads} runs in flight (from recent runs)" if est else "no history to estimate from"
+    cost = estimate_cost(store, len(runnable) * len(SPECIALTIES), 20)
+    cost_s = f"about ${cost:,.0f} in API spend at list prices (median of recent runs)" if cost else "API spend: no priced history yet"
     recent_rows = "".join(
         f"<tr><td><a href='/super/{escape(r['super_id'])}'>{escape(r['super_id'])}</a></td>"
         f"<td>{dt.datetime.fromtimestamp(r['created_at'] or 0, dt.timezone.utc).strftime('%Y-%m-%d %H:%M')}</td>"
@@ -279,7 +311,9 @@ def render_launcher(settings, store, recent_runs: list[dict], token: str) -> str
 <h1>Super Run</h1>
 <div class="warn">Launches one run per model per specialty through the server's provider keys ({escape(have)}),
 bypassing the per-email quota and the submission rate limit. {len(runnable)} runnable models &times;
-{len(SPECIALTIES)} specialties = {len(runnable) * len(SPECIALTIES)} runs at the default size; estimate: {escape(est_s)}.
+{len(SPECIALTIES)} specialties = {len(runnable) * len(SPECIALTIES)} runs at the default size; estimate: {escape(est_s)};
+{escape(cost_s)}. Spend scales with conversations &times; max turns; the attacker and judge prompts are prefix-cached
+per conversation, and <code>REDTEAM_DEFAULT_JUDGES</code> / <code>REDTEAM_DEFAULT_ATTACKERS</code> pick the models.
 Set <code>REDTEAM_WORKER_THREADS</code> higher before launching if you need it done sooner.</div>
 {skipped_rows}
 <form id="f" method="post">

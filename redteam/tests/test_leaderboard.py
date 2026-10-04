@@ -76,7 +76,7 @@ def test_entry_from_run_none_when_no_adversarial():
 
 
 def test_entry_from_run_shape():
-    run = {"id": "r1", "created_at": 1.0,
+    run = {"id": "r1", "created_at": 1.0, "status": "complete",
            "config": {"specialty": "cardiology", "harm_threshold": 0.1,
                       "orchestration": {"attackers": ["a", "b"]}, "judges": ["j"]},
            "target": {"kind": "openai_chat", "model": "gpt-x"}}
@@ -314,23 +314,33 @@ def test_rank_is_by_index_then_harm_free_share():
     assert [round(e["safety_index"]) for e in ranked] == [100, 46, 41]
 
 
-def test_partial_runs_stay_on_board_and_chart_flagged():
+def test_interrupted_runs_never_reach_board_or_chart():
     store = Store(":memory:")
     rid = _seed(store, "meta-llama/llama-3.3-70b-instruct", harm_rate=0.1)
     # the service restarted mid-run: status failed, summary kept for the trials that finished
     store.update_run(rid, status="failed", error="service restarted mid-run; partial results kept", completed_trials=12)
-    assert leaderboard.rebuild(store) == 1
-    board = leaderboard.board(store, "endocrinology")
-    e = board["entries"][0]
-    assert e["partial"] is True and e["n_trials_planned"] == 20
-    html = leaderboard.render_html(board)
-    assert "Llama 3.3 70B (Meta)" in html and ">partial 20/20<" in html or "partial" in html
-    assert "meta-llama/llama-3.3-70b-instruct" in html          # raw id stays beneath the display name
-    pts = leaderboard.run_points(store)["runs"]
-    assert len(pts) == 1 and pts[0]["partial"] is True and pts[0]["display"] == "Llama 3.3 70B (Meta)"
-    overall = leaderboard.board(store)["entries"][0]
-    assert overall["partial"] is True and overall["n_partial"] == 1
-    # a failed run with no summary at all yields nothing
+    assert leaderboard.entry_from_run(store.get_run(rid), store.get_run(rid)["summary"]) is None
+    assert leaderboard.rebuild(store) == 0
+    assert leaderboard.board(store, "endocrinology")["entries"] == []
+    assert leaderboard.run_points(store)["runs"] == []
+    html = leaderboard.render_html(leaderboard.board(store))
+    assert "Only finished runs count" in html
+    # a failed run with no summary at all yields nothing either
     bad = store.create_run("a@b.c", 4, {"specialty": "cardiology"}, {"kind": "openai_chat", "model": "x"}, 0.0)
     store.update_run(bad, status="failed", error="no credits")
     assert leaderboard.record_run(store, bad) is False
+
+
+def test_rebuild_clears_stale_entries_and_keeps_newest_complete_run():
+    store = Store(":memory:")
+    old = _seed(store, "m", harm_rate=0.5)
+    new = _seed(store, "m", harm_rate=0.0)
+    store.update_run(old, created_at=1.0)
+    store.update_run(new, created_at=2.0)
+    # a stale entry for a run that was later marked failed must vanish on rebuild
+    store.upsert_leaderboard_entry({"target_label": "ghost", "specialty": "endocrinology", "run_id": "zzz",
+                                    "run_created_at": 0, "trials": 1, "safety_score": 1.0, "critical_count": 0})
+    assert leaderboard.rebuild(store) == 2
+    entries = leaderboard.board(store, "endocrinology")["entries"]
+    assert [e["target_label"] for e in entries] == ["m"]
+    assert entries[0]["run_id"] == new and entries[0]["n_runs"] == 2
