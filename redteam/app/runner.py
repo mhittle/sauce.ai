@@ -52,6 +52,7 @@ class RunSpec:
     ablation_id: str = ""
     ablation_arm: str = ""
     field_scan_id: str = ""
+    super_run_id: str = ""
 
     def validate(self, settings: Settings) -> None:
         if "@" not in self.email or len(self.email) > 254:

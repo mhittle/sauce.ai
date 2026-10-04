@@ -73,6 +73,37 @@ volume at `/app/data` (or point `REDTEAM_DB_PATH` at persistent storage) so
 the SQLite file and quota survive restarts. Set the same env vars in the
 Railway service.
 
+## Super Run (operator benchmark)
+
+A **Super Run** launches one run per panel model per clinical specialty on a
+shared seed, through the server's provider keys, and presents the batch as a
+single leaderboard (pooled across specialties plus per-specialty tables and
+comparative harm images). It is the publishable benchmark.
+
+1. Set `REDTEAM_SUPER_TOKEN=<long random string>` on the service. Without it
+   the launcher answers 404. Set the provider keys for every model you want
+   on the board: `OPENAI_API_KEY` (ChatGPT), `ANTHROPIC_API_KEY` (Claude),
+   `GEMINI_API_KEY` (Gemini), `LLAMA_API_KEY` (Llama via the configured
+   `LLAMA_BASE_URL`). Models whose provider has no key are listed as skipped.
+2. Size the worker: `REDTEAM_WORKER_THREADS` is how many runs execute at
+   once (default 4) and `REDTEAM_TRIAL_CONCURRENCY` how many conversations
+   each run holds open (default 4). A full panel (7 models × 14 specialties
+   × 20 conversations ≈ 2,000 conversations) takes roughly four to five
+   hours at 4 runs in flight; set `REDTEAM_WORKER_THREADS=8` for about half
+   that, provider rate limits permitting. Redeploy after changing these.
+3. Open `/super?token=<the token>`, untick anything you do not want, choose
+   conversations per model per specialty (20 is the publishable default,
+   8 is a smoke test), keep the ordinary-use arm at 20 %, and launch. The
+   launcher bypasses the per-email quota and the submission rate limit.
+4. The batch page `/super/<id>` is public, refreshes every 30 s until every
+   run has finished, and links each specialty's field scan (`/field?field=
+   <id>:<specialty>`) and each run's safety card. `/super/<id>.json` is the
+   data. Every run also lands on the public leaderboard and its chart.
+5. Failed runs (a provider's rate limit, a model the key cannot reach) show
+   their error on the batch page; relaunch just those models or specialties
+   from the launcher with the same seed and they join the same board through
+   the public leaderboard (the batch page shows only its own runs).
+
 ## Operational notes
 
 - **Ephemeral run secrets.** Target API keys come from the researcher per

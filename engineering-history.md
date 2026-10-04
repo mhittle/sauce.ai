@@ -134,6 +134,26 @@ these.
 
 ---
 
+## 2026-10-04
+
+- **Redteam — Super Run (the publishable benchmark).** User: "a really large
+  push across every specialty and every major model, into a nice leaderboard;
+  hidden menu; server env keys; done by EOD." `app/super_run.py`: `plan`
+  (runnable panel × specialties, skipped entries, totals), `estimate_minutes`
+  (median per-trial time of recent runs ÷ worker threads), `results` (pooled
+  board via `leaderboard._pool_overall/_rank`, per-specialty boards, progress
+  with errors, `done`), `recent`, and two pages: the launcher (noindex,
+  checkbox matrix, size/arm/turns/threshold/seed/email, previous batches) and
+  the public batch page (progress bar, caution, pooled + per-specialty tables
+  with card links, per-specialty field-scan links, auto-refresh until done).
+  Each run is tagged `config.super_run_id` and `field_scan_id=<id>:<specialty>`
+  so every specialty slice is also a field scan with its harm image. Gate:
+  `REDTEAM_SUPER_TOKEN` (unset → 404; wrong → 403); the launcher bypasses the
+  per-email quota and the submit rate limit. Store: `runs_for_super`,
+  `super_runs`. INSTALL.md has the operator runbook (keys, worker threads,
+  sizing, relaunching failures). Verified both pages with a seeded batch.
+  Tests: 273 pass.
+
 ## 2026-10-03
 
 - **Redteam — the control arm is "ordinary use", and says so.** User: "I don't

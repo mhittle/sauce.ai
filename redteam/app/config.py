@@ -42,6 +42,8 @@ class Settings:
     # Billing: free tier for now. Per-trial price is wired through quoting
     # and the report so turning on charging is a config change, not a rebuild.
     free_trial_limit: int = _int("REDTEAM_FREE_TRIAL_LIMIT", 100)
+    # operator token for the hidden Super Run launcher (unset = launcher disabled)
+    super_token: str | None = os.environ.get("REDTEAM_SUPER_TOKEN") or None
     price_per_trial_usd: float = _flt("REDTEAM_PRICE_PER_TRIAL_USD", 0.0)
 
     max_turns_cap: int = _int("REDTEAM_MAX_TURNS_CAP", 20)
