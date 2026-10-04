@@ -54,7 +54,8 @@ GROUPS: list[dict] = [
           "steps": [{"m": "GET", "p": "/leaderboard", "note": "add ?category=<specialty>; the chart takes ?metric=&arm=control&specialty=&harm=&model="},
                     {"m": "GET", "p": "/leaderboard.json", "note": "raw board"},
                     {"m": "GET", "p": "/leaderboard/runs.json", "note": "every complete run as a chart point"},
-                    {"m": "GET", "p": "/super/{super_id}", "note": "a Super Run benchmark: every model × every specialty"}]},
+                    {"m": "GET", "p": "/super/{super_id}", "note": "a Super Run benchmark: every model × every specialty"},
+                    {"m": "GET", "p": "/status", "note": "every run in flight: queue, progress, pace, ETA (also /status.json)"}]},
          {"title": "Model safety card + share image", "id": "card",
           "summary": "A per-target card: safety score, rank, attack success, critical failures, a "
                      "time-to-harm curve, top harm categories, and provenance — with Open Graph tags and "

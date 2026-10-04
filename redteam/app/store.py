@@ -285,8 +285,8 @@ class Store:
 
     def recent_runs(self, limit: int = 200) -> list[dict]:
         """Newest-first run summaries for pickers (no report HTML, no secrets)."""
-        rows = self._q("SELECT id, email, created_at, status, n_trials, completed_trials, config_json, "
-                       "target_json FROM runs ORDER BY created_at DESC LIMIT ?", (limit,))
+        rows = self._q("SELECT id, email, created_at, started_at, finished_at, status, n_trials, completed_trials, "
+                       "error, config_json, target_json FROM runs ORDER BY created_at DESC LIMIT ?", (limit,))
         out = []
         for r in rows:
             d = dict(r)

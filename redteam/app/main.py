@@ -35,6 +35,7 @@ from . import leaderboard as lb_mod
 from . import power as power_mod
 from . import repro as repro_mod
 from . import super_run as super_mod
+from . import status as status_mod
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
@@ -207,6 +208,15 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     @app.get("/health")
     def health():
         return {"ok": True}
+
+    # -- live worker status: every run in flight ------------------------------
+    @app.get("/status", response_class=HTMLResponse)
+    def status_html():
+        return HTMLResponse(status_mod.render_html(status_mod.snapshot(store, settings)))
+
+    @app.get("/status.json")
+    def status_json():
+        return status_mod.snapshot(store, settings)
 
     @app.get("/config")
     def config():

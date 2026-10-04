@@ -110,6 +110,13 @@ specialty, harm type (run focus) and model; filters live in the URL
 (`?metric=&arm=control&specialty=&harm=&model=`) so a view can be shared, and a table
 view sits under the chart. `GET /leaderboard/runs.json` is its data.
 
+**Status** (`GET /status`, `app/status.py`) shows every run in flight on
+the worker: queue depth, each running run's trial progress, pace and
+projected finish, the runs that finished in the last day with their
+outcome or error, and the worker's configuration (threads, providers with
+keys, email). It refreshes itself every 15 s; `GET /status.json` is the
+data. Emails are masked and no credentials are shown.
+
 **Super Run** (`app/super_run.py`) is the publishable benchmark: one run per
 panel model per clinical specialty on a shared seed through the server's
 provider keys, launched from a hidden operator page (`/super?token=…`, gated

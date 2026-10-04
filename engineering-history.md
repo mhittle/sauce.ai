@@ -225,6 +225,16 @@ these.
   rate. Index replaces the linear score column on the leaderboard and Super
   Run tables (coloured by grade), joins the card/share-image caption and the
   chart dropdown (`idx` kind), and rides every run point. Tests: 282 pass.
+- **Redteam — live worker status page.** User: "a status url / page so I can
+  see every concurrent run." `app/status.py`: `snapshot(store, settings)`
+  groups the light run records into running (trials done, %, started,
+  elapsed, pace in trials/min, ETA), queued, and finished in the last 24 h
+  (outcome, error), with worker config (threads, trial concurrency,
+  providers with keys, email, Super Run enabled) and an aggregate pace/ETA
+  for everything in flight; `render_html` is a self-refreshing (15 s) page
+  with tiles and three tables, batch/field links per run, masked emails.
+  `GET /status` + `/status.json`; `store.recent_runs` now also returns
+  started_at/finished_at/error. Guide, README, INSTALL updated. Tests: 284.
 
 
 ## 2026-10-03
