@@ -270,7 +270,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
 
     @app.get("/runs/{run_id}/status")
     def status(run_id: str):
-        run = store.get_run(run_id)
+        run = store.get_run(run_id, light=True)
         if not run:
             raise HTTPException(404, "unknown run")
         adv = (run.get("summary") or {}).get("adversarial") if run.get("summary") else None
@@ -756,11 +756,13 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             except ValueError as exc:
                 raise HTTPException(400, f"{entry['display']} / {sp}: {exc}")
             specs.append((entry, sp, spec, target))
-        runs = []  # operator batch: no per-email quota, no price
-        for entry, sp, spec, target in specs:
+        runs, pending = [], []  # operator batch: no per-email quota, no price
+        for entry, sp, spec, target in specs:  # create every record first: once runs start, writes contend
             run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
-            queue.submit(run_id, spec, target)
+            pending.append((run_id, spec, target))
             runs.append({"model": entry["key"], "display": entry["display"], "specialty": sp, "run_id": run_id})
+        for run_id, spec, target in pending:
+            queue.submit(run_id, spec, target)
         return {"super_id": super_id, "n_runs": len(runs), "n_conversations": pl["n_conversations"],
                 "runs": runs, "skipped": [{"display": s["display"], "reason": s["reason"]} for s in pl["skipped"]],
                 "report": f"/super/{super_id}"}

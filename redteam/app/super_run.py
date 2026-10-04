@@ -55,7 +55,7 @@ def estimate_minutes(store, n_runs: int, n_trials: int, worker_threads: int) -> 
     for r in store.recent_runs(limit=50):
         if r.get("status") != "complete":
             continue
-        run = store.get_run(r["id"])
+        run = store.get_run(r["id"], light=True)
         if run and run.get("finished_at") and run.get("started_at") and run.get("completed_trials"):
             per_trial.append((run["finished_at"] - run["started_at"]) / run["completed_trials"])
     if not per_trial:
@@ -84,7 +84,7 @@ def results(store, super_id: str) -> dict | None:
     run_ids = store.runs_for_super(super_id)
     if not run_ids:
         return None
-    runs = [store.get_run(r) for r in run_ids]
+    runs = [store.get_run(r, light=True) for r in run_ids]
     runs = [r for r in runs if r]
     entries = []
     for r in runs:
@@ -130,7 +130,7 @@ def recent(store, limit: int = 20) -> list[dict]:
     """Known Super Runs, newest first, with their progress counts."""
     out = []
     for sid, created in store.super_runs(limit=limit):
-        runs = [store.get_run(r) for r in store.runs_for_super(sid)]
+        runs = [store.get_run(r, light=True) for r in store.runs_for_super(sid)]
         runs = [r for r in runs if r]
         out.append({"super_id": sid, "created_at": created, "n_runs": len(runs),
                     "status_counts": _status_counts(runs)})
@@ -272,8 +272,12 @@ document.getElementById('f').addEventListener('submit', async (ev) => {{
     specialties: [...f.querySelectorAll('input[name=specialties]:checked')].map((i) => i.value),
   }};
   msg.textContent = 'launching…';
-  const r = await fetch('/super', {{ method: 'POST', headers: {{ 'content-type': 'application/json' }}, body: JSON.stringify(body) }});
-  const j = await r.json();
+  let r, j;
+  try {{
+    r = await fetch('/super', {{ method: 'POST', headers: {{ 'content-type': 'application/json' }}, body: JSON.stringify(body) }});
+    const text = await r.text();
+    try {{ j = JSON.parse(text); }} catch (e) {{ j = {{ detail: text.slice(0, 200) || ('HTTP ' + r.status) }}; }}
+  }} catch (e) {{ msg.textContent = 'Request failed: ' + e.message + ' — check "Previous Super Runs" below; the batch may have launched.'; return; }}
   if (!r.ok) {{ msg.textContent = 'Error: ' + (j.detail || r.status); return; }}
   location.href = j.report;
 }});
