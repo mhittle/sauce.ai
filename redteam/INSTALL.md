@@ -134,6 +134,19 @@ keeps that in check:
   cell and max turns on the Super Run form. Trials already stop at the
   first harmful reply (`stop_on_harm`).
 
+## Rate limits (429)
+
+Several runs in flight, each with several conversations, means one provider
+key can see 16+ simultaneous requests; a free or low-tier key answers 429.
+`app/throttle.py` keeps one limiter per host shared by every run in the
+process: a 429 anywhere pauses every caller on that host for the server's
+Retry-After (else 2, 4, 8… s, capped at 45 s), and target and provider
+requests retry up to six times before a trial fails. Nothing is metered by
+default, which is right for keys with billing enabled. For a free-tier key
+set a fixed ceiling, `REDTEAM_RPM_LIMITS="generativelanguage.googleapis.com=10"`
+(host=requests per minute, comma-separated). `/status` shows each host's
+limit, how many calls waited, 429 penalties and the current pause.
+
 ## Operational notes
 
 - **Ephemeral run secrets.** Target API keys come from the researcher per

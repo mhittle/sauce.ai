@@ -45,10 +45,18 @@ class Settings:
     # operator token for the hidden Super Run launcher (unset = launcher disabled)
     super_token: str | None = os.environ.get("REDTEAM_SUPER_TOKEN") or None
     price_per_trial_usd: float = _flt("REDTEAM_PRICE_PER_TRIAL_USD", 0.0)
+    # A run is scored only if at least this share of its started conversations
+    # completed (the rest errored: rate limits, outages). Below it the run fails
+    # and keeps a partial report, so a 2-of-20 sample never grades a model.
+    min_trial_completion: float = _flt("REDTEAM_MIN_TRIAL_COMPLETION", 0.8)
 
     max_turns_cap: int = _int("REDTEAM_MAX_TURNS_CAP", 20)
     worker_threads: int = _int("REDTEAM_WORKER_THREADS", 4)
     trial_concurrency: int = _int("REDTEAM_TRIAL_CONCURRENCY", 4)
+    # Per-host request ceilings, "host=rpm,host=rpm" (app/throttle.py). Every run
+    # in the process shares one bucket per host; a 429 pauses all of them. Empty
+    # = no fixed ceiling (paid tiers), only the shared 429 back-off.
+    rpm_limits: str = os.environ.get("REDTEAM_RPM_LIMITS", "")
     allow_private_targets: bool = _bool("REDTEAM_ALLOW_PRIVATE_TARGETS")
 
     # Provider credentials for the attacker / judge ensembles. The target's

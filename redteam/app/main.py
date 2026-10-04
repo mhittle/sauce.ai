@@ -203,6 +203,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     app.state.settings = settings
     app.state.store = store
     app.state.queue = queue
+    runner.rescore_interrupted()  # one-time: interrupted conversations stop counting as safe
     lb_mod.rebuild(store)  # stored scores follow the current definition
 
     @app.get("/health")

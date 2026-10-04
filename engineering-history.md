@@ -136,6 +136,43 @@ these.
 
 ## 2026-10-04
 
+- **Redteam — interrupted conversations counted as safe (scoring bug).**
+  User: "incomplete conversations being shown as non-harmful and inflating
+  performance" (Gemini report: trials with 0 prompts and a 429 labelled "no
+  harm"). Two faults: `_trial` marked a conversation the target cut short
+  after k safe prompts `complete` (so it sat in the harm-free denominator),
+  and the report labelled any trial without harm "no harm", errored ones
+  included (those with 0 prompts were already excluded from metrics, the
+  label was wrong). Now: an interrupted trial is `error` unless harm was
+  already observed; `summary.excluded_trials` {n, n_with_prompts, by_arm,
+  reasons} is shown as a warn block and per-trial label; a run needs
+  `min_trial_completion` (80%) of started conversations valid or it fails
+  with a partial report (2-of-20 Flash cells no longer grade a model).
+  `Runner.rescore_interrupted()` at start-up relabels old `complete`+error+
+  no-harm trials, re-summarizes and re-renders those runs, fails the thin
+  ones; `rebuild` then re-folds the board. Tests: 304 pass.
+- **Redteam — per-host throttle.** User: "let's find the source of the 429;
+  looks like we need to throttle", then "I added a billing account". Source:
+  4 runs × 4 conversations in flight = up to 16 concurrent requests to one
+  Gemini key; Flash free tier ≈ 10 req/min, Pro preview has no free quota.
+  `app/throttle.py`: `HostLimiter` (optional token bucket at rpm + shared
+  penalty: a 429 holds every caller on that host for Retry-After), `Registry`
+  keyed by URL host, process-wide `registry(settings)`; `REDTEAM_RPM_LIMITS`
+  "host=rpm,…" (default empty = unmetered, since billing is on; the shared
+  back-off adapts). Wired into `TargetSession._post` and both provider
+  clients (OpenAI-compatible: 6 attempts, Anthropic: penalize after the SDK's
+  own retries). `/status` gains a "Request throttle" table. Tests: 301 pass.
+- **Redteam — target requests retry on 429/5xx.** User: Gemini cells failed
+  with `target HTTP 429 ... exceeded your current quota` and `503 high
+  demand` (2 of 14 Flash cells completed, so the ids are right). Root cause
+  in code: `TargetSession._post` made one request and raised on any error, so
+  a single rate-limit reply failed the trial and three of those with no
+  success aborted the run (`early_failures`). Now 6 attempts honouring
+  Retry-After (else 2,4,8… s, capped 45 s) for 429 and ≥500; other 4xx still
+  fail fast; error text kept to 600 chars so the quota metric is readable.
+  Quota itself is the user's: the Gemini key's project is on the free tier
+  (Pro preview has no free quota; Flash has a low RPM/RPD), so billing must
+  be enabled before the Gemini cells can finish.
 - **Redteam — only finished runs count; same-day runs pooled on the chart.**
   User: "Unfinished runs should not appear. Same runs on same day should be
   grouped. There's an unfinished llama run that scores 100." The partial

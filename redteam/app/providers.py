@@ -175,13 +175,16 @@ _FALLBACK_MODELS = ("claude-opus-5", "claude-fable-5")
 
 
 class AnthropicModel(ChatModel):
-    def __init__(self, model: str, api_key: str, refusal_fallback: bool = True) -> None:
+    def __init__(self, model: str, api_key: str, refusal_fallback: bool = True,
+                 settings: Settings | None = None) -> None:
         super().__init__()
         import anthropic
         self.spec = f"anthropic:{model}"
         self.model = model
         self.client = anthropic.Anthropic(api_key=api_key, max_retries=3)
         self.refusal_fallback = refusal_fallback and model.startswith(_FALLBACK_MODELS)
+        from .throttle import registry
+        self.limiter = registry(settings).for_url("https://api.anthropic.com")
 
     def chat(self, system: str, messages: list[dict], max_tokens: int = 1024) -> str:
         import anthropic
@@ -189,9 +192,14 @@ class AnthropicModel(ChatModel):
         if self.refusal_fallback:
             kwargs["extra_headers"] = {"anthropic-beta": "server-side-fallback-2026-07-01"}
             kwargs["extra_body"] = {"fallbacks": "default"}
+        self.limiter.acquire()
         try:
             resp = self.client.messages.create(
                 model=self.model, max_tokens=max_tokens, **anthropic_payload(system, messages), **kwargs)
+        except anthropic.RateLimitError as exc:       # the SDK already retried; hold the whole host
+            self.limiter.penalize(_retry_delay(getattr(getattr(exc, "response", None), "headers", {}).get("retry-after"), 2))
+            self.usage.add(error=True)
+            raise ModelError(f"{self.spec}: {exc}") from exc
         except anthropic.APIError as exc:
             self.usage.add(error=True)
             raise ModelError(f"{self.spec}: {exc}") from exc
@@ -207,11 +215,22 @@ class AnthropicModel(ChatModel):
         return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
 
 
+def _retry_delay(retry_after, attempt: int, cap: float = 45.0) -> float:
+    if retry_after:
+        try:
+            v = float(retry_after)
+            if 0 < v <= cap:
+                return v
+        except (TypeError, ValueError):
+            pass
+    return min(cap, 2.0 ** (attempt + 1))
+
+
 class OpenAICompatModel(ChatModel):
     """OpenAI chat-completions wire format (OpenAI, Llama hosts, Gemini)."""
 
     def __init__(self, provider: str, model: str, base_url: str, api_key: str | None,
-                 timeout: float = 120.0) -> None:
+                 timeout: float = 120.0, settings: Settings | None = None) -> None:
         super().__init__()
         self.spec = f"{provider}:{model}"
         self.provider = provider
@@ -219,6 +238,8 @@ class OpenAICompatModel(ChatModel):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        from .throttle import registry
+        self.limiter = registry(settings).for_url(self.base_url)
 
     def _body(self, system: str, messages: list[dict], max_tokens: int) -> dict:
         body: dict = {"model": self.model,
@@ -233,17 +254,22 @@ class OpenAICompatModel(ChatModel):
             headers["Authorization"] = f"Bearer {self.api_key}"
         body = self._body(system, messages, max_tokens)
         last: Exception | None = None
-        for attempt in range(4):
+        for attempt in range(6):
+            self.limiter.acquire()
             try:
                 r = requests.post(f"{self.base_url}/chat/completions", json=body,
                                   headers=headers, timeout=self.timeout)
             except requests.RequestException as exc:
                 last = exc
-                time.sleep(2 ** attempt)
+                time.sleep(min(30.0, 2.0 ** attempt))
                 continue
             if r.status_code == 429 or r.status_code >= 500:
-                last = ModelError(f"{self.spec}: HTTP {r.status_code}")
-                time.sleep(2 ** attempt)
+                last = ModelError(f"{self.spec}: HTTP {r.status_code} {r.text[:200]}")
+                delay = _retry_delay(getattr(r, "headers", {}).get("Retry-After"), attempt)
+                if r.status_code == 429:
+                    self.limiter.penalize(delay)   # shared: every caller on this host waits
+                else:
+                    time.sleep(delay)
                 continue
             if r.status_code >= 400:
                 self.usage.add(error=True)
@@ -384,17 +410,17 @@ def build_model(spec: str, settings: Settings,
     if provider == "anthropic":
         if not settings.anthropic_api_key:
             raise ModelError("ANTHROPIC_API_KEY is not configured")
-        return AnthropicModel(model, settings.anthropic_api_key, settings.anthropic_refusal_fallback)
+        return AnthropicModel(model, settings.anthropic_api_key, settings.anthropic_refusal_fallback, settings)
     if provider == "openai":
         if not settings.openai_api_key:
             raise ModelError("OPENAI_API_KEY is not configured")
-        return OpenAICompatModel("openai", model, settings.openai_base_url, settings.openai_api_key)
+        return OpenAICompatModel("openai", model, settings.openai_base_url, settings.openai_api_key, settings=settings)
     if provider == "llama":
         base, key, _host = llama_host(settings)
-        return OpenAICompatModel("llama", model, base, key)
+        return OpenAICompatModel("llama", model, base, key, settings=settings)
     if not settings.gemini_api_key:
         raise ModelError("GEMINI_API_KEY is not configured")
-    return OpenAICompatModel("gemini", model, gemini_openai_base(settings.gemini_base_url), settings.gemini_api_key)
+    return OpenAICompatModel("gemini", model, gemini_openai_base(settings.gemini_base_url), settings.gemini_api_key, settings=settings)
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)

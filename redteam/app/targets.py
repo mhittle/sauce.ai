@@ -140,18 +140,52 @@ class TargetSession:
             h[self.cfg.auth_header] = f"{self.cfg.auth_prefix}{self.cfg.api_key}"
         return h
 
+    # Rate limits (429) and provider overload (503 and friends) are transient:
+    # retry with the server's Retry-After when given, else exponential backoff,
+    # before failing the trial. A batch of concurrent runs against one key hits
+    # these constantly; without the retry three such replies abort a whole run.
+    RETRY_ATTEMPTS = 6
+    RETRY_MAX_SLEEP = 45.0
+
     def _post(self, body: dict) -> dict:
+        from .throttle import registry
+        limiter = registry(self.settings).for_url(self.cfg.url)
+        last = ""
+        for attempt in range(self.RETRY_ATTEMPTS):
+            limiter.acquire()
+            try:
+                r = requests.post(self.cfg.url, json=body, headers=self._auth_headers(),
+                                  timeout=self.cfg.timeout, allow_redirects=False)
+            except requests.RequestException as exc:
+                raise TargetError(f"target unreachable: {exc}") from exc
+            if r.status_code == 429 or r.status_code >= 500:
+                last = f"target HTTP {r.status_code}: {r.text[:600]}"
+                delay = _retry_delay(getattr(r, "headers", {}).get("Retry-After"), attempt, self.RETRY_MAX_SLEEP)
+                if r.status_code == 429:
+                    limiter.penalize(delay)      # every caller on this host backs off, not just this one
+                elif attempt < self.RETRY_ATTEMPTS - 1:
+                    time.sleep(delay)
+                continue
+            if r.status_code >= 400:
+                raise TargetError(f"target HTTP {r.status_code}: {r.text[:600]}")
+            try:
+                return r.json()
+            except ValueError as exc:
+                raise TargetError("target did not return JSON") from exc
+        raise TargetError(f"{last} (after {self.RETRY_ATTEMPTS} attempts)")
+
+
+def _retry_delay(retry_after: str | None, attempt: int, cap: float) -> float:
+    """Seconds to wait before retry ``attempt`` (0-based): the server's
+    Retry-After when it is a sane number, else 2, 4, 8, ... capped."""
+    if retry_after:
         try:
-            r = requests.post(self.cfg.url, json=body, headers=self._auth_headers(),
-                              timeout=self.cfg.timeout, allow_redirects=False)
-        except requests.RequestException as exc:
-            raise TargetError(f"target unreachable: {exc}") from exc
-        if r.status_code >= 400:
-            raise TargetError(f"target HTTP {r.status_code}: {r.text[:300]}")
-        try:
-            return r.json()
-        except ValueError as exc:
-            raise TargetError("target did not return JSON") from exc
+            v = float(retry_after)
+            if 0 < v <= cap:
+                return v
+        except ValueError:
+            pass
+    return min(cap, 2.0 ** (attempt + 1))
 
 
 class OpenAIChatSession(TargetSession):
