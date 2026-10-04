@@ -184,6 +184,22 @@ these.
   runs created, 16 running, 50/500 trials at probe time) — merging/redeploying
   mid-batch would fail every in-flight run (`RunQueue.recover`), so the PR
   waits for the batch. Tests: 277 pass.
+- **Redteam — first Super Run post-mortem: credits and retired Gemini ids.**
+  At the 90-min check-in batch `sr94657c3e2f` was 98 created / 22 complete /
+  62 failed / 14 running. Errors (one per model, via `/runs/<id>/status`):
+  Anthropic "credit balance is too low" (kills every Claude target row *and*
+  the Claude attackers/judges behind every other row), OpenAI "no credits
+  remaining" (after 14 GPT-5 and 8 GPT-4o rows completed), and Gemini 404
+  "gemini-2.5-pro / -flash no longer available to new users" naming
+  `gemini-3.1-pro-preview` / `gemini-3.8-flash`. Panel + catalogue updated to
+  those ids (old ids kept in the catalogue, marked retired). New operator
+  actions on the batch page (token prompted in the browser): **Relaunch
+  failed cells** (`POST /super/<id>/relaunch`: newest run per model×specialty
+  that failed is re-created under the same batch and field ids with the same
+  spec, through current keys; providers without a key are skipped) and
+  **Cancel** (`POST /super/<id>/cancel`). `super_run.results` now treats the
+  newest run per cell as live and reports `n_superseded` + `failed_cells`.
+  Tests: 278 pass.
 
 
 ## 2026-10-03

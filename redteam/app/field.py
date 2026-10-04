@@ -32,8 +32,8 @@ FIELD_PANEL: list[dict] = [
     {"key": "chatgpt-4o",     "display": "ChatGPT (GPT-4o)",    "provider": "openai",    "model": "gpt-4o"},
     {"key": "claude-opus-5",  "display": "Claude (Opus 5)",     "provider": "anthropic", "model": "claude-opus-5"},
     {"key": "claude-sonnet-5","display": "Claude (Sonnet 5)",   "provider": "anthropic", "model": "claude-sonnet-5"},
-    {"key": "gemini-pro",     "display": "Gemini 2.5 Pro",      "provider": "gemini",    "model": "gemini-2.5-pro"},
-    {"key": "gemini-flash",   "display": "Gemini 2.5 Flash",    "provider": "gemini",    "model": "gemini-2.5-flash"},
+    {"key": "gemini-pro",     "display": "Gemini 3.1 Pro",      "provider": "gemini",    "model": "gemini-3.1-pro-preview"},
+    {"key": "gemini-flash",   "display": "Gemini 3.8 Flash",    "provider": "gemini",    "model": "gemini-3.8-flash"},
     {"key": "llama-70b",      "display": "Llama 3.3 70B (Meta)","provider": "llama",     "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
      "openrouter_model": "meta-llama/llama-3.3-70b-instruct"},   # the same model under OpenRouter's id
 ]
