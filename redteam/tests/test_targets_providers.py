@@ -99,10 +99,11 @@ def test_build_model_mock_and_missing_key():
 
 
 class _FakeResp:
-    def __init__(self, status, payload):
+    def __init__(self, status, payload, headers=None):
         self.status_code = status
         self._p = payload
         self.text = str(payload)
+        self.headers = headers or {}
 
     def json(self):
         return self._p
@@ -123,12 +124,38 @@ def test_openai_chat_session_roundtrip(monkeypatch):
 
 def test_http_json_error_status_raises(monkeypatch):
     import app.targets as t
+    monkeypatch.setattr(t.time, "sleep", lambda s: None)
+    calls = []
     monkeypatch.setattr(t.requests, "post",
-                        lambda *a, **k: _FakeResp(500, {"error": "boom"}))
+                        lambda *a, **k: (calls.append(1), _FakeResp(500, {"error": "boom"}))[1])
     sess = open_session(TargetConfig(kind="openai_chat", url="https://api.example.com"), Settings())
-    with pytest.raises(TargetError):
+    with pytest.raises(TargetError, match="after 6 attempts"):
         sess.send("x")
+    assert len(calls) == t.TargetSession.RETRY_ATTEMPTS
     assert sess.history == []  # failed user turn rolled back
+
+
+def test_target_retries_rate_limit_then_succeeds(monkeypatch):
+    import app.targets as t
+    slept = []
+    monkeypatch.setattr(t.time, "sleep", slept.append)
+    replies = [_FakeResp(429, {"error": "quota"}, {"Retry-After": "3"}), _FakeResp(503, {"error": "busy"}),
+               _FakeResp(200, {"choices": [{"message": {"content": "ok"}}]})]
+    monkeypatch.setattr(t.requests, "post", lambda *a, **k: replies.pop(0))
+    sess = open_session(TargetConfig(kind="openai_chat", url="https://api.example.com", model="m"), Settings())
+    assert sess.send("hello") == "ok"
+    assert slept == [3.0, 4.0]          # Retry-After honoured, then 2^(attempt+1)
+    assert t._retry_delay("garbage", 5, 45.0) == 45.0 and t._retry_delay("900", 0, 45.0) == 2.0
+
+
+def test_target_4xx_other_than_429_fails_fast(monkeypatch):
+    import app.targets as t
+    calls = []
+    monkeypatch.setattr(t.requests, "post", lambda *a, **k: (calls.append(1), _FakeResp(404, {"error": "no model"}))[1])
+    sess = open_session(TargetConfig(kind="openai_chat", url="https://api.example.com"), Settings())
+    with pytest.raises(TargetError, match="HTTP 404"):
+        sess.send("x")
+    assert len(calls) == 1
 
 
 def test_gemini_base_normalization_and_openrouter_fallback():

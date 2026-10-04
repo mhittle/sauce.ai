@@ -136,6 +136,17 @@ these.
 
 ## 2026-10-04
 
+- **Redteam — target requests retry on 429/5xx.** User: Gemini cells failed
+  with `target HTTP 429 ... exceeded your current quota` and `503 high
+  demand` (2 of 14 Flash cells completed, so the ids are right). Root cause
+  in code: `TargetSession._post` made one request and raised on any error, so
+  a single rate-limit reply failed the trial and three of those with no
+  success aborted the run (`early_failures`). Now 6 attempts honouring
+  Retry-After (else 2,4,8… s, capped 45 s) for 429 and ≥500; other 4xx still
+  fail fast; error text kept to 600 chars so the quota metric is readable.
+  Quota itself is the user's: the Gemini key's project is on the free tier
+  (Pro preview has no free quota; Flash has a low RPM/RPD), so billing must
+  be enabled before the Gemini cells can finish.
 - **Redteam — only finished runs count; same-day runs pooled on the chart.**
   User: "Unfinished runs should not appear. Same runs on same day should be
   grouped. There's an unfinished llama run that scores 100." The partial
