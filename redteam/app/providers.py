@@ -175,6 +175,33 @@ class MockModel(ChatModel):
 
 PROVIDERS = ("anthropic", "openai", "llama", "gemini", "mock")
 
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
+def llama_host(settings: Settings) -> tuple[str, str | None, str]:
+    """(base_url, api_key, host) for the ``llama`` provider: the configured
+    LLAMA_* host when it has a key (or is local), else OpenRouter when
+    OPENROUTER_API_KEY is set. ``host`` is "openrouter" or "llama"."""
+    if settings.llama_api_key or "localhost" in settings.llama_base_url:
+        return settings.llama_base_url, settings.llama_api_key, "llama"
+    if settings.openrouter_api_key:
+        return OPENROUTER_BASE_URL, settings.openrouter_api_key, "openrouter"
+    return settings.llama_base_url, None, "llama"
+
+
+def gemini_openai_base(url: str) -> str:
+    """The service speaks Gemini's OpenAI-compatible endpoint. Accept the native
+    base too (``.../v1beta`` or ``.../v1beta/models/``) and map it to
+    ``.../v1beta/openai`` so a pasted native URL still works."""
+    u = (url or "").strip().rstrip("/")
+    if not u:
+        return GEMINI_OPENAI_BASE_URL
+    if "generativelanguage.googleapis.com" in u and not u.endswith("/openai"):
+        head = u.split("/v1beta")[0] if "/v1beta" in u else u.split("/v1")[0]
+        return head + "/v1beta/openai"
+    return u
+
 # Curated, human-picked model lists for the UI dropdowns. Not exhaustive and
 # not validated against a live models API — the researcher can always type a
 # custom `provider:model`, and an unknown id simply 404s at call time. Keep
@@ -197,6 +224,8 @@ MODEL_CATALOG: dict[str, list[dict]] = {
         {"id": "meta-llama/Llama-3.3-70B-Instruct-Turbo", "label": "Llama 3.3 70B Instruct (Together)"},
         {"id": "meta-llama/Llama-3.1-8B-Instruct-Turbo", "label": "Llama 3.1 8B Instruct (Together)"},
         {"id": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "label": "Llama 3.1 70B Instruct (Together)"},
+        {"id": "meta-llama/llama-3.3-70b-instruct", "label": "Llama 3.3 70B Instruct (OpenRouter)"},
+        {"id": "meta-llama/llama-4-maverick", "label": "Llama 4 Maverick (OpenRouter)"},
     ],
     "gemini": [
         {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
@@ -230,7 +259,7 @@ def available_providers(settings: Settings) -> list[str]:
         out.append("anthropic")
     if settings.openai_api_key:
         out.append("openai")
-    if settings.llama_api_key or "localhost" in settings.llama_base_url:
+    if settings.llama_api_key or settings.openrouter_api_key or "localhost" in settings.llama_base_url:
         out.append("llama")
     if settings.gemini_api_key:
         out.append("gemini")
@@ -253,10 +282,11 @@ def build_model(spec: str, settings: Settings,
             raise ModelError("OPENAI_API_KEY is not configured")
         return OpenAICompatModel("openai", model, settings.openai_base_url, settings.openai_api_key)
     if provider == "llama":
-        return OpenAICompatModel("llama", model, settings.llama_base_url, settings.llama_api_key)
+        base, key, _host = llama_host(settings)
+        return OpenAICompatModel("llama", model, base, key)
     if not settings.gemini_api_key:
         raise ModelError("GEMINI_API_KEY is not configured")
-    return OpenAICompatModel("gemini", model, settings.gemini_base_url, settings.gemini_api_key)
+    return OpenAICompatModel("gemini", model, gemini_openai_base(settings.gemini_base_url), settings.gemini_api_key)
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)

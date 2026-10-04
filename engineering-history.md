@@ -134,6 +134,41 @@ these.
 
 ---
 
+## 2026-10-04
+
+- **Redteam — Super Run (the publishable benchmark).** User: "a really large
+  push across every specialty and every major model, into a nice leaderboard;
+  hidden menu; server env keys; done by EOD." `app/super_run.py`: `plan`
+  (runnable panel × specialties, skipped entries, totals), `estimate_minutes`
+  (median per-trial time of recent runs ÷ worker threads), `results` (pooled
+  board via `leaderboard._pool_overall/_rank`, per-specialty boards, progress
+  with errors, `done`), `recent`, and two pages: the launcher (noindex,
+  checkbox matrix, size/arm/turns/threshold/seed/email, previous batches) and
+  the public batch page (progress bar, caution, pooled + per-specialty tables
+  with card links, per-specialty field-scan links, auto-refresh until done).
+  Each run is tagged `config.super_run_id` and `field_scan_id=<id>:<specialty>`
+  so every specialty slice is also a field scan with its harm image. Gate:
+  `REDTEAM_SUPER_TOKEN` (unset → 404; wrong → 403); the launcher bypasses the
+  per-email quota and the submit rate limit. Store: `runs_for_super`,
+  `super_runs`. INSTALL.md has the operator runbook (keys, worker threads,
+  sizing, relaunching failures). Verified both pages with a seeded batch.
+  Tests: 273 pass.
+- **Redteam — panel targets hit the wrong URL; Gemini native URL; OpenRouter.**
+  While wiring the user's Gemini/OpenRouter variables: `field.target_for` set the
+  target URL to the provider *base* (`…/v1`) but `OpenAIChatSession` posts to
+  the URL verbatim, so every non-Anthropic field-scan / Super Run row would
+  have 404'd. Now `…/chat/completions` is appended. `providers.gemini_openai_base`
+  maps a pasted native URL (`…/v1beta/models/`) to the OpenAI-compatible
+  `…/v1beta/openai` the service speaks (used by `build_model` and
+  `target_for`). `OPENROUTER_API_KEY`: `providers.llama_host` routes the llama
+  provider through OpenRouter when `LLAMA_API_KEY` is unset (base
+  `https://openrouter.ai/api/v1`), the panel's Llama entry carries
+  `openrouter_model` (`meta-llama/llama-3.3-70b-instruct`) with the display
+  map covering both ids, and the catalogue gains two OpenRouter Llama ids.
+  The user pasted a live Gemini key in chat; advised rotation, never stored.
+  Tests: 275 pass.
+
+
 ## 2026-10-03
 
 - **Redteam — the control arm is "ordinary use", and says so.** User: "I don't

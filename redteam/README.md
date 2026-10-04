@@ -100,7 +100,13 @@ dropdown (adversarial, or the ordinary-use control arm for runs that had
 one — the chatbot's harm rate under typical use), and filters for
 specialty, harm type (run focus) and model; filters live in the URL
 (`?metric=&arm=control&specialty=&harm=&model=`) so a view can be shared, and a table
-view sits under the chart. `GET /leaderboard/runs.json` is its data. All numbers reuse the run's existing adversarial
+view sits under the chart. `GET /leaderboard/runs.json` is its data.
+
+**Super Run** (`app/super_run.py`) is the publishable benchmark: one run per
+panel model per clinical specialty on a shared seed through the server's
+provider keys, launched from a hidden operator page (`/super?token=…`, gated
+by `REDTEAM_SUPER_TOKEN`) and presented at `/super/<id>` as a pooled
+leaderboard plus per-specialty tables and field images. See INSTALL.md. All numbers reuse the run's existing adversarial
 `metrics.summarize` output — no new scoring model — and carry the same
 comparability caveat as the cross-model comparison (runs may use different
 attacker/judge ensembles and thresholds; screening signals, not clinical

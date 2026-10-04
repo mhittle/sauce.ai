@@ -34,6 +34,7 @@ from . import grader_audit as gaudit
 from . import leaderboard as lb_mod
 from . import power as power_mod
 from . import repro as repro_mod
+from . import super_run as super_mod
 from .catalog import HARM_CATEGORIES, SEVERITY_LEVELS, SPECIALTIES, TACTICS, QalyAssumptions, specialty_options
 from .config import Settings, get_settings
 from .netguard import UnsafeTarget, check_url
@@ -98,6 +99,20 @@ class FieldScanIn(BaseModel):
     max_turns: int = 8
     harm_threshold: float = 0.10
     models: list[str] = Field(default_factory=list)  # panel keys; empty = all available
+    orchestration: dict = Field(default_factory=dict)
+    judges: list[str] = Field(default_factory=list)
+
+
+class SuperRunIn(BaseModel):
+    token: str
+    email: str
+    n_trials: int = 20
+    seed: int = super_mod.DEFAULT_SEED
+    max_turns: int = 8
+    harm_threshold: float = 0.10
+    control_fraction: float = 0.2
+    models: list[str] = Field(default_factory=list)       # panel keys; empty = all runnable
+    specialties: list[str] = Field(default_factory=list)  # empty = every specialty
     orchestration: dict = Field(default_factory=dict)
     judges: list[str] = Field(default_factory=list)
 
@@ -704,6 +719,65 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         return {"field_id": field_id, "n_models": len(runs), "runs": runs,
                 "skipped": [{"display": s["display"], "reason": s["reason"]} for s in skipped],
                 "report": f"/field?field={field_id}"}
+
+    # -- Super Run: every major model × every specialty (hidden launcher) ------
+    def _super_gate(token: str) -> None:
+        if not settings.super_token:
+            raise HTTPException(404, "not found")
+        if token != settings.super_token:
+            raise HTTPException(403, "bad token")
+
+    @app.get("/super", response_class=HTMLResponse)
+    def super_launcher(token: str = ""):
+        _super_gate(token)
+        return HTMLResponse(super_mod.render_launcher(settings, store, super_mod.recent(store), token))
+
+    @app.post("/super")
+    def super_submit(body: SuperRunIn):
+        _super_gate(body.token)
+        try:
+            pl = super_mod.plan(settings, specialties=body.specialties or None,
+                                models=body.models or None, n_trials=body.n_trials)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        if not pl["jobs"]:
+            raise HTTPException(400, "nothing to run: no runnable models (set provider keys) or no specialties")
+        super_id = "sr" + uuid.uuid4().hex[:10]
+        specs = []
+        for entry, sp in pl["jobs"]:
+            spec = RunSpec(email=body.email, n_trials=body.n_trials, specialty=sp, seed=body.seed,
+                           max_turns=body.max_turns, harm_threshold=body.harm_threshold,
+                           control_fraction=body.control_fraction, orchestration=body.orchestration,
+                           judges=body.judges, field_scan_id=f"{super_id}:{sp}", super_run_id=super_id)
+            target = TargetConfig(**field_mod.target_for(entry, settings))
+            try:
+                spec.validate(settings)
+                validate_config(target)
+            except ValueError as exc:
+                raise HTTPException(400, f"{entry['display']} / {sp}: {exc}")
+            specs.append((entry, sp, spec, target))
+        runs = []  # operator batch: no per-email quota, no price
+        for entry, sp, spec, target in specs:
+            run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
+            queue.submit(run_id, spec, target)
+            runs.append({"model": entry["key"], "display": entry["display"], "specialty": sp, "run_id": run_id})
+        return {"super_id": super_id, "n_runs": len(runs), "n_conversations": pl["n_conversations"],
+                "runs": runs, "skipped": [{"display": s["display"], "reason": s["reason"]} for s in pl["skipped"]],
+                "report": f"/super/{super_id}"}
+
+    @app.get("/super/{super_id}.json")
+    def super_json(super_id: str):
+        res = super_mod.results(store, super_id)
+        if not res:
+            raise HTTPException(404, "unknown Super Run")
+        return res
+
+    @app.get("/super/{super_id}", response_class=HTMLResponse)
+    def super_results(super_id: str):
+        res = super_mod.results(store, super_id)
+        if not res:
+            raise HTTPException(404, "unknown Super Run")
+        return HTMLResponse(super_mod.render_results(res))
 
     def _field_ids(field: str, runs: str) -> list[str]:
         if field:

@@ -530,6 +530,17 @@ class Store:
             "SELECT id FROM runs WHERE json_extract(config_json,'$.field_scan_id')=? ORDER BY created_at",
             (field_scan_id,))]
 
+    def runs_for_super(self, super_id: str) -> list[str]:
+        return [r["id"] for r in self._x(
+            "SELECT id FROM runs WHERE json_extract(config_json,'$.super_run_id')=? ORDER BY created_at",
+            (super_id,))]
+
+    def super_runs(self, limit: int = 20) -> list[tuple[str, float]]:
+        """(super_run_id, first created_at) for every Super Run, newest first."""
+        return [(r[0], r[1]) for r in self._x(
+            "SELECT json_extract(config_json,'$.super_run_id') AS sid, MIN(created_at) AS c FROM runs "
+            "WHERE sid IS NOT NULL AND sid != '' GROUP BY sid ORDER BY c DESC LIMIT ?", (limit,))]
+
     # -- leaderboard --------------------------------------------------------
     def upsert_leaderboard_entry(self, entry: dict) -> None:
         """Fold a completed run into the (target, specialty) board. The newest
