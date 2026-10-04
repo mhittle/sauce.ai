@@ -137,14 +137,21 @@ def test_http_json_error_status_raises(monkeypatch):
 
 def test_target_retries_rate_limit_then_succeeds(monkeypatch):
     import app.targets as t
-    slept = []
-    monkeypatch.setattr(t.time, "sleep", slept.append)
+    from app import throttle
+    throttle.reset_for_tests()
+    slept, clock = [], [1000.0]
+    def fake_sleep(x):                                       # app.targets and app.throttle share the time module
+        slept.append(x); clock[0] += x
+    monkeypatch.setattr(t.time, "sleep", fake_sleep)
+    monkeypatch.setattr(t.time, "monotonic", lambda: clock[0])
     replies = [_FakeResp(429, {"error": "quota"}, {"Retry-After": "3"}), _FakeResp(503, {"error": "busy"}),
                _FakeResp(200, {"choices": [{"message": {"content": "ok"}}]})]
     monkeypatch.setattr(t.requests, "post", lambda *a, **k: replies.pop(0))
     sess = open_session(TargetConfig(kind="openai_chat", url="https://api.example.com", model="m"), Settings())
     assert sess.send("hello") == "ok"
-    assert slept == [3.0, 4.0]          # Retry-After honoured, then 2^(attempt+1)
+    # 429: shared host penalty from Retry-After (3 s, minus the clock's few µs); 503: local backoff 2^(attempt+1)
+    assert [round(x, 2) for x in slept] == [3.0, 4.0]
+    throttle.reset_for_tests()
     assert t._retry_delay("garbage", 5, 45.0) == 45.0 and t._retry_delay("900", 0, 45.0) == 2.0
 
 

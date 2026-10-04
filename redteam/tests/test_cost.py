@@ -108,6 +108,7 @@ def test_anthropic_model_sends_cache_markers(monkeypatch):
     m = providers.AnthropicModel.__new__(providers.AnthropicModel)
     providers.ChatModel.__init__(m)
     m.spec, m.model, m.refusal_fallback = "anthropic:claude-opus-5", "claude-opus-5", False
+    m.limiter = providers.HostLimiter(None) if hasattr(providers, "HostLimiter") else __import__("app.throttle", fromlist=["HostLimiter"]).HostLimiter(None)
     m.client = types.SimpleNamespace(messages=Msgs())
     assert m.chat("SYS", [{"role": "user", "content": blocks("a", "b")}], 20) == "{}"
     assert captured["system"][0]["cache_control"] == {"type": "ephemeral"}

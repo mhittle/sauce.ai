@@ -69,7 +69,9 @@ def snapshot(store, settings, now: float | None = None) -> dict:
     agg_rate = sum(rates) if rates else None
     remaining = sum(x["n_trials"] - x["completed_trials"] for x in running) + sum(x["n_trials"] for x in queued)
     from .providers import available_providers
+    from .throttle import registry
     return {
+        "throttle": registry(settings).snapshot(),
         "now": now, "generated": dt.datetime.fromtimestamp(now, dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
         "worker": {
             "worker_threads": settings.worker_threads, "trial_concurrency": settings.trial_concurrency,
@@ -117,6 +119,22 @@ def _run_cell(x: dict) -> str:
             f" <span class='muted small'>{escape(x['email'])}</span></td>")
 
 
+def _rpm(v) -> str:
+    return "—" if v is None else f"{v:g}"
+
+
+def _throttle_html(t: dict) -> str:
+    if not t:
+        return ""
+    rows = "".join(f"<tr><td>{escape(h)}</td><td class='n'>{_rpm(v['rpm'])}</td>"
+                   f"<td class='n'>{v['waits']}</td><td class='n'>{v['penalties']}</td><td class='n'>{_dur(v['blocked_for_s']) if v['blocked_for_s'] > 0 else '—'}</td></tr>"
+                   for h, v in sorted(t.items()))
+    return ("<h2>Request throttle</h2><table><tr><th>Host</th><th>Limit (req/min)</th><th>Calls that waited</th>"
+            f"<th>429 penalties</th><th>Paused for</th></tr>{rows}</table>"
+            "<p class='small muted'>One bucket per host shared by every run; a 429 pauses all callers on that host "
+            "for the server's Retry-After. Set <code>REDTEAM_RPM_LIMITS</code> (host=rpm,…) to meter a host.</p>")
+
+
 def render_html(snap: dict) -> str:
     from .report import CSS, NAV
     w, c, f = snap["worker"], snap["counts"], snap["in_flight"]
@@ -154,6 +172,7 @@ def render_html(snap: dict) -> str:
 providers with keys: {escape(', '.join(w['providers']) or 'none')} &middot; email {'on' if w['email_enabled'] else 'off'} &middot;
 Super Run launcher {'enabled' if w['super_run_enabled'] else 'disabled'} &middot;
 last 24 h: {c['complete_24h']} complete, {c['failed_24h']} failed</p>
+{_throttle_html(snap.get('throttle') or {})}
 <h2>Running</h2>
 <table><tr><th>Run</th><th>Trials</th><th>Started</th><th>Elapsed</th><th>Pace (trials/min)</th><th>ETA</th></tr>{running_rows}</table>
 <h2>Queued</h2>

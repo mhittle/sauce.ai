@@ -49,6 +49,10 @@ class Settings:
     max_turns_cap: int = _int("REDTEAM_MAX_TURNS_CAP", 20)
     worker_threads: int = _int("REDTEAM_WORKER_THREADS", 4)
     trial_concurrency: int = _int("REDTEAM_TRIAL_CONCURRENCY", 4)
+    # Per-host request ceilings, "host=rpm,host=rpm" (app/throttle.py). Every run
+    # in the process shares one bucket per host; a 429 pauses all of them. Empty
+    # = no fixed ceiling (paid tiers), only the shared 429 back-off.
+    rpm_limits: str = os.environ.get("REDTEAM_RPM_LIMITS", "")
     allow_private_targets: bool = _bool("REDTEAM_ALLOW_PRIVATE_TARGETS")
 
     # Provider credentials for the attacker / judge ensembles. The target's

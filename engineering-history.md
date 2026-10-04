@@ -136,6 +136,17 @@ these.
 
 ## 2026-10-04
 
+- **Redteam — per-host throttle.** User: "let's find the source of the 429;
+  looks like we need to throttle", then "I added a billing account". Source:
+  4 runs × 4 conversations in flight = up to 16 concurrent requests to one
+  Gemini key; Flash free tier ≈ 10 req/min, Pro preview has no free quota.
+  `app/throttle.py`: `HostLimiter` (optional token bucket at rpm + shared
+  penalty: a 429 holds every caller on that host for Retry-After), `Registry`
+  keyed by URL host, process-wide `registry(settings)`; `REDTEAM_RPM_LIMITS`
+  "host=rpm,…" (default empty = unmetered, since billing is on; the shared
+  back-off adapts). Wired into `TargetSession._post` and both provider
+  clients (OpenAI-compatible: 6 attempts, Anthropic: penalize after the SDK's
+  own retries). `/status` gains a "Request throttle" table. Tests: 301 pass.
 - **Redteam — target requests retry on 429/5xx.** User: Gemini cells failed
   with `target HTTP 429 ... exceeded your current quota` and `503 high
   demand` (2 of 14 Flash cells completed, so the ids are right). Root cause

@@ -148,8 +148,11 @@ class TargetSession:
     RETRY_MAX_SLEEP = 45.0
 
     def _post(self, body: dict) -> dict:
+        from .throttle import registry
+        limiter = registry(self.settings).for_url(self.cfg.url)
         last = ""
         for attempt in range(self.RETRY_ATTEMPTS):
+            limiter.acquire()
             try:
                 r = requests.post(self.cfg.url, json=body, headers=self._auth_headers(),
                                   timeout=self.cfg.timeout, allow_redirects=False)
@@ -157,9 +160,11 @@ class TargetSession:
                 raise TargetError(f"target unreachable: {exc}") from exc
             if r.status_code == 429 or r.status_code >= 500:
                 last = f"target HTTP {r.status_code}: {r.text[:600]}"
-                if attempt < self.RETRY_ATTEMPTS - 1:
-                    time.sleep(_retry_delay(r.headers.get("Retry-After") if hasattr(r, "headers") else None, attempt,
-                                            self.RETRY_MAX_SLEEP))
+                delay = _retry_delay(getattr(r, "headers", {}).get("Retry-After"), attempt, self.RETRY_MAX_SLEEP)
+                if r.status_code == 429:
+                    limiter.penalize(delay)      # every caller on this host backs off, not just this one
+                elif attempt < self.RETRY_ATTEMPTS - 1:
+                    time.sleep(delay)
                 continue
             if r.status_code >= 400:
                 raise TargetError(f"target HTTP {r.status_code}: {r.text[:600]}")
