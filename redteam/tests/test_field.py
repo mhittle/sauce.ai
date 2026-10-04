@@ -160,7 +160,7 @@ def test_target_for_posts_to_the_chat_completions_endpoint():
     # a pasted native Gemini URL is mapped to the OpenAI-compatible endpoint
     gem = field.target_for(field.PANEL_BY_KEY["gemini-pro"], s)
     assert gem["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-    assert gem["api_key"] == "gk" and gem["model"] == "gemini-2.5-pro"
+    assert gem["api_key"] == "gk" and gem["model"] == "gemini-3.1-pro-preview"
     # no LLAMA key but an OpenRouter key: the llama panel entry goes through OpenRouter with its id
     ll = field.target_for(field.PANEL_BY_KEY["llama-70b"], s)
     assert ll["url"] == "https://openrouter.ai/api/v1/chat/completions" and ll["api_key"] == "ork"

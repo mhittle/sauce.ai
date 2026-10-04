@@ -195,8 +195,22 @@ class Store:
         self._conn.row_factory = sqlite3.Row
         if path != ":memory:":
             self._conn.execute("PRAGMA journal_mode=WAL")
+            # WAL + NORMAL: commits no longer fsync (the WAL is synced at checkpoint), which is
+            # what keeps writes cheap on a network volume; durable except for power loss.
+            self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(SCHEMA)
         self._migrate()
+        # Reads go through a second connection with its own lock, so a page read never queues
+        # behind the writers of 30+ trial threads (WAL lets readers run beside the writer).
+        # ``:memory:`` databases are per-connection, so there the reader is the writer.
+        if path == ":memory:":
+            self._rconn, self._rlock = self._conn, self._lock
+        else:
+            self._rconn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+            self._rconn.row_factory = sqlite3.Row
+            self._rconn.execute("PRAGMA busy_timeout=5000")
+            self._rlock = threading.RLock()
 
     def _migrate(self) -> None:
         """Additive columns for databases created before they existed."""
@@ -207,6 +221,11 @@ class Store:
     def _x(self, sql: str, args: tuple = ()):
         with self._lock:
             return self._conn.execute(sql, args)
+
+    def _q(self, sql: str, args: tuple = ()) -> list:
+        """Read-only query on the reader connection; rows fetched under the lock."""
+        with self._rlock:
+            return self._rconn.execute(sql, args).fetchall()
 
     # -- quota --------------------------------------------------------------
     def trials_used(self, email: str) -> int:
@@ -241,11 +260,18 @@ class Store:
                 (run_id, email, time.time(), "queued", n_trials, json.dumps(config), json.dumps(target), price_usd))
         return run_id
 
-    def get_run(self, run_id: str) -> dict | None:
-        row = self._x("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
-        if not row:
+    _RUN_LIGHT_COLS = ("id, email, created_at, started_at, finished_at, status, n_trials, completed_trials, "
+                       "config_json, target_json, summary_json, bandit_json, usage_json, error, emailed_at, "
+                       "email_error, price_usd")
+
+    def get_run(self, run_id: str, light: bool = False) -> dict | None:
+        """The run record. ``light`` leaves out ``report_html`` (hundreds of KB on
+        a complete run), for status, boards and batch pages."""
+        cols = self._RUN_LIGHT_COLS if light else "*"
+        rows = self._q(f"SELECT {cols} FROM runs WHERE id=?", (run_id,))
+        if not rows:
             return None
-        d = dict(row)
+        d = dict(rows[0])
         for k in ("config_json", "target_json", "summary_json", "bandit_json", "usage_json"):
             d[k[:-5]] = json.loads(d.pop(k)) if d.get(k) else None
         return d
@@ -259,8 +285,8 @@ class Store:
 
     def recent_runs(self, limit: int = 200) -> list[dict]:
         """Newest-first run summaries for pickers (no report HTML, no secrets)."""
-        rows = self._x("SELECT id, email, created_at, status, n_trials, completed_trials, config_json, "
-                       "target_json FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        rows = self._q("SELECT id, email, created_at, status, n_trials, completed_trials, config_json, "
+                       "target_json FROM runs ORDER BY created_at DESC LIMIT ?", (limit,))
         out = []
         for r in rows:
             d = dict(r)
@@ -296,11 +322,11 @@ class Store:
                  annotation["p_harm"], annotation["expected_qaly_loss"], latency_ms))
 
     def trials_for_run(self, run_id: str, with_turns: bool = True) -> list[dict]:
-        trials = [dict(r) for r in self._x("SELECT * FROM trials WHERE run_id=? ORDER BY idx", (run_id,))]
+        trials = [dict(r) for r in self._q("SELECT * FROM trials WHERE run_id=? ORDER BY idx", (run_id,))]
         for t in trials:
             t["persona"] = json.loads(t.pop("persona_json"))
             if with_turns:
-                rows = self._x("SELECT * FROM turns WHERE trial_id=? ORDER BY idx", (t["id"],)).fetchall()
+                rows = self._q("SELECT * FROM turns WHERE trial_id=? ORDER BY idx", (t["id"],))
                 t["turns"] = []
                 for r in rows:
                     u = dict(r)
@@ -526,18 +552,18 @@ class Store:
             (ablation_id,))]
 
     def runs_for_field(self, field_scan_id: str) -> list[str]:
-        return [r["id"] for r in self._x(
+        return [r["id"] for r in self._q(
             "SELECT id FROM runs WHERE json_extract(config_json,'$.field_scan_id')=? ORDER BY created_at",
             (field_scan_id,))]
 
     def runs_for_super(self, super_id: str) -> list[str]:
-        return [r["id"] for r in self._x(
+        return [r["id"] for r in self._q(
             "SELECT id FROM runs WHERE json_extract(config_json,'$.super_run_id')=? ORDER BY created_at",
             (super_id,))]
 
     def super_runs(self, limit: int = 20) -> list[tuple[str, float]]:
         """(super_run_id, first created_at) for every Super Run, newest first."""
-        return [(r[0], r[1]) for r in self._x(
+        return [(r[0], r[1]) for r in self._q(
             "SELECT json_extract(config_json,'$.super_run_id') AS sid, MIN(created_at) AS c FROM runs "
             "WHERE sid IS NOT NULL AND sid != '' GROUP BY sid ORDER BY c DESC LIMIT ?", (limit,))]
 
@@ -580,7 +606,7 @@ class Store:
             sql += " WHERE specialty=?"
             args = (specialty,)
         out = []
-        for r in self._x(sql, args):
+        for r in self._q(sql, args):
             d = dict(r)
             d.update(json.loads(d.pop("metrics_json")))
             out.append(d)

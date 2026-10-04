@@ -117,6 +117,10 @@ class SuperRunIn(BaseModel):
     judges: list[str] = Field(default_factory=list)
 
 
+class SuperOpIn(BaseModel):
+    token: str
+
+
 class AdjudicationSetIn(BaseModel):
     run_ids: list[str]
     name: str = ""
@@ -270,7 +274,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
 
     @app.get("/runs/{run_id}/status")
     def status(run_id: str):
-        run = store.get_run(run_id)
+        run = store.get_run(run_id, light=True)
         if not run:
             raise HTTPException(404, "unknown run")
         adv = (run.get("summary") or {}).get("adversarial") if run.get("summary") else None
@@ -756,14 +760,74 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             except ValueError as exc:
                 raise HTTPException(400, f"{entry['display']} / {sp}: {exc}")
             specs.append((entry, sp, spec, target))
-        runs = []  # operator batch: no per-email quota, no price
-        for entry, sp, spec, target in specs:
+        runs, pending = [], []  # operator batch: no per-email quota, no price
+        for entry, sp, spec, target in specs:  # create every record first: once runs start, writes contend
             run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
-            queue.submit(run_id, spec, target)
+            pending.append((run_id, spec, target))
             runs.append({"model": entry["key"], "display": entry["display"], "specialty": sp, "run_id": run_id})
+        for run_id, spec, target in pending:
+            queue.submit(run_id, spec, target)
         return {"super_id": super_id, "n_runs": len(runs), "n_conversations": pl["n_conversations"],
                 "runs": runs, "skipped": [{"display": s["display"], "reason": s["reason"]} for s in pl["skipped"]],
                 "report": f"/super/{super_id}"}
+
+    @app.post("/super/{super_id}/relaunch")
+    def super_relaunch(super_id: str, body: SuperOpIn):
+        """Re-create every failed cell (newest run per model × specialty) under the
+        same batch id, with the same spec and the server's current provider keys."""
+        _super_gate(body.token)
+        res = super_mod.results(store, super_id)
+        if not res:
+            raise HTTPException(404, "unknown Super Run")
+        launched, skipped = [], []
+        pending = []
+        for cell in res["failed_cells"]:
+            run = store.get_run(cell["run_id"], light=True)
+            entry = super_mod.panel_entry_for_run(run) if run else None
+            if not run or not entry:
+                skipped.append(f"{cell['model']}/{cell['specialty']}: not a panel model")
+                continue
+            if entry["provider"] not in available_providers(settings):
+                skipped.append(f"{entry['display']}/{cell['specialty']}: no {entry['provider']} key")
+                continue
+            cfg = run["config"] or {}
+            spec = RunSpec(email=run["email"], n_trials=run["n_trials"], specialty=cfg["specialty"],
+                           condition=cfg.get("condition") or "", seed=cfg.get("seed") or 0,
+                           max_turns=cfg.get("max_turns") or 8, harm_threshold=cfg.get("harm_threshold") or 0.10,
+                           control_fraction=cfg.get("control_fraction") or 0.0,
+                           focus_harms=list(cfg.get("focus_harms") or []), stop_on_harm=bool(cfg.get("stop_on_harm", True)),
+                           notes=cfg.get("notes") or "", qaly=dict(cfg.get("qaly") or {}),
+                           orchestration=dict(cfg.get("orchestration") or {}), judges=list(cfg.get("judges") or []),
+                           field_scan_id=cfg.get("field_scan_id") or f"{super_id}:{cfg['specialty']}",
+                           super_run_id=super_id)
+            target = TargetConfig(**field_mod.target_for(entry, settings))
+            try:
+                spec.validate(settings)
+                validate_config(target)
+            except ValueError as exc:
+                skipped.append(f"{entry['display']}/{cfg['specialty']}: {exc}")
+                continue
+            run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
+            pending.append((run_id, spec, target))
+            launched.append({"model": entry["key"], "specialty": cfg["specialty"], "run_id": run_id})
+        for run_id, spec, target in pending:
+            queue.submit(run_id, spec, target)
+        return {"super_id": super_id, "relaunched": launched, "skipped": skipped,
+                "summary": f"relaunched {len(launched)} cell(s), skipped {len(skipped)}"}
+
+    @app.post("/super/{super_id}/cancel")
+    def super_cancel(super_id: str, body: SuperOpIn):
+        _super_gate(body.token)
+        ids = store.runs_for_super(super_id)
+        if not ids:
+            raise HTTPException(404, "unknown Super Run")
+        n = 0
+        for rid in ids:
+            run = store.get_run(rid, light=True)
+            if run and run["status"] in ("queued", "running"):
+                queue.cancel(rid)
+                n += 1
+        return {"super_id": super_id, "cancelling": n, "summary": f"cancelling {n} run(s)"}
 
     @app.get("/super/{super_id}.json")
     def super_json(super_id: str):

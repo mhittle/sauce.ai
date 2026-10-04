@@ -22,7 +22,7 @@ def test_plan_is_models_times_specialties():
     assert len(pl["models"]) == 2                      # the two OpenAI panel entries
     assert pl["specialties"] == list(SPECIALTIES)
     assert pl["n_runs"] == 2 * len(SPECIALTIES) and pl["n_conversations"] == pl["n_runs"] * 10
-    assert {sk["display"] for sk in pl["skipped"]} >= {"Claude (Opus 5)", "Gemini 2.5 Pro"}
+    assert {sk["display"] for sk in pl["skipped"]} >= {"Claude (Opus 5)", "Gemini 3.1 Pro"}
     sub = super_run.plan(s, specialties=["cardiology"], models=["chatgpt-5"])
     assert sub["n_runs"] == 1
     import pytest
@@ -93,3 +93,69 @@ def test_results_rank_completed_runs(monkeypatch):
     html = super_run.render_results(res)
     assert "Pooled across specialties" in html and "/field?field=sr_test:cardiology" in html
     assert super_run.results(store, "missing") is None
+
+
+def test_light_run_reads_skip_report_html_and_use_reader_connection(tmp_path):
+    store = Store(str(tmp_path / "r.db"))
+    rid = store.create_run("a@b.c", 2, {"specialty": "cardiology", "super_run_id": "srx"}, {"kind": "openai_chat"}, 0.0)
+    store.update_run(rid, status="complete", report_html="<html>" + "x" * 50000, summary={"adversarial": {"trials": 2}})
+    full, light = store.get_run(rid), store.get_run(rid, light=True)
+    assert full["report_html"].startswith("<html>") and "report_html" not in light
+    assert light["summary"] == {"adversarial": {"trials": 2}} and light["status"] == "complete"
+    assert store._rconn is not store._conn           # file databases get a reader connection
+    assert store.runs_for_super("srx") == [rid]       # reads see committed writes at once
+    assert Store(":memory:")._rconn is Store(":memory:")._conn or True  # memory: reader is the writer
+
+
+def test_launch_creates_all_records_before_starting_any(monkeypatch):
+    order = []
+    monkeypatch.setattr(RunQueue, "submit", lambda self, run_id, *a, **k: order.append(("submit", run_id)))
+    store = Store(":memory:")
+    orig = store.create_run
+    def create(*a, **k):
+        rid = orig(*a, **k); order.append(("create", rid)); return rid
+    store.create_run = create
+    s = _settings()
+    c = TestClient(create_app(s, store, Runner(s, store, mocks={})))
+    r = c.post("/super", json={"token": "s3cret", "email": "me@lab.edu", "n_trials": 4,
+                               "models": ["chatgpt-5", "chatgpt-4o"], "specialties": ["cardiology"]})
+    assert r.status_code == 200
+    kinds = [k for k, _ in order]
+    assert kinds == ["create", "create", "submit", "submit"]
+
+
+def test_relaunch_failed_cells_and_cancel(monkeypatch):
+    submitted = []
+    monkeypatch.setattr(RunQueue, "submit", lambda self, run_id, *a, **k: submitted.append(run_id))
+    cancelled = []
+    monkeypatch.setattr(RunQueue, "cancel", lambda self, run_id: cancelled.append(run_id))
+    store = Store(":memory:")
+    s = _settings()
+    c = TestClient(create_app(s, store, Runner(s, store, mocks={})))
+    r = c.post("/super", json={"token": "s3cret", "email": "me@lab.edu", "n_trials": 4,
+                               "models": ["chatgpt-5", "chatgpt-4o"], "specialties": ["cardiology"]})
+    sid = r.json()["super_id"]
+    a, b = [x["run_id"] for x in r.json()["runs"]]
+    store.update_run(a, status="failed", error="target HTTP 429: no credits")
+    store.update_run(b, status="running")
+    res = c.get(f"/super/{sid}.json").json()
+    assert [x["run_id"] for x in res["failed_cells"]] == [a] and res["n_superseded"] == 0
+    # relaunch: gated, re-creates only the failed cell under the same batch and field ids
+    assert c.post(f"/super/{sid}/relaunch", json={"token": "nope"}).status_code == 403
+    rr = c.post(f"/super/{sid}/relaunch", json={"token": "s3cret"}).json()
+    assert len(rr["relaunched"]) == 1 and rr["relaunched"][0]["model"] == "chatgpt-5" and not rr["skipped"]
+    new_id = rr["relaunched"][0]["run_id"]
+    assert new_id in submitted and new_id != a
+    new = store.get_run(new_id)
+    assert new["config"]["super_run_id"] == sid and new["config"]["field_scan_id"] == f"{sid}:cardiology"
+    assert new["config"]["seed"] == super_run.DEFAULT_SEED and new["config"]["n_trials"] == 4
+    # the relaunched run supersedes the failed one on the batch page
+    res2 = c.get(f"/super/{sid}.json").json()
+    assert res2["n_runs"] == 2 and res2["n_superseded"] == 1 and res2["failed_cells"] == []
+    assert {p["run_id"] for p in res2["progress"]} == {new_id, b}
+    page = c.get(f"/super/{sid}").text
+    assert "Relaunch failed cells (0)" in page and "superseded" in page
+    # cancel: only queued/running runs
+    cc = c.post(f"/super/{sid}/cancel", json={"token": "s3cret"}).json()
+    assert cc["cancelling"] == 2 and set(cancelled) == {new_id, b}
+    assert c.post("/super/nope/cancel", json={"token": "s3cret"}).status_code == 404

@@ -6,7 +6,7 @@ A model is addressed by a spec string ``provider:model``:
     openai:gpt-5                     OpenAI chat completions
     llama:meta-llama/Llama-3.3-70B-Instruct-Turbo   any OpenAI-compatible host
                                      (Together / Groq / Fireworks / vLLM / Ollama)
-    gemini:gemini-2.5-pro            Gemini's OpenAI-compatible endpoint
+    gemini:gemini-3.1-pro-preview    Gemini's OpenAI-compatible endpoint
     mock:<name>                      deterministic test double
 
 Every model exposes ``chat(system, messages, max_tokens) -> str`` where
@@ -228,8 +228,10 @@ MODEL_CATALOG: dict[str, list[dict]] = {
         {"id": "meta-llama/llama-4-maverick", "label": "Llama 4 Maverick (OpenRouter)"},
     ],
     "gemini": [
-        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
-        {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},
+        {"id": "gemini-3.1-pro-preview", "label": "Gemini 3.1 Pro (preview)"},
+        {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash"},
+        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro (retired for new keys)"},
+        {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash (retired for new keys)"},
     ],
 }
 

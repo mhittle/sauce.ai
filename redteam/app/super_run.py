@@ -55,7 +55,7 @@ def estimate_minutes(store, n_runs: int, n_trials: int, worker_threads: int) -> 
     for r in store.recent_runs(limit=50):
         if r.get("status") != "complete":
             continue
-        run = store.get_run(r["id"])
+        run = store.get_run(r["id"], light=True)
         if run and run.get("finished_at") and run.get("started_at") and run.get("completed_trials"):
             per_trial.append((run["finished_at"] - run["started_at"]) / run["completed_trials"])
     if not per_trial:
@@ -84,8 +84,14 @@ def results(store, super_id: str) -> dict | None:
     run_ids = store.runs_for_super(super_id)
     if not run_ids:
         return None
-    runs = [store.get_run(r) for r in run_ids]
+    runs = [store.get_run(r, light=True) for r in run_ids]
     runs = [r for r in runs if r]
+    # a relaunched cell supersedes its earlier (failed) run: newest per (model, specialty) counts
+    latest: dict[tuple, dict] = {}
+    for r in sorted(runs, key=lambda r: r.get("created_at") or 0):
+        latest[(leaderboard.target_label(r), (r.get("config") or {}).get("specialty"))] = r
+    superseded = {r["id"] for r in runs} - {r["id"] for r in latest.values()}
+    runs = list(latest.values())
     entries = []
     for r in runs:
         if r["status"] == "complete":
@@ -123,14 +129,27 @@ def results(store, super_id: str) -> dict | None:
         "pooled": pooled, "per_specialty": per_specialty, "progress": progress,
         "field_ids": {sp: f"{super_id}:{sp}" for sp in specialties},
         "done": all(r["status"] in ("complete", "failed") for r in runs),
+        "n_superseded": len(superseded),
+        "failed_cells": [{"model": p["model"], "specialty": p["specialty"], "run_id": p["run_id"]}
+                         for p in progress if p["status"] == "failed"],
     }
+
+
+def panel_entry_for_run(run: dict) -> dict | None:
+    """The panel entry a batch run was built from (by its target model id,
+    under either host id), so a cell can be relaunched with the current keys."""
+    model = (run.get("target") or {}).get("model")
+    for p in field_mod.FIELD_PANEL:
+        if model in (p["model"], p.get("openrouter_model")):
+            return p
+    return None
 
 
 def recent(store, limit: int = 20) -> list[dict]:
     """Known Super Runs, newest first, with their progress counts."""
     out = []
     for sid, created in store.super_runs(limit=limit):
-        runs = [store.get_run(r) for r in store.runs_for_super(sid)]
+        runs = [store.get_run(r, light=True) for r in store.runs_for_super(sid)]
         runs = [r for r in runs if r]
         out.append({"super_id": sid, "created_at": created, "n_runs": len(runs),
                     "status_counts": _status_counts(runs)})
@@ -203,9 +222,30 @@ failures. Attackers: {escape(', '.join(res['attackers']) or '—')} &middot; Jud
 folds these runs in automatically; the <a href="/leaderboard?model=">runs-over-time chart</a> shows each one.</p>
 {spec_sections}
 <h2>Run progress</h2>
+<p class="small"><button type="button" class="ghost" id="relaunch">Relaunch failed cells ({len(res['failed_cells'])})</button>
+<button type="button" class="ghost" id="cancel">Cancel running &amp; queued</button>
+<span class="muted" id="opmsg">operator actions; they ask for the Super Run token</span>
+{f"&middot; {res['n_superseded']} earlier run(s) superseded by relaunches" if res['n_superseded'] else ''}</p>
 <table><tr><th>Specialty</th><th>Model</th><th>Status</th><th>Trials</th><th></th></tr>{prog_rows}</table>
 <p class="small muted">Super Run <code>{escape(res['super_id'])}</code> &middot; JSON: <a href="/super/{escape(res['super_id'])}.json">/super/{escape(res['super_id'])}.json</a></p>
-</div></body></html>"""
+</div>
+<script>
+(function(){{
+  const sid = {escape(repr(res['super_id']))}, msg = document.getElementById('opmsg');
+  async function op(path, label) {{
+    const token = prompt('Super Run token to ' + label + ':'); if (!token) return;
+    msg.textContent = label + '…';
+    try {{
+      const r = await fetch('/super/' + sid + '/' + path, {{ method: 'POST', headers: {{ 'content-type': 'application/json' }}, body: JSON.stringify({{ token }}) }});
+      const t = await r.text(); let j; try {{ j = JSON.parse(t); }} catch (e) {{ j = {{ detail: t.slice(0, 200) }}; }}
+      msg.textContent = r.ok ? (label + ': ' + (j.summary || 'done') + ' — reloading') : ('Error: ' + (j.detail || r.status));
+      if (r.ok) setTimeout(() => location.reload(), 1500);
+    }} catch (e) {{ msg.textContent = 'Request failed: ' + e.message; }}
+  }}
+  document.getElementById('relaunch').addEventListener('click', () => op('relaunch', 'relaunch failed cells'));
+  document.getElementById('cancel').addEventListener('click', () => op('cancel', 'cancel the batch'));
+}})();
+</script></body></html>"""
 
 
 def render_launcher(settings, store, recent_runs: list[dict], token: str) -> str:
@@ -272,8 +312,12 @@ document.getElementById('f').addEventListener('submit', async (ev) => {{
     specialties: [...f.querySelectorAll('input[name=specialties]:checked')].map((i) => i.value),
   }};
   msg.textContent = 'launching…';
-  const r = await fetch('/super', {{ method: 'POST', headers: {{ 'content-type': 'application/json' }}, body: JSON.stringify(body) }});
-  const j = await r.json();
+  let r, j;
+  try {{
+    r = await fetch('/super', {{ method: 'POST', headers: {{ 'content-type': 'application/json' }}, body: JSON.stringify(body) }});
+    const text = await r.text();
+    try {{ j = JSON.parse(text); }} catch (e) {{ j = {{ detail: text.slice(0, 200) || ('HTTP ' + r.status) }}; }}
+  }} catch (e) {{ msg.textContent = 'Request failed: ' + e.message + ' — check "Previous Super Runs" below; the batch may have launched.'; return; }}
   if (!r.ok) {{ msg.textContent = 'Error: ' + (j.detail || r.status); return; }}
   location.href = j.report;
 }});

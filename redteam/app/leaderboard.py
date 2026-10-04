@@ -109,7 +109,7 @@ def record_run(store, run_id: str) -> bool:
     """Fold one completed run into the leaderboard. Idempotent per run_id.
     Never raises — leaderboard bookkeeping must not break a run."""
     try:
-        run = store.get_run(run_id)
+        run = store.get_run(run_id, light=True)
         if not run:
             return False
         entry = entry_from_run(run, run.get("summary") or {})
@@ -226,7 +226,7 @@ def run_points(store) -> dict:
     for r in store.recent_runs(limit=100_000):
         if r.get("status") != "complete":
             continue
-        run = store.get_run(r["id"])
+        run = store.get_run(r["id"], light=True)
         p = run_point(run) if run else None
         if p:
             pts.append(p)
