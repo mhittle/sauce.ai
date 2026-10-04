@@ -28,6 +28,7 @@ from .orchestrator import Orchestrator, OrchestratorConfig, TacticBandit
 from .personas import make_persona
 from .providers import ChatModel, ModelError, build_model, parse_spec
 from .report import render_report
+from . import super_run as super_run_mod
 from .store import Store
 from .targets import TargetConfig, TargetError, open_session, validate_config
 
@@ -54,6 +55,7 @@ class RunSpec:
     ablation_arm: str = ""
     field_scan_id: str = ""
     super_run_id: str = ""
+    budget_usd: float = 0.0        # batch cap (Super Run); 0 = none
 
     def validate(self, settings: Settings) -> None:
         if "@" not in self.email or len(self.email) > 254:
@@ -108,6 +110,12 @@ def allocate_arms(n: int, control_fraction: float, rng: random.Random) -> list[s
     return arms
 
 
+def live_cost(models: dict) -> float:
+    """Estimated USD the given model clients have spent so far in this process."""
+    from .providers import cost_usd
+    return sum((cost_usd(spec, m.usage.as_dict()) or 0.0) for spec, m in models.items())
+
+
 def excluded_trials(trials: list[dict]) -> dict:
     """Conversations that errored (status ``error``) and so count in no rate:
     how many, how many of those had already exchanged prompts, and the error
@@ -158,10 +166,16 @@ class Runner:
     def execute(self, run_id: str, spec: RunSpec, target: TargetConfig) -> None:
         store = self.store
         started_trials = 0
+        models: dict[str, ChatModel] = {}
         store.update_run(run_id, status="running", started_at=time.time())
         try:
             validate_config(target)
             models = self._models(spec)
+            # batch budget: what the other runs of this Super Run have already spent;
+            # this run adds its own live usage before each conversation starts
+            batch_spent = (super_run_mod.spent(store, spec.super_run_id, exclude=run_id)
+                           if spec.budget_usd and spec.super_run_id else 0.0)
+            over_budget = {"hit": False}
             ocfg = spec.orch_config(self.settings)
             pool = ThreadPoolExecutor(max_workers=max(4, self.settings.worker_threads * 4))
             bandit = TacticBandit(ocfg.tactics)
@@ -184,6 +198,9 @@ class Runner:
                 with lock:
                     if early_failures["n"] >= 3 and early_failures["ok"] == 0:
                         return  # target is misconfigured; stop burning attacker calls
+                    if spec.budget_usd and batch_spent + live_cost(models) >= spec.budget_usd:
+                        over_budget["hit"] = True
+                        return  # the batch has spent its budget: start nothing more
                     started_trials += 1
                 ok = self._trial(run_id, idx, arm, persona, trng, spec, target, orch, judges)
                 with lock:
@@ -196,6 +213,10 @@ class Runner:
 
             trials = store.trials_for_run(run_id)
             valid = sum(1 for t in trials if t["status"] in ("complete", "harm"))
+            if over_budget["hit"]:
+                raise TargetError(f"batch budget ${spec.budget_usd:,.2f} exhausted "
+                                  f"(about ${batch_spent + live_cost(models):,.2f} spent); "
+                                  f"{started_trials} of {spec.n_trials} conversations started")
             if not valid:
                 errs = {t["error"] for t in trials if t["error"]}
                 raise TargetError("no trial completed: " + "; ".join(sorted(errs))[:500])
@@ -220,6 +241,8 @@ class Runner:
             store.update_run(run_id, emailed_at=time.time() if ok else None, email_error=err)
             pool.shutdown(wait=False)
         except (ValueError, ModelError, TargetError, UnsafeTarget) as exc:
+            if models:   # what a failed run spent is still spend: keep it for the batch total
+                store.update_run(run_id, usage={s: m.usage.as_dict(s) for s, m in models.items()})
             self._fail(run_id, spec, started_trials, str(exc))
         except Exception as exc:  # the worker must never die silently
             log.error("run %s crashed: %s", run_id, traceback.format_exc())
