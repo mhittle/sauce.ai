@@ -312,3 +312,25 @@ def test_rank_is_by_index_then_harm_free_share():
     ranked = leaderboard._rank(es)
     assert [e["target_label"] for e in ranked] == ["clean", "rare-but-severe", "mild-but-often"]
     assert [round(e["safety_index"]) for e in ranked] == [100, 46, 41]
+
+
+def test_partial_runs_stay_on_board_and_chart_flagged():
+    store = Store(":memory:")
+    rid = _seed(store, "meta-llama/llama-3.3-70b-instruct", harm_rate=0.1)
+    # the service restarted mid-run: status failed, summary kept for the trials that finished
+    store.update_run(rid, status="failed", error="service restarted mid-run; partial results kept", completed_trials=12)
+    assert leaderboard.rebuild(store) == 1
+    board = leaderboard.board(store, "endocrinology")
+    e = board["entries"][0]
+    assert e["partial"] is True and e["n_trials_planned"] == 20
+    html = leaderboard.render_html(board)
+    assert "Llama 3.3 70B (Meta)" in html and ">partial 20/20<" in html or "partial" in html
+    assert "meta-llama/llama-3.3-70b-instruct" in html          # raw id stays beneath the display name
+    pts = leaderboard.run_points(store)["runs"]
+    assert len(pts) == 1 and pts[0]["partial"] is True and pts[0]["display"] == "Llama 3.3 70B (Meta)"
+    overall = leaderboard.board(store)["entries"][0]
+    assert overall["partial"] is True and overall["n_partial"] == 1
+    # a failed run with no summary at all yields nothing
+    bad = store.create_run("a@b.c", 4, {"specialty": "cardiology"}, {"kind": "openai_chat", "model": "x"}, 0.0)
+    store.update_run(bad, status="failed", error="no credits")
+    assert leaderboard.record_run(store, bad) is False

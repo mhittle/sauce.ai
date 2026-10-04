@@ -235,6 +235,18 @@ these.
   with tiles and three tables, batch/field links per run, masked emails.
   `GET /status` + `/status.json`; `store.recent_runs` now also returns
   started_at/finished_at/error. Guide, README, INSTALL updated. Tests: 284.
+- **Redteam — "the leaderboard doesn't show Llama."** It did (rank 1 overall,
+  194 trials) but under the raw id `meta-llama/llama-3.3-70b-instruct`, from
+  the 14 Llama runs the #317 deploy interrupted: `finalize_partial_report`
+  records a partial summary on the board, while the chart (`run_points`) and
+  `rebuild` only took `status == "complete"`, so the chart had no Llama. Now
+  one rule everywhere: a run with a summary counts, complete or interrupted;
+  `entry_from_run` adds `partial` + `n_trials_planned`, the table shows the
+  panel display name with the raw id beneath and a "partial 12/20" badge,
+  pooled rows count partials, chart points for partial runs draw hollow with
+  a tooltip line and an axis note, and `rebuild`/`run_points` take complete
+  and failed-with-summary runs. A failed run with no summary still yields
+  nothing. Tests: 285 pass.
 
 
 ## 2026-10-03

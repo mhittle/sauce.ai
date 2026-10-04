@@ -84,7 +84,7 @@
       `<text x="${M.l - 8}" y="${Y(v) + 4}" text-anchor="end">${yFmt(v)}</text>`;
     for (const t of xT) if (t >= t0 && t <= t1) g += `<text x="${X(t)}" y="${H - M.b + 18}" text-anchor="middle">${fmtDate(t)}</text>`;
     g += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/>`;
-    g += `<text x="${M.l}" y="${H - 6}" fill="var(--muted)">run date (UTC) · ${arm === 'control' ? 'ordinary-use (control) arm' : 'adversarial arm'} · ${m.higher_is_safer ? 'higher is safer' : 'lower is safer'}</text></g>`;
+    g += `<text x="${M.l}" y="${H - 6}" fill="var(--muted)">run date (UTC) · ${arm === 'control' ? 'ordinary-use (control) arm' : 'adversarial arm'} · ${m.higher_is_safer ? 'higher is safer' : 'lower is safer'}${runs.some((r) => r.partial) ? ' · hollow marker = interrupted (partial) run' : ''}</text></g>`;
 
     // per-model trend lines (2px, recessive) and end labels
     const byModel = {};
@@ -103,7 +103,9 @@
     for (const r of runs) {
       const v = scaleVal(val(r, metricKey), m.kind), c = ci(r, metricKey), x = X(r.created_at), y = Y(v);
       if (c) g += `<line x1="${x}" x2="${x}" y1="${Y(scaleVal(c[0], m.kind))}" y2="${Y(scaleVal(c[1], m.kind))}" stroke="${colorOf[r.model]}" stroke-opacity=".45" stroke-width="1.5"/>`;
-      g += `<circle cx="${x}" cy="${y}" r="5.5" fill="${colorOf[r.model]}" stroke="var(--card)" stroke-width="2"/>` +
+      g += (r.partial
+        ? `<circle cx="${x}" cy="${y}" r="5" fill="var(--card)" stroke="${colorOf[r.model]}" stroke-width="2.5"/>`   // hollow = partial run
+        : `<circle cx="${x}" cy="${y}" r="5.5" fill="${colorOf[r.model]}" stroke="var(--card)" stroke-width="2"/>`) +
         `<circle cx="${x}" cy="${y}" r="13" fill="transparent" data-run="${esc(r.run_id)}" style="cursor:pointer"/>`;
     }
     // direct labels at the right edge, nudged apart (text ink, never series colour)
@@ -125,7 +127,8 @@
         tip.innerHTML = `<b>${esc(r.display)}</b> <span class="muted">${esc(r.model)}</span><br>` +
           `${fmtDate(r.created_at)} · ${esc(DATA.specialties[r.specialty] || r.specialty)}${r.condition ? ' · ' + esc(r.condition) : ''}<br>` +
           `<b>${esc(m.label)}: ${fmt(val(r, metricKey), m.kind)}</b>${c ? ` <span class="muted">(${fmt(c[0], m.kind)} to ${fmt(c[1], m.kind)})</span>` : ''}<br>` +
-          `${armOf(r).trials} conversations (${arm === 'control' ? 'ordinary use' : 'adversarial'}) · ${arm === 'control' ? 'harm rate' : 'attack success'} ${fmt(val(r, 'attack_success'), 'pct')} · ${armOf(r).critical_count} critical<br>` +
+          `${armOf(r).trials} conversations (${arm === 'control' ? 'ordinary use' : 'adversarial'}) · ${arm === 'control' ? 'harm rate' : 'attack success'} ${fmt(val(r, 'attack_success'), 'pct')} · ${armOf(r).critical_count} critical` +
+          (r.partial ? `<br><b>partial run</b>: interrupted after ${r.trials} of ${r.n_trials_planned} conversations (hollow marker)` : '') + `<br>` +
           `<a href="/card?run=${esc(r.run_id)}">safety card</a> · <a href="/runs/${esc(r.run_id)}">report</a>`;
         tip.style.display = 'block';
       });
