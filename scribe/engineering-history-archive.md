@@ -6,6 +6,66 @@ not read during onboarding.
 
 ---
 
+## 2026-09-15 (n) — PR D: account screens (profile, company, team, teammate invites)
+
+**Shipped.** `routes/account.ts` (`requireUser`; owner writes behind the
+new `requireOrgOwner`, which platform admins also pass): `PATCH /me
+{name, phone}`; `GET /account` (me, org with signed logo URL, members,
+pending invites for this org); `PATCH /account/org {name}`; `POST
+/account/org/logo` (PNG/JPEG → `orgs/{org}/logo-*.{ext}`,
+`orgs.logo_s3_key`); `PATCH /account/members/:id {org_role}` (no
+self-demotion); `POST /account/invites {email, name?}` → an invite with
+`org_id` set (joins the org, no new org, no credits) via the shared
+`createInvite` in `routes/invites.ts`; `DELETE /account/invites/:id`.
+Quote PDF uses the org's logo when set, else the platform logo. Web:
+`pages/Account.tsx` at `/account` (You / Company / Team cards; members see
+read-only), "Account & team" in the account menu above Sign out.
+
+**Gotchas.** (1) An admin's platform-level invite (Admin → Users) with no
+company name makes an org named after the person; owners rename it here.
+(2) Members cannot be removed yet (users carry FKs from takeoffs/quotes);
+demote to member instead — removal is a follow-up. (3) `orgSettings`
+quote terms/footer stay platform-wide.
+
+---
+
+## 2026-09-15 (m) — PR B: sign-up page + email magic link
+
+**Shipped.**
+- `POST /signup {token, name, phone?}` (public): pending invite → one
+  transaction creates the org (`invite.org_name ?? name`; or joins
+  `invite.org_id`), the user (`estimator`, org `owner` for a new org,
+  `terms_accepted_at/version/ip`, `last_sign_in_at`) and consumes the
+  invite; the session token is set as the cookie AND returned in the body
+  (`session`) — the SPA stores it (`setSession`) and goes to Jobs. 409 with
+  `state` when the invite is used/revoked/expired or the email already has
+  an account.
+- Web `/signup?token=…` (`pages/Signup.tsx`, renders without a session):
+  looks the token up, shows plain copy for invalid/used/revoked/expired,
+  else the form — email read-only, name (prefilled from the invite),
+  phone optional, "By continuing you agree to the Terms and Privacy
+  Policy" (links from `TERMS_URL` / `PRIVACY_URL` on the api, plain text
+  when unset).
+- Magic link: migration `0015_login_tokens.sql`; `POST /auth/magic-link
+  {email}` always answers `{ok: true}` (no account enumeration), emails
+  `GET /auth/magic/:token` (15 min, single use) which redirects with
+  `#session=` like the Google callback; expired/used → `?auth_error=
+  link_expired`. Sign-in screen: "Email me a sign-in link" under the
+  Google button; `not_allowed` copy now says sign-ups are by invitation.
+  `magicLinkEmail` template.
+- Google sign-in for an invited user needs nothing new: the callback
+  already accepts any existing `users` row, and sign-up creates it.
+
+**Not done.** No welcome email (the invite email is the welcome). No
+password (decision). The tutorial's sample job is not seeded yet — a new
+org lands on an empty Jobs list.
+
+**Manual:** MA-015 (consent screen external + published, Terms/Privacy
+pages and `TERMS_URL` / `PRIVACY_URL` on `scribe-api`). Without
+MA-013 the magic link is only in the api log (`magic link not emailed`).
+
+---
+
 ## 2026-09-15 (l) — PR C: tenancy — orgs, org_id on every customer table, platform admins
 
 **Shipped (migration `0014_orgs.sql`, applies at boot).** `orgs` (name,

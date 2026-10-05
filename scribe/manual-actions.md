@@ -10,6 +10,9 @@ real secret *values* here — document var names only.
 
 ## Open
 
+> **2026-10-05:** #309 + #310 verified live; neither needed a manual action.
+> Nothing new to do from them. All Open items below remain unconfirmed.
+
 > **2026-10-02:** the usage ledger (#309) needs no manual action — migration
 > 0017 applies at api boot. Every Open item below is still unconfirmed.
 > **2026-10-02:** credits (#310) need no manual action — migration 0018

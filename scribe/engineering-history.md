@@ -115,6 +115,10 @@ deploys if a future session doesn't know it exists. Keep this current.
   no rate row (exact or alias prefix) is skipped with a log line. Before
   changing `VISION_MODEL` / `OPENAI_VISION_MODEL`, add its rate in a
   migration. Rates are never updated — a price change is a new row.
+- **Billing state (verified live 2026-10-05):** usage ledger (#309, 0017)
+  and credits (#310, 0018) are deployed. No Stripe code, no
+  `STRIPE_*` vars. Every org's first job is a 0-page hold; Admin → Credits
+  holds the rules (`platform_settings`) and balances.
 - **Credits are RECORD-ONLY (2026-10-02, #310).** `platform_settings.
   credits_enforced = false`: every job holds/settles pages and balances can
   go negative, but nothing is blocked. Turn it on (Admin → Credits) only
@@ -124,6 +128,37 @@ deploys if a future session doesn't know it exists. Keep this current.
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-05 — session wrap-up: usage ledger + credits merged and live; Stripe next
+
+**Context.** Session 2026-10-02→05 from the 2026-09-23 prompt: Task 1 usage
+ledger, report costs, ask pricing, Task 2 credits. Task 3 (Stripe) not
+started — pack prices unconfirmed.
+
+**Shipped (both merged 2026-10-02).** #309 usage ledger (0017, Admin →
+Usage, `scripts/kit-cost.mjs`); #310 credits (0018, $1/page, no minimum,
+first job free, record-only, Admin → Credits). #310 was rebased onto #309
+(conflicts were add/add only; both tabs and both route sets kept).
+
+**Prod verification (2026-10-05).** All #309/#310 files on `origin/main`
+(`git cat-file`); `/health/db` ok; `/admin/usage`, `/credits`,
+`/admin/credits` answer 401 (route exists) — the api boots only after
+migrating, so 0017 + 0018 applied. Live bundle `index-BA6beBJh.js`
+contains "Model cost per job, stage, page", "First job free",
+"Balances, grants, rules". Prod usage numbers NOT yet read (no session in
+the app this time) — Admin → Usage is the first thing to look at next.
+
+**Owner decisions.** $1 per page read; no per-job minimum; first job free
+(any size) replaces the page grant; packs 25 / 100 / 500 pages (prices
+not yet confirmed — proposal $25 / $90 / $400); enforcement stays off until
+Stripe.
+
+**Open.** Stripe (Task 3); open-hold sweep before enforcement; read prod
+Usage vs the kit estimate (4.1¢/page median); MA-006/013/014/015/016 and
+older MA-007/008/009/011 unconfirmed; measurement Option A/B/C; SCR-015;
+SCR-013 live spot-check.
 
 ---
 
@@ -297,67 +332,15 @@ simply shows nothing until it does.
 
 ---
 
-## 2026-09-15 (n) — PR D: account screens (profile, company, team, teammate invites)
-
-**Shipped.** `routes/account.ts` (`requireUser`; owner writes behind the
-new `requireOrgOwner`, which platform admins also pass): `PATCH /me
-{name, phone}`; `GET /account` (me, org with signed logo URL, members,
-pending invites for this org); `PATCH /account/org {name}`; `POST
-/account/org/logo` (PNG/JPEG → `orgs/{org}/logo-*.{ext}`,
-`orgs.logo_s3_key`); `PATCH /account/members/:id {org_role}` (no
-self-demotion); `POST /account/invites {email, name?}` → an invite with
-`org_id` set (joins the org, no new org, no credits) via the shared
-`createInvite` in `routes/invites.ts`; `DELETE /account/invites/:id`.
-Quote PDF uses the org's logo when set, else the platform logo. Web:
-`pages/Account.tsx` at `/account` (You / Company / Team cards; members see
-read-only), "Account & team" in the account menu above Sign out.
-
-**Gotchas.** (1) An admin's platform-level invite (Admin → Users) with no
-company name makes an org named after the person; owners rename it here.
-(2) Members cannot be removed yet (users carry FKs from takeoffs/quotes);
-demote to member instead — removal is a follow-up. (3) `orgSettings`
-quote terms/footer stay platform-wide.
-
----
-
-## 2026-09-15 (m) — PR B: sign-up page + email magic link
-
-**Shipped.**
-- `POST /signup {token, name, phone?}` (public): pending invite → one
-  transaction creates the org (`invite.org_name ?? name`; or joins
-  `invite.org_id`), the user (`estimator`, org `owner` for a new org,
-  `terms_accepted_at/version/ip`, `last_sign_in_at`) and consumes the
-  invite; the session token is set as the cookie AND returned in the body
-  (`session`) — the SPA stores it (`setSession`) and goes to Jobs. 409 with
-  `state` when the invite is used/revoked/expired or the email already has
-  an account.
-- Web `/signup?token=…` (`pages/Signup.tsx`, renders without a session):
-  looks the token up, shows plain copy for invalid/used/revoked/expired,
-  else the form — email read-only, name (prefilled from the invite),
-  phone optional, "By continuing you agree to the Terms and Privacy
-  Policy" (links from `TERMS_URL` / `PRIVACY_URL` on the api, plain text
-  when unset).
-- Magic link: migration `0015_login_tokens.sql`; `POST /auth/magic-link
-  {email}` always answers `{ok: true}` (no account enumeration), emails
-  `GET /auth/magic/:token` (15 min, single use) which redirects with
-  `#session=` like the Google callback; expired/used → `?auth_error=
-  link_expired`. Sign-in screen: "Email me a sign-in link" under the
-  Google button; `not_allowed` copy now says sign-ups are by invitation.
-  `magicLinkEmail` template.
-- Google sign-in for an invited user needs nothing new: the callback
-  already accepts any existing `users` row, and sign-up creates it.
-
-**Not done.** No welcome email (the invite email is the welcome). No
-password (decision). The tutorial's sample job is not seeded yet — a new
-org lands on an empty Jobs list.
-
-**Manual:** MA-015 (consent screen external + published, Terms/Privacy
-pages and `TERMS_URL` / `PRIVACY_URL` on `scribe-api`). Without
-MA-013 the magic link is only in the api log (`magic link not emailed`).
-
----
-
 ## Condensed history
+
+### 2026-09-15 (n) — PR D: account screens (archived verbatim)
+`/account` (profile, company name/logo, team roles, teammate invites),
+`requireOrgOwner`; org logo wins on that org's quote PDFs.
+
+### 2026-09-15 (m) — PR B: sign-up + magic link (archived verbatim)
+`POST /signup` (org + owner + invite consumed in one transaction, session in
+the body), `/signup?token=` page, email magic link (0015 `login_tokens`).
 
 ### 2026-09-15 (l) — PR C: tenancy (archived verbatim)
 Migration 0014 `orgs` + `org_id` on takeoffs/quotes/customers/eval_fixtures,
