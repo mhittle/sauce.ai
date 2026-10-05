@@ -129,6 +129,15 @@ keeps that in check:
   report's Compute table shows cached share and cost; the Super Run page
   totals the batch; the launcher estimates a batch's spend from the median
   per-conversation cost of recent runs.
+- **Where a run's money goes.** One complete 20-conversation Gemini Flash
+  cell measured $6.79: Opus 242 calls / $5.44, Sonnet 137 calls / $1.35.
+  Opus was called twice per turn, once as the judge and once as the
+  **arbiter** scoring the attacker's two candidates, so the arbiter default
+  is now Sonnet (`REDTEAM_DEFAULT_ARBITER`), about 40% off per run.
+- **Batch budget.** The Super Run form takes a USD cap (prefilled from the
+  estimate); once the batch's stored plus live spend reaches it, runs start
+  no more conversations and fail with "batch budget exhausted", keeping a
+  partial report. Failed runs keep their usage so the batch total is honest.
 - **Levers you choose.** `REDTEAM_DEFAULT_JUDGES` (Opus 5 by default, 2.5×
   the price of Sonnet 5), `REDTEAM_DEFAULT_ATTACKERS`, conversations per
   cell and max turns on the Super Run form. Trials already stop at the

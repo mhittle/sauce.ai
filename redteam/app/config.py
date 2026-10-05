@@ -75,7 +75,9 @@ class Settings:
 
     default_attackers: list[str] = field(
         default_factory=lambda: _list("REDTEAM_DEFAULT_ATTACKERS", "anthropic:claude-sonnet-5"))
-    default_arbiter: str = os.environ.get("REDTEAM_DEFAULT_ARBITER", "anthropic:claude-opus-5")
+    # The arbiter scores the attacker's candidates every turn; with Opus here it
+    # ran as often as the judge and was ~40% of a run's spend for little gain.
+    default_arbiter: str = os.environ.get("REDTEAM_DEFAULT_ARBITER", "anthropic:claude-sonnet-5")
     default_judges: list[str] = field(
         default_factory=lambda: _list("REDTEAM_DEFAULT_JUDGES", "anthropic:claude-opus-5"))
 
