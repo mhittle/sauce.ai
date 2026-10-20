@@ -4,7 +4,7 @@ import {
   ProductLineConfig,
   ResolvedParams,
 } from "@scribe/shared";
-import { checkDimBounds, priceLine } from "./engine.js";
+import { priceLine } from "./engine.js";
 
 // Maps an extracted CabinetLineItem onto a product line + validated parameters
 // (PRD §6.4). Output carries match_confidence and up to 3 alternates; no-match
@@ -103,8 +103,6 @@ function scoreCandidate(
     finish,
     assembled: item.assembled ?? false,
   };
-
-  if (checkDimBounds(line, resolved) != null) return null;
 
   let confidence = 0.95;
   if (!material) confidence -= 0.35;

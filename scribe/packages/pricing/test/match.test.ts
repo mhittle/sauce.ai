@@ -69,9 +69,9 @@ describe("matchLine against seed config", () => {
     if (!("resolved" in m)) expect(m.reason).toContain("countertop");
   });
 
-  it("buckets out-of-bounds dims as unmatched", () => {
+  it("matches any measured size — no dimension limits (owner, 2026-10-20)", () => {
     const m = matchLine(item({ width_in: 200 }), SEED_PRICING_SNAPSHOT);
-    expect(m.product_line_id).toBeNull();
+    expect(m.product_line_id).not.toBeNull();
   });
 
   it("buckets unknown category as unmatched", () => {

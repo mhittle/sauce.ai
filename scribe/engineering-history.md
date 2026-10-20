@@ -136,6 +136,26 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-10-20 (e) — no size limits in pricing (owner: "let the measurements do the work")
+
+**Context.** The 48" Framed Casework max that blocked the Albert Boyle quote
+was a placeholder from the v1 seed (Claude, 2026-06-10, `seed.ts`), carried
+into prod's price list v1–v3; not a CabinetNow rule. Owner: don't set limits.
+
+**Shipped.** `@scribe/pricing`: `priceLine` no longer checks `dim_bounds`
+(removed `checkDimBounds` / the `out_of_bounds` reason) and `matchLine` no
+longer drops candidates by size. `dim_bounds` stays in the schema, the DB
+and Admin data, but nothing enforces it. Pricing defaults an empty material
+to the product's first material (the matcher's existing rule) — the two prod
+lines carried `material: ""` from the old hand-pick. Applies to every price
+list, including ones old quotes are pinned to, so quote `a98845a0` prices
+its 58" cabinets on deploy (at the default material — check it).
+
+**Gotcha.** Size is now never a reason a line can't be priced; a cabinet
+read at a wrong size is priced at that size — the review is the check.
+
+---
+
 ## 2026-10-20 (d) — old-rates quotes say "build a new quote" (owner ask)
 
 `GET /quotes/:id` returns `newer_rates` (a price list newer than the
@@ -319,51 +339,12 @@ row; then turn `credits_enforced` on.
 
 ---
 
-## 2026-10-02 — usage ledger (step 3a): every model call costed; Admin → Usage (#309)
-
-**Context.** Owner prompt: build 3a (instrument, don't charge), report the
-measured cost, then ask the pricing question before credits.
-
-**Shipped (#309, migration `0017_usage_events.sql`).**
-- `model_rates` (versioned, never updated; seeded at list 2026-10:
-  Sonnet 4.6 300/1500/375/30, Haiku 4.5 100/500/125/10, Opus 4.8
-  500/2500/625/50, gpt-4.1 200/800/200/50 cents per MTok) and
-  `usage_events` (org, takeoff, stage, model, rate id, in/out/cache tokens,
-  images, page, `page_kind`, `cost_microcents` = tokens × cents/MTok, exact).
-- `lib/usage.ts`: `costMicrocents`, `pickRate` (exact id, else longest alias
-  prefix — dated snapshots match), `insertUsageEvent`, `usageContextFor`.
-  `TakeoffBudget(context)`: `record()` adds to the cap and writes a row,
-  `ledger()` writes without counting (OpenAI cross-check, detect, measure —
-  none were capped before). A failed insert logs `usage event insert failed`
-  and never fails a build.
-- Hooked: classify (images = batch), locate, extract (page + page class),
-  spreadsheet, cross_validate (OpenAI cached tokens split out), detect
-  (page + area kind), measure (both attempts; page null).
-- `GET /admin/usage?from&to&org_id` (`routes/usage.ts`, platform admin) +
-  Admin → Usage tab: totals, median/p90 per job and per page, by stage+model,
-  by page kind, by job. Job pages = selected pages, else PDF page count, else 1.
-- `apps/workers/scripts/kit-cost.mjs`: prices the staged kits with the free
-  `count_tokens` endpoint (inputs exact incl. re-rendered classify
-  thumbnails; outputs = stored answers re-tokenized, a floor).
-
-**Measured (18-quote kit set, Sonnet 4.6 list).** $1.75 for all 18 (32
-selected pages, 79 PDF pages). Per job median 8.7¢, p90 20¢, max 25¢. Per
-selected page median 4.1¢, p90 12.5¢. Plan-only jobs 10.7¢/page median vs
-elevation-only 3.5¢ (a plan job is usually 1 page carrying the whole
-measure pass). Stage share: measure 52%, detect 29%, classify 19%
-(classify scales with the PDF's total pages, not the selection). Re-runs
-(Find, Measure again) are not in these numbers.
-
-**Gotcha (load-bearing).** A model id with no `model_rates` row is not
-recorded (logged per call). Setting `VISION_MODEL` / `OPENAI_VISION_MODEL`
-to a new model needs a new rate row first.
-
-**Verified.** Offline gate green; on local `scribe_dev` the migration
-applied at boot, real worker inserts costed exactly, an unknown model was
-logged and skipped, `/admin/usage` and the tab rendered.
-
-**Open.** Credits (3b) wait on the owner's pricing answer; Stripe after.
 ## Condensed history
+
+### 2026-10-02 — usage ledger, step 3a (#309, archived verbatim)
+Migration 0017 `model_rates` + `usage_events` (microcents); `TakeoffBudget`
+writes every model call; Admin → Usage; `scripts/kit-cost.mjs` (18 kits:
+4.1¢/page median by count_tokens; first real job 2.7¢/page).
 
 ### 2026-09-23 — wrap-up: accounts + tutorial live (archived verbatim)
 #279–#283 merged 2026-09-21 and verified on prod; billing then unbuilt;

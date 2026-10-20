@@ -1,6 +1,5 @@
 import {
   Adder,
-  DimBounds,
   ProductLineConfig,
   ResolvedParams,
   roundCents,
@@ -30,8 +29,7 @@ export interface LinePriceError {
     | "inactive_product_line"
     | "unknown_material"
     | "unknown_finish"
-    | "missing_dimension"
-    | "out_of_bounds";
+    | "missing_dimension";
   detail: string;
 }
 
@@ -57,30 +55,6 @@ function applyAdder(adder: Adder, baseCents: number): number {
   return adder.kind === "flat" ? adder.cents : (adder.pct / 100) * baseCents;
 }
 
-function checkBound(
-  value: number | null,
-  bound: DimBounds["width"],
-  name: string
-): string | null {
-  if (bound == null) return null;
-  if (value == null) return `missing ${name}`;
-  if (value < bound.min_in || value > bound.max_in) {
-    return `${name} ${value}" outside ${bound.min_in}"–${bound.max_in}"`;
-  }
-  return null;
-}
-
-export function checkDimBounds(
-  line: ProductLineConfig,
-  params: ResolvedParams
-): string | null {
-  return (
-    checkBound(params.width_in, line.dim_bounds.width, "width") ??
-    checkBound(params.height_in, line.dim_bounds.height, "height") ??
-    checkBound(params.depth_in, line.dim_bounds.depth, "depth")
-  );
-}
-
 export function priceLine(
   line: ProductLineConfig,
   params: ResolvedParams
@@ -93,12 +67,13 @@ export function priceLine(
     };
   }
 
-  const boundError = checkDimBounds(line, params);
-  if (boundError) {
-    return { ok: false, reason: "out_of_bounds", detail: boundError };
-  }
+  // No size limits (owner, 2026-10-20): a product prices whatever was
+  // measured. `dim_bounds` stays in the config but is not enforced.
 
-  const materialRate = line.material_rates[params.material];
+  // No material read → the product's first material, the same default the
+  // matcher uses (a hand-picked line can carry an empty material).
+  const material = params.material || Object.keys(line.material_rates)[0] || "";
+  const materialRate = line.material_rates[material];
   if (!materialRate) {
     return {
       ok: false,
