@@ -122,14 +122,44 @@ deploys if a future session doesn't know it exists. Keep this current.
   amount == the pack price in `PAGE_PACKS` — changing a pack price means a
   code change, not a Stripe dashboard change.
 - **Credits are RECORD-ONLY (2026-10-02, #310).** `platform_settings.
-  credits_enforced = false`: every job holds/settles pages and balances can
-  go negative, but nothing is blocked. Turn it on (Admin → Credits) only
-  after Stripe lets customers buy pages, and after the open-hold sweep.
+  credits_enforced = false`: holds/settles happen and balances can go
+  negative, nothing is blocked. Prerequisites for ticking "Block jobs the
+  balance can't cover" (Admin → Credits): Stripe live (MA-017) and the
+  hourly hold sweep (2026-10-20, `credits.sweep` queue on scribe-workers,
+  `CREDIT_HOLD_SWEEP_HOURS` default 24) — both now in code.
 - **`ROUTER_TOLERANT_MERGE=1` is SET on `scribe-workers`** (owner, 2026-08-12)
   — the demoted-role re-admit merge is LIVE prod behavior (kit-measured 0.379
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-20 — open-hold sweep + "charge again" (#324, credits, before enforcement)
+
+**Owner:** release holds on jobs left unfinished; a swept job that is picked
+back up is charged again ("charge again", 2026-10-20).
+
+**Shipped.** `@scribe/db` `sweepStaleHolds(db, hours)`: holds with no
+settle/release whose takeoff is `processing` / `awaiting_pages` /
+`awaiting_boxes` and has had no activity (hold, takeoff `updated_at`, newest
+area) for `CREDIT_HOLD_SWEEP_HOURS` (default 24) are released with a note.
+Workers run it hourly on a new `credits.sweep` BullMQ queue
+(`upsertJobScheduler`). `reholdIfReleased` + the API's `reholdOrRefuse`:
+Find (`/detections/run`) and Build (`/build-takeoff`) on a job whose hold
+was released open a fresh hold (402 when enforced and short); an open or
+settled hold is never charged again, and a swept free first job comes back
+free. Ledger label "Pages returned" (note says failed / not finished).
+
+**Verified locally (`scribe_dev`).** Stale abandoned job released; a job
+with an area drawn within the hour kept; settled and fresh jobs untouched;
+second sweep a no-op; resuming charged 3 pages once; resuming the free job
+stayed free; balance = sum of deltas. Not exercised: the hourly scheduler
+(local Redis down).
+
+**Gotcha.** Image jobs are released by the sweep but only Find/Build re-hold,
+and those are PDF routes — an image job abandoned and finished later another
+way is not re-charged.
 
 ---
 
@@ -163,9 +193,6 @@ round trip (MA-017 step 5).
 
 **Open.** Open-hold sweep (before enforcement); one real prod job to prove
 usage + hold/settle; then live keys + enforcement.
-
----
-
 ## 2026-10-05 — session wrap-up: usage ledger + credits merged and live; Stripe next
 
 **Context.** Session 2026-10-02→05 from the 2026-09-23 prompt: Task 1 usage
@@ -331,43 +358,12 @@ still needs evidence.
 
 ---
 
-## 2026-09-15 (o) — onboarding tutorial: seeded sample job + coachmarks
-
-**Shipped (migration `0016_onboarding.sql`).**
-- **Sample job.** `org_settings.sample_takeoff_id` (Admin → Users →
-  "Sample job for new accounts"; must be review/approved and not itself a
-  clone). `lib/sample.ts cloneSampleTakeoff(orgId, userId)`: copies the
-  takeoff row (`is_sample`, `storage_id` = original, status `review`,
-  name "Sample — <file>"), its detections and lines with ids remapped
-  (faces' `raw_model_output.parent`, `detection_id`); idempotent per org;
-  called after sign-up (best-effort) and by `POST /account/sample`. Image
-  routes (`pages`, `thumbs`, `reads`, `beta/pages`) read from
-  `storage_id`; a preHandler refuses non-GET `/takeoffs/:id/…` on a sample
-  except accept-lines / approve / reopen (409 "this is the sample job —
-  upload your own plan set"), so reviewing, approving and quoting it works
-  and nothing re-reads it. `/jobs` carries `isSample`; the row shows a
-  "sample" badge.
-- **Coachmarks.** `ui/Coachmark.tsx` (fixed popover pinned to
-  `[data-tour=…]`, never blocks input, Next / Skip tour, N/M) and
-  `components/Tour.tsx` (`TOURS` copy per screen; steps whose anchor is
-  absent are skipped; progress `users.onboarding {seen, dismissed}` via
-  `PATCH /me`; `/auth/me` returns it). Anchors: Jobs upload zone + sample
-  row; Pages continue button; Mark step action; Review accept button +
-  estimate bar; Quote tiers + send. "Show me around" in the account menu
-  clears progress, re-seeds the sample and goes to Jobs.
-
-**Gotchas.** (1) `storage_id` is only honoured by the four image routes;
-worker key helpers still use the takeoff id — hence the write block on
-samples. (2) Deleting the original sample takeoff is blocked by the FK
-from `org_settings`; clear the sample first. (3) The tour reads `["me"]`
-from the query cache — a page that renders before `/auth/me` resolves
-simply shows nothing until it does.
-
-**Manual:** MA-016 (choose a sample plan set we may show to strangers).
-
----
-
 ## Condensed history
+
+### 2026-09-15 (o) — onboarding tutorial (archived verbatim)
+Migration 0016: sample-job clone per new org (`storage_id` shares the
+original's images; writes refused on samples) + coachmark tours, progress
+in `users.onboarding`. Sample is unset in prod (MA-016).
 
 ### 2026-09-15 (n) — PR D: account screens (archived verbatim)
 `/account` (profile, company name/logo, team roles, teammate invites),

@@ -12,6 +12,7 @@ import {
   renderBetaPage,
 } from "./takeoff/detect.js";
 import { runSource, runAllSources } from "./crawler/run.js";
+import { getDb, sweepStaleHolds } from "@scribe/db";
 import { redisConnection } from "./lib/redis.js";
 
 const log = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -20,6 +21,7 @@ const connection = redisConnection();
 
 const TAKEOFF_QUEUE = "takeoff.process";
 const CRAWLER_QUEUE = "crawler.run";
+const CREDITS_QUEUE = "credits.sweep";
 
 // Two-gate takeoff flow: `prepare` (thumbnails + classification →
 // awaiting_pages), `extract` (read selected pages → awaiting_boxes),
@@ -62,7 +64,19 @@ const crawlerWorker = new Worker(
   { connection, concurrency: 1 }
 );
 
-for (const w of [takeoffWorker, crawlerWorker]) {
+// Give back credit holds on jobs left unfinished (accounts-plan.md §3.2):
+// hourly, releasing holds with no activity for CREDIT_HOLD_SWEEP_HOURS (24).
+const creditsWorker = new Worker(
+  CREDITS_QUEUE,
+  async () => {
+    const hours = Number(process.env.CREDIT_HOLD_SWEEP_HOURS ?? 24);
+    const released = await sweepStaleHolds(getDb(), hours);
+    if (released.length > 0) log.info({ released, hours }, "stale credit holds released");
+  },
+  { connection, concurrency: 1 }
+);
+
+for (const w of [takeoffWorker, crawlerWorker, creditsWorker]) {
   w.on("failed", (job, err) => {
     log.error({ job: job?.name, id: job?.id, err: err.message }, "job failed");
   });
@@ -76,12 +90,21 @@ await crawlerQueue.upsertJobScheduler(
   { name: "crawl-all" }
 );
 
-log.info("scribe workers up: takeoff + crawler");
+const creditsQueue = new Queue(CREDITS_QUEUE, { connection });
+await creditsQueue.upsertJobScheduler(
+  "credit-hold-sweep-hourly",
+  { every: 60 * 60 * 1000 },
+  { name: "sweep" }
+);
+
+log.info("scribe workers up: takeoff + crawler + credit sweep");
 
 async function shutdown() {
   await takeoffWorker.close();
   await crawlerWorker.close();
+  await creditsWorker.close();
   await crawlerQueue.close();
+  await creditsQueue.close();
   process.exit(0);
 }
 process.on("SIGINT", shutdown);

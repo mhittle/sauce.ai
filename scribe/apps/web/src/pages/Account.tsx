@@ -339,7 +339,8 @@ function Pages() {
       </div>
       <p className="px-4 pb-2 text-xs text-muted">
         Every page Scribe reads takes one from this balance. Finding, building or measuring
-        again on the same job costs nothing extra, and a job that fails gives its pages back.
+        again on the same job costs nothing extra. A job that fails, or is left unfinished for a
+        day, gives its pages back; picking it up again later uses them again.
       </p>
       {purchased && !landed && <p className="px-4 pb-2 text-sm text-ink">{PURCHASE_PENDING}</p>}
       <div className="flex flex-wrap items-center gap-2 px-4 pb-3" data-tour="buy-pages">
