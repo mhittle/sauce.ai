@@ -4,7 +4,7 @@ import {
   ProductLineConfig,
   ResolvedParams,
 } from "@scribe/shared";
-import { checkDimBounds } from "./engine.js";
+import { checkDimBounds, priceLine } from "./engine.js";
 
 // Maps an extracted CabinetLineItem onto a product line + validated parameters
 // (PRD §6.4). Output carries match_confidence and up to 3 alternates; no-match
@@ -151,4 +151,55 @@ export function matchLine(
       match_confidence: c.confidence,
     })),
   };
+}
+
+// A human picked `line` for `item` (the review's unmatched bucket). Resolve
+// it the way the matcher would — material/finish snapped to the product's
+// options, the first material when none is given — and refuse what pricing
+// would refuse, with the reason in words. The category gate is skipped: the
+// person choosing the product is the override. (SCR-016)
+export function resolveForProductLine(
+  item: CabinetLineItem,
+  line: ProductLineConfig
+): { ok: true; resolved: ResolvedParams } | { ok: false; reason: string } {
+  if (!line.active) return { ok: false, reason: `${line.name} is not an active product` };
+  const materials = Object.keys(line.material_rates);
+  const material = resolveMaterial(item.material, materials)?.resolved ?? materials[0];
+  if (!material) return { ok: false, reason: `${line.name} has no materials configured` };
+  let finish: string | null = null;
+  if (item.finish) {
+    const f = resolveOption(item.finish, Object.keys(line.finish_adders));
+    if (!f) return { ok: false, reason: `${line.name} has no "${item.finish}" finish` };
+    finish = f.resolved;
+  }
+  const resolved: ResolvedParams = {
+    product_line_id: line.id,
+    qty: item.qty,
+    width_in: item.width_in,
+    height_in: item.height_in,
+    depth_in: item.depth_in,
+    material,
+    finish,
+    assembled: item.assembled ?? false,
+  };
+  const outcome = priceLine(line, resolved);
+  if (!outcome.ok) return { ok: false, reason: outcome.detail };
+  return { ok: true, resolved };
+}
+
+// Why a line that carries a product cannot be priced against `snapshot`
+// right now, or null when it prices. The review uses this so a line counts
+// as fixed exactly when the quote can price it.
+export function priceIssue(
+  productLineId: string | null,
+  resolvedParams: unknown,
+  snapshot: PricingSnapshot
+): string | null {
+  if (!productLineId) return null;
+  const pl = snapshot.product_lines.find((p) => p.id === productLineId);
+  if (!pl) return `product ${productLineId} is not in the current price list`;
+  const parsed = ResolvedParams.safeParse(resolvedParams);
+  if (!parsed.success) return "the product's size and material are missing — pick the product again";
+  const outcome = priceLine(pl, parsed.data);
+  return outcome.ok ? null : outcome.detail;
 }

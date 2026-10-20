@@ -54,7 +54,7 @@ export interface PricedLine {
 
 export interface PricingRun {
   priced: PricedLine[];
-  unpriced: { takeoff_line_id: string; reason: string }[];
+  unpriced: { takeoff_line_id: string; tag: string | null; reason: string }[];
   totals: QuoteTotals;
   freight_pallets: number;
   freight_verification_required: boolean;
@@ -74,6 +74,7 @@ export async function runPricing(
     if (!line.productLineId || !line.resolvedParams) {
       unpriced.push({
         takeoff_line_id: line.id,
+        tag: line.tag,
         reason: "unmatched — resolve in the review screen",
       });
       continue;
@@ -82,6 +83,7 @@ export async function runPricing(
     if (!pl) {
       unpriced.push({
         takeoff_line_id: line.id,
+        tag: line.tag,
         reason: `product line ${line.productLineId} missing from pricing config`,
       });
       continue;
@@ -89,7 +91,7 @@ export async function runPricing(
     const params = ResolvedParams.parse(line.resolvedParams);
     const result = priceLine(pl, params);
     if (!result.ok) {
-      unpriced.push({ takeoff_line_id: line.id, reason: result.detail });
+      unpriced.push({ takeoff_line_id: line.id, tag: line.tag, reason: result.detail });
       continue;
     }
     lineResults.push(result);

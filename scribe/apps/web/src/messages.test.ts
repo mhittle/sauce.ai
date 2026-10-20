@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint } from "./messages";
+import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint, friendlyPriceIssue, lineSaveErrorText, unpricedLineTitle } from "./messages";
 
 describe("friendlyError", () => {
   it("hides the SQL behind a plain sentence and keeps it as detail", () => {
@@ -119,5 +119,25 @@ describe("custom page purchase copy", () => {
     expect(customHint(3, custom)).toBe("Minimum 5 pages.");
     expect(customHint(6000, custom)).toBe("Up to 5,000 pages at a time.");
     expect(customHint(10, custom)).toMatch(/^\$1 a page/);
+  });
+});
+
+describe("unpriced line copy (SCR-016)", () => {
+  it("explains an out-of-range width in plain words with the fix", () => {
+    expect(friendlyPriceIssue('width 58" outside 9"–48"')).toBe(
+      '58" width is outside what this product takes (9"–48"). Change the width, or split it into two cabinets.'
+    );
+    expect(friendlyPriceIssue('depth 2" outside 4"–30"')).toMatch(/Change the depth, or pick another product/);
+  });
+  it("maps the other pricing reasons and passes unknown text through", () => {
+    expect(friendlyPriceIssue("unmatched — resolve in the review screen")).toMatch(/No product picked yet/);
+    expect(friendlyPriceIssue("product line x missing from pricing config")).toMatch(/isn't in the price list/);
+    expect(friendlyPriceIssue("something new")).toBe("something new");
+  });
+  it("turns a refused hand-pick (422) into the plain reason", () => {
+    const e = Object.assign(new Error('width 58" outside 9"–48"'), { status: 422 });
+    expect(lineSaveErrorText(e)).toMatch(/^58" width is outside/);
+    expect(lineSaveErrorText(new Error("boom"))).toBe("boom");
+    expect(unpricedLineTitle("  ", 2)).toBe("Line 2");
   });
 });

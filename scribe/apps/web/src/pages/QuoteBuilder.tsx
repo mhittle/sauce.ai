@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { friendlyPriceIssue, unpricedLineTitle } from "../messages";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { quoteBuilderRoute } from "../main";
@@ -60,7 +61,7 @@ interface QuoteDetail {
       lead_time_days: number;
       needs_review: boolean;
     }[];
-    unpriced: { takeoff_line_id: string; reason: string }[];
+    unpriced: { takeoff_line_id: string; tag?: string | null; reason: string }[];
     totals: {
       subtotal_cents: number;
       markup_cents: number;
@@ -400,6 +401,15 @@ export function QuoteBuilderPage() {
                   Fix them in the takeoff
                 </Link>
                 .
+                <ul className="mt-1 list-disc pl-5 text-xs">
+                  {quote.pricing.unpriced.map((u, i) => (
+                    <li key={u.takeoff_line_id}>
+                      <span className="font-medium">{unpricedLineTitle(u.tag ?? null, i + 1)}</span>
+                      {" — "}
+                      {friendlyPriceIssue(u.reason)}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             <p className="px-4 py-2 text-xs text-faint">

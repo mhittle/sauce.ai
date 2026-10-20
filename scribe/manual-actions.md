@@ -127,11 +127,6 @@ into chat to enable local harness runs. Treat it as compromised:
 3. Create a new key and update `ANTHROPIC_API_KEY` on `scribe-workers` in Railway
    (Settings → Variables → update the value → redeploy workers).
 
-### MA-006 — Enter real pricing rates before the first external quote
-Admin → Pricing Editor: replace every NEEDS REVIEW placeholder rate and save
-(creates pricing config v2). Quotes pricing against NEEDS REVIEW rates are
-blocked from `sent` by design (PRD §12).
-
 ### MA-007 — Validate seed Socrata field maps on first crawl
 The three seeded jurisdiction field maps (SF / LA / NYC in `sources.config`)
 are best-effort. Trigger each source once (Admin → Crawler Sources → Run
@@ -163,6 +158,12 @@ unaffected — they are not meant to expire).
 ---
 
 ## Completed
+
+### 2026-10-20 — real pricing rates entered (MA-006)
+- **MA-006** owner confirmed real rates are in; prod evidence: quote
+  `a98845a0` (2026-10-20) prices with `any_needs_review = false`. Quotes
+  created before the new rates keep their pinned config and stay blocked —
+  build a new quote from the takeoff for those.
 
 ### 2026-08-12 — ROUTER_TOLERANT_MERGE enabled (MA-012)
 - **MA-012** `ROUTER_TOLERANT_MERGE=1` set on `scribe-workers` by the owner

@@ -226,3 +226,36 @@ export function customHint(
   if (pages > custom.max) return `Up to ${custom.max.toLocaleString("en-US")} pages at a time.`;
   return `$${(custom.pagePriceCents / 100).toLocaleString("en-US")} a page. The 100 and 500 packs cost less per page.`;
 }
+
+// --- Lines the quote can't price (SCR-016) ---
+
+// Plain words for pricing's reason a line can't be priced.
+export function friendlyPriceIssue(raw: string): string {
+  const dim = raw.match(/^(width|height|depth) ([\d.]+)" outside ([\d.]+)"–([\d.]+)"/);
+  if (dim) {
+    const [, which, value, min, max] = dim;
+    const tip = which === "width" && Number(value) > Number(max)
+      ? " Change the width, or split it into two cabinets."
+      : ` Change the ${which}, or pick another product.`;
+    return `${value}" ${which} is outside what this product takes (${min}"–${max}").${tip}`;
+  }
+  if (/^unmatched/.test(raw)) return "No product picked yet — pick one in the takeoff.";
+  if (/missing from pricing config|not in the current price list/.test(raw)) {
+    return "This product isn't in the price list this quote uses — pick the product again in the takeoff.";
+  }
+  if (/^material /.test(raw)) return "This product has no price for that material — change the material or pick another product.";
+  if (/^finish /.test(raw)) return "This product has no price for that finish — change the finish or pick another product.";
+  return raw;
+}
+
+export function unpricedLineTitle(tag: string | null, n: number): string {
+  return tag?.trim() ? tag : `Line ${n}`;
+}
+
+// Toast body when a takeoff line edit is refused: a hand-picked product that
+// can't price the line (422) gets the plain reason; anything else as sent.
+export function lineSaveErrorText(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if ((err as { status?: number })?.status === 422) return friendlyPriceIssue(msg);
+  return msg;
+}
