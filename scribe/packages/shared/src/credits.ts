@@ -32,3 +32,17 @@ export function chargeBlocked(
 ): boolean {
   return settings.creditsEnforced && charge.credits > balance;
 }
+
+// Page packs sold through Stripe Checkout (owner, 2026-10-19). Prices are
+// integer cents; the pack id is what the web sends and the webhook trusts.
+export const PAGE_PACKS = [
+  { id: "pages_25", pages: 25, priceCents: 2_500 },
+  { id: "pages_100", pages: 100, priceCents: 9_000 },
+  { id: "pages_500", pages: 500, priceCents: 40_000 },
+] as const;
+
+export type PagePack = (typeof PAGE_PACKS)[number];
+
+export function findPack(id: string): PagePack | null {
+  return PAGE_PACKS.find((p) => p.id === id) ?? null;
+}

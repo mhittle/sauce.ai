@@ -444,7 +444,11 @@ the top bar, cost preview on Pages, grant on sign-up) 4. Depends on PR C.
 
 ---
 
-## 4. Stripe (roadmap only — not built)
+## 4. Stripe — **built 2026-10-19 (#323)**
+
+Packs 25 pages $25 · 100 $90 · 500 $400, priced inline (no Stripe
+products). Setup is MA-017. The plan below is what was built, except no
+SDK and no products/prices to create.
 
 Roadmap row stands ("Stripe payments", Pri 7, LOE 4). Dependencies, in
 order: credits ledger (3.1) → Stripe account + Checkout for the packs in

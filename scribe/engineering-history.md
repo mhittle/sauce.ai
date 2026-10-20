@@ -115,10 +115,12 @@ deploys if a future session doesn't know it exists. Keep this current.
   no rate row (exact or alias prefix) is skipped with a log line. Before
   changing `VISION_MODEL` / `OPENAI_VISION_MODEL`, add its rate in a
   migration. Rates are never updated — a price change is a new row.
-- **Billing state (verified live 2026-10-05):** usage ledger (#309, 0017)
-  and credits (#310, 0018) are deployed. No Stripe code, no
-  `STRIPE_*` vars. Every org's first job is a 0-page hold; Admin → Credits
-  holds the rules (`platform_settings`) and balances.
+- **Billing state (2026-10-19):** usage ledger (#309, 0017) and credits
+  (#310, 0018) live; Stripe page packs (#323) merged code but OFF until
+  `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` are set on `scribe-api`
+  (MA-017). The webhook credits only `checkout.session.completed`, paid,
+  amount == the pack price in `PAGE_PACKS` — changing a pack price means a
+  code change, not a Stripe dashboard change.
 - **Credits are RECORD-ONLY (2026-10-02, #310).** `platform_settings.
   credits_enforced = false`: every job holds/settles pages and balances can
   go negative, but nothing is blocked. Turn it on (Admin → Credits) only
@@ -128,6 +130,39 @@ deploys if a future session doesn't know it exists. Keep this current.
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-19 — Stripe page packs (#323); Task 0: prod usage is empty
+
+**Task 0 (read prod Usage, 2026-10-19).** Admin → Usage: 0 jobs / $0 since
+2026-10-01 (and all-time). Not a bug: prod has ONE org (CabinetNow) and its
+newest job is 2026-09-14 — nobody has run a job since the ledger shipped.
+Railway (last 7 d): no `usage event insert failed`, no worker activity.
+The kit estimate (4.1¢/page median) is still the only cost evidence; the
+ledger is unproven end-to-end in prod until one real job runs.
+
+**Shipped (#323).** Owner: packs 25 pages $25 · 100 $90 · 500 $400;
+receipts log-only until MA-013. No Stripe SDK: `lib/stripe.ts`
+(`checkoutForm` with inline `price_data`, `createCheckoutSession`,
+`verifyStripeSignature` HMAC + 5-min tolerance); `routes/billing.ts`
+(`POST /billing/checkout` any member, 503 when unconfigured;
+`POST /billing/webhook` in its own raw-body plugin → paid +
+amount == pack price → `writeLedger` `purchase`, external_ref = session id,
+pre-check + 0018 unique index); `receiptEmail`; `PAGE_PACKS` in
+`@scribe/shared`; `/credits` returns `packs` + `billing`; Account → Pages
+buy buttons, `?purchased=1` banner polls until the row lands.
+
+**Verified locally** with signed fake events: credited once, redelivery and
+two simultaneous deliveries → one row, bad signature 400, wrong amount /
+unpaid / other events ignored, receipt logged. NOT exercised: a real Stripe
+round trip (MA-017 step 5).
+
+**Manual:** MA-017 (Stripe account, `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, webhook endpoint; test mode first).
+
+**Open.** Open-hold sweep (before enforcement); one real prod job to prove
+usage + hold/settle; then live keys + enforcement.
 
 ---
 

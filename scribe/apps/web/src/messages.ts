@@ -170,7 +170,7 @@ export function creditCostLine(
 
 // Shown when enforced credits don't cover a job (API 402).
 export const CREDITS_INSUFFICIENT =
-  "You don't have enough pages left for this job. Buy more pages, or select fewer pages.";
+  "You don't have enough pages left for this job. Buy more pages on your Account page, or select fewer pages.";
 
 // Toast body for a failed job submit: the plain credits line for a 402,
 // else the server's text.
@@ -192,3 +192,23 @@ export const CREDIT_REASON_LABEL: Record<string, string> = {
 
 // Admin → Credits could not be fetched (admin-only screen).
 export const CREDITS_LOAD_FAILED = "Credits couldn't be loaded. Try again in a moment.";
+
+// --- Buying pages (Stripe Checkout) ---
+
+export function packLabel(pages: number, priceCents: number): string {
+  return `${pages} pages — $${(priceCents / 100).toLocaleString("en-US")}`;
+}
+
+export const BILLING_OFF =
+  "Buying pages online isn't switched on yet. Contact us and we'll add pages to your account.";
+
+export const PURCHASE_PENDING =
+  "Payment received — your pages will appear here in a moment.";
+
+export const PURCHASE_DONE = "Payment received — your pages have been added.";
+
+// Toast body when Checkout could not be opened.
+export function checkoutErrorText(err: unknown): string {
+  if ((err as { status?: number })?.status === 503) return BILLING_OFF;
+  return "We couldn't open the payment page. Please try again.";
+}

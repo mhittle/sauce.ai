@@ -81,3 +81,45 @@ export function magicLinkEmail(input: { to: string; name: string | null; link: s
 </body></html>`;
   return { to: input.to, subject, html, text };
 }
+
+export interface ReceiptEmailInput {
+  to: string;
+  name: string | null;
+  pages: number;
+  amountCents: number;
+  balance: number;
+  accountLink: string;
+}
+
+// Receipt for a page-pack purchase (Stripe's own receipts stay off so all
+// mail comes from one sender).
+export function receiptEmail(input: ReceiptEmailInput): {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const amount = `$${(input.amountCents / 100).toFixed(2)}`;
+  const subject = `Your Scribe receipt — ${input.pages} pages`;
+  const lines = [
+    greeting,
+    "",
+    `Thanks for your purchase. ${input.pages} pages have been added to your Scribe account.`,
+    "",
+    `Paid: ${amount}`,
+    `Pages added: ${input.pages}`,
+    `Balance now: ${input.balance} pages`,
+    "",
+    `Your account and page history: ${input.accountLink}`,
+  ];
+  const html = `<p>${escapeHtml(greeting)}</p>
+<p>Thanks for your purchase. ${input.pages} pages have been added to your Scribe account.</p>
+<table cellpadding="4">
+<tr><td>Paid</td><td><strong>${amount}</strong></td></tr>
+<tr><td>Pages added</td><td>${input.pages}</td></tr>
+<tr><td>Balance now</td><td>${input.balance} pages</td></tr>
+</table>
+<p><a href="${escapeHtml(input.accountLink)}">Your account and page history</a></p>`;
+  return { to: input.to, subject, html, text: lines.join("\n") };
+}

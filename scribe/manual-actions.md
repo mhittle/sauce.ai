@@ -10,6 +10,9 @@ real secret *values* here — document var names only.
 
 ## Open
 
+> **2026-10-19:** Stripe page packs shipped switched off — **MA-017** turns
+> them on (test mode first).
+
 > **2026-10-05:** #309 + #310 verified live; neither needed a manual action.
 > Nothing new to do from them. All Open items below remain unconfirmed.
 
@@ -25,6 +28,31 @@ real secret *values* here — document var names only.
 > between "merged and live" and "a prospect can use this end to end": MA-006
 > or no quote can be sent, MA-013 or no invite email goes out, MA-015 or
 > Google sign-in stays capped at 100 hand-listed users.
+
+### MA-017 — Stripe account + keys + webhook (page packs, Stripe PR)
+"Buy pages" on Account stays switched off until both vars are set; nothing
+else depends on it. Start in **test mode**; go live only after a test
+purchase lands.
+1. Create/sign in to the Stripe account (dashboard.stripe.com). Business
+   details as needed. No products or prices to create — the three packs
+   (25 pages $25, 100 pages $90, 500 pages $400) are priced in code.
+2. Test mode → Developers → API keys → copy the **Secret key** (`sk_test_…`)
+   → Railway `scribe-api` → Variables → `STRIPE_SECRET_KEY`.
+3. Developers → Webhooks → **Add endpoint**:
+   URL `https://scribe-api-production-757c.up.railway.app/billing/webhook`,
+   event **`checkout.session.completed`** only → Add → reveal the
+   **Signing secret** (`whsec_…`) → `scribe-api` → `STRIPE_WEBHOOK_SECRET`.
+   Railway redeploys the api on the variable change.
+4. Settings → Customer emails: leave Stripe's own **successful payment
+   receipts off** (Scribe sends its own once MA-013 is done; until then
+   receipts are only logged).
+5. Verify: sign in to Scribe → Account → Pages → "25 pages — $25" → pay with
+   card `4242 4242 4242 4242`, any future date, any CVC → you land back on
+   Account → "Payment received" → the 25 pages appear in the history within
+   seconds. In Stripe → Webhooks → the endpoint shows a 200 delivery.
+6. Going live later: repeat 2–3 with the live-mode key and a live-mode
+   endpoint (its own `whsec_`), then tick "Block jobs the balance can't
+   cover" in Admin → Credits only after the open-hold sweep has shipped.
 
 ### MA-016 — Pick the tutorial's sample job (tutorial PR)
 New sign-ups get a copy of one finished takeoff on their Jobs list. Until

@@ -15,6 +15,7 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { inviteRoutes } from "./routes/invites.js";
 import { signupRoutes } from "./routes/signup.js";
 import { accountRoutes } from "./routes/account.js";
+import { billingRoutes, stripeWebhookRoutes } from "./routes/billing.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -49,6 +50,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(accountRoutes);
   await app.register(creditRoutes);
   await app.register(adminCreditRoutes);
+  await app.register(billingRoutes);
+  await app.register(stripeWebhookRoutes);
 
   return app;
 }

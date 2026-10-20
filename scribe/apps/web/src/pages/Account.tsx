@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { accountRoute } from "../main";
 import { LedgerTable, useCredits } from "../components/Credits";
-import { creditsShort } from "../messages";
+import {
+  BILLING_OFF,
+  checkoutErrorText,
+  creditsShort,
+  packLabel,
+  PURCHASE_DONE,
+  PURCHASE_PENDING,
+} from "../messages";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiSend, apiUpload } from "../api";
 import {
@@ -297,9 +306,31 @@ function Members({
 
 // The org's page credits: balance and the ledger behind it.
 function Pages() {
-  const q = useCredits();
+  const { purchased } = accountRoute.useSearch();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [baseline] = useState(() => Date.now());
+  const q = useCredits(purchased ? 3_000 : undefined);
+  // Stop polling once the purchase row has landed (or after a minute).
+  const landed =
+    purchased != null &&
+    (q.data?.ledger ?? []).some((r) => r.reason === "purchase" && Date.parse(r.createdAt) > baseline - 10 * 60_000);
+  useEffect(() => {
+    if (!purchased) return;
+    if (landed || Date.now() - baseline > 60_000) {
+      if (landed) toast.success(PURCHASE_DONE);
+      navigate({ to: "/account", search: { purchased: undefined }, replace: true });
+    }
+  }, [purchased, landed, q.dataUpdatedAt]);
+  const buy = useMutation({
+    mutationFn: (pack: string) => apiSend<{ url: string }>("POST", "/billing/checkout", { pack }),
+    onSuccess: (r) => {
+      window.location.href = r.url;
+    },
+    onError: (e) => toast.error("Couldn't open the payment page", checkoutErrorText(e)),
+  });
   if (!q.data) return null;
-  const { balance, firstJobFree, ledger } = q.data;
+  const { balance, firstJobFree, ledger, packs, billing } = q.data;
   return (
     <Card className="p-0">
       <div className="flex items-baseline justify-between px-4 pt-4">
@@ -310,6 +341,21 @@ function Pages() {
         Every page Scribe reads takes one from this balance. Finding, building or measuring
         again on the same job costs nothing extra, and a job that fails gives its pages back.
       </p>
+      {purchased && !landed && <p className="px-4 pb-2 text-sm text-ink">{PURCHASE_PENDING}</p>}
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-3" data-tour="buy-pages">
+        {packs.map((p) => (
+          <Button
+            key={p.id}
+            size="sm"
+            disabled={!billing}
+            loading={buy.isPending && buy.variables === p.id}
+            onClick={() => buy.mutate(p.id)}
+          >
+            {packLabel(p.pages, p.priceCents)}
+          </Button>
+        ))}
+        {!billing && <span className="text-xs text-muted">{BILLING_OFF}</span>}
+      </div>
       <LedgerTable rows={ledger} />
     </Card>
   );

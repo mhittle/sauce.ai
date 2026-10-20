@@ -22,13 +22,18 @@ export interface CreditsState {
   settings: CreditSettings;
   firstJobFree: boolean;
   ledger: LedgerRow[];
+  packs: { id: string; pages: number; priceCents: number }[];
+  billing: boolean;
 }
 
-export function useCredits() {
+// `pollMs` keeps refetching (the Stripe webhook can land a few seconds after
+// the customer is sent back from Checkout).
+export function useCredits(pollMs?: number) {
   return useQuery({
     queryKey: ["credits"],
     queryFn: () => apiGet<CreditsState>("/credits"),
     staleTime: 30_000,
+    refetchInterval: pollMs ?? false,
   });
 }
 
