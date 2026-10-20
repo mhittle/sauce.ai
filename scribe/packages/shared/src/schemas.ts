@@ -208,6 +208,22 @@ export const DimBounds = z.object({
 });
 export type DimBounds = z.infer<typeof DimBounds>;
 
+// Size limits an admin sets per product (owner, 2026-10-20). Empty = no
+// limit; either end may be left open. Replaces the never-enforced seed
+// `dim_bounds` placeholders, which stay in old configs but are ignored.
+export const SizeLimit = z.object({
+  min_in: z.number().positive().nullable().default(null),
+  max_in: z.number().positive().nullable().default(null),
+});
+export type SizeLimit = z.infer<typeof SizeLimit>;
+
+export const SizeLimits = z.object({
+  width: SizeLimit.nullable().default(null),
+  height: SizeLimit.nullable().default(null),
+  depth: SizeLimit.nullable().default(null),
+});
+export type SizeLimits = z.infer<typeof SizeLimits>;
+
 export const ProductLineConfig = z.object({
   id: z.string(),
   name: z.string(),
@@ -217,6 +233,7 @@ export const ProductLineConfig = z.object({
   finish_adders: z.record(Adder),
   assembly_adder: Adder.nullable(),
   dim_bounds: DimBounds,
+  size_limits: SizeLimits.default({}),
   lead_time_days: z.number().int().nonnegative(),
   active: z.boolean(),
 });

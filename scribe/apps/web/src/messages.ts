@@ -231,6 +231,14 @@ export function customHint(
 
 // Plain words for pricing's reason a line can't be priced.
 export function friendlyPriceIssue(raw: string): string {
+  const limit = raw.match(/^(width|height|depth) ([\d.]+)" is (over|under) the ([\d.]+)" (max|min) set for (.+)$/);
+  if (limit) {
+    const [, which, value, side, bound, kind, product] = limit;
+    const tip = which === "width" && side === "over"
+      ? "Change the width, split it into two cabinets, or pick another product."
+      : `Change the ${which}, or pick another product.`;
+    return `${value}" ${which} is ${side} the ${bound}" ${kind} set for ${product} in Admin › Pricing. ${tip}`;
+  }
   const dim = raw.match(/^(width|height|depth) ([\d.]+)" outside ([\d.]+)"–([\d.]+)"/);
   if (dim) {
     const [, which, value, min, max] = dim;
@@ -270,3 +278,8 @@ export const QUOTE_PLACEHOLDER_ADMIN = "Placeholder rates in use — enter real 
 export const QUOTE_PLACEHOLDER_MEMBER = "Pricing for this quote isn't finalized yet — ask an admin";
 export const REBUILD_QUOTE = "Build a new quote";
 export const QUOTE_REBUILT = "New quote built with the current rates";
+
+// Admin › Pricing: per-product size limits.
+export const SIZE_LIMITS_TITLE = "Size limits (inches)";
+export const SIZE_LIMITS_HINT =
+  "Leave blank for no limit. A cabinet outside a limit isn't priced on this product — the takeoff and quote say why.";

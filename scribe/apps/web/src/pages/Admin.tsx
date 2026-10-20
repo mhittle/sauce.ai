@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SIZE_LIMITS_HINT, SIZE_LIMITS_TITLE } from "../messages";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { adminRoute } from "../main";
@@ -103,9 +104,14 @@ interface ProductLine {
   finish_adders: Record<string, Adder>;
   assembly_adder: Adder | null;
   dim_bounds: Record<string, unknown>;
+  size_limits: SizeLimits;
   lead_time_days: number;
   active: boolean;
 }
+
+type SizeDim = "width" | "height" | "depth";
+type SizeLimits = Record<SizeDim, { min_in: number | null; max_in: number | null } | null>;
+const NO_LIMITS: SizeLimits = { width: null, height: null, depth: null };
 
 interface PricingResponse {
   product_lines: {
@@ -117,6 +123,7 @@ interface PricingResponse {
     finishAdders: ProductLine["finish_adders"];
     assemblyAdder: Adder | null;
     dimBounds: Record<string, unknown>;
+    sizeLimits: Partial<SizeLimits> | null;
     leadTimeDays: number;
     active: boolean;
   }[];
@@ -150,6 +157,7 @@ function PricingEditor() {
           finish_adders: p.finishAdders,
           assembly_adder: p.assemblyAdder,
           dim_bounds: p.dimBounds,
+          size_limits: { ...NO_LIMITS, ...(p.sizeLimits ?? {}) },
           lead_time_days: p.leadTimeDays,
           active: p.active,
         }))
@@ -304,10 +312,59 @@ function PricingEditor() {
               </div>
             </div>
           </div>
+          <SizeLimitsEditor limits={pl.size_limits} onChange={(size_limits) => update(i, { size_limits })} />
         </Card>
       ))}
 
       <TestCalculator productLines={draft} />
+    </div>
+  );
+}
+
+// Per-product size limits (owner, 2026-10-20). Blank = no limit; a cabinet
+// outside a set limit can't be priced on this product and says why.
+function SizeLimitsEditor({
+  limits,
+  onChange,
+}: {
+  limits: SizeLimits;
+  onChange: (next: SizeLimits) => void;
+}) {
+  const set = (dim: SizeDim, end: "min_in" | "max_in", raw: string) => {
+    const v = raw.trim() === "" ? null : Number(raw);
+    const cur = limits[dim] ?? { min_in: null, max_in: null };
+    const next = { ...cur, [end]: v != null && Number.isFinite(v) && v > 0 ? v : null };
+    onChange({ ...limits, [dim]: next.min_in == null && next.max_in == null ? null : next });
+  };
+  return (
+    <div className="mt-4 border-t border-rule-soft pt-3">
+      <SectionLabel>{SIZE_LIMITS_TITLE}</SectionLabel>
+      <p className="mb-2 text-xs text-muted">{SIZE_LIMITS_HINT}</p>
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        {(["width", "height", "depth"] as const).map((dim) => (
+          <div key={dim} className="flex items-center gap-1.5 text-sm">
+            <span className="w-14 capitalize text-ink">{dim}</span>
+            <NumberInput
+              aria-label={`${dim} minimum (inches)`}
+              placeholder="min"
+              className="w-20"
+              step="0.25"
+              value={limits[dim]?.min_in ?? ""}
+              onChange={(e) => set(dim, "min_in", e.target.value)}
+            />
+            <span className="text-faint">–</span>
+            <NumberInput
+              aria-label={`${dim} maximum (inches)`}
+              placeholder="max"
+              className="w-20"
+              step="0.25"
+              value={limits[dim]?.max_in ?? ""}
+              onChange={(e) => set(dim, "max_in", e.target.value)}
+            />
+            <span className="font-mono text-xs text-faint">in</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
