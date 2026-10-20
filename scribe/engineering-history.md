@@ -46,8 +46,9 @@ deploys if a future session doesn't know it exists. Keep this current.
 - **Runtime images use `pnpm --filter <pkg> --prod deploy --legacy /out`** —
   verified standalone in the sandbox and now by real Railway builds (all
   three Dockerfiles build and run in prod).
-- **Seeded pricing rates are placeholders** (`needs_review: true`); the API
-  blocks `sent` quotes that price against them. Seeded Socrata field maps
+- **Seeded pricing rates were placeholders**; real rates entered by the owner
+  (MA-006, confirmed 2026-10-20). Quotes pin their pricing config — a quote
+  built on the old placeholder config stays unsendable; build a new one. Seeded Socrata field maps
   (SF/LA/NYC dataset ids + columns) are best-effort and must be validated on
   first pull (MA-007).
 - **SAM.gov is the only active crawler source** (since 2026-06-18 (c), migration
@@ -132,6 +133,31 @@ deploys if a future session doesn't know it exists. Keep this current.
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-20 (c) — SCR-016: hand-picked products must be priceable (#326)
+
+**Bug.** Quote `a98845a0` kept "2 lines could not be priced" after the owner
+fixed them in the takeoff; Send disabled. **Cause (prod evidence):** the
+quote re-prices live — not stale. Both lines were 58" base cabinets that no
+product accepts (Framed Casework 9–48"); the "fix" was a hand-pick in the
+review's unmatched bucket, which `PATCH /takeoff-lines` saved unchecked and
+the review then counted as resolved. Send was blocked only by those lines
+(rates real — MA-006 closed; freight not required).
+
+**Fix.** `@scribe/pricing` `resolveForProductLine` (matcher-style
+material/finish resolution + `priceLine`) and `priceIssue`; API refuses an
+unpriceable hand-pick with a 422 + reason and adds `priceIssue` to every
+line on `GET /takeoffs/:id` (latest price list); quote `unpriced` entries
+carry the tag; review treats `priceIssue` lines as unmatched with the plain
+reason; quote lists each unpriced cabinet. Copy in `messages.ts`
+(`friendlyPriceIssue`, `lineSaveErrorText`).
+
+**Gotcha (unchanged, worth knowing).** A quote pins the pricing config it
+was created with; new rates never reach an old quote — build a new quote.
+The Admin blocker text "enter real rates in Admin › Pricing" is therefore
+misleading for an existing quote (not changed here).
 
 ---
 
