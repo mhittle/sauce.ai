@@ -178,6 +178,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
 
     const settings = await loadOrgSettings();
     const config = await loadPricingConfigById(quote.pricingConfigId);
+    const latest = await loadLatestPricingConfig();
     const lines = await loadQuoteLines(quote.takeoffId);
     const run = await runPricing(lines, config.snapshot, settings, {
       markup_pct: quote.markupPct,
@@ -205,6 +206,9 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       takeoff_status: job?.status ?? null,
       pricing: run,
       pricing_config_version: config.version,
+      // A quote keeps the price list it was built with; when rates have been
+      // saved since, the way forward is a new quote, not Admin › Pricing.
+      newer_rates: latest.version > config.version,
       quote_tiers: quoteTiers,
     };
   });
@@ -248,9 +252,12 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
         });
       }
       if (run.totals.any_needs_review) {
+        const latest = await loadLatestPricingConfig();
         return reply.code(409).send({
           error:
-            "quote prices against NEEDS REVIEW rates — an admin must enter real rates first",
+            latest.id !== quote.pricingConfigId
+              ? "quote was built on an older price list with placeholder rates — build a new quote from the takeoff to use the current rates"
+              : "quote prices against NEEDS REVIEW rates — an admin must enter real rates first",
         });
       }
       if (run.unpriced.length > 0) {
