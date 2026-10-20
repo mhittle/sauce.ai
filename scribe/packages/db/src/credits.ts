@@ -166,7 +166,8 @@ async function holdClosed(db: Tx, holdId: number): Promise<boolean> {
 export async function closeHold(
   db: Db,
   takeoffId: string,
-  kind: "settle" | "release"
+  kind: "settle" | "release",
+  note: string | null = null
 ): Promise<LedgerRow | null> {
   return db.transaction(async (tx) => {
     const [t] = await tx
@@ -184,9 +185,65 @@ export async function closeHold(
       reason: kind,
       takeoffId,
       holdId: hold.id,
-      note: null,
+      note,
     });
   });
+}
+
+// Holds whose job stopped short of review — abandoned at Mark, or a worker
+// that died mid-job — are given back after `hours` without activity (hold,
+// takeoff row, or a drawn/scanned area). Returns the takeoff ids released.
+export async function sweepStaleHolds(db: Db, hours = 24): Promise<string[]> {
+  const stale = await db.execute(sql`
+    SELECT t.id
+    FROM takeoffs t
+    JOIN credit_ledger h ON h.id = t.credit_hold_id
+    WHERE t.status IN ('processing', 'awaiting_pages', 'awaiting_boxes')
+      AND NOT EXISTS (
+        SELECT 1 FROM credit_ledger c WHERE c.hold_id = h.id AND c.reason IN ('settle', 'release')
+      )
+      AND GREATEST(
+        h.created_at,
+        t.updated_at,
+        COALESCE((SELECT max(d.created_at) FROM takeoff_detections d WHERE d.takeoff_id = t.id), h.created_at)
+      ) < now() - make_interval(hours => ${hours})
+  `);
+  const released: string[] = [];
+  for (const row of stale.rows as { id: string }[]) {
+    const r = await closeHold(db, row.id, "release", `job not finished within ${hours} h`);
+    if (r) released.push(row.id);
+  }
+  return released;
+}
+
+// "Charge again" (owner, 2026-10-20): a job whose hold was released — swept
+// for inactivity — and is then picked back up opens a fresh hold at the
+// action that costs us again (Find, Build). A job whose hold is open or
+// settled is not charged again; re-runs stay free.
+export async function reholdIfReleased(
+  tx: Tx,
+  input: { orgId: string; takeoffId: string; actorUserId: string | null }
+): Promise<{ charge: JobCharge; balance: number; settings: CreditSettings } | null> {
+  const [t] = await tx
+    .select({ holdId: takeoffs.creditHoldId, selected: takeoffs.selectedPages, kind: takeoffs.sourceKind })
+    .from(takeoffs)
+    .where(eq(takeoffs.id, input.takeoffId));
+  if (!t?.holdId) return null;
+  const released = await tx.execute(sql`
+    SELECT 1 FROM credit_ledger WHERE hold_id = ${t.holdId} AND reason = 'release' LIMIT 1
+  `);
+  if (released.rows.length === 0) return null;
+  await lockOrg(tx, input.orgId);
+  const pages =
+    t.kind === "pdf" && Array.isArray(t.selected) && t.selected.length > 0 ? t.selected.length : 1;
+  const q = await quoteJob(tx, input.orgId, pages);
+  // The org's free first job stays free when it is picked back up, even if
+  // later jobs were submitted while it sat unfinished.
+  const [prior] = await tx.select().from(creditLedger).where(eq(creditLedger.id, t.holdId));
+  if (prior && prior.delta === 0 && prior.note?.startsWith("first job free")) {
+    return { ...q, charge: { pages, credits: 0, free: true } };
+  }
+  return q;
 }
 
 export async function recentLedger(db: Tx, orgId: string, limit = 50): Promise<LedgerRow[]> {

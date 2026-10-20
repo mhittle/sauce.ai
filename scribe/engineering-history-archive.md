@@ -6,6 +6,42 @@ not read during onboarding.
 
 ---
 
+## 2026-09-15 (o) — onboarding tutorial: seeded sample job + coachmarks
+
+**Shipped (migration `0016_onboarding.sql`).**
+- **Sample job.** `org_settings.sample_takeoff_id` (Admin → Users →
+  "Sample job for new accounts"; must be review/approved and not itself a
+  clone). `lib/sample.ts cloneSampleTakeoff(orgId, userId)`: copies the
+  takeoff row (`is_sample`, `storage_id` = original, status `review`,
+  name "Sample — <file>"), its detections and lines with ids remapped
+  (faces' `raw_model_output.parent`, `detection_id`); idempotent per org;
+  called after sign-up (best-effort) and by `POST /account/sample`. Image
+  routes (`pages`, `thumbs`, `reads`, `beta/pages`) read from
+  `storage_id`; a preHandler refuses non-GET `/takeoffs/:id/…` on a sample
+  except accept-lines / approve / reopen (409 "this is the sample job —
+  upload your own plan set"), so reviewing, approving and quoting it works
+  and nothing re-reads it. `/jobs` carries `isSample`; the row shows a
+  "sample" badge.
+- **Coachmarks.** `ui/Coachmark.tsx` (fixed popover pinned to
+  `[data-tour=…]`, never blocks input, Next / Skip tour, N/M) and
+  `components/Tour.tsx` (`TOURS` copy per screen; steps whose anchor is
+  absent are skipped; progress `users.onboarding {seen, dismissed}` via
+  `PATCH /me`; `/auth/me` returns it). Anchors: Jobs upload zone + sample
+  row; Pages continue button; Mark step action; Review accept button +
+  estimate bar; Quote tiers + send. "Show me around" in the account menu
+  clears progress, re-seeds the sample and goes to Jobs.
+
+**Gotchas.** (1) `storage_id` is only honoured by the four image routes;
+worker key helpers still use the takeoff id — hence the write block on
+samples. (2) Deleting the original sample takeoff is blocked by the FK
+from `org_settings`; clear the sample first. (3) The tour reads `["me"]`
+from the query cache — a page that renders before `/auth/me` resolves
+simply shows nothing until it does.
+
+**Manual:** MA-016 (choose a sample plan set we may show to strangers).
+
+---
+
 ## 2026-09-15 (n) — PR D: account screens (profile, company, team, teammate invites)
 
 **Shipped.** `routes/account.ts` (`requireUser`; owner writes behind the

@@ -145,14 +145,18 @@ async function failTakeoff(
       updatedAt: new Date(),
     })
     .where(eq(takeoffs.id, takeoffId));
-  await closeCreditHold(takeoffId, "release");
+  await closeCreditHold(takeoffId, "release", "the job failed");
 }
 
 // Settle on review, release on failure (accounts-plan.md §3.2). Credits are
 // bookkeeping: a ledger fault is logged and never fails or blocks the job.
-async function closeCreditHold(takeoffId: string, kind: "settle" | "release"): Promise<void> {
+async function closeCreditHold(
+  takeoffId: string,
+  kind: "settle" | "release",
+  note: string | null = null
+): Promise<void> {
   try {
-    await closeHold(getDb(), takeoffId, kind);
+    await closeHold(getDb(), takeoffId, kind, note);
   } catch (err) {
     console.error(
       JSON.stringify({

@@ -185,7 +185,7 @@ export const CREDIT_REASON_LABEL: Record<string, string> = {
   purchase: "Pages bought",
   hold: "Job submitted",
   settle: "Job finished",
-  release: "Job failed — pages returned",
+  release: "Pages returned",
   refund: "Refund",
   adjust: "Correction",
 };

@@ -16,6 +16,7 @@ import {
   lockOrg,
   openHold,
   quoteJob,
+  reholdIfReleased,
 } from "@scribe/db";
 import {
   BETA_DISPLAY_DPI,
@@ -268,6 +269,24 @@ function notEnoughCredits(needed: number, balance: number) {
     needed,
     balance,
   };
+}
+
+// A job whose hold was swept for inactivity is charged again when work on it
+// resumes (Find, Build). Returns a 402 body when enforced credits refuse it.
+async function reholdOrRefuse(
+  orgId: string,
+  takeoffId: string,
+  actorUserId: string
+): Promise<ReturnType<typeof notEnoughCredits> | null> {
+  return getDb().transaction(async (tx) => {
+    const q = await reholdIfReleased(tx, { orgId, takeoffId, actorUserId });
+    if (!q) return null;
+    if (chargeBlocked(q.charge, q.balance, q.settings)) {
+      return notEnoughCredits(q.charge.credits, q.balance);
+    }
+    await openHold(tx, { orgId, takeoffId, charge: q.charge, actorUserId });
+    return null;
+  });
 }
 
 export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
@@ -642,6 +661,8 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     "/takeoffs/:id/detections/run",
     async (req, reply) => {
       const db = getDb();
+      const refused = await reholdOrRefuse(req.orgId, req.params.id, req.user!.id);
+      if (refused) return reply.code(402).send(refused);
       const drawn = await db
         .update(takeoffDetections)
         .set({ status: "queued" })
@@ -828,6 +849,8 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           .code(400)
           .send({ error: "nothing new to build — scan a new or changed area first" });
       }
+      const refused = await reholdOrRefuse(req.orgId, req.params.id, req.user!.id);
+      if (refused) return reply.code(402).send(refused);
       const [updated] = await db
         .update(takeoffs)
         .set({

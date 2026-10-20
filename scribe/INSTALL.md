@@ -84,7 +84,8 @@ full list):
   `TAKEOFF_TOKEN_BUDGET`, `CRAWLER_DAILY_TOKEN_BUDGET`, `SAMGOV_API_KEY`
   (optional), `SOCRATA_APP_TOKEN` (optional), `OPENAI_API_KEY` +
   `OPENAI_VISION_MODEL` (optional — only for AI cross-validation),
-  `NODE_ENV=production`
+  `NODE_ENV=production`; optional `CREDIT_HOLD_SWEEP_HOURS` (default 24 —
+  hours idle before an unfinished job's credit hold is released)
 - **web:** `VITE_API_URL` (build-time)
 
 First-deploy bootstrap: **none** — the api runs migrations + seed on boot

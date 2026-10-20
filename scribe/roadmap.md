@@ -22,6 +22,8 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Credits: per-page credits (product-plan §5 3b) — $1/page, no minimum, first job free; ledger, hold/settle/release, balance, cost preview, Admin → Credits (record-only) | 8 | 4 | backend | done (#310, 2026-10-02; usage ledger 3a is #309) |
 | Stripe payments — page packs 25/$25, 100/$90, 500/$400 via Stripe Checkout, signed webhook → `purchase` ledger row (product-plan §5 3c) | 7 | 4 | backend | done (#323, 2026-10-19; switched on by MA-017) |
 | Open-hold sweep — release credit holds on jobs abandoned before review (>24 h, no terminal state); required before `credits_enforced` goes on | 6 | 1 | backend | backlog |
+| Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog — NEXT (unblocked by #310; packs 25 / 100 / 500 pages, prices to confirm) |
+| Open-hold sweep — release credit holds on jobs abandoned before review (>24 h idle), hourly; a resumed job is charged again at Find/Build (free first job stays free) | 6 | 1 | backend | done (2026-10-20) |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
 | One flow: wizard (Mark → Find → Build) is the only PDF path; auto-located regions pre-boxed; legacy box gate removed | 9 | 3 | ui | done (2026-09-14) |
