@@ -36,7 +36,13 @@ import {
   type TakeoffStatus,
   chargeBlocked,
 } from "@scribe/shared";
-import { matchLine, materialStats, priceQuoteTiers } from "@scribe/pricing";
+import {
+  matchLine,
+  materialStats,
+  priceIssue,
+  priceQuoteTiers,
+  resolveForProductLine,
+} from "@scribe/pricing";
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { objectExists, putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
@@ -482,7 +488,19 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         qty: l.qty,
       }))
     );
-    return { ...rows[0], lines, material_stats, quote_tiers };
+    // A line counts as fixed only when the quote can price it (SCR-016): a
+    // product picked by hand that can't take this size is flagged here, with
+    // the reason, against the price list new quotes use.
+    const snapshot = await latestSnapshot();
+    return {
+      ...rows[0],
+      lines: lines.map((l) => ({
+        ...l,
+        priceIssue: priceIssue(l.productLineId, l.resolvedParams, snapshot),
+      })),
+      material_stats,
+      quote_tiers,
+    };
   });
 
   // Batch-accept: one call marks every line at or above the threshold (and
@@ -1095,6 +1113,45 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
       const patch = LinePatch.parse(req.body);
       const db = getDb();
       const set: Record<string, unknown> = { reviewerEdited: true, updatedAt: new Date() };
+      // A product picked by hand is resolved and price-checked here, not
+      // trusted from the client: a pick the quote couldn't price is refused
+      // with the reason (SCR-016), so the review never shows it as fixed.
+      if (patch.product_line_id) {
+        const [current] = await db
+          .select()
+          .from(takeoffLines)
+          .where(
+            and(
+              eq(takeoffLines.id, req.params.id),
+              inArray(takeoffLines.takeoffId, orgTakeoffIds(req.orgId))
+            )
+          );
+        if (!current) return reply.code(404).send({ error: "not found" });
+        const snapshot = await latestSnapshot();
+        const pl = snapshot.product_lines.find((p) => p.id === patch.product_line_id);
+        if (!pl) {
+          return reply
+            .code(422)
+            .send({ error: `product ${patch.product_line_id} is not in the current price list`, code: "unpriceable" });
+        }
+        const base = lineFromRow(current);
+        const item = {
+          ...base,
+          ...(patch.qty !== undefined ? { qty: patch.qty } : {}),
+          ...(patch.width_in !== undefined ? { width_in: patch.width_in } : {}),
+          ...(patch.height_in !== undefined ? { height_in: patch.height_in } : {}),
+          ...(patch.depth_in !== undefined ? { depth_in: patch.depth_in } : {}),
+          ...(patch.material !== undefined ? { material: patch.material } : {}),
+          ...(patch.finish !== undefined ? { finish: patch.finish } : {}),
+          ...(patch.assembled !== undefined ? { assembled: patch.assembled } : {}),
+        };
+        const r = resolveForProductLine(item, pl);
+        if (!r.ok) {
+          return reply.code(422).send({ error: r.reason, code: "unpriceable", product: pl.name });
+        }
+        patch.resolved_params = r.resolved as unknown as Record<string, unknown>;
+        set.unmatchedReason = null;
+      }
       const map: Record<string, string> = {
         tag: "tag",
         room: "room",

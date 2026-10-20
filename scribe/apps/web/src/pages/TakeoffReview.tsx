@@ -19,7 +19,7 @@ import { categoryDotClass, categoryLabel } from "../labels";
 import { SourceBoxPanel } from "../components/SourceBoxPanel";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 import { TechnicalDetail, useIsAdmin } from "../components/TechnicalDetail";
-import { friendlyError, friendlyNotes } from "../messages";
+import { friendlyError, friendlyNotes, friendlyPriceIssue, lineSaveErrorText } from "../messages";
 
 // The review screen is the product (PRD §7.2): the drawing on the left with
 // one dot per cabinet, the breakdown on the right grouped by room, every cell
@@ -44,6 +44,9 @@ interface Line {
   productLineId: string | null;
   matchConfidence: number | null;
   unmatchedReason: string | null;
+  // Set by the API when a line carries a product the price list can't price
+  // at this size/material (SCR-016) — it still needs fixing.
+  priceIssue?: string | null;
   reviewerEdited: boolean;
   bbox: [number, number, number, number] | null;
   readImageKey: string | null;
@@ -104,7 +107,11 @@ function isFace(l: Line): boolean {
   return l.rawModelOutput?.expanded === true;
 }
 function isFlagged(l: Line): boolean {
-  return l.confidence < LOW_CONFIDENCE || l.productLineId == null;
+  return l.confidence < LOW_CONFIDENCE || needsProduct(l);
+}
+// Not priceable yet: no product, or a product that can't price this line.
+function needsProduct(l: Line): boolean {
+  return l.productLineId == null || Boolean(l.priceIssue);
 }
 
 export function TakeoffReviewPage() {
@@ -158,7 +165,7 @@ export function TakeoffReviewPage() {
     mutationFn: ({ id, patch }: { id: string; patch: Record<string, unknown> }) =>
       apiSend("PATCH", `/takeoff-lines/${id}`, patch),
     onSuccess: invalidate,
-    onError: (e) => toast.error("Line not saved", errorMessage(e)),
+    onError: (e) => toast.error("Line not saved", lineSaveErrorText(e)),
   });
 
   const deleteLine = useMutation({
@@ -266,7 +273,7 @@ export function TakeoffReviewPage() {
     return m;
   }, [allLines]);
   const flagged = useMemo(() => cabinets.filter(isFlagged), [cabinets]);
-  const unmatched = useMemo(() => cabinets.filter((l) => !l.productLineId), [cabinets]);
+  const unmatched = useMemo(() => cabinets.filter(needsProduct), [cabinets]);
   const acceptable = useMemo(
     () => cabinets.filter((l) => l.confidence >= LOW_CONFIDENCE && l.confidence < 1),
     [cabinets]
@@ -957,7 +964,7 @@ function CabinetRow({
   const low = line.confidence < LOW_CONFIDENCE;
   const rowClass = selected
     ? "bg-accent-soft shadow-[inset_3px_0_0_var(--accent)]"
-    : low || !line.productLineId
+    : low || needsProduct(line)
       ? "bg-warn-soft/40 hover:bg-warn-soft/70"
       : "hover:bg-rule-soft";
   const num = (v: number | null) => (v == null ? "" : String(v));
@@ -1076,15 +1083,16 @@ function CabinetRow({
           </button>
         </td>
         <td className="px-1 py-1 align-top">
-          {line.productLineId ? (
+          {line.productLineId && !(line.priceIssue && editable) ? (
             <span className="block max-w-[9rem] truncate px-1 text-xs text-muted" title={productName.get(line.productLineId) ?? line.productLineId}>
               {productName.get(line.productLineId) ?? line.productLineId}
             </span>
           ) : editable ? (
             <Select
+              key={line.productLineId ?? "none"}
               className="w-full py-0.5 text-xs"
               defaultValue=""
-              title={line.unmatchedReason ?? undefined}
+              title={line.priceIssue ?? line.unmatchedReason ?? undefined}
               aria-label="Assign a product"
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => {
@@ -1104,7 +1112,7 @@ function CabinetRow({
                 });
               }}
             >
-              <option value="">Unmatched — pick…</option>
+              <option value="">{line.productLineId ? "Can't price — pick another…" : "Unmatched — pick…"}</option>
               {productLines.map((pl) => (
                 <option key={pl.id} value={pl.id}>
                   {pl.name}
@@ -1114,8 +1122,13 @@ function CabinetRow({
           ) : (
             <span className="px-1 text-xs text-bad">unmatched</span>
           )}
-          {!line.productLineId && line.unmatchedReason && (
-            <div className="px-1 text-[11px] text-faint">{line.unmatchedReason}</div>
+          {line.priceIssue ? (
+            <div className="px-1 text-[11px] text-bad">{friendlyPriceIssue(line.priceIssue)}</div>
+          ) : (
+            !line.productLineId &&
+            line.unmatchedReason && (
+              <div className="px-1 text-[11px] text-faint">{line.unmatchedReason}</div>
+            )
           )}
         </td>
         <td className="px-1 py-1 text-right align-top">
