@@ -11,6 +11,8 @@ import {
   recentLedger,
   writeLedger,
 } from "@scribe/db";
+import { PAGE_PACKS } from "@scribe/shared";
+import { billingConfigured } from "../lib/stripe.js";
 
 // Credits (accounts-plan.md §3): 1 credit = 1 page read. Customer view is the
 // org's balance, settings for the cost preview, and its ledger; platform
@@ -27,6 +29,8 @@ export async function creditRoutes(app: FastifyInstance): Promise<void> {
       settings,
       firstJobFree: await firstJobFreeAvailable(db, req.orgId, settings),
       ledger: await recentLedger(db, req.orgId, 50),
+      packs: PAGE_PACKS,
+      billing: billingConfigured(),
     };
   });
 }

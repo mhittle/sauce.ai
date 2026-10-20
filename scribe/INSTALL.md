@@ -76,7 +76,10 @@ full list):
   `WEB_PUBLIC_URL`, `NODE_ENV=production`; email (invites): `RESEND_API_KEY`,
   `EMAIL_FROM`, `EMAIL_REPLY_TO` (optional) — without the key, invites are
   created but not sent and the admin copies the link; sign-up: `TERMS_URL`,
-  `PRIVACY_URL`, `TERMS_VERSION` (links under the sign-up form)
+  `PRIVACY_URL`, `TERMS_VERSION` (links under the sign-up form); billing
+  (page packs): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — without both,
+  "Buy pages" is shown switched off; webhook endpoint
+  `<API_PUBLIC_URL>/billing/webhook`, event `checkout.session.completed`
 - **workers:** `DATABASE_URL`, `REDIS_URL`, `R2_*`, `ANTHROPIC_API_KEY`,
   `TAKEOFF_TOKEN_BUDGET`, `CRAWLER_DAILY_TOKEN_BUDGET`, `SAMGOV_API_KEY`
   (optional), `SOCRATA_APP_TOKEN` (optional), `OPENAI_API_KEY` +

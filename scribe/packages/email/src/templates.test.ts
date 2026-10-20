@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inviteEmail } from "./templates.js";
+import { inviteEmail, receiptEmail } from "./templates.js";
 
 describe("inviteEmail", () => {
   const base = {
@@ -26,5 +26,15 @@ describe("inviteEmail", () => {
     const m = inviteEmail({ ...base, name: null, creditsGranted: 0 });
     expect(m.text.startsWith("Hi,\n")).toBe(true);
     expect(m.text).not.toContain("pages of reading");
+  });
+});
+
+describe("receiptEmail", () => {
+  it("states pages, amount and the new balance", () => {
+    const m = receiptEmail({ to: "a@b.co", name: "Pat", pages: 100, amountCents: 9000, balance: 112, accountLink: "https://web/account" });
+    expect(m.subject).toBe("Your Scribe receipt — 100 pages");
+    expect(m.text).toContain("Paid: $90.00");
+    expect(m.text).toContain("Balance now: 112 pages");
+    expect(m.html).toContain("https://web/account");
   });
 });

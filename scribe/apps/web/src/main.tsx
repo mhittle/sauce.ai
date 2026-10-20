@@ -124,6 +124,11 @@ export const accountRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/account",
   component: AccountPage,
+  validateSearch: (search: Record<string, unknown>): { purchased?: string } => ({
+    purchased: typeof search.purchased === "string" || typeof search.purchased === "number"
+      ? String(search.purchased)
+      : undefined,
+  }),
 });
 
 const routeTree = rootRoute.addChildren([
