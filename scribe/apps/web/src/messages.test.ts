@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText } from "./messages";
+import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint } from "./messages";
 
 describe("friendlyError", () => {
   it("hides the SQL behind a plain sentence and keeps it as detail", () => {
@@ -108,5 +108,16 @@ describe("credits copy", () => {
       CREDITS_INSUFFICIENT
     );
     expect(submitErrorText(new Error("boom"))).toBe("boom");
+  });
+});
+
+describe("custom page purchase copy", () => {
+  const custom = { min: 5, max: 5000, pagePriceCents: 100 };
+  it("labels the price and explains the limits", () => {
+    expect(customBuyLabel(10, 100)).toBe("Buy for $10");
+    expect(customBuyLabel(1200, 100)).toBe("Buy for $1,200");
+    expect(customHint(3, custom)).toBe("Minimum 5 pages.");
+    expect(customHint(6000, custom)).toBe("Up to 5,000 pages at a time.");
+    expect(customHint(10, custom)).toMatch(/^\$1 a page/);
   });
 });

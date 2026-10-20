@@ -10,6 +10,9 @@ real secret *values* here — document var names only.
 
 ## Open
 
+> **2026-10-20:** MA-017 steps 1–3 done in a Stripe **sandbox** and verified
+> with a 25-page test purchase. Still open: going live (step 6) with live keys.
+
 > **2026-10-19:** Stripe page packs shipped switched off — **MA-017** turns
 > them on (test mode first).
 

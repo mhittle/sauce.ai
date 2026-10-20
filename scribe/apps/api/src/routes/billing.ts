@@ -13,9 +13,9 @@ import { webUrl } from "./auth.js";
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
   app.post("/billing/checkout", { preHandler: app.requireUser }, async (req, reply) => {
-    const body = z.object({ pack: z.string() }).parse(req.body);
-    const pack = findPack(body.pack);
-    if (!pack) return reply.code(400).send({ error: `unknown pack ${body.pack}` });
+    const body = z.object({ pack: z.string(), pages: z.number().int().optional() }).parse(req.body);
+    const pack = findPack(body.pack, body.pages);
+    if (!pack) return reply.code(400).send({ error: `unknown pack ${body.pack}${body.pages != null ? ` (${body.pages} pages)` : ""}` });
     if (!billingConfigured()) {
       return reply.code(503).send({ error: "billing is not configured", code: "billing_unconfigured" });
     }
@@ -56,7 +56,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance): Promise<void> {
     const s = event.data.object;
     if (s.payment_status !== "paid") return { received: true, ignored: "not paid" };
 
-    const pack = findPack(s.metadata?.pack ?? "");
+    const pack = findPack(s.metadata?.pack ?? "", s.metadata?.pages ? Number(s.metadata.pages) : undefined);
     const orgId = s.metadata?.org_id;
     // Acknowledge (200) so Stripe stops retrying, but never credit a session
     // whose pack or amount does not match what we sell.

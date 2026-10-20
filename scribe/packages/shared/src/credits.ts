@@ -41,8 +41,27 @@ export const PAGE_PACKS = [
   { id: "pages_500", pages: 500, priceCents: 40_000 },
 ] as const;
 
-export type PagePack = (typeof PAGE_PACKS)[number];
+export interface PagePack {
+  id: string;
+  pages: number;
+  priceCents: number;
+}
 
-export function findPack(id: string): PagePack | null {
+// Any number of pages at list price (owner, 2026-10-20). The floor keeps
+// Stripe's fixed fee from eating tiny purchases.
+export const CUSTOM_PACK_ID = "custom";
+export const PAGE_PRICE_CENTS = 100;
+export const CUSTOM_PAGES_MIN = 5;
+export const CUSTOM_PAGES_MAX = 5_000;
+
+export function customPack(pages: number): PagePack | null {
+  if (!Number.isInteger(pages) || pages < CUSTOM_PAGES_MIN || pages > CUSTOM_PAGES_MAX) return null;
+  return { id: CUSTOM_PACK_ID, pages, priceCents: pages * PAGE_PRICE_CENTS };
+}
+
+// A fixed pack by id, or a custom amount; null for anything we don't sell.
+// Used by checkout (to price) and by the webhook (to check what was paid).
+export function findPack(id: string, pages?: number): PagePack | null {
+  if (id === CUSTOM_PACK_ID) return pages == null ? null : customPack(pages);
   return PAGE_PACKS.find((p) => p.id === id) ?? null;
 }

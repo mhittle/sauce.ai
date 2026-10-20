@@ -6,6 +6,64 @@ not read during onboarding.
 
 ---
 
+## 2026-09-23 — session wrap-up: accounts + tutorial merged and live; billing still unbuilt
+
+**Context.** Session 2026-09-15→23. The owner's four tasks were: plan the
+invite → sign-up → profile flow, plan the onboarding tutorial, specify what
+credits need (plan only), and confirm the Stripe row. After the plan came an
+"ok go", so tasks 1 and 2 were built; 3 and 4 remain plan-only by decision.
+
+**What shipped (all merged to `main` 2026-09-21).**
+- **#278** `accounts-plan.md` — state diagram, schemas, Google/Resend manual
+  steps, tenancy route audit, PR split, credits schema + pricing proposal.
+- **#279 PR A** `packages/email` (Resend REST, log-only without the key) +
+  migration 0013 `invites` + admin invite API + Admin → Users invite panel.
+- **#280 PR C** tenancy: migration 0014 `orgs`, `org_id` on takeoffs/quotes/
+  customers/eval_fixtures, `is_platform_admin`, `req.orgId` (+ `X-Org-Id`
+  for platform admins), `lib/scope.ts` on ~24 id lookups, per-org lists and
+  dashboard, `/projects` platform-only. **This closed the security item** —
+  before it, any signed-in user saw every takeoff.
+- **#281 PR B** `POST /signup` (org + owner user + invite consumed in one
+  transaction, session in the body) + `/signup?token=` page + email magic
+  link (migration 0015 `login_tokens`).
+- **#282 PR D** `/account`: profile, company name/logo (org logo now wins on
+  that org's quote PDFs), team roles, teammate invites; `requireOrgOwner`.
+- **#283** onboarding tutorial: migration 0016, sample-job clone
+  (`storage_id` shares the original's images; non-GET writes on a sample are
+  refused), `Tour`/`Coachmark` with a sequence per screen, progress in
+  `users.onboarding`, "Show me around" in the account menu.
+
+**Owner decisions this session.** Sign-up form is email + name + phone only
+(no company, no how-heard, no checkbox — a terms LINE). PR order A → C → B
+→ D, so tenancy landed before any outside user could exist. Sign-in is
+Google OAuth or an email magic link; no password.
+
+**Prod verification (2026-09-23).** `/health/db` ok; `GET /signup/<bogus>`
+returns the route's own `{"error":"invite not found"}` (not route-not-found),
+so PR B's routes are deployed and migrations 0013–0016 applied at boot. Live
+web bundle `index-CDvzjuQb.js` contains "Create my account", "Email me a
+sign-in link", "Show me around", "Sample job for new accounts", "Invite
+someone", "Skip tour". Every merged file confirmed present on `origin/main`
+by `git cat-file` (the 2026-09-13 stacked-PR trap did not recur).
+
+**Also run locally (2026-09-22)** on a throwaway `scribe_dev` DB: invite →
+copy link → sign-up → new org → Account page, end to end, green. Recipe in
+Load-bearing state.
+
+**NOT built, by decision.** Credits and Stripe. There is no `usage_events`,
+`credit_ledger`, `model_rates`, `platform_settings` or Stripe code on main.
+**Gotcha:** the invite form's "Pages included" is stored on the invite and
+shown to the invitee at sign-up, but nothing reads or decrements it — every
+account today reads without limit at our API cost.
+
+**Open for the owner.** Pricing shape (per page + minimum, or per job),
+signup grant, pack sizes — `accounts-plan.md` §3.4. Manual actions MA-006
+(real rates; the send gate blocks every quote until done), MA-013, MA-014,
+MA-015, MA-016. Measurement-accuracy Option A/B/C still undecided; SCR-015
+still needs evidence.
+
+---
+
 ## 2026-09-15 (o) — onboarding tutorial: seeded sample job + coachmarks
 
 **Shipped (migration `0016_onboarding.sql`).**

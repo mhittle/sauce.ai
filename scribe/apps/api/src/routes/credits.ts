@@ -11,7 +11,7 @@ import {
   recentLedger,
   writeLedger,
 } from "@scribe/db";
-import { PAGE_PACKS } from "@scribe/shared";
+import { CUSTOM_PAGES_MAX, CUSTOM_PAGES_MIN, PAGE_PACKS, PAGE_PRICE_CENTS } from "@scribe/shared";
 import { billingConfigured } from "../lib/stripe.js";
 
 // Credits (accounts-plan.md §3): 1 credit = 1 page read. Customer view is the
@@ -30,6 +30,7 @@ export async function creditRoutes(app: FastifyInstance): Promise<void> {
       firstJobFree: await firstJobFreeAvailable(db, req.orgId, settings),
       ledger: await recentLedger(db, req.orgId, 50),
       packs: PAGE_PACKS,
+      custom: { min: CUSTOM_PAGES_MIN, max: CUSTOM_PAGES_MAX, pagePriceCents: PAGE_PRICE_CENTS },
       billing: billingConfigured(),
     };
   });
