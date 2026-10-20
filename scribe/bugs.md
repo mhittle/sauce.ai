@@ -19,6 +19,13 @@ Format:
 
 ## Open
 
+### SCR-016 — Quote still says "2 lines could not be priced" after they were fixed in the takeoff; Send quote greyed out
+- **Status:** open
+- **Reported:** 2026-10-20 by owner (screenshots: red "2 lines could not be priced and are left off this quote. Fix them in the takeoff." + "UPGRADED · TOTAL $24,689.81 · 2 lines still unpriced"; Send quote disabled)
+- **Description:** The owner fixed the two unpriced lines in the takeoff, but the quote screen still counts them as unpriced and Send quote stays disabled. Two questions: (1) where the quote's unpriced count comes from and why the takeoff fix did not reach it; (2) every reason Send is disabled (unpriced lines, placeholder rates MA-006, freight gate, NEEDS REVIEW).
+- **Notes / fix:** Evidence (prod, 2026-10-20): quote `a98845a0` on takeoff `3b2cd095` (Albert_Boyle_Office_CAD_16.pdf). The quote is NOT stale — `GET /quotes/:id` re-prices the live takeoff lines every time. The two lines (`447ef452`, `55b16637`) are 58" wide base cabinets; no product line accepts that width (framed-casework 9–48"). The "fix" was a manual product-line assignment in the review's unmatched bucket: `PATCH /takeoff-lines/:id` with `product_line_id` writes it as-is and skips the price check (`takeoffs.ts` `manualAssign`), and the review treats any line with a `productLineId` as resolved (`TakeoffReview.tsx` :107/:269) and hides `unmatchedReason` once one is set (:1117). So the takeoff looked clean while `priceLine` still rejects both lines ("width 58" outside 9"–48""). Send is disabled ONLY by those 2 unpriced lines: `any_needs_review` is false (real rates are in — MA-006 looks done) and freight verification is not required ($7.6k, nothing assembled).
+- **PR:** —
+
 ### SCR-015 — Door and drawer-front counts are wrong on the review/quote
 - **Status:** open
 - **Reported:** 2026-09-15 by owner ("fixing the door and drawer front count")
