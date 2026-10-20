@@ -212,3 +212,17 @@ export function checkoutErrorText(err: unknown): string {
   if ((err as { status?: number })?.status === 503) return BILLING_OFF;
   return "We couldn't open the payment page. Please try again.";
 }
+
+// Custom page amount on Account → Pages.
+export function customBuyLabel(pages: number, pagePriceCents: number): string {
+  return `Buy for $${((pages * pagePriceCents) / 100).toLocaleString("en-US")}`;
+}
+
+export function customHint(
+  pages: number,
+  custom: { min: number; max: number; pagePriceCents: number }
+): string {
+  if (!Number.isInteger(pages) || pages < custom.min) return `Minimum ${custom.min} pages.`;
+  if (pages > custom.max) return `Up to ${custom.max.toLocaleString("en-US")} pages at a time.`;
+  return `$${(custom.pagePriceCents / 100).toLocaleString("en-US")} a page. The 100 and 500 packs cost less per page.`;
+}

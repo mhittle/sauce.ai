@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chargeBlocked, jobCharge } from "../src/credits.js";
+import { chargeBlocked, CUSTOM_PAGES_MAX, CUSTOM_PAGES_MIN, findPack, jobCharge } from "../src/credits.js";
 
 describe("jobCharge", () => {
   it("charges a page per selected page, with no minimum by default", () => {
@@ -24,5 +24,21 @@ describe("chargeBlocked", () => {
     expect(chargeBlocked(charge, 9, { creditsEnforced: true })).toBe(true);
     expect(chargeBlocked(charge, 10, { creditsEnforced: true })).toBe(false);
     expect(chargeBlocked(jobCharge(10, { minPagesPerJob: 1 }, true), 0, { creditsEnforced: true })).toBe(false);
+  });
+});
+
+describe("findPack", () => {
+  it("finds fixed packs and ignores a pages value for them", () => {
+    expect(findPack("pages_100")?.priceCents).toBe(9_000);
+    expect(findPack("pages_100", 7)?.pages).toBe(100);
+    expect(findPack("pages_7")).toBeNull();
+  });
+
+  it("prices a custom amount at $1 a page within the limits", () => {
+    expect(findPack("custom", 10)).toEqual({ id: "custom", pages: 10, priceCents: 1_000 });
+    expect(findPack("custom", CUSTOM_PAGES_MIN - 1)).toBeNull();
+    expect(findPack("custom", CUSTOM_PAGES_MAX + 1)).toBeNull();
+    expect(findPack("custom", 10.5)).toBeNull();
+    expect(findPack("custom")).toBeNull();
   });
 });

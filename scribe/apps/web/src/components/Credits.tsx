@@ -23,6 +23,7 @@ export interface CreditsState {
   firstJobFree: boolean;
   ledger: LedgerRow[];
   packs: { id: string; pages: number; priceCents: number }[];
+  custom: { min: number; max: number; pagePriceCents: number };
   billing: boolean;
 }
 

@@ -6,6 +6,8 @@ import {
   BILLING_OFF,
   checkoutErrorText,
   creditsShort,
+  customBuyLabel,
+  customHint,
   packLabel,
   PURCHASE_DONE,
   PURCHASE_PENDING,
@@ -19,6 +21,7 @@ import {
   errorMessage,
   Field,
   Input,
+  NumberInput,
   PageTitle,
   SectionLabel,
   SkeletonRows,
@@ -322,15 +325,19 @@ function Pages() {
       navigate({ to: "/account", search: { purchased: undefined }, replace: true });
     }
   }, [purchased, landed, q.dataUpdatedAt]);
+  const [customPages, setCustomPages] = useState(10);
   const buy = useMutation({
-    mutationFn: (pack: string) => apiSend<{ url: string }>("POST", "/billing/checkout", { pack }),
+    mutationFn: (v: { pack: string; pages?: number }) =>
+      apiSend<{ url: string }>("POST", "/billing/checkout", v),
     onSuccess: (r) => {
       window.location.href = r.url;
     },
     onError: (e) => toast.error("Couldn't open the payment page", checkoutErrorText(e)),
   });
   if (!q.data) return null;
-  const { balance, firstJobFree, ledger, packs, billing } = q.data;
+  const { balance, firstJobFree, ledger, packs, billing, custom } = q.data;
+  const customOk =
+    Number.isInteger(customPages) && customPages >= custom.min && customPages <= custom.max;
   return (
     <Card className="p-0">
       <div className="flex items-baseline justify-between px-4 pt-4">
@@ -349,14 +356,44 @@ function Pages() {
             key={p.id}
             size="sm"
             disabled={!billing}
-            loading={buy.isPending && buy.variables === p.id}
-            onClick={() => buy.mutate(p.id)}
+            loading={buy.isPending && buy.variables?.pack === p.id}
+            onClick={() => buy.mutate({ pack: p.id })}
           >
             {packLabel(p.pages, p.priceCents)}
           </Button>
         ))}
         {!billing && <span className="text-xs text-muted">{BILLING_OFF}</span>}
       </div>
+      {billing && (
+        <form
+          className="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (customOk) buy.mutate({ pack: "custom", pages: customPages });
+          }}
+        >
+          <span className="text-muted">Or buy</span>
+          <NumberInput
+            aria-label="Pages to buy"
+            className="w-24"
+            min={custom.min}
+            max={custom.max}
+            step={1}
+            value={Number.isNaN(customPages) ? "" : customPages}
+            onChange={(e) => setCustomPages(Math.trunc(Number(e.target.value)))}
+          />
+          <span className="text-muted">pages</span>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!customOk}
+            loading={buy.isPending && buy.variables?.pack === "custom"}
+          >
+            {customOk ? customBuyLabel(customPages, custom.pagePriceCents) : "Buy"}
+          </Button>
+          <span className="text-xs text-muted">{customHint(customPages, custom)}</span>
+        </form>
+      )}
       <LedgerTable rows={ledger} />
     </Card>
   );
