@@ -46,6 +46,9 @@ deploys if a future session doesn't know it exists. Keep this current.
 - **Runtime images use `pnpm --filter <pkg> --prod deploy --legacy /out`** —
   verified standalone in the sandbox and now by real Railway builds (all
   three Dockerfiles build and run in prod).
+- **Size limits are Admin-set only (2026-10-20):** `product_lines.size_limits`
+  (empty = none) is enforced; the seed `dim_bounds` in price lists v1–v3 are
+  ignored on purpose — don't re-enable them.
 - **Seeded pricing rates were placeholders**; real rates entered by the owner
   (MA-006, confirmed 2026-10-20). Quotes pin their pricing config — a quote
   built on the old placeholder config stays unsendable; build a new one. Seeded Socrata field maps
@@ -133,6 +136,25 @@ deploys if a future session doesn't know it exists. Keep this current.
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-20 (f) — size limits are an Admin setting (owner: "something I can control")
+
+After #328 removed the hard-coded limits, the owner asked for limits they
+control. **Shipped:** `size_limits` per product (`SizeLimits` in
+`@scribe/shared`, min/max per width/height/depth, each end optional, empty
+by default) — a NEW field, so the old seed `dim_bounds` placeholders (9–48"
+etc., still in v1–v3) never come back. Migration `0019_size_limits.sql`
+(`product_lines.size_limits jsonb DEFAULT '{}'`). `checkSizeLimits`:
+`priceLine` refuses with reason `size_limit` and a plain detail ("width 58"
+is over the 48" max set for Framed Casework"); `matchLine` skips a product
+whose limit the cabinet breaks so another can take it; an unmeasured
+dimension is not judged. Admin › Pricing: "Size limits (inches)" row per
+product; saving creates a new price-list version like any rate change, so
+existing quotes keep theirs. Verified locally: set a 48" max in the UI →
+v2 snapshot carries it → hand-pick of a 58" cabinet refused with that text;
+a product without a limit accepts it.
 
 ---
 

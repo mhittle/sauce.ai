@@ -29,7 +29,8 @@ export interface LinePriceError {
     | "inactive_product_line"
     | "unknown_material"
     | "unknown_finish"
-    | "missing_dimension";
+    | "missing_dimension"
+    | "size_limit";
   detail: string;
 }
 
@@ -55,6 +56,31 @@ function applyAdder(adder: Adder, baseCents: number): number {
   return adder.kind === "flat" ? adder.cents : (adder.pct / 100) * baseCents;
 }
 
+// The admin's size limits for this product (Admin › Pricing). A dimension
+// that wasn't measured is not judged; an unset end is open.
+export function checkSizeLimits(
+  line: ProductLineConfig,
+  params: ResolvedParams
+): string | null {
+  const limits = line.size_limits;
+  if (!limits) return null;
+  const dims = [
+    ["width", params.width_in, limits.width],
+    ["height", params.height_in, limits.height],
+    ["depth", params.depth_in, limits.depth],
+  ] as const;
+  for (const [name, value, limit] of dims) {
+    if (value == null || limit == null) continue;
+    if (limit.max_in != null && value > limit.max_in) {
+      return `${name} ${value}" is over the ${limit.max_in}" max set for ${line.name}`;
+    }
+    if (limit.min_in != null && value < limit.min_in) {
+      return `${name} ${value}" is under the ${limit.min_in}" min set for ${line.name}`;
+    }
+  }
+  return null;
+}
+
 export function priceLine(
   line: ProductLineConfig,
   params: ResolvedParams
@@ -67,8 +93,10 @@ export function priceLine(
     };
   }
 
-  // No size limits (owner, 2026-10-20): a product prices whatever was
-  // measured. `dim_bounds` stays in the config but is not enforced.
+  // Only the limits an admin set (size_limits); the old seed `dim_bounds`
+  // are not enforced (owner, 2026-10-20).
+  const overLimit = checkSizeLimits(line, params);
+  if (overLimit) return { ok: false, reason: "size_limit", detail: overLimit };
 
   // No material read → the product's first material, the same default the
   // matcher uses (a hand-picked line can carry an empty material).

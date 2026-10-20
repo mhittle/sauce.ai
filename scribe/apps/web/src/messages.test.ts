@@ -149,3 +149,12 @@ describe("placeholder-rate blocker copy", () => {
     expect(QUOTE_PLACEHOLDER_ADMIN).toMatch(/Admin › Pricing/);
   });
 });
+
+describe("admin size limit copy", () => {
+  it("explains a limit the admin set", () => {
+    expect(friendlyPriceIssue('width 58" is over the 48" max set for Framed Casework')).toBe(
+      '58" width is over the 48" max set for Framed Casework in Admin › Pricing. Change the width, split it into two cabinets, or pick another product.'
+    );
+    expect(friendlyPriceIssue('depth 3" is under the 4" min set for Doors')).toMatch(/Change the depth, or pick another product/);
+  });
+});

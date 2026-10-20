@@ -126,6 +126,8 @@ export const productLines = pgTable("product_lines", {
   finishAdders: jsonb("finish_adders").notNull().default({}),
   assemblyAdder: jsonb("assembly_adder"),
   dimBounds: jsonb("dim_bounds").notNull().default({}),
+  // migrations/0019 — admin-set size limits (SizeLimits); {} = none.
+  sizeLimits: jsonb("size_limits").notNull().default({}),
   leadTimeDays: integer("lead_time_days").notNull().default(7),
   active: boolean("active").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

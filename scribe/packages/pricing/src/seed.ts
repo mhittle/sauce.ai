@@ -7,8 +7,9 @@ import { PricingSnapshot, ProductLineConfig } from "@scribe/shared";
 
 const NR = { needs_review: true };
 
-function pl(input: ProductLineConfig): ProductLineConfig {
-  return input;
+// No size limits by default — an admin sets them in Admin › Pricing.
+function pl(input: Omit<ProductLineConfig, "size_limits">): ProductLineConfig {
+  return { ...input, size_limits: { width: null, height: null, depth: null } };
 }
 
 export const SEED_PRODUCT_LINES: ProductLineConfig[] = [
