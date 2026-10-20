@@ -136,20 +136,6 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
-## 2026-10-20 (d) — old-rates quotes say "build a new quote" (owner ask)
-
-`GET /quotes/:id` returns `newer_rates` (a price list newer than the
-quote's pinned one exists). When the quote prices on placeholder rates and
-`newer_rates` is true, the blocker reads "This quote was built with the old
-placeholder rates — build a new quote to use the current rates" and a
-"Build a new quote" button posts `/quotes` for the same takeoff (same name)
-and opens it; the send 409 says the same. Only when the newest list is
-itself placeholder does it still point admins at Admin › Pricing. Copy in
-`messages.ts`. Verified locally: both branches, and the button opens a new
-quote on the newest list.
-
----
-
 ## 2026-10-20 (e) — no size limits in pricing (owner: "let the measurements do the work")
 
 **Context.** The 48" Framed Casework max that blocked the Albert Boyle quote
@@ -167,6 +153,20 @@ its 58" cabinets on deploy (at the default material — check it).
 
 **Gotcha.** Size is now never a reason a line can't be priced; a cabinet
 read at a wrong size is priced at that size — the review is the check.
+
+---
+
+## 2026-10-20 (d) — old-rates quotes say "build a new quote" (owner ask)
+
+`GET /quotes/:id` returns `newer_rates` (a price list newer than the
+quote's pinned one exists). When the quote prices on placeholder rates and
+`newer_rates` is true, the blocker reads "This quote was built with the old
+placeholder rates — build a new quote to use the current rates" and a
+"Build a new quote" button posts `/quotes` for the same takeoff (same name)
+and opens it; the send 409 says the same. Only when the newest list is
+itself placeholder does it still point admins at Admin › Pricing. Copy in
+`messages.ts`. Verified locally: both branches, and the button opens a new
+quote on the newest list.
 
 ---
 
