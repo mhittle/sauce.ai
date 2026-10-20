@@ -135,6 +135,34 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-10-20 — open-hold sweep + "charge again" (#324, credits, before enforcement)
+
+**Owner:** release holds on jobs left unfinished; a swept job that is picked
+back up is charged again ("charge again", 2026-10-20).
+
+**Shipped.** `@scribe/db` `sweepStaleHolds(db, hours)`: holds with no
+settle/release whose takeoff is `processing` / `awaiting_pages` /
+`awaiting_boxes` and has had no activity (hold, takeoff `updated_at`, newest
+area) for `CREDIT_HOLD_SWEEP_HOURS` (default 24) are released with a note.
+Workers run it hourly on a new `credits.sweep` BullMQ queue
+(`upsertJobScheduler`). `reholdIfReleased` + the API's `reholdOrRefuse`:
+Find (`/detections/run`) and Build (`/build-takeoff`) on a job whose hold
+was released open a fresh hold (402 when enforced and short); an open or
+settled hold is never charged again, and a swept free first job comes back
+free. Ledger label "Pages returned" (note says failed / not finished).
+
+**Verified locally (`scribe_dev`).** Stale abandoned job released; a job
+with an area drawn within the hour kept; settled and fresh jobs untouched;
+second sweep a no-op; resuming charged 3 pages once; resuming the free job
+stayed free; balance = sum of deltas. Not exercised: the hourly scheduler
+(local Redis down).
+
+**Gotcha.** Image jobs are released by the sweep but only Find/Build re-hold,
+and those are PDF routes — an image job abandoned and finished later another
+way is not re-charged.
+
+---
+
 ## 2026-10-19 — Stripe page packs (#323); Task 0: prod usage is empty
 
 **Task 0 (read prod Usage, 2026-10-19).** Admin → Usage: 0 jobs / $0 since
@@ -165,34 +193,6 @@ round trip (MA-017 step 5).
 
 **Open.** Open-hold sweep (before enforcement); one real prod job to prove
 usage + hold/settle; then live keys + enforcement.
-## 2026-10-20 — open-hold sweep + "charge again" (credits, before enforcement)
-
-**Owner:** release holds on jobs left unfinished; a swept job that is picked
-back up is charged again ("charge again", 2026-10-20).
-
-**Shipped.** `@scribe/db` `sweepStaleHolds(db, hours)`: holds with no
-settle/release whose takeoff is `processing` / `awaiting_pages` /
-`awaiting_boxes` and has had no activity (hold, takeoff `updated_at`, newest
-area) for `CREDIT_HOLD_SWEEP_HOURS` (default 24) are released with a note.
-Workers run it hourly on a new `credits.sweep` BullMQ queue
-(`upsertJobScheduler`). `reholdIfReleased` + the API's `reholdOrRefuse`:
-Find (`/detections/run`) and Build (`/build-takeoff`) on a job whose hold
-was released open a fresh hold (402 when enforced and short); an open or
-settled hold is never charged again, and a swept free first job comes back
-free. Ledger label "Pages returned" (note says failed / not finished).
-
-**Verified locally (`scribe_dev`).** Stale abandoned job released; a job
-with an area drawn within the hour kept; settled and fresh jobs untouched;
-second sweep a no-op; resuming charged 3 pages once; resuming the free job
-stayed free; balance = sum of deltas. Not exercised: the hourly scheduler
-(local Redis down).
-
-**Gotcha.** Image jobs are released by the sweep but only Find/Build re-hold,
-and those are PDF routes — an image job abandoned and finished later another
-way is not re-charged.
-
----
-
 ## 2026-10-05 — session wrap-up: usage ledger + credits merged and live; Stripe next
 
 **Context.** Session 2026-10-02→05 from the 2026-09-23 prompt: Task 1 usage
