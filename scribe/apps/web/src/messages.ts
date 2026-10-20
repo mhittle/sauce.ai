@@ -259,3 +259,14 @@ export function lineSaveErrorText(err: unknown): string {
   if ((err as { status?: number })?.status === 422) return friendlyPriceIssue(msg);
   return msg;
 }
+
+// --- Quote send blockers: placeholder rates ---
+
+// The quote was built while placeholder rates were in use and real rates
+// have been saved since: a quote keeps its price list, so it needs rebuilding.
+export const QUOTE_OLD_RATES =
+  "This quote was built with the old placeholder rates — build a new quote to use the current rates";
+export const QUOTE_PLACEHOLDER_ADMIN = "Placeholder rates in use — enter real rates in Admin › Pricing";
+export const QUOTE_PLACEHOLDER_MEMBER = "Pricing for this quote isn't finalized yet — ask an admin";
+export const REBUILD_QUOTE = "Build a new quote";
+export const QUOTE_REBUILT = "New quote built with the current rates";

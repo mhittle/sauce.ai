@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint, friendlyPriceIssue, lineSaveErrorText, unpricedLineTitle } from "./messages";
+import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint, friendlyPriceIssue, lineSaveErrorText, unpricedLineTitle, QUOTE_OLD_RATES, QUOTE_PLACEHOLDER_ADMIN } from "./messages";
 
 describe("friendlyError", () => {
   it("hides the SQL behind a plain sentence and keeps it as detail", () => {
@@ -139,5 +139,13 @@ describe("unpriced line copy (SCR-016)", () => {
     expect(lineSaveErrorText(e)).toMatch(/^58" width is outside/);
     expect(lineSaveErrorText(new Error("boom"))).toBe("boom");
     expect(unpricedLineTitle("  ", 2)).toBe("Line 2");
+  });
+});
+
+describe("placeholder-rate blocker copy", () => {
+  it("tells an old quote to rebuild rather than pointing at Admin", () => {
+    expect(QUOTE_OLD_RATES).toMatch(/build a new quote/);
+    expect(QUOTE_OLD_RATES).not.toMatch(/Admin/);
+    expect(QUOTE_PLACEHOLDER_ADMIN).toMatch(/Admin › Pricing/);
   });
 });

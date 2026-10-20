@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { friendlyPriceIssue, unpricedLineTitle } from "../messages";
+import {
+  friendlyPriceIssue,
+  QUOTE_OLD_RATES,
+  QUOTE_PLACEHOLDER_ADMIN,
+  QUOTE_PLACEHOLDER_MEMBER,
+  QUOTE_REBUILT,
+  REBUILD_QUOTE,
+  unpricedLineTitle,
+} from "../messages";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { quoteBuilderRoute } from "../main";
@@ -46,6 +54,7 @@ interface QuoteDetail {
   sentAt: string | null;
   createdAt: string;
   pricing_config_version: number;
+  newer_rates?: boolean;
   pricing: {
     priced: {
       takeoff_line_id: string;
@@ -153,6 +162,21 @@ export function QuoteBuilderPage() {
     onError: (e) => toast.error("Couldn't send", errorMessage(e)),
   });
 
+  // A quote keeps the price list it was built with; when it was built on
+  // placeholder rates and real ones exist now, rebuild it from the takeoff.
+  const rebuild = useMutation({
+    mutationFn: () =>
+      apiSend<{ id: string }>("POST", "/quotes", {
+        takeoff_id: q.data!.takeoffId,
+        name: q.data!.name ?? undefined,
+      }),
+    onSuccess: (r) => {
+      toast.success(QUOTE_REBUILT);
+      navigate({ to: "/quotes/$quoteId", params: { quoteId: r.id } });
+    },
+    onError: (e) => toast.error("Couldn't build a new quote", errorMessage(e)),
+  });
+
   const quote = q.data;
   const isAdmin = me.data?.role === "admin";
   const showMargin = me.data?.role === "admin" || me.data?.role === "sales";
@@ -172,9 +196,11 @@ export function QuoteBuilderPage() {
     }
     if (quote.pricing.totals.any_needs_review) {
       out.push(
-        isAdmin
-          ? "Placeholder rates in use — enter real rates in Admin › Pricing"
-          : "Pricing for this quote isn't finalized yet — ask an admin"
+        quote.newer_rates
+          ? QUOTE_OLD_RATES
+          : isAdmin
+            ? QUOTE_PLACEHOLDER_ADMIN
+            : QUOTE_PLACEHOLDER_MEMBER
       );
     }
     return out;
@@ -526,6 +552,11 @@ export function QuoteBuilderPage() {
               <li key={b}>· {b}</li>
             ))}
           </ul>
+        )}
+        {!locked && quote.pricing.totals.any_needs_review && quote.newer_rates && (
+          <Button size="sm" loading={rebuild.isPending} onClick={() => rebuild.mutate()}>
+            {REBUILD_QUOTE}
+          </Button>
         )}
         <div className="ml-auto flex items-center gap-2" data-tour="quote-send">
           <Button loading={generatePdf.isPending} onClick={() => generatePdf.mutate()}>

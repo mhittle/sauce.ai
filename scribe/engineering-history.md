@@ -136,6 +136,20 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-10-20 (d) — old-rates quotes say "build a new quote" (owner ask)
+
+`GET /quotes/:id` returns `newer_rates` (a price list newer than the
+quote's pinned one exists). When the quote prices on placeholder rates and
+`newer_rates` is true, the blocker reads "This quote was built with the old
+placeholder rates — build a new quote to use the current rates" and a
+"Build a new quote" button posts `/quotes` for the same takeoff (same name)
+and opens it; the send 409 says the same. Only when the newest list is
+itself placeholder does it still point admins at Admin › Pricing. Copy in
+`messages.ts`. Verified locally: both branches, and the button opens a new
+quote on the newest list.
+
+---
+
 ## 2026-10-20 (c) — SCR-016: hand-picked products must be priceable (#326)
 
 **Bug.** Quote `a98845a0` kept "2 lines could not be priced" after the owner
@@ -156,8 +170,8 @@ reason; quote lists each unpriced cabinet. Copy in `messages.ts`
 
 **Gotcha (unchanged, worth knowing).** A quote pins the pricing config it
 was created with; new rates never reach an old quote — build a new quote.
-The Admin blocker text "enter real rates in Admin › Pricing" is therefore
-misleading for an existing quote (not changed here).
+The Admin blocker text "enter real rates in Admin › Pricing" was
+misleading for an existing quote — fixed the same day (see (d)).
 
 ---
 
