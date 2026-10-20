@@ -27,10 +27,8 @@ function item(p: Partial<CabinetLineItem>): CabinetLineItem {
 
 // SCR-016: a 58" base cabinet was hand-assigned to Framed Casework (9–48").
 describe("resolveForProductLine", () => {
-  it("refuses a width the product can't take, in words", () => {
-    const r = resolveForProductLine(item({ width_in: 58 }), framed);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toMatch(/width 58" outside 9"–48"/);
+  it("accepts the 58\" prod cabinet now that sizes aren't limited", () => {
+    expect(resolveForProductLine(item({ width_in: 58 }), framed).ok).toBe(true);
   });
 
   it("fills the material the way the matcher does when none was read", () => {
@@ -55,8 +53,12 @@ describe("priceIssue", () => {
     expect(priceIssue("framed-casework", resolved(29), SEED_PRICING_SNAPSHOT)).toBeNull();
     expect(priceIssue(null, null, SEED_PRICING_SNAPSHOT)).toBeNull();
   });
-  it("explains the prod case: assigned but unpriceable", () => {
-    expect(priceIssue("framed-casework", resolved(58, ""), SEED_PRICING_SNAPSHOT)).toMatch(/width 58"/);
+  it("explains what still can't be priced", () => {
+    expect(priceIssue("framed-casework", resolved(58), SEED_PRICING_SNAPSHOT)).toBeNull();
+    // The prod lines carried material "" from the old hand-pick: they price
+    // on the product's default material now.
+    expect(priceIssue("framed-casework", resolved(58, ""), SEED_PRICING_SNAPSHOT)).toBeNull();
+    expect(priceIssue("framed-casework", resolved(58, "unobtanium"), SEED_PRICING_SNAPSHOT)).toMatch(/unobtanium/);
     expect(priceIssue("nope", resolved(29), SEED_PRICING_SNAPSHOT)).toMatch(/not in the current price list/);
     expect(priceIssue("framed-casework", null, SEED_PRICING_SNAPSHOT)).toMatch(/pick the product again/);
   });

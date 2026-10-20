@@ -150,6 +150,26 @@ quote on the newest list.
 
 ---
 
+## 2026-10-20 (e) — no size limits in pricing (owner: "let the measurements do the work")
+
+**Context.** The 48" Framed Casework max that blocked the Albert Boyle quote
+was a placeholder from the v1 seed (Claude, 2026-06-10, `seed.ts`), carried
+into prod's price list v1–v3; not a CabinetNow rule. Owner: don't set limits.
+
+**Shipped.** `@scribe/pricing`: `priceLine` no longer checks `dim_bounds`
+(removed `checkDimBounds` / the `out_of_bounds` reason) and `matchLine` no
+longer drops candidates by size. `dim_bounds` stays in the schema, the DB
+and Admin data, but nothing enforces it. Pricing defaults an empty material
+to the product's first material (the matcher's existing rule) — the two prod
+lines carried `material: ""` from the old hand-pick. Applies to every price
+list, including ones old quotes are pinned to, so quote `a98845a0` prices
+its 58" cabinets on deploy (at the default material — check it).
+
+**Gotcha.** Size is now never a reason a line can't be priced; a cabinet
+read at a wrong size is priced at that size — the review is the check.
+
+---
+
 ## 2026-10-20 (c) — SCR-016: hand-picked products must be priceable (#326)
 
 **Bug.** Quote `a98845a0` kept "2 lines could not be priced" after the owner

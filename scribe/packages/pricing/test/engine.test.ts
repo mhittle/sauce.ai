@@ -99,10 +99,11 @@ describe("priceLine", () => {
     expect(r.ok && r.needs_review).toBe(true);
   });
 
-  it("rejects out-of-bounds dims", () => {
+  it("prices any measured size — no dimension limits (owner, 2026-10-20)", () => {
     const r = priceLine(framed, params({ width_in: 60 }));
-    expect(r.ok).toBe(false);
-    expect(!r.ok && r.reason).toBe("out_of_bounds");
+    expect(r.ok).toBe(true);
+    const narrow = priceLine(framed, params({ width_in: 30 }));
+    expect(r.ok && narrow.ok && r.unit_cents).toBe(narrow.ok && narrow.unit_cents * 2);
   });
 
   it("rejects unknown material and finish", () => {
