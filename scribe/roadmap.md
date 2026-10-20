@@ -20,7 +20,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 | Sign-up flow + onboarding tutorial — invite email with a sign-up link → details form → user profile; Google OAuth consent/publishing + email provider (product-plan §4); first-run tutorial | 9 | 6 | backend | done (#279 invites, #280 tenancy, #281 sign-up, #282 account, #283 tutorial; merged + live 2026-09-21) |
 | Usage ledger (product-plan §5 3a) — `model_rates` + `usage_events` (0017), every model call costed, Admin → Usage | 8 | 3 | backend | done (#309, 2026-10-02) |
 | Credits: per-page credits (product-plan §5 3b) — $1/page, no minimum, first job free; ledger, hold/settle/release, balance, cost preview, Admin → Credits (record-only) | 8 | 4 | backend | done (#310, 2026-10-02; usage ledger 3a is #309) |
-| Stripe payments — credit packs via Stripe Checkout, webhook → credit ledger (product-plan §5 3c) | 7 | 4 | backend | backlog — NEXT (unblocked by #310; packs 25 / 100 / 500 pages, prices to confirm) |
+| Stripe payments — page packs 25/$25, 100/$90, 500/$400 via Stripe Checkout, signed webhook → `purchase` ledger row (product-plan §5 3c) | 7 | 4 | backend | done (#323, 2026-10-19; switched on by MA-017) |
 | Open-hold sweep — release credit holds on jobs abandoned before review (>24 h, no terminal state); required before `credits_enforced` goes on | 6 | 1 | backend | backlog |
 | Fix door and drawer-front counts (SCR-015) — faces derived by `expandToComponents` heuristics don't match the drawing; evidence first, then per-cabinet face counts from the read or better heuristics | 8 | 3 | pricing | backlog |
 | Mark step: no pre-selection, side panel, two-way selection (PR 1); areas own their cabinets — a correction rescans and rebuilds one area (PR 2) | 9 | 6 | ui | done (2026-09-15) |
@@ -197,6 +197,9 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 ### Stripe payments
 
+- **2026-10-19 done (#323):** REST Checkout + hand-verified webhook,
+  inline-priced packs, idempotent `purchase` rows, receipts log-only until
+  MA-013. Off until MA-017 sets the keys.
 - **Priority 7 / LOE 4 / backend / backlog.** Stripe Checkout for credit
   packs; webhook → `credit_ledger`; receipts by email. After the ledger and
   credits exist (invite-only beta grants credits without Stripe).
