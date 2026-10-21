@@ -6,6 +6,38 @@ not read during onboarding.
 
 ---
 
+## 2026-10-02 (b) — credits (step 3b): $1/page ledger, first job free, record-only (#310)
+
+**Owner pricing (2026-10-02):** $1 per page read, **no minimum**, **first
+job free** (any size; replaces the page grant), packs 25 / 100 / 500
+(Stripe). Invites that already promised "Pages included" keep them.
+
+**Shipped (#310, migration `0018_credits.sql`).** `credit_ledger`
+(unique close per hold; unique purchase ref for Stripe), `orgs.credit_balance`
+(cache, written only under the org row lock), `takeoffs.credit_hold_id /
+pages_charged`, `platform_settings` (min 1, first_job_free on,
+credits_enforced off). Backfill: used invites' `credits_granted` became
+`signup_grant` rows. `@scribe/db` `credits.ts` (`writeLedger`, `quoteJob`,
+`openHold`, `closeHold`); `@scribe/shared` `jobCharge` / `chargeBlocked`
+(same formula for hold and preview). Hold on Pages submit (PDF) or at
+upload (image/sheet, 1 page); settle when the job reaches review (both
+review writers in `process.ts`); release in `failTakeoff`. Free first job =
+a 0-page hold; it stays available while every earlier hold was released.
+Re-runs (Find, Build, Measure again) never charge. Web: top-bar balance,
+Pages cost preview, Account → Pages ledger, Admin → Credits (rules,
+balances, ledger, adjust). Invite "Pages included" now defaults to 0.
+
+**Gotchas.** (1) Enforcement off = balances can go negative; that is the
+record of what would have been charged. (2) A job abandoned before review
+keeps its hold open (no sweep yet) — fine while not enforced; add the
+24 h sweep before turning enforcement on. (3) Not exercised locally: the
+upload-time hold (no object storage) and the queue add (Redis down).
+
+**Next.** Stripe (Task 3): Checkout for 25/100/500 → webhook → `purchase`
+row; then turn `credits_enforced` on.
+
+---
+
 ## 2026-10-02 — usage ledger (step 3a): every model call costed; Admin → Usage (#309)
 
 **Context.** Owner prompt: build 3a (instrument, don't charge), report the

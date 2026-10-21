@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inviteEmail, receiptEmail } from "./templates.js";
+import { smtpOptions } from "./index.js";
 
 describe("inviteEmail", () => {
   const base = {
@@ -11,9 +12,10 @@ describe("inviteEmail", () => {
     creditsGranted: 20,
   };
 
-  it("names the inviter, carries the link, escapes html", () => {
+  it("uses the placeholder wording, carries the link, escapes html", () => {
     const m = inviteEmail(base);
-    expect(m.subject).toBe("Mike invited you to Scribe");
+    expect(m.subject).toBe("Test invitation to Scribe");
+    expect(m.text).toContain("This is a test invitation to Scribe.");
     expect(m.text).toContain(base.link);
     expect(m.html).toContain(`href="${base.link}"`);
     expect(m.html).toContain("Pat &lt;Shop&gt;");
@@ -36,5 +38,13 @@ describe("receiptEmail", () => {
     expect(m.text).toContain("Paid: $90.00");
     expect(m.text).toContain("Balance now: 112 pages");
     expect(m.html).toContain("https://web/account");
+  });
+});
+
+describe("smtpOptions", () => {
+  it("uses implicit TLS on 465 and STARTTLS otherwise", () => {
+    expect(smtpOptions({ SMTP_HOST: "smtp.gmail.com", SMTP_PORT: "465", SMTP_USER: "u", SMTP_PASS: "p" })).toMatchObject({ port: 465, secure: true, auth: { user: "u" } });
+    expect(smtpOptions({ SMTP_HOST: "h" }).port).toBe(587);
+    expect(smtpOptions({ SMTP_HOST: "h", SMTP_PORT: "587" }).secure).toBe(false);
   });
 });

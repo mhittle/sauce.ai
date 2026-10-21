@@ -78,11 +78,11 @@ deploys if a future session doesn't know it exists. Keep this current.
   got PR 1 only while all four showed "merged". Fixed by #260 (the PR 3
   branch, which contained all the merges, opened against `main`). Either
   base every PR on `main`, or merge bottom-up and delete each branch.
-- **Accounts are LIVE but email is NOT configured (2026-09-21, #279–#283).**
-  `RESEND_API_KEY` / `EMAIL_FROM` are unset on `scribe-api`, so every invite
-  and magic link is created and then only LOGGED (`email not configured`);
-  the admin copies the link out of Admin → Users by hand. Setting the two
-  vars switches sending on with no code change (MA-013).
+- **Email sends via SMTP once MA-013's variables are set (2026-10-21).**
+  `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM` on
+  `scribe-api` (Gmail, ridadarwish12@gmail.com, app password). Unset → every
+  invite, magic link and receipt is only LOGGED and the admin copies links
+  from Admin → Users. Gmail caps ~500/day.
 - **Migration 0014 created the platform org "CabinetNow"** and backfilled
   every pre-existing user, takeoff, quote, customer and eval_fixture into
   it. `orgs.is_platform` marks it; machine users (dev bypass,
@@ -136,6 +136,33 @@ deploys if a future session doesn't know it exists. Keep this current.
   vs 0.328 baseline). Removing the var reverts to the plan-only router and
   silently re-breaks elevation-heavy docs. `ROUTER_ELEVATION_PRIMARY` exists
   gated but is NOT set (measured ≈ equal; don't set without new evidence).
+
+---
+
+## 2026-10-21 — SMTP email (nodemailer) + invites by CSV; placeholder invite copy
+
+**Owner asks.** Send email through SMTP (Gmail, ridadarwish12@gmail.com)
+instead of waiting on Resend; an "Import CSV" for bulk invites with a
+downloadable one-row template; invite text "This is a test invitation"
+while the real wording is written.
+
+**Shipped.** `packages/email`: nodemailer SMTP transport when `SMTP_HOST`
++ `SMTP_USER` + `SMTP_PASS` + `EMAIL_FROM` are set (465 = TLS, else
+STARTTLS); Resend REST next; else log-only. A failed SMTP send logs
+`email send failed (smtp)` with the code and returns `sent: false` — the
+invite still exists and its link is shown. Invite wording lives in
+`INVITE_SUBJECT` / `INVITE_INTRO` (templates.ts) — placeholder now.
+`@scribe/shared` `parseInviteCsv` / `INVITE_CSV_TEMPLATE` (columns email,
+name, company, pages_included, note; header variants; quotes/BOM/CRLF;
+per-row errors; dedupe; 500 rows). `POST /admin/invites/import {csv}`
+re-parses server-side, skips existing accounts and live invites, returns a
+per-row result. Admin › Users: "Invite from a CSV" card — Download template,
+Import CSV, preview with row errors, Send N invites, results with copy links.
+
+**Verified locally.** Import: 2 created with links, existing user skipped,
+bad email + duplicate reported by row, re-import skipped as already invited;
+unreachable SMTP logged and did not fail the invite; UI preview rendered.
+NOT exercised: a real Gmail send (owner sets the vars — MA-013).
 
 ---
 
@@ -329,39 +356,12 @@ SCR-013 live spot-check.
 
 ---
 
-## 2026-10-02 (b) — credits (step 3b): $1/page ledger, first job free, record-only (#310)
-
-**Owner pricing (2026-10-02):** $1 per page read, **no minimum**, **first
-job free** (any size; replaces the page grant), packs 25 / 100 / 500
-(Stripe). Invites that already promised "Pages included" keep them.
-
-**Shipped (#310, migration `0018_credits.sql`).** `credit_ledger`
-(unique close per hold; unique purchase ref for Stripe), `orgs.credit_balance`
-(cache, written only under the org row lock), `takeoffs.credit_hold_id /
-pages_charged`, `platform_settings` (min 1, first_job_free on,
-credits_enforced off). Backfill: used invites' `credits_granted` became
-`signup_grant` rows. `@scribe/db` `credits.ts` (`writeLedger`, `quoteJob`,
-`openHold`, `closeHold`); `@scribe/shared` `jobCharge` / `chargeBlocked`
-(same formula for hold and preview). Hold on Pages submit (PDF) or at
-upload (image/sheet, 1 page); settle when the job reaches review (both
-review writers in `process.ts`); release in `failTakeoff`. Free first job =
-a 0-page hold; it stays available while every earlier hold was released.
-Re-runs (Find, Build, Measure again) never charge. Web: top-bar balance,
-Pages cost preview, Account → Pages ledger, Admin → Credits (rules,
-balances, ledger, adjust). Invite "Pages included" now defaults to 0.
-
-**Gotchas.** (1) Enforcement off = balances can go negative; that is the
-record of what would have been charged. (2) A job abandoned before review
-keeps its hold open (no sweep yet) — fine while not enforced; add the
-24 h sweep before turning enforcement on. (3) Not exercised locally: the
-upload-time hold (no object storage) and the queue add (Redis down).
-
-**Next.** Stripe (Task 3): Checkout for 25/100/500 → webhook → `purchase`
-row; then turn `credits_enforced` on.
-
----
-
 ## Condensed history
+
+### 2026-10-02 (b) — credits, step 3b (#310, archived verbatim)
+Migration 0018 `credit_ledger` / `orgs.credit_balance` / `platform_settings`;
+$1/page, first job free, hold on submit → settle on review / release on
+failure; record-only until enforcement (see Load-bearing state).
 
 ### 2026-10-02 — usage ledger, step 3a (#309, archived verbatim)
 Migration 0017 `model_rates` + `usage_events` (microcents); `TakeoffBudget`

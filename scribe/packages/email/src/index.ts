@@ -1,7 +1,10 @@
-// Transactional email via Resend's REST API (no SDK — one endpoint). Without
-// RESEND_API_KEY every send is logged instead, so dev, tests and a prod
-// deploy that has not finished the DNS setup keep working; the caller gets
-// `sent: false` and can show the link another way.
+import nodemailer, { type Transporter } from "nodemailer";
+
+// Transactional email. SMTP (any provider: Gmail/Workspace, Microsoft 365,
+// SES…) via nodemailer when SMTP_HOST is set; else Resend's REST API when
+// RESEND_API_KEY is set; else every send is logged instead, so dev, tests and
+// an unconfigured prod keep working — the caller gets `sent: false` and can
+// show the link another way. EMAIL_FROM is the sender for both.
 
 export interface EmailMessage {
   to: string;
@@ -16,14 +19,56 @@ export interface SendResult {
   reason?: string;
 }
 
+function smtpConfigured(): boolean {
+  return Boolean(
+    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.EMAIL_FROM
+  );
+}
+
 export function emailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+  return smtpConfigured() || Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+}
+
+// SMTP_PORT 465 = implicit TLS; anything else (587) upgrades with STARTTLS.
+export function smtpOptions(env: NodeJS.ProcessEnv = process.env) {
+  const port = Number(env.SMTP_PORT ?? 587);
+  return {
+    host: env.SMTP_HOST,
+    port,
+    secure: port === 465,
+    auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+  };
+}
+
+let transport: Transporter | null = null;
+
+async function sendSmtp(
+  msg: EmailMessage,
+  log: (obj: Record<string, unknown>, msg: string) => void
+): Promise<SendResult> {
+  transport ??= nodemailer.createTransport(smtpOptions());
+  try {
+    const info = await transport.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: msg.to,
+      subject: msg.subject,
+      html: msg.html,
+      text: msg.text,
+      ...(process.env.EMAIL_REPLY_TO ? { replyTo: process.env.EMAIL_REPLY_TO } : {}),
+    });
+    return { sent: true, id: info.messageId };
+  } catch (err) {
+    const e = err as { message?: string; code?: string; responseCode?: number };
+    log({ to: msg.to, code: e.code, responseCode: e.responseCode, err: e.message }, "email send failed (smtp)");
+    return { sent: false, reason: `smtp ${e.code ?? e.responseCode ?? "error"}` };
+  }
 }
 
 export async function sendEmail(
   msg: EmailMessage,
   log: (obj: Record<string, unknown>, msg: string) => void = () => {}
 ): Promise<SendResult> {
+  if (smtpConfigured()) return sendSmtp(msg, log);
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!key || !from) {

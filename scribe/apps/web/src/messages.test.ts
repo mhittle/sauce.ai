@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint, friendlyPriceIssue, lineSaveErrorText, unpricedLineTitle, QUOTE_OLD_RATES, QUOTE_PLACEHOLDER_ADMIN } from "./messages";
+import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint, friendlyPriceIssue, lineSaveErrorText, unpricedLineTitle, QUOTE_OLD_RATES, QUOTE_PLACEHOLDER_ADMIN, importPreviewLine, importResultLine } from "./messages";
 
 describe("friendlyError", () => {
   it("hides the SQL behind a plain sentence and keeps it as detail", () => {
@@ -156,5 +156,14 @@ describe("admin size limit copy", () => {
       '58" width is over the 48" max set for Framed Casework in Admin › Pricing. Change the width, split it into two cabinets, or pick another product.'
     );
     expect(friendlyPriceIssue('depth 3" is under the 4" min set for Doors')).toMatch(/Change the depth, or pick another product/);
+  });
+});
+
+describe("invite import copy", () => {
+  it("summarises the preview and the outcome", () => {
+    expect(importPreviewLine(1)).toBe("1 person to invite.");
+    expect(importPreviewLine(0)).toMatch(/no one/);
+    expect(importResultLine([{ status: "sent" }, { status: "sent" }, { status: "skipped" }])).toBe("Invites: 2 emailed, 1 skipped");
+    expect(importResultLine([{ status: "created" }])).toBe("Invites: 1 created (copy links)");
   });
 });

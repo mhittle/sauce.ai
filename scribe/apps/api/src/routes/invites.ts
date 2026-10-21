@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { parseInviteCsv } from "@scribe/shared";
 import { desc, eq } from "drizzle-orm";
 import { getDb, invites, users } from "@scribe/db";
 import { emailConfigured, inviteEmail, sendEmail } from "@scribe/email";
@@ -148,6 +149,57 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
       // The link is returned so the admin can paste it when email is not
       // configured; it is the only time the raw token leaves the server.
       return reply.code(201).send({ ...publicInvite(made.row), sent: made.sent, link: made.link });
+    });
+
+    // Bulk invites from a CSV (Admin › Users › Import CSV). The server parses
+    // the raw file itself (same parser as the web preview), skips anyone who
+    // already has an account or a live invite, and reports every row.
+    admin.post("/admin/invites/import", async (req, reply) => {
+      const body = z.object({ csv: z.string().max(1_000_000) }).parse(req.body);
+      const parsed = parseInviteCsv(body.csv);
+      if (parsed.rows.length === 0) {
+        return reply.code(400).send({ error: parsed.errors[0]?.message ?? "no invites in the file", errors: parsed.errors });
+      }
+      const db = getDb();
+      const results: {
+        line: number;
+        email: string;
+        status: "sent" | "created" | "skipped";
+        reason?: string;
+        link?: string;
+      }[] = [];
+      for (const r of parsed.rows) {
+        const live = (await db.select().from(invites).where(eq(invites.email, r.email))).some(
+          (i) => inviteState(i) === "pending"
+        );
+        if (live) {
+          results.push({ line: r.line, email: r.email, status: "skipped", reason: "already invited — use Resend on the list below" });
+          continue;
+        }
+        const made = await createInvite(app, {
+          email: r.email,
+          name: r.name,
+          orgName: r.company,
+          creditsGranted: r.pagesIncluded,
+          note: r.note,
+          invitedBy: req.user!,
+        });
+        if ("error" in made) {
+          results.push({ line: r.line, email: r.email, status: "skipped", reason: made.error });
+          continue;
+        }
+        results.push({
+          line: r.line,
+          email: r.email,
+          status: made.sent ? "sent" : "created",
+          link: made.link,
+        });
+      }
+      req.log.info(
+        { rows: parsed.rows.length, sent: results.filter((x) => x.status === "sent").length },
+        "invite csv imported"
+      );
+      return { emailConfigured: emailConfigured(), results, errors: parsed.errors };
     });
 
     // A new token: the old link stops working, the new one is emailed (and
