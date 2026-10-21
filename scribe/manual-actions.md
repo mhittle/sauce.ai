@@ -10,6 +10,9 @@ real secret *values* here — document var names only.
 
 ## Open
 
+> **2026-10-21:** MA-013 now uses SMTP (Gmail) — four variables + `EMAIL_FROM`
+> on `scribe-api`; see the entry.
+
 > **2026-10-20:** MA-017 steps 1–3 done in a Stripe **sandbox** and verified
 > with a 25-page test purchase. Still open: going live (step 6) with live keys.
 
@@ -91,25 +94,31 @@ admin** on ridadarwish12@gmail.com (also set Role = Admin). Verify with
 Rida sees only the CabinetNow org's jobs (which is everything today) and no
 Admin tab.
 
-### MA-013 — Resend account, sending domain, DNS, `RESEND_API_KEY` on `scribe-api` (PR A, invites)
-Until done, Admin → Users → "Send invite" creates the invite and shows the
-link to copy; nothing is emailed (the API logs `email not configured`).
-1. https://resend.com → create the account → Domains → Add domain. Use a
-   subdomain of the product domain (e.g. `mail.<domain>`) — `up.railway.app`
-   cannot send mail, so this needs the real domain (accounts-plan.md §1.6).
-2. At the DNS host add exactly the records Resend lists: the DKIM
-   (`resend._domainkey.mail.<domain>` TXT), the SPF (`send.mail.<domain>`
-   TXT `v=spf1 include:amazonses.com ~all`) and its MX
-   (`feedback-smtp.<region>.amazonses.com`, priority 10). Add DMARC:
-   `_dmarc.mail.<domain>` TXT `v=DMARC1; p=none; rua=mailto:dmarc@<domain>`
-   (tighten to `p=quarantine` after a clean week).
-3. Wait for the domain to show **Verified** in Resend; send the dashboard
-   test email.
-4. Resend → API Keys → create a "sending" key. Railway → `scribe-api` →
-   Variables: `RESEND_API_KEY=<key>`, `EMAIL_FROM=Scribe <no-reply@mail.<domain>>`,
-   `EMAIL_REPLY_TO=<a real inbox>`. Redeploy the api.
-5. Verify: Admin → Users → invite your own address → the email arrives; the
-   invites table shows "Emailed to …".
+### MA-013 — Email: SMTP variables on `scribe-api` (was: Resend; SMTP added 2026-10-21)
+Until done, invites (single and CSV), sign-in links and purchase receipts
+are created but only logged (`email not configured`); Admin › Users shows
+the links to copy. SMTP wins when `SMTP_HOST` is set; Resend still works if
+its key is set instead.
+1. Owner's choice (2026-10-21): send from **ridadarwish12@gmail.com** via
+   Gmail. The password must be a Google **app password** (Google Account ›
+   Security › 2-Step Verification on › App passwords › create "Scribe"),
+   not the account password.
+2. Railway → `scribe-api` → Variables (the owner enters these; never paste
+   the password in chat):
+   - `SMTP_HOST` = `smtp.gmail.com`
+   - `SMTP_PORT` = `465`
+   - `SMTP_USER` = `ridadarwish12@gmail.com`
+   - `SMTP_PASS` = the app password
+   - `EMAIL_FROM` = `Scribe <ridadarwish12@gmail.com>` (Gmail rewrites any
+     other From to the account address)
+   Deploy; the api restarts with the new variables.
+3. Verify: Admin › Users → the "Email is not set up" warning is gone →
+   invite your own second address → it arrives ("Test invitation to Scribe").
+   If it doesn't, Railway logs `email send failed (smtp)` with the SMTP
+   code (e.g. 535 = wrong app password; ETIMEDOUT/ECONNREFUSED = outbound
+   SMTP blocked on the plan — try `SMTP_PORT=587`).
+4. Later: a product domain + a provider with SPF/DKIM (Workspace, Resend,
+   SES) for deliverability; Gmail caps sending at ~500/day.
 
 ### MA-012 — (No action to enable; rollback knob only) Staged reads default
 PR #247 makes the staged pipeline the default for PDF takeoffs — nothing to

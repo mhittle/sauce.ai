@@ -234,10 +234,17 @@ importers:
         version: 3.2.6(@types/node@22.19.20)(jiti@2.7.0)(lightningcss@1.32.0)
 
   packages/email:
+    dependencies:
+      nodemailer:
+        specifier: ^6.10.1
+        version: 6.10.1
     devDependencies:
       '@types/node':
         specifier: ^22.19.20
         version: 22.19.20
+      '@types/nodemailer':
+        specifier: ^6.4.24
+        version: 6.4.24
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -1308,6 +1315,9 @@ packages:
   '@types/node@22.19.20':
     resolution: {integrity: sha512-6tELRwSDYWW9EdZhbeZmYGZ1/7Djkt+Ah3/ScEYT9cDord7UJzasR/4D3VONg9tQI5CDp+/CZC1AXj2pCFOvpw==}
 
+  '@types/nodemailer@6.4.24':
+    resolution: {integrity: sha512-Ww4u0rT9wQNXh4JiQaIwx3QWdcOFXzOjQA2zc+jtFYNmQiT4mIUqcDin51bDFdkzKubFnQCZNK7FIHlPKQ/q9w==}
+
   '@types/pdfkit@0.13.9':
     resolution: {integrity: sha512-RDG8Yb1zT7I01FfpwK7nMSA433XWpblMqSCtA5vJlSyavWZb303HUYPCel6JTiDDFqwGLvtAnYbH8N/e0Cb89g==}
 
@@ -2049,6 +2059,10 @@ packages:
   node-releases@2.0.47:
     resolution: {integrity: sha512-Uzmd6LXpouKo8EUK68IjH4+E01w/hXyV3R3g/geCJo+rXLNfh1xucB+LOzYEOQPSiUK3h/xZf0cQGcSsmyL2Og==}
     engines: {node: '>=18'}
+
+  nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
 
   object-inspect@1.13.4:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
@@ -3499,6 +3513,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@6.4.24':
+    dependencies:
+      '@types/node': 22.19.20
+
   '@types/pdfkit@0.13.9':
     dependencies:
       '@types/node': 22.19.20
@@ -4187,6 +4205,8 @@ snapshots:
     optional: true
 
   node-releases@2.0.47: {}
+
+  nodemailer@6.10.1: {}
 
   object-inspect@1.13.4: {}
 

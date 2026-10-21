@@ -73,8 +73,9 @@ full list):
 - **api:** `DATABASE_URL`, `REDIS_URL`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`,
   `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS`, `API_PUBLIC_URL`,
-  `WEB_PUBLIC_URL`, `NODE_ENV=production`; email (invites): `RESEND_API_KEY`,
-  `EMAIL_FROM`, `EMAIL_REPLY_TO` (optional) — without the key, invites are
+  `WEB_PUBLIC_URL`, `NODE_ENV=production`; email (invites, sign-in links, receipts): SMTP
+  `SMTP_HOST`, `SMTP_PORT` (465/587), `SMTP_USER`, `SMTP_PASS` — or Resend
+  `RESEND_API_KEY` — plus `EMAIL_FROM`, `EMAIL_REPLY_TO` (optional); with neither, invites are
   created but not sent and the admin copies the link; sign-up: `TERMS_URL`,
   `PRIVACY_URL`, `TERMS_VERSION` (links under the sign-up form); billing
   (page packs): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — without both,

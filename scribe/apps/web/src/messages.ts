@@ -283,3 +283,35 @@ export const QUOTE_REBUILT = "New quote built with the current rates";
 export const SIZE_LIMITS_TITLE = "Size limits (inches)";
 export const SIZE_LIMITS_HINT =
   "Leave blank for no limit. A cabinet outside a limit isn't priced on this product — the takeoff and quote say why.";
+
+// --- Admin › Users: invites by CSV ---
+
+export const INVITE_IMPORT_HINT =
+  "One person per row: email (required), name, company, pages_included, note. Download the template to start. You'll see who is in the file before anything is sent.";
+
+export const EMAIL_NOT_CONFIGURED =
+  "Email is not set up on the API (SMTP_HOST / SMTP_USER / SMTP_PASS / EMAIL_FROM), so invites are not sent — copy each link after creating it.";
+
+export const INVITE_STATUS_LABEL: Record<"sent" | "created" | "skipped", string> = {
+  sent: "Invite emailed",
+  created: "Invite created — email not set up, copy the link",
+  skipped: "Skipped",
+};
+
+export function importPreviewLine(n: number): string {
+  return n === 0 ? "no one to invite in this file." : `${n} ${n === 1 ? "person" : "people"} to invite.`;
+}
+
+export function importErrorsLine(n: number): string {
+  return `${n} row${n === 1 ? "" : "s"} can't be used and will be left out:`;
+}
+
+export function importResultLine(results: { status: "sent" | "created" | "skipped" }[]): string {
+  const c = (s: string) => results.filter((r) => r.status === s).length;
+  const parts = [
+    c("sent") ? `${c("sent")} emailed` : "",
+    c("created") ? `${c("created")} created (copy links)` : "",
+    c("skipped") ? `${c("skipped")} skipped` : "",
+  ].filter(Boolean);
+  return `Invites: ${parts.join(", ") || "none"}`;
+}

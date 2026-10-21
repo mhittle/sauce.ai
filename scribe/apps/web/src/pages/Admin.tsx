@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { SIZE_LIMITS_HINT, SIZE_LIMITS_TITLE } from "../messages";
+import { EMAIL_NOT_CONFIGURED, SIZE_LIMITS_HINT, SIZE_LIMITS_TITLE } from "../messages";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { adminRoute } from "../main";
 import { apiGet, apiSend, apiUpload, formatUsd } from "../api";
 import { Usage } from "./AdminUsage";
+import { InviteImport } from "./AdminInviteImport";
 import { Credits } from "./AdminCredits";
 import {
   Badge,
@@ -916,11 +917,7 @@ function Invites() {
             Send invite
           </Button>
         </form>
-        {q.data && !q.data.emailConfigured && (
-          <p className="text-xs text-warn">
-            Email is not configured on the API (RESEND_API_KEY / EMAIL_FROM), so invites are not sent — copy the link after creating one.
-          </p>
-        )}
+        {q.data && !q.data.emailConfigured && <p className="text-xs text-warn">{EMAIL_NOT_CONFIGURED}</p>}
         {lastLink && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-rule bg-rule-soft px-3 py-2 text-xs">
             <span className="text-muted">
@@ -941,6 +938,7 @@ function Invites() {
           </div>
         )}
       </Card>
+      <InviteImport />
       <Card className="p-0">
         <div className="flex items-center justify-between px-4 py-2">
           <SectionLabel>Invites</SectionLabel>

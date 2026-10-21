@@ -15,6 +15,11 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Invitation wording — placeholder while the owner writes the real copy
+// (2026-10-21). Edit these two lines; the link, expiry and sign-off stay.
+export const INVITE_SUBJECT = "Test invitation to Scribe";
+export const INVITE_INTRO = "This is a test invitation to Scribe.";
+
 export function inviteEmail(input: InviteEmailInput): {
   to: string;
   subject: string;
@@ -30,11 +35,11 @@ export function inviteEmail(input: InviteEmailInput): {
     input.creditsGranted > 0
       ? ` Your account starts with ${input.creditsGranted} pages of reading included.`
       : "";
-  const subject = `${input.inviterName} invited you to Scribe`;
+  const subject = INVITE_SUBJECT;
   const text = [
     greeting,
     "",
-    `${input.inviterName} has invited you to Scribe, the cabinet takeoff tool: upload a plan set, mark the cabinet areas, and get a priced takeoff to review.${credits}`,
+    `${INVITE_INTRO}${credits}`,
     "",
     "Create your account here:",
     input.link,
@@ -45,7 +50,7 @@ export function inviteEmail(input: InviteEmailInput): {
   ].join("\n");
   const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;max-width:520px;margin:0 auto;padding:24px">
 <p>${escapeHtml(greeting)}</p>
-<p>${escapeHtml(input.inviterName)} has invited you to <strong>Scribe</strong>, the cabinet takeoff tool: upload a plan set, mark the cabinet areas, and get a priced takeoff to review.${escapeHtml(credits)}</p>
+<p>${escapeHtml(INVITE_INTRO)}${escapeHtml(credits)}</p>
 <p style="margin:28px 0"><a href="${escapeHtml(input.link)}" style="background:#1a1a1a;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block">Create your account</a></p>
 <p style="font-size:13px;color:#666">Or paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#666">${escapeHtml(input.link)}</a></p>
 <p style="font-size:13px;color:#666">This link is for ${escapeHtml(input.to)} only and expires in ${days} day${days === 1 ? "" : "s"}.</p>
