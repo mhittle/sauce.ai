@@ -139,6 +139,18 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-10-22 — redeploy trigger (Railway deploys were paused)
+
+#330 (SMTP + CSV invites) merged 2026-10-21 but never deployed: Railway's
+`scribe api` page showed "Limited Access — Deploys have been paused
+temporarily" and prod stayed on #329; the owner's new `SMTP_*` variables
+were staged but not live either. This docs-only PR exists to give Railway a
+fresh `main` commit under `scribe/` to build once deploys are allowed again.
+Verify after it lands: `/admin/invites/import` answers 400/401 (not 404),
+Admin › Users shows "Invite from a CSV", and `emailConfigured` is true.
+
+---
+
 ## 2026-10-21 — SMTP email (nodemailer) + invites by CSV; placeholder invite copy
 
 **Owner asks.** Send email through SMTP (Gmail, ridadarwish12@gmail.com)
