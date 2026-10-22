@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { SendQuoteDialog } from "../components/SendQuoteDialog";
 import {
   friendlyPriceIssue,
+  QUOTE_SENT,
+  QUOTE_SENT_MANUAL,
+  quoteEmailDefaults,
   QUOTE_OLD_RATES,
   QUOTE_PLACEHOLDER_ADMIN,
   QUOTE_PLACEHOLDER_MEMBER,
@@ -55,6 +59,8 @@ interface QuoteDetail {
   createdAt: string;
   pricing_config_version: number;
   newer_rates?: boolean;
+  email_configured?: boolean;
+  sender_email?: string;
   pricing: {
     priced: {
       takeoff_line_id: string;
@@ -99,7 +105,7 @@ interface QuoteDetail {
 }
 
 const TIER_HINT: Record<TierName, string> = {
-  low: "Shaker doors at the real CabinetNow rate",
+  low: "Shaker doors at the standard rate",
   medium: "Estimated mid-range door styles",
   high: "Estimated premium door styles",
 };
@@ -144,20 +150,20 @@ export function QuoteBuilderPage() {
     onError: (e) => toast.error("PDF not generated", errorMessage(e)),
   });
 
-  // Send: the server enforces the gates (freight confirmed, no placeholder
-  // rates, nothing unpriced). On success, open a drafted email — attaching
-  // the PDF stays manual until the email provider lands (Stage 2).
-  const send = useMutation({
+  // Send: the server emails the quote with the PDF attached (SendQuoteDialog)
+  // and enforces the gates (freight confirmed, no placeholder rates, nothing
+  // unpriced). Without server email: mark sent, open the PDF to save and a
+  // drafted email to attach it to by hand.
+  const [sendOpen, setSendOpen] = useState(false);
+  const sendManually = useMutation({
     mutationFn: () => apiSend("PATCH", `/quotes/${quoteId}`, { status: "sent" }),
     onSuccess: () => {
       invalidate();
-      toast.success("Quote marked as sent", "Attach the PDF to the email that just opened.");
+      toast.success(QUOTE_SENT_MANUAL);
       const quote = q.data!;
-      window.location.href = `mailto:?subject=${encodeURIComponent(
-        `CabinetNow quote — ${quote.name ?? quote.sourceFilename ?? quoteRef(quote.id)}`
-      )}&body=${encodeURIComponent(
-        "Quote attached. Please verify all measurements and quantities. Pricing valid 10 days."
-      )}`;
+      const { subject, message } = quoteEmailDefaults(quote.name ?? quote.sourceFilename ?? quoteRef(quote.id));
+      generatePdf.mutate();
+      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
     },
     onError: (e) => toast.error("Couldn't send", errorMessage(e)),
   });
@@ -440,7 +446,7 @@ export function QuoteBuilderPage() {
             )}
             <p className="px-4 py-2 text-xs text-faint">
               The line items above are the itemized audit; the price levels use the
-              CabinetNow box + door/front + drawer-box model. Glides, shelf pins and
+              box + door/front + drawer-box model. Glides, shelf pins and
               toe kick are not yet included.
             </p>
           </Card>
@@ -565,16 +571,28 @@ export function QuoteBuilderPage() {
           {!locked && (
             <Button
               variant="primary"
-              loading={send.isPending}
+              loading={sendManually.isPending}
               disabled={blockers.length > 0}
               title={blockers.length > 0 ? blockers.join(" · ") : undefined}
-              onClick={() => send.mutate()}
+              onClick={() => (quote.email_configured ? setSendOpen(true) : sendManually.mutate())}
             >
               Send quote
             </Button>
           )}
         </div>
       </div>
+      <SendQuoteDialog
+        open={sendOpen}
+        quoteId={quote.id}
+        quoteName={quote.name ?? quote.sourceFilename ?? quoteRef(quote.id)}
+        senderEmail={quote.sender_email ?? null}
+        onClose={() => setSendOpen(false)}
+        onSent={() => {
+          setSendOpen(false);
+          invalidate();
+          toast.success(QUOTE_SENT);
+        }}
+      />
     </div>
   );
 }

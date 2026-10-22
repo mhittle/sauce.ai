@@ -137,7 +137,7 @@ export async function seed(): Promise<void> {
         "- Pricing is valid for 10 days from the quote date.",
         "- Freight is estimated and confirmed at order time.",
       ].join("\n"),
-      "CabinetNow.com — custom cabinet products, shipped nationwide.",
+      "",
       JSON.stringify({
         pallet_width_in: 48,
         pallet_depth_in: 40,

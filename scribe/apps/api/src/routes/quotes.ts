@@ -19,6 +19,7 @@ import {
 } from "../lib/settings.js";
 import { runPricing, type DbLine } from "../lib/pricing-run.js";
 import { renderQuotePdf } from "../lib/quote-pdf.js";
+import { emailConfigured, quoteEmail, sendEmail } from "@scribe/email";
 import { quoteInOrg, takeoffInOrg } from "../lib/scope.js";
 
 const QuotePatch = z.object({
@@ -70,6 +71,179 @@ function tierTotals(
     subtotalCents,
     totalCents: subtotalCents + markupCents + handlingCents + freightCents,
   };
+}
+
+// Send gates (PRD §6.5, §12): freight must be verified; no NEEDS REVIEW rates
+// and nothing unpriced may reach a customer. Null = sendable.
+async function sendBlocker(
+  run: Awaited<ReturnType<typeof runPricing>>,
+  quote: typeof quotes.$inferSelect
+): Promise<string | null> {
+  if (run.freight_verification_required && !quote.freightVerified) {
+    return "freight must be verified before this quote can be sent";
+  }
+  if (run.totals.any_needs_review) {
+    const latest = await loadLatestPricingConfig();
+    return latest.id !== quote.pricingConfigId
+      ? "quote was built on an older price list with placeholder rates — build a new quote from the takeoff to use the current rates"
+      : "quote prices against NEEDS REVIEW rates — an admin must enter real rates first";
+  }
+  if (run.unpriced.length > 0) {
+    return `${run.unpriced.length} line(s) are unpriced — resolve or remove them first`;
+  }
+  return null;
+}
+
+// Render the customer PDF for a quote (its persisted tier unless `tierQuery`
+// overrides) and store it; shared by Download PDF and Send quote.
+async function storeQuotePdf(
+  quote: typeof quotes.$inferSelect,
+  orgId: string,
+  tierQuery?: string,
+  opts: { storeBestEffort?: boolean } = {}
+): Promise<{ key: string | null; pdf: Buffer; filename: string }> {
+  const db = getDb();
+  const req = { orgId, query: { tier: tierQuery } };
+  const settings = await loadOrgSettings();
+  const config = await loadPricingConfigById(quote.pricingConfigId);
+  const lines = await loadQuoteLines(quote.takeoffId);
+  const run = await runPricing(lines, config.snapshot, settings, {
+    markup_pct: quote.markupPct,
+    handling_cents: quote.handlingCents,
+    freight_override_cents: quote.freightCents,
+  });
+
+  let customerCompany: string | null = null;
+  if (quote.customerId) {
+    const c = await db
+  .select()
+  .from(customers)
+  .where(and(eq(customers.id, quote.customerId), eq(customers.orgId, req.orgId)));
+    customerCompany = c[0]?.company ?? null;
+  }
+
+  // The tenant's own logo when they set one, else the platform logo.
+  const [org] = await db.select({ logoS3Key: orgs.logoS3Key, name: orgs.name }).from(orgs).where(eq(orgs.id, req.orgId));
+  const logoKey = org?.logoS3Key ?? settings.logoS3Key;
+  let logo: Buffer | null = null;
+  if (logoKey) {
+    try {
+  logo = await getObject(logoKey);
+    } catch {
+  logo = null;
+    }
+  }
+
+  // Price the customer-facing list with the same tier model the web Quote
+  // Builder shows (boxes + doors/fronts + one rolled-up hardware line).
+  // Defaults to the quote's persisted tier; ?tier= still overrides.
+  const tier: TierName =
+    req.query.tier === "low" ||
+    req.query.tier === "medium" ||
+    req.query.tier === "high"
+  ? req.query.tier
+  : (quote.pricingTier as TierName);
+  const itemized = priceQuoteLineItems(
+    lines.map((l) => ({
+  category: l.category,
+  width_in: l.widthIn,
+  height_in: l.heightIn,
+  depth_in: l.depthIn,
+  qty: l.qty,
+  tag: l.tag,
+  room: l.room,
+  material: l.material,
+  finish: l.finish,
+    })),
+    tier
+  );
+
+  const KIND_LABEL: Record<string, string> = {
+    box: "Cabinet box",
+    door: "Door",
+    drawer_front: "Drawer front",
+    hardware: "Hardware",
+  };
+  const HARDWARE_ROOM = "Hardware & Accessories";
+  const displayLines = itemized.items.map((it) => {
+    if (it.kind === "hardware") {
+  return {
+    tag: "Hardware",
+    room: HARDWARE_ROOM,
+    description: `Dovetail drawer boxes — ${it.qty} pc, soft-close ready`,
+    qty: it.qty,
+    unit_cents: it.unit_cents,
+    total_cents: it.total_cents,
+  };
+    }
+    const s = it.source as unknown as {
+  width_in: number | null;
+  height_in: number | null;
+  depth_in?: number | null;
+  tag: string | null;
+  room: string | null;
+  material: string | null;
+  finish: string | null;
+    };
+    const dims = [s.width_in, s.height_in, s.depth_in]
+  .map((d) => (d == null ? "—" : `${d}"`))
+  .join(" × ");
+    const matFinish = [s.material, s.finish].filter(Boolean).join(" ");
+    return {
+  tag: s.tag,
+  room: s.room,
+  description: `${KIND_LABEL[it.kind]} ${dims}${matFinish ? ` · ${matFinish}` : ""}`.trim(),
+  qty: it.qty,
+  unit_cents: it.unit_cents,
+  total_cents: it.total_cents,
+    };
+  });
+  // Group by room (stable), hardware last.
+  const roomKey = (l: { room: string | null }) =>
+    l.room === HARDWARE_ROOM ? "￿" : l.room ?? "Other";
+  displayLines.sort((a, b) => roomKey(a).localeCompare(roomKey(b)));
+
+  const subtotalCents = itemized.subtotal_cents;
+  const markupCents = Math.round((subtotalCents * quote.markupPct) / 100);
+  const freightCents = run.totals.freight_cents;
+  const totalCents =
+    subtotalCents + markupCents + quote.handlingCents + freightCents;
+
+  const pdf = await renderQuotePdf({
+    quote_number: quote.id.slice(0, 8).toUpperCase(),
+    created_at: quote.createdAt,
+    valid_until: quote.validUntil ? new Date(quote.validUntil) : null,
+    org_name: org?.name ?? null,
+    quote_name: quote.name ?? null,
+    customer_company: customerCompany,
+    tier_label: itemized.tier_label,
+    lines: displayLines,
+    subtotal_cents: subtotalCents,
+    markup_cents: markupCents,
+    handling_cents: quote.handlingCents,
+    freight_cents: freightCents,
+    freight_pallets: quote.freightPallets,
+    total_cents: totalCents,
+    max_lead_time_days: quote.maxLeadTimeDays,
+    settings,
+    logo,
+  });
+
+  const filed = `quotes/${quote.id}/quote.pdf`;
+  let key: string | null = filed;
+  try {
+    await putObject(filed, pdf, "application/pdf");
+    await db
+      .update(quotes)
+      .set({ pdfS3Key: filed, updatedAt: new Date() })
+      .where(eq(quotes.id, quote.id));
+  } catch (err) {
+    // Emailing the quote doesn't need the stored copy; downloading does.
+    if (!opts.storeBestEffort) throw err;
+    key = null;
+  }
+  const base = (quote.name ?? `quote-${quote.id.slice(0, 8)}`).replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+  return { key, pdf, filename: `${base || "quote"}.pdf` };
 }
 
 export async function quoteRoutes(app: FastifyInstance): Promise<void> {
@@ -209,6 +383,9 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       // A quote keeps the price list it was built with; when rates have been
       // saved since, the way forward is a new quote, not Admin › Pricing.
       newer_rates: latest.version > config.version,
+      // Send dialog: can the server email it, and who it comes from.
+      email_configured: emailConfigured(),
+      sender_email: req.user!.email,
       quote_tiers: quoteTiers,
     };
   });
@@ -243,28 +420,9 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       run.totals.freight_cents
     );
 
-    // Send gates (PRD §6.5, §12): freight must be verified; no NEEDS REVIEW
-    // rates may reach a customer.
     if (patch.status === "sent") {
-      if (run.freight_verification_required && !quote.freightVerified) {
-        return reply.code(409).send({
-          error: "freight must be verified before this quote can be sent",
-        });
-      }
-      if (run.totals.any_needs_review) {
-        const latest = await loadLatestPricingConfig();
-        return reply.code(409).send({
-          error:
-            latest.id !== quote.pricingConfigId
-              ? "quote was built on an older price list with placeholder rates — build a new quote from the takeoff to use the current rates"
-              : "quote prices against NEEDS REVIEW rates — an admin must enter real rates first",
-        });
-      }
-      if (run.unpriced.length > 0) {
-        return reply.code(409).send({
-          error: `${run.unpriced.length} line(s) are unpriced — resolve or remove them first`,
-        });
-      }
+      const blocked = await sendBlocker(run, quote);
+      if (blocked) return reply.code(409).send({ error: blocked });
     }
 
     const [updated] = await db
@@ -318,141 +476,79 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
         .from(quotes)
         .where(quoteInOrg(req.orgId, req.params.id));
       if (rows.length === 0) return reply.code(404).send({ error: "not found" });
-      const quote = rows[0];
-
-      const settings = await loadOrgSettings();
-      const config = await loadPricingConfigById(quote.pricingConfigId);
-      const lines = await loadQuoteLines(quote.takeoffId);
-      const run = await runPricing(lines, config.snapshot, settings, {
-        markup_pct: quote.markupPct,
-        handling_cents: quote.handlingCents,
-        freight_override_cents: quote.freightCents,
-      });
-
-      let customerCompany: string | null = null;
-      if (quote.customerId) {
-        const c = await db
-          .select()
-          .from(customers)
-          .where(and(eq(customers.id, quote.customerId), eq(customers.orgId, req.orgId)));
-        customerCompany = c[0]?.company ?? null;
-      }
-
-      // The tenant's own logo when they set one, else the platform logo.
-      const [org] = await db.select({ logoS3Key: orgs.logoS3Key }).from(orgs).where(eq(orgs.id, req.orgId));
-      const logoKey = org?.logoS3Key ?? settings.logoS3Key;
-      let logo: Buffer | null = null;
-      if (logoKey) {
-        try {
-          logo = await getObject(logoKey);
-        } catch {
-          logo = null;
-        }
-      }
-
-      // Price the customer-facing list with the same tier model the web Quote
-      // Builder shows (boxes + doors/fronts + one rolled-up hardware line).
-      // Defaults to the quote's persisted tier; ?tier= still overrides.
-      const tier: TierName =
-        req.query.tier === "low" ||
-        req.query.tier === "medium" ||
-        req.query.tier === "high"
-          ? req.query.tier
-          : (quote.pricingTier as TierName);
-      const itemized = priceQuoteLineItems(
-        lines.map((l) => ({
-          category: l.category,
-          width_in: l.widthIn,
-          height_in: l.heightIn,
-          depth_in: l.depthIn,
-          qty: l.qty,
-          tag: l.tag,
-          room: l.room,
-          material: l.material,
-          finish: l.finish,
-        })),
-        tier
-      );
-
-      const KIND_LABEL: Record<string, string> = {
-        box: "Cabinet box",
-        door: "Door",
-        drawer_front: "Drawer front",
-        hardware: "Hardware",
-      };
-      const HARDWARE_ROOM = "Hardware & Accessories";
-      const displayLines = itemized.items.map((it) => {
-        if (it.kind === "hardware") {
-          return {
-            tag: "Hardware",
-            room: HARDWARE_ROOM,
-            description: `Dovetail drawer boxes — ${it.qty} pc, soft-close ready`,
-            qty: it.qty,
-            unit_cents: it.unit_cents,
-            total_cents: it.total_cents,
-          };
-        }
-        const s = it.source as unknown as {
-          width_in: number | null;
-          height_in: number | null;
-          depth_in?: number | null;
-          tag: string | null;
-          room: string | null;
-          material: string | null;
-          finish: string | null;
-        };
-        const dims = [s.width_in, s.height_in, s.depth_in]
-          .map((d) => (d == null ? "—" : `${d}"`))
-          .join(" × ");
-        const matFinish = [s.material, s.finish].filter(Boolean).join(" ");
-        return {
-          tag: s.tag,
-          room: s.room,
-          description: `${KIND_LABEL[it.kind]} ${dims}${matFinish ? ` · ${matFinish}` : ""}`.trim(),
-          qty: it.qty,
-          unit_cents: it.unit_cents,
-          total_cents: it.total_cents,
-        };
-      });
-      // Group by room (stable), hardware last.
-      const roomKey = (l: { room: string | null }) =>
-        l.room === HARDWARE_ROOM ? "￿" : l.room ?? "Other";
-      displayLines.sort((a, b) => roomKey(a).localeCompare(roomKey(b)));
-
-      const subtotalCents = itemized.subtotal_cents;
-      const markupCents = Math.round((subtotalCents * quote.markupPct) / 100);
-      const freightCents = run.totals.freight_cents;
-      const totalCents =
-        subtotalCents + markupCents + quote.handlingCents + freightCents;
-
-      const pdf = await renderQuotePdf({
-        quote_number: quote.id.slice(0, 8).toUpperCase(),
-        created_at: quote.createdAt,
-        valid_until: quote.validUntil ? new Date(quote.validUntil) : null,
-        customer_company: customerCompany,
-        tier_label: itemized.tier_label,
-        lines: displayLines,
-        subtotal_cents: subtotalCents,
-        markup_cents: markupCents,
-        handling_cents: quote.handlingCents,
-        freight_cents: freightCents,
-        freight_pallets: quote.freightPallets,
-        total_cents: totalCents,
-        max_lead_time_days: quote.maxLeadTimeDays,
-        settings,
-        logo,
-      });
-
-      const key = `quotes/${quote.id}/quote.pdf`;
-      await putObject(key, pdf, "application/pdf");
-      await db
-        .update(quotes)
-        .set({ pdfS3Key: key, updatedAt: new Date() })
-        .where(eq(quotes.id, quote.id));
-
-      return { pdf_s3_key: key, url: await signedGetUrl(key, 3600) };
+      const { key } = await storeQuotePdf(rows[0], req.orgId, req.query.tier);
+      return { pdf_s3_key: key, url: await signedGetUrl(key!, 3600) };
     }
   );
+
+  // Email the quote with its PDF attached (owner, 2026-10-22: a mailto link
+  // can't carry an attachment). Same gates as marking it sent; the sender is
+  // the reply-to and gets a copy by default; only a delivered email marks the
+  // quote sent.
+  app.post<{ Params: { id: string } }>("/quotes/:id/send", async (req, reply) => {
+    const parsed = z
+      .object({
+        to: z.array(z.string().trim().toLowerCase().email()).min(1).max(10),
+        subject: z.string().trim().min(1).max(200),
+        message: z.string().trim().max(5000).default(""),
+        copy_me: z.boolean().default(true),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "check the recipient addresses and the subject", code: "bad_request" });
+    }
+    const body = parsed.data;
+    if (!emailConfigured()) {
+      return reply.code(503).send({ error: "email is not configured", code: "email_unconfigured" });
+    }
+    const db = getDb();
+    const rows = await db.select().from(quotes).where(quoteInOrg(req.orgId, req.params.id));
+    if (rows.length === 0) return reply.code(404).send({ error: "not found" });
+    const quote = rows[0];
+    if (["won", "lost", "expired"].includes(quote.status)) {
+      return reply.code(409).send({ error: `quote is ${quote.status}` });
+    }
+    const settings = await loadOrgSettings();
+    const config = await loadPricingConfigById(quote.pricingConfigId);
+    const run = await runPricing(await loadQuoteLines(quote.takeoffId), config.snapshot, settings, {
+      markup_pct: quote.markupPct,
+      handling_cents: quote.handlingCents,
+      freight_override_cents: quote.freightCents,
+    });
+    const blocked = await sendBlocker(run, quote);
+    if (blocked) return reply.code(409).send({ error: blocked });
+
+    const { pdf, filename } = await storeQuotePdf(quote, req.orgId, undefined, { storeBestEffort: true });
+    const [org] = await db.select({ name: orgs.name }).from(orgs).where(eq(orgs.id, req.orgId));
+    const sender = req.user!;
+    const orgName = org?.name ?? "Scribe";
+    const result = await sendEmail(
+      {
+        ...quoteEmail({
+          to: body.to,
+          subject: body.subject,
+          message: body.message,
+          senderName: sender.name ?? sender.email,
+          orgName,
+        }),
+        cc: body.copy_me && !body.to.includes(sender.email.toLowerCase()) ? [sender.email] : undefined,
+        replyTo: sender.email,
+        fromName: orgName,
+        attachments: [{ filename, content: pdf, contentType: "application/pdf" }],
+      },
+      (obj, msg) => req.log.warn(obj, msg)
+    );
+    if (!result.sent) {
+      return reply.code(502).send({ error: `email not sent (${result.reason ?? "unknown"})`, code: "email_failed" });
+    }
+    const [updated] = await db
+      .update(quotes)
+      .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+      .where(quoteInOrg(req.orgId, req.params.id))
+      .returning();
+    req.log.info({ quote: quote.id, to: body.to.length, bytes: pdf.length }, "quote emailed");
+    return { sent: true, to: body.to, status: updated.status, sentAt: updated.sentAt };
+  });
 
   // BigCommerce draft order — optional integration (PRD §7.1).
   app.post<{ Params: { id: string } }>(

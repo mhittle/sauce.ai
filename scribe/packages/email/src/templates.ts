@@ -128,3 +128,33 @@ export function receiptEmail(input: ReceiptEmailInput): {
 <p><a href="${escapeHtml(input.accountLink)}">Your account and page history</a></p>`;
   return { to: input.to, subject, html, text: lines.join("\n") };
 }
+
+export interface QuoteEmailInput {
+  to: string[];
+  subject: string;
+  message: string;
+  senderName: string;
+  orgName: string;
+}
+
+// A quote sent to a customer: the sender's own message, the PDF attached.
+// Plain on purpose — it should read like the estimator's email, not ours.
+export function quoteEmail(input: QuoteEmailInput): {
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const text = `${input.message.trim()}\n\n— ${input.senderName}, ${input.orgName}\n(The quote is attached as a PDF.)`;
+  const paragraphs = input.message
+    .trim()
+    .split(/\n{2,}/)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .join("\n");
+  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#18222e;line-height:1.5;max-width:560px;margin:0 auto;padding:24px">
+${paragraphs}
+<p style="color:#5c6876">— ${escapeHtml(input.senderName)}, ${escapeHtml(input.orgName)}</p>
+<p style="font-size:13px;color:#8b95a1">The quote is attached as a PDF.</p>
+</body></html>`;
+  return { to: input.to, subject: input.subject, html, text };
+}

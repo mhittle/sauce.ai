@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { inviteEmail, receiptEmail } from "./templates.js";
-import { smtpOptions } from "./index.js";
+import { inviteEmail, quoteEmail, receiptEmail } from "./templates.js";
+import { fromHeader, smtpOptions } from "./index.js";
 
 describe("inviteEmail", () => {
   const base = {
@@ -46,5 +46,23 @@ describe("smtpOptions", () => {
     expect(smtpOptions({ SMTP_HOST: "smtp.gmail.com", SMTP_PORT: "465", SMTP_USER: "u", SMTP_PASS: "p" })).toMatchObject({ port: 465, secure: true, auth: { user: "u" } });
     expect(smtpOptions({ SMTP_HOST: "h" }).port).toBe(587);
     expect(smtpOptions({ SMTP_HOST: "h", SMTP_PORT: "587" }).secure).toBe(false);
+  });
+});
+
+describe("quoteEmail", () => {
+  it("keeps the sender's message, signs it, notes the attachment, escapes html", () => {
+    const m = quoteEmail({ to: ["a@b.co"], subject: "Quote — Kitchen", message: "Hi <Pat>,\n\nAttached.", senderName: "Rida", orgName: "Acme" });
+    expect(m.text).toContain("Hi <Pat>,\n\nAttached.");
+    expect(m.text).toContain("— Rida, Acme");
+    expect(m.html).toContain("Hi &lt;Pat&gt;,");
+    expect(m.html).toContain("attached as a PDF");
+  });
+});
+
+describe("fromHeader", () => {
+  it("swaps the display name but never the address", () => {
+    expect(fromHeader("Scribe <x@gmail.com>", "Pat's Cabinets")).toBe(`"Pat's Cabinets" <x@gmail.com>`);
+    expect(fromHeader("x@gmail.com", 'Bad "name" <y@z>')).toBe(`"Bad name y@z" <x@gmail.com>`);
+    expect(fromHeader("Scribe <x@gmail.com>")).toBe("Scribe <x@gmail.com>");
   });
 });

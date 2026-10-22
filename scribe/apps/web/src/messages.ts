@@ -315,3 +315,29 @@ export function importResultLine(results: { status: "sent" | "created" | "skippe
   ].filter(Boolean);
   return `Invites: ${parts.join(", ") || "none"}`;
 }
+
+// --- Send quote by email (PDF attached) ---
+
+export function quoteEmailDefaults(quoteName: string): { subject: string; message: string } {
+  return {
+    subject: `Quote — ${quoteName}`,
+    message: `Hi,\n\nPlease find our quote for ${quoteName} attached.\n\nPlease verify all measurements and quantities before ordering. Pricing is valid for 10 days.\n\nThank you,`,
+  };
+}
+
+export const SEND_QUOTE_HINT =
+  "The quote PDF is attached automatically. Replies come to you, and the quote is marked as sent once the email goes out.";
+
+export const QUOTE_SENT = "Quote emailed with the PDF attached";
+
+// Plain words for a refused send; null = show the server's text.
+export function quoteSendErrorText(err: unknown): string | null {
+  const status = (err as { status?: number })?.status;
+  if (status === 503) return "Email isn't set up on the server yet, so the quote can't be emailed from here.";
+  if (status === 502) return "The email didn't go out. Check the address and try again in a moment.";
+  return null;
+}
+
+// Fallback when the server can't send email: the PDF opens to save and the
+// email app opens with a draft — attach the PDF by hand.
+export const QUOTE_SENT_MANUAL = "Quote marked as sent — attach the downloaded PDF to the email that just opened.";

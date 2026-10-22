@@ -1140,7 +1140,7 @@ function Users() {
           </Button>
         </form>
         <p className="text-xs text-faint">
-          Adds a CabinetNow staff account directly (no email); customers arrive through invites above.
+          Adds a staff account to the platform company directly (no email); customers arrive through invites above.
           Platform admins see every org's jobs and this panel.
         </p>
       </Card>
