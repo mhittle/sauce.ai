@@ -139,6 +139,45 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-10-22 (b) — quote emailed with the PDF attached; PDF restyled; CabinetNow text removed
+
+**Owner asks.** (1) Remove CabinetNow text from the product. (2) Make the
+quote PDF match the site. (3) Send quote opened the mail app but didn't
+attach the quote — a `mailto:` link can't carry an attachment.
+
+**Shipped.**
+- **Send quote = server email.** `POST /quotes/:id/send {to[], subject,
+  message, copy_me}`: same gates as marking sent (`sendBlocker`, shared with
+  PATCH), renders the PDF (`storeQuotePdf`, storage best-effort on this
+  path), sends via `packages/email` with the PDF attached, From display =
+  the company name on `EMAIL_FROM`'s address (`fromHeader`), Reply-To = the
+  sender, CC the sender by default; only a delivered email marks the quote
+  sent (502 otherwise). `GET /quotes/:id` adds `email_configured`,
+  `sender_email`. Web `SendQuoteDialog` (To / Subject / Message / "Send me a
+  copy"); without server email it falls back to mark-sent + PDF + mailto.
+  `packages/email`: `attachments`, `cc`, `replyTo`, `fromName` (SMTP and
+  Resend), `quoteEmail` template.
+- **PDF restyle** (`lib/quote-pdf.ts`): the app's fonts embedded (Archivo
+  via `@fontsource/archivo`, IBM Plex Sans via `@fontsource/ibm-plex-sans`,
+  IBM Plex Mono via `@ibm/plex-mono` — fontkit 1.9 can't subset the
+  fontsource Plex Mono), light-theme colours, uppercase mono labels, a job
+  card, totals card, one redline accent, "page n of m" footer; room heading
+  never strands at a page end.
+- **CabinetNow text:** quote tier hint + itemized note, Admin staff hint,
+  mailto subject; seed footer emptied; migration `0021_neutral_quote_footer`
+  clears the seeded "CabinetNow.com — …" footer only if untouched. Code
+  comments and the parked crawler's User-Agent left as is.
+
+**Verified locally.** A throwaway stdlib SMTP sink received the email:
+From = company name, Reply-To + CC = sender, `Send-test-kitchen.pdf` (25 KB)
+attached and rendering in the new style; the quote flipped to sent.
+
+**Owner data to check.** The platform company is still NAMED "CabinetNow"
+(Account › Company) — it prints on that company's quote PDFs and as the
+email From name; and Admin › Branding terms/footer are platform-wide.
+
+---
+
 ## 2026-10-22 — redeploy trigger (Railway deploys were paused)
 
 #330 (SMTP + CSV invites) merged 2026-10-21 but never deployed: Railway's
@@ -307,68 +346,13 @@ way is not re-charged.
 
 ---
 
-## 2026-10-19 — Stripe page packs (#323); Task 0: prod usage is empty
-
-**Task 0 (read prod Usage, 2026-10-19).** Admin → Usage: 0 jobs / $0 since
-2026-10-01 (and all-time). Not a bug: prod has ONE org (CabinetNow) and its
-newest job is 2026-09-14 — nobody has run a job since the ledger shipped.
-Railway (last 7 d): no `usage event insert failed`, no worker activity.
-The kit estimate (4.1¢/page median) is still the only cost evidence; the
-ledger is unproven end-to-end in prod until one real job runs.
-
-**Shipped (#323).** Owner: packs 25 pages $25 · 100 $90 · 500 $400;
-receipts log-only until MA-013. No Stripe SDK: `lib/stripe.ts`
-(`checkoutForm` with inline `price_data`, `createCheckoutSession`,
-`verifyStripeSignature` HMAC + 5-min tolerance); `routes/billing.ts`
-(`POST /billing/checkout` any member, 503 when unconfigured;
-`POST /billing/webhook` in its own raw-body plugin → paid +
-amount == pack price → `writeLedger` `purchase`, external_ref = session id,
-pre-check + 0018 unique index); `receiptEmail`; `PAGE_PACKS` in
-`@scribe/shared`; `/credits` returns `packs` + `billing`; Account → Pages
-buy buttons, `?purchased=1` banner polls until the row lands.
-
-**Verified locally** with signed fake events: credited once, redelivery and
-two simultaneous deliveries → one row, bad signature 400, wrong amount /
-unpaid / other events ignored, receipt logged. NOT exercised: a real Stripe
-round trip (MA-017 step 5).
-
-**Manual:** MA-017 (Stripe account, `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, webhook endpoint; test mode first).
-
-**Open.** Open-hold sweep (before enforcement); one real prod job to prove
-usage + hold/settle; then live keys + enforcement.
-## 2026-10-05 — session wrap-up: usage ledger + credits merged and live; Stripe next
-
-**Context.** Session 2026-10-02→05 from the 2026-09-23 prompt: Task 1 usage
-ledger, report costs, ask pricing, Task 2 credits. Task 3 (Stripe) not
-started — pack prices unconfirmed.
-
-**Shipped (both merged 2026-10-02).** #309 usage ledger (0017, Admin →
-Usage, `scripts/kit-cost.mjs`); #310 credits (0018, $1/page, no minimum,
-first job free, record-only, Admin → Credits). #310 was rebased onto #309
-(conflicts were add/add only; both tabs and both route sets kept).
-
-**Prod verification (2026-10-05).** All #309/#310 files on `origin/main`
-(`git cat-file`); `/health/db` ok; `/admin/usage`, `/credits`,
-`/admin/credits` answer 401 (route exists) — the api boots only after
-migrating, so 0017 + 0018 applied. Live bundle `index-BA6beBJh.js`
-contains "Model cost per job, stage, page", "First job free",
-"Balances, grants, rules". Prod usage numbers NOT yet read (no session in
-the app this time) — Admin → Usage is the first thing to look at next.
-
-**Owner decisions.** $1 per page read; no per-job minimum; first job free
-(any size) replaces the page grant; packs 25 / 100 / 500 pages (prices
-not yet confirmed — proposal $25 / $90 / $400); enforcement stays off until
-Stripe.
-
-**Open.** Stripe (Task 3); open-hold sweep before enforcement; read prod
-Usage vs the kit estimate (4.1¢/page median); MA-006/013/014/015/016 and
-older MA-007/008/009/011 unconfirmed; measurement Option A/B/C; SCR-015;
-SCR-013 live spot-check.
-
----
-
 ## Condensed history
+
+### 2026-10-19 — Stripe page packs (#323); Task 0: prod usage is empty (archived verbatim)
+See engineering-history-archive.md.
+
+### 2026-10-05 — session wrap-up: usage ledger + credits merged and live; Stripe next (archived verbatim)
+See engineering-history-archive.md.
 
 ### 2026-10-02 (b) — credits, step 3b (#310, archived verbatim)
 Migration 0018 `credit_ledger` / `orgs.credit_balance` / `platform_settings`;

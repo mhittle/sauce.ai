@@ -1,10 +1,13 @@
+import { createRequire } from "node:module";
 import PDFDocument from "pdfkit";
 import { formatUsd } from "@scribe/shared";
 import type { OrgSettingsRow } from "./settings.js";
 
-// Server-side branded quote PDF (PRD §7.1). A clean, customer-facing layout:
-// logo/title band, quote meta, room-grouped itemized table with per-row
-// heights (no overlap), and a totals box. Money is rendered from cents.
+// Server-side quote PDF (PRD §7.1), styled like the web app (owner,
+// 2026-10-22): Archivo headings, IBM Plex Sans text, IBM Plex Mono numbers
+// and small uppercase labels, navy ink on white, blue-grey rules, the redline
+// accent used once. Room-grouped itemized table with per-row heights, a
+// totals card, terms, and "page n of m". Money is rendered from cents.
 
 export interface QuotePdfLine {
   tag: string | null;
@@ -19,6 +22,8 @@ export interface QuotePdfInput {
   quote_number: string;
   created_at: Date;
   valid_until: Date | null;
+  org_name?: string | null;
+  quote_name?: string | null;
   customer_company: string | null;
   tier_label: string | null;
   lines: QuotePdfLine[];
@@ -33,176 +38,211 @@ export interface QuotePdfInput {
   logo: Buffer | null;
 }
 
-// Brand palette (CabinetNow maroon) + neutrals.
-const BRAND = "#7a1f1f";
-const INK = "#1f1f1f";
-const MUTED = "#6b6b6b";
-const RULE = "#d9d4d2";
-const ZEBRA = "#f6f4f3";
+// The web app's light theme (apps/web/src/styles.css).
+const C = {
+  ink: "#18222e",
+  muted: "#5c6876",
+  faint: "#8b95a1",
+  rule: "#d4dae1",
+  ruleSoft: "#e7ebef",
+  bg: "#f2f4f6",
+  accent: "#e0522b",
+};
+
+const require = createRequire(import.meta.url);
+const fontFile = (pkg: string, file: string) => require.resolve(`@fontsource/${pkg}/files/${file}`);
+const FONTS = {
+  display: fontFile("archivo", "archivo-latin-700-normal.woff"),
+  displayMedium: fontFile("archivo", "archivo-latin-600-normal.woff"),
+  sans: fontFile("ibm-plex-sans", "ibm-plex-sans-latin-400-normal.woff"),
+  sansMedium: fontFile("ibm-plex-sans", "ibm-plex-sans-latin-500-normal.woff"),
+  sansBold: fontFile("ibm-plex-sans", "ibm-plex-sans-latin-600-normal.woff"),
+  // IBM's own Plex Mono build: fontkit can't subset the fontsource one.
+  mono: require.resolve("@ibm/plex-mono/fonts/complete/woff/IBMPlexMono-Regular.woff"),
+  monoMedium: require.resolve("@ibm/plex-mono/fonts/complete/woff/IBMPlexMono-Medium.woff"),
+};
 
 // LETTER content box: 50 → 562 (width 512).
 const LEFT = 50;
 const RIGHT = 562;
-const PAGE_BOTTOM = 740;
+const WIDTH = RIGHT - LEFT;
+const PAGE_BOTTOM = 730;
 
-// Columns: Item | Description | Qty | Unit | Total (numeric cols right-aligned).
+// Columns: Item | Description | Qty | Unit | Total (numbers right-aligned).
 const COL = {
-  item: { x: 50, w: 92 },
-  desc: { x: 148, w: 268 },
-  qty: { x: 420, w: 34, align: "right" as const },
-  unit: { x: 458, w: 50, align: "right" as const },
-  total: { x: 512, w: 50, align: "right" as const },
+  item: { x: LEFT, w: 104 },
+  desc: { x: 160, w: 228 },
+  qty: { x: 392, w: 36 },
+  unit: { x: 432, w: 60 },
+  total: { x: 496, w: 66 },
 };
+
+const day = (d: Date) => d.toISOString().slice(0, 10);
 
 export function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "LETTER", margin: 50 });
+    const doc = new PDFDocument({ size: "LETTER", margin: 50, bufferPages: true });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
+    for (const [name, path] of Object.entries(FONTS)) doc.registerFont(name, path);
 
-    // ── Header band ──────────────────────────────────────────────────────────
-    let headerBottom = 50;
+    // Small uppercase mono label, the web's "font-mono text-[11px] uppercase".
+    const label = (text: string, x: number, y: number, opts: PDFKit.Mixins.TextOptions = {}) =>
+      doc.font("monoMedium").fontSize(6.5).fillColor(C.muted).text(text.toUpperCase(), x, y, { characterSpacing: 0.8, ...opts });
+
+    // ── Header ───────────────────────────────────────────────────────────────
+    let leftBottom = 50;
+    let drewLogo = false;
     if (input.logo) {
       try {
-        doc.image(input.logo, LEFT, 42, { fit: [170, 56] });
-        headerBottom = 104;
+        doc.image(input.logo, LEFT, 46, { fit: [170, 52] });
+        leftBottom = 102;
+        drewLogo = true;
       } catch {
-        // non-PNG/JPEG logo — fall through to text title
+        // non-PNG/JPEG logo — fall back to the company name
       }
     }
-    // Right-aligned "QUOTE" + meta block.
-    doc.font("Helvetica-Bold").fontSize(22).fillColor(BRAND).text("QUOTE", LEFT, 46, {
-      width: RIGHT - LEFT,
-      align: "right",
+    if (!drewLogo && input.org_name) {
+      doc.font("display").fontSize(16).fillColor(C.ink).text(input.org_name, LEFT, 50, { width: 260 });
+      leftBottom = doc.y + 2;
+    }
+
+    // Right: eyebrow + quote number, like the app's page title.
+    label("Quote", 330, 50, { width: RIGHT - 330, align: "right" });
+    doc.font("display").fontSize(20).fillColor(C.ink).text(`#${input.quote_number}`, 330, 60, { width: RIGHT - 330, align: "right" });
+
+    // Meta row: label over value, mono.
+    const meta: [string, string][] = [["Date", day(input.created_at)]];
+    if (input.valid_until) meta.push(["Valid until", day(input.valid_until)]);
+    if (input.max_lead_time_days != null) meta.push(["Lead time", `up to ${input.max_lead_time_days} days`]);
+    const metaW = 92;
+    meta.forEach(([k, v], i) => {
+      const x = RIGHT - (meta.length - i) * metaW;
+      label(k, x, 90, { width: metaW - 6, align: "right" });
+      doc.font("mono").fontSize(8.5).fillColor(C.ink).text(v, x, 99, { width: metaW - 6, align: "right" });
     });
-    doc.font("Helvetica").fontSize(9).fillColor(MUTED);
-    const meta: string[] = [
-      `Quote #: ${input.quote_number}`,
-      `Date: ${input.created_at.toISOString().slice(0, 10)}`,
-    ];
-    if (input.valid_until) meta.push(`Valid until: ${input.valid_until.toISOString().slice(0, 10)}`);
-    if (input.max_lead_time_days != null) meta.push(`Lead time: up to ${input.max_lead_time_days} days`);
-    doc.text(meta.join("    "), LEFT, 74, { width: RIGHT - LEFT, align: "right" });
 
-    let y = Math.max(headerBottom, 92);
-    // "Prepared for" + tier badge line.
-    doc.font("Helvetica").fontSize(10).fillColor(INK);
-    if (input.customer_company) {
-      doc.text(`Prepared for: ${input.customer_company}`, LEFT, y);
-      y = doc.y + 2;
+    let y = Math.max(leftBottom, 116) + 8;
+    // Prepared for / job / tier — a quiet card.
+    const facts: [string, string][] = [];
+    if (input.customer_company) facts.push(["Prepared for", input.customer_company]);
+    if (input.quote_name) facts.push(["Job", input.quote_name]);
+    if (input.tier_label) facts.push(["Price level", input.tier_label]);
+    if (facts.length > 0) {
+      const cardH = 34;
+      doc.roundedRect(LEFT, y, WIDTH, cardH, 4).fillAndStroke(C.bg, C.rule);
+      const cw = WIDTH / facts.length;
+      facts.forEach(([k, v], i) => {
+        const x = LEFT + 12 + i * cw;
+        label(k, x, y + 7, { width: cw - 20 });
+        doc.font("sansMedium").fontSize(9.5).fillColor(C.ink).text(v, x, y + 17, { width: cw - 20, height: 12, ellipsis: true });
+      });
+      y += cardH + 14;
     }
-    if (input.tier_label) {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor(BRAND).text(`${input.tier_label} estimate`, LEFT, y);
-      y = doc.y + 4;
-    }
+    // The one accent mark: a short redline rule over the table.
+    doc.rect(LEFT, y, 28, 2).fill(C.accent);
+    doc.y = y + 10;
 
-    // Divider under header.
-    doc.moveTo(LEFT, y + 4).lineTo(RIGHT, y + 4).lineWidth(1.5).strokeColor(BRAND).stroke();
-    doc.y = y + 12;
-
-    // ── Table header (repeats on each page) ───────────────────────────────────
+    // ── Table header (repeats on each page) ──────────────────────────────────
     const drawTableHeader = () => {
       const hy = doc.y;
-      doc.rect(LEFT, hy, RIGHT - LEFT, 18).fill(BRAND);
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#ffffff");
-      doc.text("Item", COL.item.x + 4, hy + 5, { width: COL.item.w });
-      doc.text("Description", COL.desc.x, hy + 5, { width: COL.desc.w });
-      doc.text("Qty", COL.qty.x, hy + 5, { width: COL.qty.w, align: COL.qty.align });
-      doc.text("Unit", COL.unit.x, hy + 5, { width: COL.unit.w, align: COL.unit.align });
-      doc.text("Total", COL.total.x, hy + 5, { width: COL.total.w, align: COL.total.align });
-      doc.y = hy + 22;
+      label("Item", COL.item.x, hy, { width: COL.item.w });
+      label("Description", COL.desc.x, hy, { width: COL.desc.w });
+      label("Qty", COL.qty.x, hy, { width: COL.qty.w, align: "right" });
+      label("Unit", COL.unit.x, hy, { width: COL.unit.w, align: "right" });
+      label("Total", COL.total.x, hy, { width: COL.total.w, align: "right" });
+      doc.moveTo(LEFT, hy + 12).lineTo(RIGHT, hy + 12).lineWidth(0.75).strokeColor(C.rule).stroke();
+      doc.y = hy + 18;
     };
     drawTableHeader();
-
-    // ── Itemized rows (room-grouped, per-row height, zebra striping) ──────────
-    let zebra = false;
-    let currentRoom: string | null | undefined = undefined;
 
     const ensureSpace = (rowH: number) => {
       if (doc.y + rowH > PAGE_BOTTOM) {
         doc.addPage();
+        doc.y = 50;
         drawTableHeader();
-        zebra = false;
       }
     };
 
+    // ── Rows (room-grouped, per-row height, soft dividers) ───────────────────
+    let currentRoom: string | null | undefined = undefined;
     for (const line of input.lines) {
-      // Room subheader when the room changes.
       const room = line.room ?? "Other";
       if (room !== currentRoom) {
-        ensureSpace(20);
-        const ry = doc.y;
-        doc.font("Helvetica-Bold").fontSize(9.5).fillColor(BRAND).text(room, COL.item.x, ry + 4);
-        doc.y = ry + 18;
+        // Room heading plus at least one row, so a heading never ends a page.
+        ensureSpace(50);
+        const ry = doc.y + (currentRoom === undefined ? 0 : 6);
+        doc.font("displayMedium").fontSize(9.5).fillColor(C.ink).text(room, COL.item.x, ry);
+        doc.y = ry + 16;
         currentRoom = room;
-        zebra = false;
       }
-
-      doc.font("Helvetica").fontSize(9).fillColor(INK);
-      const itemH = doc.heightOfString(line.tag ?? "—", { width: COL.item.w - 4 });
+      doc.font("sans").fontSize(8.5);
+      const itemH = doc.heightOfString(line.tag ?? "—", { width: COL.item.w - 6 });
       const descH = doc.heightOfString(line.description, { width: COL.desc.w });
-      const rowH = Math.max(itemH, descH, 11) + 7;
+      const rowH = Math.max(itemH, descH, 10) + 8;
       ensureSpace(rowH);
-
       const ry = doc.y;
-      if (zebra) doc.rect(LEFT, ry - 1, RIGHT - LEFT, rowH).fill(ZEBRA);
-      doc.fillColor(INK).font("Helvetica").fontSize(9);
-      doc.text(line.tag ?? "—", COL.item.x + 4, ry + 2, { width: COL.item.w - 4 });
-      doc.text(line.description, COL.desc.x, ry + 2, { width: COL.desc.w });
-      doc.text(String(line.qty), COL.qty.x, ry + 2, { width: COL.qty.w, align: COL.qty.align });
-      doc.text(formatUsd(line.unit_cents), COL.unit.x, ry + 2, { width: COL.unit.w, align: COL.unit.align });
-      doc.fillColor(INK).text(formatUsd(line.total_cents), COL.total.x, ry + 2, {
-        width: COL.total.w,
-        align: COL.total.align,
-      });
+      doc.font("sansMedium").fontSize(8.5).fillColor(C.ink).text(line.tag ?? "—", COL.item.x, ry + 3, { width: COL.item.w - 6 });
+      doc.font("sans").fontSize(8.5).fillColor(C.muted).text(line.description, COL.desc.x, ry + 3, { width: COL.desc.w });
+      doc.font("mono").fontSize(8.5).fillColor(C.ink);
+      doc.text(String(line.qty), COL.qty.x, ry + 3, { width: COL.qty.w, align: "right" });
+      doc.text(formatUsd(line.unit_cents), COL.unit.x, ry + 3, { width: COL.unit.w, align: "right" });
+      doc.font("monoMedium").text(formatUsd(line.total_cents), COL.total.x, ry + 3, { width: COL.total.w, align: "right" });
+      doc.moveTo(LEFT, ry + rowH).lineTo(RIGHT, ry + rowH).lineWidth(0.5).strokeColor(C.ruleSoft).stroke();
       doc.y = ry + rowH;
-      zebra = !zebra;
     }
 
-    // ── Totals box (right-aligned) ────────────────────────────────────────────
-    ensureSpace(120);
-    doc.moveDown(0.5);
-    const boxX = 332;
+    // ── Totals card (right) ──────────────────────────────────────────────────
+    const rows: [string, number][] = [["Subtotal", input.subtotal_cents]];
+    if (input.markup_cents !== 0) rows.push(["Adjustment", input.markup_cents]);
+    if (input.handling_cents !== 0) rows.push(["Handling", input.handling_cents]);
+    rows.push([`Freight (${input.freight_pallets} pallet${input.freight_pallets === 1 ? "" : "s"})`, input.freight_cents]);
+    const cardH = 16 + rows.length * 14 + 34;
+    ensureSpace(cardH + 20);
+    const boxX = 336;
     const boxW = RIGHT - boxX;
-    let ty = doc.y + 4;
-    doc.moveTo(boxX, ty).lineTo(RIGHT, ty).lineWidth(1).strokeColor(RULE).stroke();
-    ty += 6;
+    let ty = doc.y + 14;
+    doc.roundedRect(boxX, ty, boxW, cardH, 4).lineWidth(0.75).strokeColor(C.rule).stroke();
+    let ry = ty + 10;
+    for (const [k, v] of rows) {
+      doc.font("sans").fontSize(8.5).fillColor(C.muted).text(k, boxX + 12, ry, { width: boxW - 100 });
+      doc.font("mono").fontSize(8.5).fillColor(C.ink).text(formatUsd(v), RIGHT - 92, ry, { width: 80, align: "right" });
+      ry += 14;
+    }
+    doc.moveTo(boxX + 12, ry + 2).lineTo(RIGHT - 12, ry + 2).lineWidth(0.5).strokeColor(C.rule).stroke();
+    label("Total", boxX + 12, ry + 12);
+    doc.font("monoMedium").fontSize(14).fillColor(C.ink).text(formatUsd(input.total_cents), RIGHT - 152, ry + 8, { width: 140, align: "right" });
+    doc.y = ty + cardH;
 
-    const totalsRow = (label: string, cents: number, opts: { bold?: boolean; brand?: boolean } = {}) => {
-      doc.font(opts.bold ? "Helvetica-Bold" : "Helvetica").fontSize(opts.bold ? 11 : 9.5);
-      doc.fillColor(opts.brand ? BRAND : opts.bold ? INK : MUTED);
-      doc.text(label, boxX, ty, { width: boxW - 70 });
-      doc.fillColor(opts.brand ? BRAND : INK).text(formatUsd(cents), RIGHT - 70, ty, {
-        width: 70,
-        align: "right",
-      });
-      ty += opts.bold ? 18 : 14;
-    };
-
-    totalsRow("Subtotal", input.subtotal_cents);
-    if (input.markup_cents !== 0) totalsRow("Adjustment", input.markup_cents);
-    if (input.handling_cents !== 0) totalsRow("Handling", input.handling_cents);
-    totalsRow(
-      `Freight (${input.freight_pallets} pallet${input.freight_pallets === 1 ? "" : "s"})`,
-      input.freight_cents
-    );
-    doc.moveTo(boxX, ty + 1).lineTo(RIGHT, ty + 1).lineWidth(1).strokeColor(RULE).stroke();
-    ty += 8;
-    totalsRow("Total", input.total_cents, { bold: true, brand: true });
-
-    // ── Terms + footer ────────────────────────────────────────────────────────
-    doc.y = Math.max(doc.y, ty) + 18;
-    if (doc.y > PAGE_BOTTOM - 60) doc.addPage();
-    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(INK).text("Terms", LEFT, doc.y);
-    doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(input.settings.quoteTermsMd, LEFT, doc.y + 2, {
-      width: RIGHT - LEFT,
-    });
+    // ── Terms + footer ───────────────────────────────────────────────────────
+    doc.y += 22;
+    if (doc.y > PAGE_BOTTOM - 70) {
+      doc.addPage();
+      doc.y = 50;
+    }
+    label("Terms", LEFT, doc.y);
+    doc.font("sans").fontSize(8).fillColor(C.muted).text(input.settings.quoteTermsMd, LEFT, doc.y + 4, { width: WIDTH, lineGap: 1.5 });
     if (input.settings.quoteFooterMd) {
       doc.moveDown(0.8);
-      doc.fillColor("#999").fontSize(7.5).text(input.settings.quoteFooterMd, LEFT, doc.y, {
-        width: RIGHT - LEFT,
+      doc.font("sans").fontSize(7.5).fillColor(C.faint).text(input.settings.quoteFooterMd, LEFT, doc.y, { width: WIDTH });
+    }
+
+    // ── Page footer on every page ────────────────────────────────────────────
+    const range = doc.bufferedPageRange();
+    for (let i = range.start; i < range.start + range.count; i++) {
+      doc.switchToPage(i);
+      // The footer sits in the bottom margin; without this pdfkit would page.
+      doc.page.margins.bottom = 0;
+      doc.moveTo(LEFT, 752).lineTo(RIGHT, 752).lineWidth(0.5).strokeColor(C.ruleSoft).stroke();
+      doc.font("mono").fontSize(6.5).fillColor(C.faint);
+      doc.text(`QUOTE #${input.quote_number}`, LEFT, 757, { width: WIDTH / 2, lineBreak: false, characterSpacing: 0.6 });
+      doc.text(`PAGE ${i - range.start + 1} OF ${range.count}`, LEFT + WIDTH / 2, 757, {
+        width: WIDTH / 2,
+        align: "right",
+        lineBreak: false,
+        characterSpacing: 0.6,
       });
     }
 

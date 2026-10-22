@@ -6,11 +6,31 @@ import nodemailer, { type Transporter } from "nodemailer";
 // an unconfigured prod keep working — the caller gets `sent: false` and can
 // show the link another way. EMAIL_FROM is the sender for both.
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface EmailMessage {
-  to: string;
+  to: string | string[];
+  cc?: string[];
   subject: string;
   html: string;
   text: string;
+  // Replies go here instead of EMAIL_REPLY_TO (a quote's sender).
+  replyTo?: string;
+  // Display name on EMAIL_FROM's address ("Pat's Cabinets via Scribe").
+  fromName?: string;
+  attachments?: EmailAttachment[];
+}
+
+// EMAIL_FROM with its display name swapped; the address never changes (the
+// provider only sends as the configured address).
+export function fromHeader(emailFrom: string, fromName?: string): string {
+  if (!fromName) return emailFrom;
+  const address = emailFrom.match(/<([^>]+)>/)?.[1] ?? emailFrom.trim();
+  return `"${fromName.replace(/["\\<>\r\n]/g, "")}" <${address}>`;
 }
 
 export interface SendResult {
@@ -48,13 +68,16 @@ async function sendSmtp(
 ): Promise<SendResult> {
   transport ??= nodemailer.createTransport(smtpOptions());
   try {
+    const replyTo = msg.replyTo ?? process.env.EMAIL_REPLY_TO;
     const info = await transport.sendMail({
-      from: process.env.EMAIL_FROM,
+      from: fromHeader(process.env.EMAIL_FROM!, msg.fromName),
       to: msg.to,
+      ...(msg.cc?.length ? { cc: msg.cc } : {}),
       subject: msg.subject,
       html: msg.html,
       text: msg.text,
-      ...(process.env.EMAIL_REPLY_TO ? { replyTo: process.env.EMAIL_REPLY_TO } : {}),
+      ...(replyTo ? { replyTo } : {}),
+      ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
     });
     return { sent: true, id: info.messageId };
   } catch (err) {
@@ -82,12 +105,16 @@ export async function sendEmail(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      from,
-      to: [msg.to],
+      from: fromHeader(from, msg.fromName),
+      to: Array.isArray(msg.to) ? msg.to : [msg.to],
+      ...(msg.cc?.length ? { cc: msg.cc } : {}),
       subject: msg.subject,
       html: msg.html,
       text: msg.text,
-      ...(process.env.EMAIL_REPLY_TO ? { reply_to: process.env.EMAIL_REPLY_TO } : {}),
+      ...((msg.replyTo ?? process.env.EMAIL_REPLY_TO) ? { reply_to: msg.replyTo ?? process.env.EMAIL_REPLY_TO } : {}),
+      ...(msg.attachments?.length
+        ? { attachments: msg.attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64") })) }
+        : {}),
     }),
   });
   if (!res.ok) {
@@ -99,5 +126,5 @@ export async function sendEmail(
   return { sent: true, id: data.id };
 }
 
-export { inviteEmail, magicLinkEmail, receiptEmail } from "./templates.js";
-export type { InviteEmailInput, ReceiptEmailInput } from "./templates.js";
+export { inviteEmail, magicLinkEmail, quoteEmail, receiptEmail } from "./templates.js";
+export type { InviteEmailInput, QuoteEmailInput, ReceiptEmailInput } from "./templates.js";

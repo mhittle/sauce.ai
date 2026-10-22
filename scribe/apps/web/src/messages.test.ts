@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint, friendlyPriceIssue, lineSaveErrorText, unpricedLineTitle, QUOTE_OLD_RATES, QUOTE_PLACEHOLDER_ADMIN, importPreviewLine, importResultLine } from "./messages";
+import { friendlyError, friendlyNote, friendlyNotes, creditCostLine, creditsShort, CREDITS_INSUFFICIENT, submitErrorText, customBuyLabel, customHint, friendlyPriceIssue, lineSaveErrorText, unpricedLineTitle, QUOTE_OLD_RATES, QUOTE_PLACEHOLDER_ADMIN, importPreviewLine, importResultLine, quoteEmailDefaults, quoteSendErrorText } from "./messages";
 
 describe("friendlyError", () => {
   it("hides the SQL behind a plain sentence and keeps it as detail", () => {
@@ -165,5 +165,16 @@ describe("invite import copy", () => {
     expect(importPreviewLine(0)).toMatch(/no one/);
     expect(importResultLine([{ status: "sent" }, { status: "sent" }, { status: "skipped" }])).toBe("Invites: 2 emailed, 1 skipped");
     expect(importResultLine([{ status: "created" }])).toBe("Invites: 1 created (copy links)");
+  });
+});
+
+describe("send quote copy", () => {
+  it("prefills a neutral subject and message, and explains failures plainly", () => {
+    const d = quoteEmailDefaults("Albert Boyle Office");
+    expect(d.subject).toBe("Quote — Albert Boyle Office");
+    expect(d.message).toMatch(/attached/);
+    expect(`${d.subject} ${d.message}`).not.toMatch(/cabinet ?now/i);
+    expect(quoteSendErrorText(Object.assign(new Error("x"), { status: 503 }))).toMatch(/isn't set up/);
+    expect(quoteSendErrorText(new Error("x"))).toBeNull();
   });
 });

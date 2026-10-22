@@ -6,6 +6,70 @@ not read during onboarding.
 
 ---
 
+## 2026-10-19 — Stripe page packs (#323); Task 0: prod usage is empty
+
+**Task 0 (read prod Usage, 2026-10-19).** Admin → Usage: 0 jobs / $0 since
+2026-10-01 (and all-time). Not a bug: prod has ONE org (CabinetNow) and its
+newest job is 2026-09-14 — nobody has run a job since the ledger shipped.
+Railway (last 7 d): no `usage event insert failed`, no worker activity.
+The kit estimate (4.1¢/page median) is still the only cost evidence; the
+ledger is unproven end-to-end in prod until one real job runs.
+
+**Shipped (#323).** Owner: packs 25 pages $25 · 100 $90 · 500 $400;
+receipts log-only until MA-013. No Stripe SDK: `lib/stripe.ts`
+(`checkoutForm` with inline `price_data`, `createCheckoutSession`,
+`verifyStripeSignature` HMAC + 5-min tolerance); `routes/billing.ts`
+(`POST /billing/checkout` any member, 503 when unconfigured;
+`POST /billing/webhook` in its own raw-body plugin → paid +
+amount == pack price → `writeLedger` `purchase`, external_ref = session id,
+pre-check + 0018 unique index); `receiptEmail`; `PAGE_PACKS` in
+`@scribe/shared`; `/credits` returns `packs` + `billing`; Account → Pages
+buy buttons, `?purchased=1` banner polls until the row lands.
+
+**Verified locally** with signed fake events: credited once, redelivery and
+two simultaneous deliveries → one row, bad signature 400, wrong amount /
+unpaid / other events ignored, receipt logged. NOT exercised: a real Stripe
+round trip (MA-017 step 5).
+
+**Manual:** MA-017 (Stripe account, `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, webhook endpoint; test mode first).
+
+**Open.** Open-hold sweep (before enforcement); one real prod job to prove
+usage + hold/settle; then live keys + enforcement.
+
+---
+
+## 2026-10-05 — session wrap-up: usage ledger + credits merged and live; Stripe next
+
+**Context.** Session 2026-10-02→05 from the 2026-09-23 prompt: Task 1 usage
+ledger, report costs, ask pricing, Task 2 credits. Task 3 (Stripe) not
+started — pack prices unconfirmed.
+
+**Shipped (both merged 2026-10-02).** #309 usage ledger (0017, Admin →
+Usage, `scripts/kit-cost.mjs`); #310 credits (0018, $1/page, no minimum,
+first job free, record-only, Admin → Credits). #310 was rebased onto #309
+(conflicts were add/add only; both tabs and both route sets kept).
+
+**Prod verification (2026-10-05).** All #309/#310 files on `origin/main`
+(`git cat-file`); `/health/db` ok; `/admin/usage`, `/credits`,
+`/admin/credits` answer 401 (route exists) — the api boots only after
+migrating, so 0017 + 0018 applied. Live bundle `index-BA6beBJh.js`
+contains "Model cost per job, stage, page", "First job free",
+"Balances, grants, rules". Prod usage numbers NOT yet read (no session in
+the app this time) — Admin → Usage is the first thing to look at next.
+
+**Owner decisions.** $1 per page read; no per-job minimum; first job free
+(any size) replaces the page grant; packs 25 / 100 / 500 pages (prices
+not yet confirmed — proposal $25 / $90 / $400); enforcement stays off until
+Stripe.
+
+**Open.** Stripe (Task 3); open-hold sweep before enforcement; read prod
+Usage vs the kit estimate (4.1¢/page median); MA-006/013/014/015/016 and
+older MA-007/008/009/011 unconfirmed; measurement Option A/B/C; SCR-015;
+SCR-013 live spot-check.
+
+---
+
 ## 2026-10-02 (b) — credits (step 3b): $1/page ledger, first job free, record-only (#310)
 
 **Owner pricing (2026-10-02):** $1 per page read, **no minimum**, **first
