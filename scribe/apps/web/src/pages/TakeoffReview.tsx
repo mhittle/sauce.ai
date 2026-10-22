@@ -19,7 +19,7 @@ import { categoryDotClass, categoryLabel } from "../labels";
 import { SourceBoxPanel } from "../components/SourceBoxPanel";
 import { ReadingProgress, type Progress } from "../components/ReadingProgress";
 import { TechnicalDetail, useIsAdmin } from "../components/TechnicalDetail";
-import { friendlyError, friendlyNotes, friendlyPriceIssue, lineSaveErrorText } from "../messages";
+import { friendlyError, friendlyNotes, friendlyPriceIssue, lineSaveErrorText, FACE_GUESS_BADGE, faceCountTitle } from "../messages";
 
 // The review screen is the product (PRD §7.2): the drawing on the left with
 // one dot per cabinet, the breakdown on the right grouped by room, every cell
@@ -47,6 +47,10 @@ interface Line {
   // Set by the API when a line carries a product the price list can't price
   // at this size/material (SCR-016) — it still needs fixing.
   priceIssue?: string | null;
+  // Counted faces per cabinet (SCR-015): from the drawing or a reviewer;
+  // null = guessed from the cabinet's name.
+  doors?: number | null;
+  drawers?: number | null;
   reviewerEdited: boolean;
   bbox: [number, number, number, number] | null;
   readImageKey: string | null;
@@ -102,6 +106,26 @@ const UNDO_MS = 8000;
 const NO_ROOM = "No room";
 
 type Filter = "all" | "flagged" | "unmatched";
+
+const FACE_CATEGORIES = new Set(["casework_base", "casework_wall", "casework_tall", "vanity"]);
+
+// Editing one count pins both (the other keeps what the cabinet shows now),
+// so the faces stop being guessed; a blank count goes back to the guess.
+function faceCountPatch(
+  field: "doors" | "drawers",
+  raw: string,
+  line: Line,
+  doorFaces: number,
+  frontFaces: number
+): Record<string, number | null> {
+  const per = (n: number) => Math.round(n / (line.qty || 1));
+  const v = raw.trim() === "" ? null : Math.max(0, Math.min(20, Math.trunc(Number(raw))));
+  if (v == null || Number.isNaN(v)) return { doors: null, drawers: null };
+  return {
+    doors: field === "doors" ? v : (line.doors ?? per(doorFaces)),
+    drawers: field === "drawers" ? v : (line.drawers ?? per(frontFaces)),
+  };
+}
 
 function isFace(l: Line): boolean {
   return l.rawModelOutput?.expanded === true;
@@ -1013,12 +1037,40 @@ function CabinetRow({
               ariaLabel="Finish"
               onCommit={(v) => onPatch({ finish: v.trim() || null })}
             />
-            {(doors > 0 || fronts > 0) && !showFaces && (
-              <span className="ml-1 whitespace-nowrap text-[11px] text-faint">
-                {[doors > 0 && `${doors} door${doors === 1 ? "" : "s"}`, fronts > 0 && `${fronts} front${fronts === 1 ? "" : "s"}`]
-                  .filter(Boolean)
-                  .join(" · ")}
+            {FACE_CATEGORIES.has(line.category) && editable ? (
+              <span
+                className="ml-1 flex items-center gap-0.5 whitespace-nowrap text-[11px] text-faint"
+                title={faceCountTitle(line.doors != null || line.drawers != null)}
+              >
+                <Cell
+                  value={String(line.doors ?? Math.round(doors / (line.qty || 1)))}
+                  editable
+                  mono
+                  className="w-5 text-center"
+                  ariaLabel="Doors per cabinet"
+                  onCommit={(v) => onPatch(faceCountPatch("doors", v, line, doors, fronts))}
+                />
+                doors ·
+                <Cell
+                  value={String(line.drawers ?? Math.round(fronts / (line.qty || 1)))}
+                  editable
+                  mono
+                  className="w-5 text-center"
+                  ariaLabel="Drawer fronts per cabinet"
+                  onCommit={(v) => onPatch(faceCountPatch("drawers", v, line, doors, fronts))}
+                />
+                drawers
+                {line.doors == null && line.drawers == null && <span className="text-warn">· {FACE_GUESS_BADGE}</span>}
               </span>
+            ) : (
+              (doors > 0 || fronts > 0) &&
+              !showFaces && (
+                <span className="ml-1 whitespace-nowrap text-[11px] text-faint">
+                  {[doors > 0 && `${doors} door${doors === 1 ? "" : "s"}`, fronts > 0 && `${fronts} front${fronts === 1 ? "" : "s"}`]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              )
             )}
           </div>
         </td>

@@ -91,3 +91,24 @@ describe("expandToComponents", () => {
     expect(faces[0].height_in).toBe(36);
   });
 });
+
+// SCR-015: counted faces (area scan on an elevation, or the reviewer) win.
+describe("expandToComponents with counted faces", () => {
+  const count = (faces: ReturnType<typeof expandToComponents>, kind: string) =>
+    faces.filter((f) => f.category === kind).reduce((n, f) => n + f.qty, 0);
+
+  it("uses the counts over the name and the notes", () => {
+    const faces = expandToComponents(cab({ tag: "Sink Base 36", notes: "2 doors", width_in: 36, doors: 1, drawers: 3 }));
+    expect(count(faces, "door")).toBe(1);
+    expect(count(faces, "drawer_front")).toBe(3);
+  });
+
+  it("multiplies by quantity and treats 0/0 as a faceless unit", () => {
+    expect(count(expandToComponents(cab({ tag: "Wall 30", category: "casework_wall", doors: 2, drawers: 0, qty: 3 })), "door")).toBe(6);
+    expect(expandToComponents(cab({ tag: "Base 30", doors: 0, drawers: 0 }))).toEqual([]);
+  });
+
+  it("falls back to the guess when nothing was counted", () => {
+    expect(count(expandToComponents(cab({ tag: "Sink Base 36", width_in: 36, doors: null, drawers: null })), "door")).toBe(2);
+  });
+});

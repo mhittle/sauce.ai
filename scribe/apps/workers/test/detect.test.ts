@@ -418,3 +418,33 @@ describe("extractJson (prod 2026-09-14: markdown work-through before the JSON)",
     expect(r.warnings).toEqual([]);
   });
 });
+
+// SCR-015: face counts from the area scan (detect-v6).
+describe("face counts", () => {
+  const ctx = {
+    cropPt: { x0: 72, y0: 144, x1: 792, y1: 864 },
+    cropDpi: 100,
+    displayDpi: 72,
+    dims: { widthPt: 1224, heightPt: 1584 },
+  };
+  it("parses doors/drawers and nulls bad values", () => {
+    const text = `{"items":[{"label":"b","category":"casework_base","confidence":0.9,"bbox_2d":[1,1,2,2],"doors":1,"drawers":3},{"label":"c","category":"casework_base","confidence":0.9,"bbox_2d":[1,1,2,2],"doors":"two","drawers":-1},{"label":"d","category":"casework_base","confidence":0.9,"bbox_2d":[1,1,2,2]}]}`;
+    const items = processDetectionResponse(text, ctx);
+    expect(items.map((i) => [i.doors, i.drawers])).toEqual([[1, 3], [null, null], [null, null]]);
+  });
+
+  const measured = { marker: 1, tag: "B30", category: "casework_base", width_in: 30, height_in: 34.5, depth_in: 24, confidence: 0.9, measured: true };
+
+  it("carries counts from an elevation marker onto its line", () => {
+    const { lines: [line] } = mergeMeasuredLines([entry(1, { kind: "elevation", doors: 1, drawers: 1 })], [measured]);
+    expect([line.doors, line.drawers]).toEqual([1, 1]);
+  });
+
+  it("never puts counts on plan-run units", () => {
+    const { lines } = mergeMeasuredLines(
+      [entry(1, { kind: "plan", doors: 2, drawers: 0 })],
+      [{ ...measured, run_length_in: 60, units: [{ tag: "B30", category: "casework_base", w: 30, h: 34.5, d: 24, measured: true, confidence: 0.9 }, { tag: "B30", category: "casework_base", w: 30, h: 34.5, d: 24, measured: true, confidence: 0.9 }] }]
+    );
+    expect(lines.every((l) => l.doors == null && l.drawers == null)).toBe(true);
+  });
+});

@@ -158,6 +158,9 @@ const LinePatch = z.object({
   product_line_id: z.string().nullable().optional(),
   resolved_params: z.record(z.unknown()).nullable().optional(),
   confidence: z.number().min(0).max(1).optional(),
+  // Reviewer-set face counts (SCR-015); null = back to the heuristics.
+  doors: z.number().int().min(0).max(20).nullable().optional(),
+  drawers: z.number().int().min(0).max(20).nullable().optional(),
   // Box-review gate: moving/resizing a box is a visual-anchor edit only —
   // the inches fields drive pricing.
   bbox: BBox.nullable().optional(),
@@ -200,6 +203,8 @@ function lineFromRow(
     confidence: row.confidence,
     estimated: row.notes?.startsWith(ESTIMATED_NOTE_PREFIX) ?? false,
     bbox_2d: null,
+    doors: row.doors,
+    drawers: row.drawers,
   };
 }
 
@@ -1169,6 +1174,8 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         resolved_params: "resolvedParams",
         confidence: "confidence",
         bbox: "bbox",
+        doors: "doors",
+        drawers: "drawers",
       };
       for (const [k, v] of Object.entries(patch)) {
         if (v !== undefined) set[map[k]] = v;
@@ -1203,6 +1210,8 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
         "finish",
         "assembled",
         "notes",
+        "doors",
+        "drawers",
       ] as const;
       const pricingTouched = PRICING_FIELDS.some(
         (f) => patch[f] !== undefined

@@ -319,6 +319,9 @@ export interface MarkerEntry {
   geom?: LineGeom | null;
   // The marked area this marker came from (lines inherit it).
   detectionId?: string | null;
+  // Faces counted by the area scan (elevations only; null = not counted).
+  doors?: number | null;
+  drawers?: number | null;
 }
 
 // Snap gate (v0-drawing-scale-plan.md): off by default until the kit A/B.
@@ -492,6 +495,10 @@ export function mergeMeasuredLines(
       bbox_2d: bbox,
       geom: entry.geom ?? null,
       detection_id: entry.detectionId ?? null,
+      // Counted faces belong to the drawn cabinet, not to plan-run units.
+      ...(entry.kind === "plan" || extraNote != null
+        ? {}
+        : { doors: entry.doors ?? null, drawers: entry.drawers ?? null }),
     };
     return sized?.measured && !defaulted ? line : markEstimated(line);
   };
@@ -740,6 +747,8 @@ export async function buildFromDetections(
             kind: d.kind,
             detectionId: d.id,
             bboxReadPx: null, // filled after the page render DPI is known
+            // A plan view shows no faces: never trust a count from one.
+            ...(d.kind === "plan" ? {} : { doors: item.doors, drawers: item.drawers }),
           };
           let displayBbox = item.bbox_2d;
           if (snapEnabled && displayBbox) {

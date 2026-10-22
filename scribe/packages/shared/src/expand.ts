@@ -74,11 +74,17 @@ export function expandToComponents(cab: CabinetLineItem): CabinetLineItem[] {
   const h = cab.height_in;
   if (w == null || h == null || w <= 0 || h <= 0) return [];
 
-  let { doors, drawers } = parseConfig(cab.notes);
   const tag = (cab.tag ?? "").toLowerCase();
   const isWall = cab.category === "casework_wall";
+  const counted = cab.doors != null || cab.drawers != null;
+  let { doors, drawers } = counted
+    ? { doors: cab.doors ?? 0, drawers: cab.drawers ?? 0 }
+    : parseConfig(cab.notes);
 
-  // Fall back to standard configs when the notes don't spell it out.
+  // Counted faces win (SCR-015): read off the drawing or set by a reviewer —
+  // 0 and 0 means an open / faceless unit. Otherwise fall back to standard
+  // configs when the notes don't spell it out.
+  if (counted && doors === 0 && drawers === 0) return [];
   if (doors === 0 && drawers === 0) {
     if (/sink/.test(tag)) doors = 2;
     else if (/drawer/.test(tag)) drawers = 3;

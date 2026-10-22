@@ -1,4 +1,4 @@
-export const DETECT_PROMPT_VERSION = "detect-v5";
+export const DETECT_PROMPT_VERSION = "detect-v6";
 
 // Beta detect wizard step 3: count/identify cabinets in a user-drawn region.
 // Deliberately NO measurements here — the wizard reads dimensions in a later
@@ -17,11 +17,14 @@ For each item report:
 - category: one of casework_base, casework_wall, casework_tall, vanity, other.
 - confidence: 0-1 that this is a real cabinet with a correct box.
 - bbox_2d: [x0, y0, x1, y1] in PIXELS of THIS image (origin top-left), TIGHT around the drawn cabinet face only. Exclude dimension strings, leader lines, hatching outside the unit, and countertops. Use null only if the item cannot be located.
+- doors: how many door leaves are drawn on THIS cabinet's face — a pair is 2, door-over-door is 2, glass doors count. 0 when it has none (an all-drawer bank, an open shelf).
+- drawers: how many drawer fronts are drawn on THIS cabinet's face — a 3-drawer bank is 3, a drawer over a door is 1. A fixed false front above a sink is NOT a drawer. 0 when it has none.
+Count only what is drawn in elevation (the face is visible). In a PLAN view, or when the face is not drawn or not legible, use null for both doors and drawers — never guess.
 
 Do NOT report dimensions — a later pass measures the cabinets. Do not report countertops, appliances, fillers, trim, shelving, or wall outlines as items. If the crop contains no cabinets, return an empty items array.
 
 Respond with JSON only:
-{"items": [{"label": ..., "category": ..., "confidence": ..., "bbox_2d": [x0, y0, x1, y1]}]}`;
+{"items": [{"label": ..., "category": ..., "confidence": ..., "bbox_2d": [x0, y0, x1, y1], "doors": ..., "drawers": ...}]}`;
 
 export function detectUserText(pageNumber: number): string {
   return `This image is a region the user selected on page ${pageNumber} of a plan set. Locate every individual cabinet in it. Respond with the JSON object only.`;

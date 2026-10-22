@@ -55,6 +55,10 @@ export const CabinetLineItem = z.object({
   geom: z.unknown().nullable().optional(),
   // The marked area (takeoff_detections.id) this line was built from.
   detection_id: z.string().nullable().optional(),
+  // Door leaves / drawer fronts counted on the drawn face (area scan on an
+  // elevation, or the reviewer). null/absent = not counted → heuristics.
+  doors: z.number().int().min(0).max(20).nullable().optional(),
+  drawers: z.number().int().min(0).max(20).nullable().optional(),
 });
 export type CabinetLineItem = z.infer<typeof CabinetLineItem>;
 
@@ -83,6 +87,10 @@ export const DetectionItem = z.object({
     .nullable()
     .catch(null)
     .default(null),
+  // Faces counted on the drawn cabinet (detect-v6); null in plan views or
+  // when the face isn't legible.
+  doors: z.number().int().min(0).max(20).nullable().catch(null).default(null),
+  drawers: z.number().int().min(0).max(20).nullable().catch(null).default(null),
 });
 export type DetectionItem = z.infer<typeof DetectionItem>;
 

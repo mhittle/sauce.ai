@@ -270,6 +270,8 @@ export async function replaceLinesForDetections(
         readRect: line.read_rect ?? null,
         geom: line.geom ?? null,
         detectionId: line.detection_id ?? null,
+        doors: line.doors ?? null,
+        drawers: line.drawers ?? null,
       })
       .returning({ id: takeoffLines.id });
     inserted.push(row.id);
@@ -828,6 +830,8 @@ export function rowToLine(row: typeof takeoffLines.$inferSelect): CabinetLineIte
     confidence: row.confidence,
     estimated: row.notes?.startsWith(ESTIMATED_NOTE_PREFIX) ?? false,
     bbox_2d: null,
+    doors: row.doors,
+    drawers: row.drawers,
   };
 }
 

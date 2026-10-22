@@ -315,3 +315,13 @@ export function importResultLine(results: { status: "sent" | "created" | "skippe
   ].filter(Boolean);
   return `Invites: ${parts.join(", ") || "none"}`;
 }
+
+// --- Door / drawer-front counts on the review (SCR-015) ---
+
+export const FACE_GUESS_BADGE = "guessed";
+
+export function faceCountTitle(counted: boolean): string {
+  return counted
+    ? "Doors and drawer fronts per cabinet, counted on the drawing or set by you. Clear a number to go back to the guess."
+    : "Guessed from the cabinet's name — the drawing didn't show the face. Type the right numbers to fix the doors and fronts.";
+}

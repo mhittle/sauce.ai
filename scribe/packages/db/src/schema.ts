@@ -199,6 +199,9 @@ export const takeoffLines = pgTable("takeoff_lines", {
   readRect: jsonb("read_rect"),
   // migrations/0010 — LineGeom: geometric size, snapped edges, size source.
   geom: jsonb("geom"),
+  // migrations/0020 — counted door / drawer-front faces (null = not counted).
+  doors: integer("doors"),
+  drawers: integer("drawers"),
   // migrations/0012 — the marked area this cabinet was built from (null =
   // reviewer-drawn or legacy).
   detectionId: uuid("detection_id"),
