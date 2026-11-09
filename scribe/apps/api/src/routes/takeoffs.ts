@@ -10,6 +10,7 @@ import {
   productLines,
   projectDocuments,
   quotes,
+  takeoffCallbacks,
   takeoffDetections,
   takeoffLines,
   takeoffs,
@@ -34,6 +35,7 @@ import {
   SelectedPage,
   SourceKind,
   type TakeoffStatus,
+  buildApprovedPayload,
   chargeBlocked,
 } from "@scribe/shared";
 import {
@@ -46,6 +48,8 @@ import {
 import { exportCsv, type ExportableLine } from "@scribe/export";
 import { objectExists, putObject, signedGetUrl } from "@scribe/storage";
 import { getTakeoffQueue } from "../lib/queue.js";
+import { parseExternalLink } from "../lib/external.js";
+import { isServiceUser } from "../auth.js";
 import { orgTakeoffIds, requireTakeoffInOrg, takeoffInOrg } from "../lib/scope.js";
 
 const EXT_TO_KIND: Record<string, SourceKind> = {
@@ -318,6 +322,16 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
     let kind: SourceKind;
     let projectId: string | null = null;
 
+    // External link (migrations/0022): ?external_source=&external_ref=&callback_url=
+    const link = parseExternalLink(req.query, {
+      isService: isServiceUser(req.user),
+      production: process.env.NODE_ENV === "production",
+    });
+    if ("error" in link) {
+      const code = link.error.includes("service auth") ? 403 : 400;
+      return reply.code(code).send({ error: link.error });
+    }
+
     if (req.isMultipart()) {
       const file = await req.file();
       if (!file) return reply.code(400).send({ error: "no file uploaded" });
@@ -373,6 +387,9 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           sourceFilename: filename,
           sourceKind: kind,
           status: "processing",
+          externalSource: link.externalSource,
+          externalRef: link.externalRef,
+          callbackUrl: link.callbackUrl,
         })
         .returning();
       if (charge) {
@@ -1374,6 +1391,33 @@ export async function takeoffRoutes(app: FastifyInstance): Promise<void> {
           .update(evalFixtures)
           .set({ approvedLines: lines })
           .where(eq(evalFixtures.takeoffId, req.params.id));
+      }
+
+      // External takeoff (migrations/0022): push the approved lines back to
+      // the caller. The handler only records the event; the worker delivers
+      // and retries. Re-approving after a reopen is a new event.
+      if (updated.callbackUrl && updated.externalSource && updated.externalRef) {
+        const approvedAt = updated.updatedAt;
+        const eventId = `${updated.id}:${approvedAt.getTime()}`;
+        const payload = buildApprovedPayload(updated, lines, approvedAt, eventId);
+        const [cb] = await db
+          .insert(takeoffCallbacks)
+          .values({
+            takeoffId: updated.id,
+            event: "takeoff.approved",
+            eventId,
+            callbackUrl: updated.callbackUrl,
+            payload,
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (cb) {
+          await getTakeoffQueue().add(
+            "callback",
+            { takeoff_id: updated.id, callback_id: cb.id },
+            { attempts: 8, backoff: { type: "exponential", delay: 30_000 }, removeOnComplete: 500 }
+          );
+        }
       }
 
       return updated;

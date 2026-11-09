@@ -82,7 +82,12 @@ full list):
   "Buy pages" is shown switched off; webhook endpoint
   `<API_PUBLIC_URL>/billing/webhook`, event `checkout.session.completed`
 - **workers:** `DATABASE_URL`, `REDIS_URL`, `R2_*`, `ANTHROPIC_API_KEY`,
-  `TAKEOFF_TOKEN_BUDGET`, `CRAWLER_DAILY_TOKEN_BUDGET`, `SAMGOV_API_KEY`
+  `TAKEOFF_TOKEN_BUDGET`, `CRAWLER_DAILY_TOKEN_BUDGET`, `SAMGOV_API_KEY`;
+  external takeoffs (CabinetHub): `CALLBACK_SIGNING_SECRET` — signs the
+  approved-lines callback; must equal the receiver's `SCRIBE_WEBHOOK_SECRET`
+- **api (service callers):** `SERVICE_TOKEN` — bearer for machine callers
+  (signal, CabinetHub) on `POST /takeoffs`; CabinetHub's worker holds it as
+  `SCRIBE_SERVICE_TOKEN`
   (optional), `SOCRATA_APP_TOKEN` (optional), `OPENAI_API_KEY` +
   `OPENAI_VISION_MODEL` (optional — only for AI cross-validation),
   `NODE_ENV=production`; optional `CREDIT_HOLD_SWEEP_HOURS` (default 24 —

@@ -14,6 +14,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
+| CabinetHub integration — external takeoffs: `POST /takeoffs` takes `external_source`/`external_ref`/`callback_url` (service auth only); Approve pushes the lines to the callback, signed, retried by the worker; platform org credits-exempt | 9 | 4 | backend | done (#333 draft, 2026-11-09; owner merge pending) |
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |
@@ -71,6 +72,25 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 ---
 
 ## Items in detail
+
+### CabinetHub integration — external takeoffs + approved-lines callback
+
+**Why.** cabinethub.com becomes the client-facing side (shop uploads plans and
+pays); Scribe is where the team produces the takeoff. CabinetHub sends each
+paid plan file to `POST /takeoffs`; when the takeoff is **approved** in Scribe
+the lines go back to CabinetHub, where an estimator reviews them before
+anything reaches the shop. Lines only — no pricing crosses.
+
+**Scope (this side).** Migration 0022; `?external_source=&external_ref=&callback_url=`
+on `POST /takeoffs` (query string, since multipart text fields are order-
+dependent); `callback_url` only for the `SERVICE_TOKEN` machine user, https in
+production; approve inserts a `takeoff_callbacks` row and queues `callback`;
+the worker POSTs `{event:"takeoff.approved", event_id, takeoff_id,
+external_ref, approved_at, lines[]}` with `scribe-signature: t=…,v1=…`
+(Stripe scheme, `CALLBACK_SIGNING_SECRET`), 8 attempts, 4xx permanent;
+`orgs.credits_exempt` so the connector is never blocked if enforcement is
+turned on. Manual: MA-018. CabinetHub side: its PRs C1 (send) and C2
+(webhook receive) in `mhittle/cabinethub.com`.
 
 ### Measuring step fails in prod after #272 (SCR-013)
 

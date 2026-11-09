@@ -25,6 +25,8 @@ export const orgs = pgTable("orgs", {
   logoS3Key: text("logo_s3_key"),
   // migrations/0018 — cache of sum(credit_ledger.delta), pages.
   creditBalance: integer("credit_balance").notNull().default(0),
+  // migrations/0022 — never blocked by credits (platform org / machine users).
+  creditsExempt: boolean("credits_exempt").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -166,6 +168,11 @@ export const takeoffs = pgTable("takeoffs", {
   // migrations/0018 — the credit hold opened when the job was submitted.
   creditHoldId: bigint("credit_hold_id", { mode: "number" }),
   pagesCharged: integer("pages_charged"),
+  // migrations/0022 — where an external caller's upload came from and where
+  // to push the approved lines (CabinetHub). Null for in-app uploads.
+  externalSource: text("external_source"),
+  externalRef: text("external_ref"),
+  callbackUrl: text("callback_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -204,6 +211,22 @@ export const takeoffLines = pgTable("takeoff_lines", {
   detectionId: uuid("detection_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// migrations/0022 — outbound "takeoff.approved" deliveries to an external
+// caller's callback_url. One row per approve; the worker retries delivery.
+export const takeoffCallbacks = pgTable("takeoff_callbacks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  takeoffId: uuid("takeoff_id").notNull(),
+  event: text("event").notNull(),
+  eventId: text("event_id").notNull().unique(),
+  callbackUrl: text("callback_url").notNull(),
+  payload: jsonb("payload").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Beta drag-to-detect scans (migrations/0006): one row per drag over a page.

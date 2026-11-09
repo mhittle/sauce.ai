@@ -92,7 +92,12 @@ export function devBypassEnabled(): boolean {
 // PDF to be quoted) presents `Authorization: Bearer ${SERVICE_TOKEN}`. It maps
 // to a single machine user so takeoffs still have a valid uploadedBy. Disabled
 // unless SERVICE_TOKEN is set; compared timing-safe.
-const SERVICE_EMAIL = "signal-connector@scribe.local";
+export const SERVICE_EMAIL = "signal-connector@scribe.local";
+
+// True when the request was authenticated with SERVICE_TOKEN (machine user).
+export function isServiceUser(user: SessionUser | null | undefined): boolean {
+  return user?.email === SERVICE_EMAIL;
+}
 
 function tokensMatch(presented: string, expected: string): boolean {
   const a = Buffer.from(presented);

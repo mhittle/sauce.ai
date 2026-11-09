@@ -12,6 +12,7 @@ import {
   renderBetaPage,
 } from "./takeoff/detect.js";
 import { runSource, runAllSources } from "./crawler/run.js";
+import { deliverCallback } from "./callbacks/deliver.js";
 import { getDb, sweepStaleHolds } from "@scribe/db";
 import { redisConnection } from "./lib/redis.js";
 
@@ -41,6 +42,9 @@ const takeoffWorker = new Worker(
       await renderBetaPage(id, job.data.page, log);
     else if (job.name === "detect")
       await detectRegion(job.data.detection_id, log);
+    // External takeoff callback (migrations/0022): push approved lines.
+    else if (job.name === "callback")
+      await deliverCallback(job.data.callback_id, log);
     else if (job.name === "beta_build")
       await buildFromDetections(id, job.data.prior_status ?? "review", log, {
         // The wizard IS the pipeline now: every build snapshots the
