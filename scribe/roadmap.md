@@ -14,7 +14,7 @@ Status values: `backlog` · `in-progress` · `done` · `blocked`.
 
 | Title | Pri | LOE | Cat | Status |
 |---|---|---|---|---|
-| CabinetHub integration — external takeoffs: `POST /takeoffs` takes `external_source`/`external_ref`/`callback_url` (service auth only); Approve pushes the lines to the callback, signed, retried by the worker; platform org credits-exempt | 9 | 4 | backend | in-progress (draft PR) |
+| CabinetHub integration — external takeoffs: `POST /takeoffs` takes `external_source`/`external_ref`/`callback_url` (service auth only); Approve pushes the lines to the callback, signed, retried by the worker; platform org credits-exempt | 9 | 4 | backend | done (#333 draft, 2026-11-09; owner merge pending) |
 | Measuring step fails in prod after #272 (SCR-013) — evidence: no build failed after #270; answers wrapped in prose now parse; review shows a failed re-measure | 10 | 3 | takeoff | in-progress (#274, prod verify pending) |
 | Measuring step fails in prod after #272 (SCR-013) — diagnose from worker logs + stored answers first; success must land on the review | 10 | 3 | takeoff | backlog |
 | Measurement accuracy study — plan written (`measurement-accuracy-plan.md`): count is the F1 loss, text-layer dims cap at 26%, recommend areas + Find count gate + per-area measuring after a $4 kit experiment | 9 | 5 | takeoff | in-progress (plan, awaiting owner decision) |

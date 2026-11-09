@@ -174,7 +174,7 @@ tests `packages/shared/test/callbacks.test.ts`, `apps/api/test/external.test.ts`
 on `scribe-api` is now shared with CabinetHub's worker too. Migration applies
 at api boot. Nothing changes for signal or in-app uploads.
 
-**PRs.** This PR (draft). CabinetHub side: C1 (send paid plans) and C2
+**PRs.** #333 (draft). CabinetHub side: C1 (send paid plans) and C2
 (`POST /webhooks/scribe` → `takeoff_items source='ai'`) in `mhittle/cabinethub.com`.
 
 **Open items.** Scribe UI badge "From CabinetHub" + delivery state on the
