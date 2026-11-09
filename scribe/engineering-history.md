@@ -139,6 +139,51 @@ deploys if a future session doesn't know it exists. Keep this current.
 
 ---
 
+## 2026-11-09 — CabinetHub integration: external takeoffs + approved-lines callback
+
+**Context.** cabinethub.com becomes the client-facing side (shop uploads
+plans, pays); Scribe is where the team does the takeoff. Owner decisions
+(2026-11-05): CabinetHub sends on payment; Scribe returns on **Approve**
+(not `review`); lines land in CabinetHub staff ops as AI items for an
+estimator to review; lines only, no pricing. Both sides default-off.
+
+**What shipped (this side).** Migration 0022: `takeoffs.external_source /
+external_ref / callback_url`, table `takeoff_callbacks`, `orgs.credits_exempt`
+(true for the platform org; `quoteJob` returns `creditsEnforced=false` for an
+exempt org so the connector is never 402'd). `POST /takeoffs` reads the link
+from the **query string** (`parseExternalLink`, `apps/api/src/lib/external.ts`);
+`callback_url` only for the `SERVICE_TOKEN` machine user (`isServiceUser`),
+https in production — a signed-in user cannot aim the worker at a URL.
+`POST /takeoffs/:id/approve` inserts a `takeoff_callbacks` row
+(`event_id = <takeoff>:<approved_at ms>`, so a re-approve is a new event) and
+queues `callback` on `takeoff.process` (8 attempts, exp. backoff 30 s). Worker
+`callbacks/deliver.ts` signs the body Stripe-style (`scribe-signature:
+t=…,v1=…`, HMAC-SHA256 over `<t>.<body>`, `CALLBACK_SIGNING_SECRET`) and POSTs;
+2xx → `delivered_at`; 4xx (not 408/429) recorded as permanent; else throw →
+retry. Payload builder `buildApprovedPayload` lives in `@scribe/shared`
+(pure — shared is bundled for the browser, so the signer is in the worker).
+
+**Code touched.** `packages/db/{migrations/0022,schema.ts,credits.ts}`,
+`packages/shared/src/callbacks.ts`, `apps/api/src/{auth.ts,lib/external.ts,
+routes/takeoffs.ts}`, `apps/workers/src/{index.ts,callbacks/deliver.ts}`;
+tests `packages/shared/test/callbacks.test.ts`, `apps/api/test/external.test.ts`,
+`apps/workers/test/callback-deliver.test.ts`.
+
+**Deploy/infra.** New var `CALLBACK_SIGNING_SECRET` on `scribe-workers`
+(MA-018; same value = CabinetHub api `SCRIBE_WEBHOOK_SECRET`). `SERVICE_TOKEN`
+on `scribe-api` is now shared with CabinetHub's worker too. Migration applies
+at api boot. Nothing changes for signal or in-app uploads.
+
+**PRs.** This PR (draft). CabinetHub side: C1 (send paid plans) and C2
+(`POST /webhooks/scribe` → `takeoff_items source='ai'`) in `mhittle/cabinethub.com`.
+
+**Open items.** Scribe UI badge "From CabinetHub" + delivery state on the
+review page (small follow-up). Worker delivery is unit-tested on the pure
+parts only; first real round trip is the Railway smoke test after both sides
+merge. If `credits_enforced` is ever turned on, the platform org stays exempt.
+
+---
+
 ## 2026-10-22 (b) — quote emailed with the PDF attached; PDF restyled; CabinetNow text removed
 
 **Owner asks.** (1) Remove CabinetNow text from the product. (2) Make the
@@ -272,77 +317,29 @@ quote on the newest list.
 
 ## 2026-10-20 (c) — SCR-016: hand-picked products must be priceable (#326)
 
-**Bug.** Quote `a98845a0` kept "2 lines could not be priced" after the owner
-fixed them in the takeoff; Send disabled. **Cause (prod evidence):** the
-quote re-prices live — not stale. Both lines were 58" base cabinets that no
-product accepts (Framed Casework 9–48"); the "fix" was a hand-pick in the
-review's unmatched bucket, which `PATCH /takeoff-lines` saved unchecked and
-the review then counted as resolved. Send was blocked only by those lines
-(rates real — MA-006 closed; freight not required).
-
-**Fix.** `@scribe/pricing` `resolveForProductLine` (matcher-style
-material/finish resolution + `priceLine`) and `priceIssue`; API refuses an
-unpriceable hand-pick with a 422 + reason and adds `priceIssue` to every
-line on `GET /takeoffs/:id` (latest price list); quote `unpriced` entries
-carry the tag; review treats `priceIssue` lines as unmatched with the plain
-reason; quote lists each unpriced cabinet. Copy in `messages.ts`
-(`friendlyPriceIssue`, `lineSaveErrorText`).
-
-**Gotcha (unchanged, worth knowing).** A quote pins the pricing config it
-was created with; new rates never reach an old quote — build a new quote.
-The Admin blocker text "enter real rates in Admin › Pricing" was
-misleading for an existing quote — fixed the same day (see (d)).
+A 58" base hand-picked into a product that only accepts 9–48" saved unchecked
+and blocked Send. Fix: `resolveForProductLine` + `priceIssue` in
+`@scribe/pricing`; API 422s an unpriceable hand-pick and returns `priceIssue`
+per line; review/quote show the reason. Gotcha: a quote pins its pricing
+config — new rates need a new quote. Full text: `engineering-history-archive.md`.
 
 ---
 
 ## 2026-10-20 (b) — Stripe verified live in sandbox; custom page amounts
 
-**Stripe sandbox round trip (prod, 2026-10-20).** Owner set test-mode
-`STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` (MA-017 steps 1–3, sandbox)
-and bought 25 pages with card 4242: Railway logs show `checkout session
-created` → `purchase credited` (25) → receipt `email not configured — not
-sent` (MA-013); the ledger has exactly one `purchase` +25 row with the
-`cs_test_…` session id. Unsigned POSTs to the webhook now return 400.
-
-**First prod usage numbers (2026-10-20).** One real job
-(Albert_Boyle_Office_CAD_16.pdf, 4 pages, the free first job — hold then
-settle in the ledger): 10.8¢ total, 2.7¢/page; measure 58%, detect 33%,
-classify 10%. The kit estimate for the same set was 8.4¢ (output tokens
-are a floor there), so real ≈ 1.3× the kit numbers.
-
-**Shipped.** Custom amounts (owner): `findPack("custom", pages)` prices any
-5–5,000 pages at `PAGE_PRICE_CENTS` (100); checkout takes `{pack, pages}`;
-the webhook re-derives the price from `metadata.pages` and still requires
-amount == price. Account → Pages: "Or buy [N] pages — Buy for $N" with the
-limits explained. Min 5 keeps Stripe's fixed fee from eating tiny buys.
+Sandbox round trip verified (MA-017 steps 1–3; one `purchase` +25 row;
+unsigned webhook POSTs → 400). First prod usage: 10.8¢ for a 4-page job
+(≈1.3× the kit estimate). Shipped custom amounts 5–5,000 pages at $1/page.
+Full text: `engineering-history-archive.md`.
 
 ---
 
 ## 2026-10-20 — open-hold sweep + "charge again" (#324, credits, before enforcement)
 
-**Owner:** release holds on jobs left unfinished; a swept job that is picked
-back up is charged again ("charge again", 2026-10-20).
-
-**Shipped.** `@scribe/db` `sweepStaleHolds(db, hours)`: holds with no
-settle/release whose takeoff is `processing` / `awaiting_pages` /
-`awaiting_boxes` and has had no activity (hold, takeoff `updated_at`, newest
-area) for `CREDIT_HOLD_SWEEP_HOURS` (default 24) are released with a note.
-Workers run it hourly on a new `credits.sweep` BullMQ queue
-(`upsertJobScheduler`). `reholdIfReleased` + the API's `reholdOrRefuse`:
-Find (`/detections/run`) and Build (`/build-takeoff`) on a job whose hold
-was released open a fresh hold (402 when enforced and short); an open or
-settled hold is never charged again, and a swept free first job comes back
-free. Ledger label "Pages returned" (note says failed / not finished).
-
-**Verified locally (`scribe_dev`).** Stale abandoned job released; a job
-with an area drawn within the hour kept; settled and fresh jobs untouched;
-second sweep a no-op; resuming charged 3 pages once; resuming the free job
-stayed free; balance = sum of deltas. Not exercised: the hourly scheduler
-(local Redis down).
-
-**Gotcha.** Image jobs are released by the sweep but only Find/Build re-hold,
-and those are PDF routes — an image job abandoned and finished later another
-way is not re-charged.
+`sweepStaleHolds` releases holds on jobs idle >24 h (hourly `credits.sweep`
+queue); Find/Build on a swept job re-hold (`reholdIfReleased`); free first job
+stays free. Gotcha: image jobs released by the sweep are never re-charged.
+Full text: `engineering-history-archive.md`.
 
 ---
 

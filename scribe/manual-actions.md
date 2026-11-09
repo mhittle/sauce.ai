@@ -86,6 +86,24 @@ Google Cloud → APIs & Services → OAuth consent screen:
    Redeploy the api. The sign-up form links them; without the vars the words
    render as plain text.
 
+### MA-018 — External takeoffs: callback signing secret for CabinetHub (migration 0022)
+
+Ships with the CabinetHub integration PR. Migration `0022_external_takeoffs.sql`
+applies at api boot (adds `takeoffs.external_*`/`callback_url`,
+`takeoff_callbacks`, `orgs.credits_exempt` = true for the platform org). The
+new code does nothing until a caller sends `?callback_url=`, and the worker
+does not deliver until the secret is set.
+
+1. Generate one secret: `openssl rand -hex 32`.
+2. Railway → `scribe-workers` → Variables: `CALLBACK_SIGNING_SECRET=<that value>`.
+3. Hand the **same value** to CabinetHub's owner for the CabinetHub `api`
+   service variable `SCRIBE_WEBHOOK_SECRET`.
+4. Confirm `SERVICE_TOKEN` is set on `scribe-api` (it is — signal uses it, MA-007
+   in `signal/manual-actions.md`); hand its value to CabinetHub's `worker`
+   service as `SCRIBE_SERVICE_TOKEN`, with `SCRIBE_API_URL=https://scribe-api-production-757c.up.railway.app`.
+5. Verify: approve a CabinetHub-sourced takeoff in Scribe → Railway workers log
+   `callback delivery … outcome: delivered`; `takeoff_callbacks.delivered_at` set.
+
 ### MA-014 — Make ridadarwish12@gmail.com a platform admin (PR C, tenancy)
 Migration 0014 promotes only users with `role = 'admin'` (mhittle@gmail.com).
 After the api deploys: sign in as Mike → Admin → Users → tick **Platform

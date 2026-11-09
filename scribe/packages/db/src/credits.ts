@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { type CreditSettings, jobCharge, type JobCharge } from "@scribe/shared";
 import type { Db } from "./index.js";
-import { creditLedger, platformSettings, takeoffs } from "./schema.js";
+import { creditLedger, orgs, platformSettings, takeoffs } from "./schema.js";
 
 // Credit ledger writes (accounts-plan.md §3.1). Every write locks the org row,
 // so balance_after and orgs.credit_balance are computed under the lock, in
@@ -115,7 +115,17 @@ export async function quoteJob(
   orgId: string,
   pages: number
 ): Promise<{ charge: JobCharge; balance: number; settings: CreditSettings }> {
-  const settings = await getCreditSettings(db);
+  const base = await getCreditSettings(db);
+  // migrations/0022 — an exempt org (the platform org's machine users) is
+  // never blocked; its holds are still recorded.
+  const [org] = await db
+    .select({ exempt: orgs.creditsExempt })
+    .from(orgs)
+    .where(eq(orgs.id, orgId));
+  const settings: CreditSettings = {
+    ...base,
+    creditsEnforced: base.creditsEnforced && !(org?.exempt ?? false),
+  };
   const free = await firstJobFreeAvailable(db, orgId, settings);
   return {
     charge: jobCharge(pages, settings, free),
