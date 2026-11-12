@@ -1,4 +1,4 @@
-# sauce.ai/datasets — install & deploy
+# Palo Alto Health Labs Datasets — install & deploy
 
 One container (FastAPI API + UI + crawl threads) and one persistent volume
 (`/data`: SQLite catalog + downloaded files). No database service.
@@ -23,8 +23,8 @@ uvicorn app.main:app --reload             # http://localhost:8000
 Or with Docker:
 
 ```bash
-docker build -t sauce-datasets datasets
-docker run -p 8000:8000 -v "$PWD/datasets/data:/data" -e ANTHROPIC_API_KEY sauce-datasets
+docker build -t pahl-datasets datasets
+docker run -p 8000:8000 -v "$PWD/datasets/data:/data" -e ANTHROPIC_API_KEY pahl-datasets
 ```
 
 ---
@@ -57,7 +57,7 @@ docker run -p 8000:8000 -v "$PWD/datasets/data:/data" -e ANTHROPIC_API_KEY sauce
    on the next boot).
 6. **Replicas = 1** (Settings → Deploy). See the note at the top.
 7. **Domain.** Settings → Networking → **Generate Domain** (or add a custom
-   domain, e.g. `datasets.sauce.ai`, and point a CNAME at it).
+   domain, e.g. `datasets.paloaltohealthlabs.com`, and point a CNAME at it).
 8. **Deploy & verify.**
    ```bash
    curl https://<domain>/health
@@ -122,7 +122,7 @@ dataset (a small, low-effort call) and free public APIs otherwise.
 ## 5. Before sharing the URL
 
 There is no auth: anyone with the URL can start paid crawls. Until the
-sauce.ai account layer is wired in, either keep the domain private or put
+account layer is wired in, either keep the domain private or put
 it behind an access proxy (e.g. Cloudflare Access), and keep
 `DATASETS_MAX_CONCURRENT_CRAWLS=1`. Set a monthly spend limit in the
 Anthropic console.

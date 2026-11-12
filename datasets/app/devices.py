@@ -37,7 +37,7 @@ logging.getLogger("pypdf").setLevel(logging.ERROR)  # font-encoding chatter
 
 FDA_DOCS = "https://www.accessdata.fda.gov/cdrh_docs"
 FDA_DB = "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfpmn"
-_UA = {"User-Agent": "Mozilla/5.0 (compatible; sauce.ai-datasets/0.1; +https://sauce.ai)"}
+_UA = {"User-Agent": "Mozilla/5.0 (compatible; pahl-datasets/0.1; +https://datasets.paloaltohealthlabs.com)"}
 _SUB_RE = re.compile(r"\b(K\d{6}|DEN\d{6})\b")
 PAGE = 1000
 MAX_PDF_BYTES = 40_000_000

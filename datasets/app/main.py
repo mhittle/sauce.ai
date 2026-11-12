@@ -1,4 +1,4 @@
-"""FastAPI app for sauce.ai/datasets: search the catalog, launch crawls, serve
+"""FastAPI app for Palo Alto Health Labs Datasets: search the catalog, launch crawls, serve
 downloaded files, and the single-page UI.
 
     uvicorn app.main:app --reload      # dev
@@ -89,7 +89,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         devices.stop()
         manager.shutdown()
 
-    app = FastAPI(title="sauce.ai/datasets", lifespan=lifespan,
+    app = FastAPI(title="Palo Alto Health Labs Datasets", lifespan=lifespan,
                   description="LLM-driven medical dataset finder", version="0.1.0")
     app.state.store, app.state.manager, app.state.settings = store, manager, settings
     app.state.literature, app.state.devices = literature, devices

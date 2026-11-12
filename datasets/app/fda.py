@@ -17,7 +17,7 @@ from urllib.parse import quote
 import requests
 
 API = "https://api.fda.gov/device/510k.json"
-_UA = {"User-Agent": "sauce.ai-datasets (+https://sauce.ai)"}
+_UA = {"User-Agent": "pahl-datasets (+https://datasets.paloaltohealthlabs.com)"}
 log = logging.getLogger(__name__)
 
 
