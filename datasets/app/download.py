@@ -20,7 +20,7 @@ from urllib.parse import unquote, urlsplit
 import requests
 
 log = logging.getLogger(__name__)
-_UA = {"User-Agent": "Mozilla/5.0 (compatible; sauce.ai-datasets/0.1)"}
+_UA = {"User-Agent": "Mozilla/5.0 (compatible; pahl-datasets/0.1)"}
 
 FLAT_EXTENSIONS = (
     # tabular / text

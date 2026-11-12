@@ -24,7 +24,7 @@ def make(tmp_path, llm=True):
 def test_health_and_ui(tmp_path):
     client, _, _ = make(tmp_path, llm=False)
     assert client.get("/health").json()["llm_configured"] is False
-    assert "sauce.ai" in client.get("/").text
+    assert "Palo Alto Health Labs" in client.get("/").text
     assert client.get("/static/app.js").status_code == 200
 
 

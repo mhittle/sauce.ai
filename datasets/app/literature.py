@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 
 EPMC = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 OPENALEX = "https://api.openalex.org"
-_UA = {"User-Agent": "sauce.ai-datasets literature linker (+https://sauce.ai)"}
+_UA = {"User-Agent": "pahl-datasets literature linker (+https://datasets.paloaltohealthlabs.com)"}
 _DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\"'<>)\],;]+)", re.I)
 _OA_SELECT = ("id,doi,display_name,publication_year,cited_by_count,ids,"
               "primary_location,authorships")

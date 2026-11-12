@@ -1,4 +1,4 @@
-# sauce.ai / datasets
+# Palo Alto Health Labs · Datasets
 
 LLM-driven finder for medical datasets — the first building block of a
 "Hugging Face for health data" (working name disease.ai). You type a target
@@ -163,7 +163,7 @@ Scheduled crawl (nightly, 1 hour):
 python -m jobs.crawl --query "pneumothorax chest x-ray" --minutes 15   # one-off
 ```
 
-Docker: `docker build -t sauce-datasets . && docker run -p 8000:8000 -v $PWD/data:/data -e ANTHROPIC_API_KEY sauce-datasets`.
+Docker: `docker build -t pahl-datasets . && docker run -p 8000:8000 -v $PWD/data:/data -e ANTHROPIC_API_KEY pahl-datasets`.
 All settings are in `.env.example`.
 
 ## API
@@ -199,7 +199,7 @@ All settings are in `.env.example`.
   limited to flat-file types, size-capped, and blocked from private/loopback
   addresses (checked on every redirect hop). Files are never executed.
 - **No auth.** Anyone who can reach the server can launch (paid) crawls. Put it
-  behind the sauce.ai account layer before exposing it publicly.
+  behind an account layer before exposing it publicly.
 - **Not yet run against the live API** in development (no key in the build
   environment); the agent loop is covered by scripted-client tests.
 

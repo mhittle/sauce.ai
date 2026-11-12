@@ -3,27 +3,79 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>sauce.ai · datasets</title>
+  <!-- Google tag (gtag.js), same property as paloaltohealthlabs.com -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WHDQHLHXJ4"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-WHDQHLHXJ4');
+  </script>
+  <title>Datasets | Palo Alto Health Labs</title>
+  <meta name="description" content="Find the data to build medical AI. Name a condition; an agentic search finds open datasets, how to access them, the papers that use them, and the FDA 510(k), De Novo and PMA submissions behind each market.">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Datasets | Palo Alto Health Labs">
+  <meta property="og:description" content="Find the data to build medical AI: datasets, access steps, citing papers and FDA submissions, by condition.">
+  <meta property="og:url" content="https://datasets.paloaltohealthlabs.com/">
+  <meta property="og:site_name" content="Palo Alto Health Labs">
+  <meta property="og:image" content="https://paloaltohealthlabs.com/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://paloaltohealthlabs.com/og-image.png">
+  <link rel="icon" href="https://paloaltohealthlabs.com/favicon.ico" sizes="32x32">
+  <link rel="icon" href="https://paloaltohealthlabs.com/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="https://paloaltohealthlabs.com/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header class="top">
-    <div class="brand">sauce.ai <span>/ datasets</span></div>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-view="search">Search</button>
-      <button class="tab" data-view="directory">Directory</button>
-      <button class="tab" data-view="devices">FDA devices</button>
-      <button class="tab" data-view="crawls">Crawls</button>
-    </nav>
-    <div class="top-right">
-      <span id="stats" class="muted"></span>
-      <button id="broad-btn" class="btn secondary" title="Crawl the web for datasets across all conditions, highest 510(k) count first">Run 1-hour crawl</button>
+  <header class="nav">
+    <div class="wrap">
+      <a class="wordmark" href="https://paloaltohealthlabs.com/" aria-label="Palo Alto Health Labs home">
+        <svg class="wordmark-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 13 H6 L8 8 L11 17 L14 10 L16 13 H22" fill="none" stroke="#2433D9" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Palo Alto Health Labs
+      </a>
+      <nav aria-label="Site">
+        <ul>
+          <li><a href="https://paloaltohealthlabs.com/index.html#resources">Resources</a></li>
+          <li><a href="https://paloaltohealthlabs.com/blog/">Blog</a></li>
+          <li><a href="https://paloaltohealthlabs.com/co-scientist/">Co-Scientist</a></li>
+          <li><a href="/" aria-current="page">Datasets</a></li>
+          <li><a href="https://paloaltohealthlabs.com/index.html#services">All services</a></li>
+        </ul>
+      </nav>
     </div>
   </header>
 
+  <header class="hero hero-s">
+    <div class="wrap">
+      <span class="label crumb"><a href="https://paloaltohealthlabs.com/">Palo Alto Health Labs</a> / Datasets</span>
+      <h1>Datasets for medical AI</h1>
+      <p class="lead">Name a condition. An agentic search finds the datasets, how to get them, the papers that use them, and the FDA submissions behind each market.</p>
+      <p class="disc" role="note"><b>Disclaimer</b>Catalog entries are found and summarized by AI agents. Not validated by a human; check each source's own terms and documentation before use.</p>
+    </div>
+  </header>
+
+  <div class="appbar">
+    <div class="wrap">
+      <nav class="tabs" role="tablist" aria-label="Datasets">
+        <button class="tab active" data-view="search">Search</button>
+        <button class="tab" data-view="directory">Directory</button>
+        <button class="tab" data-view="devices">FDA devices</button>
+        <button class="tab" data-view="crawls">Crawls</button>
+      </nav>
+      <div class="top-right">
+        <span id="stats" class="muted"></span>
+        <button id="broad-btn" class="btn secondary" title="Crawl the web for datasets across all conditions, highest 510(k) count first">Run 1-hour crawl</button>
+      </div>
+    </div>
+  </div>
+
   <div id="banner" class="banner hidden"></div>
 
-  <main>
+  <main class="wrap app">
     <!-- Search -->
     <section id="view-search" class="view">
       <form id="search-form" class="search">
@@ -99,6 +151,17 @@
       </table>
     </section>
   </main>
+
+  <footer class="foot night">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div><span class="label">Services</span><a href="https://paloaltohealthlabs.com/services/healthcare-ai-consulting.html">Healthcare AI</a><a href="https://paloaltohealthlabs.com/services/samd-consulting.html">SaMD &amp; FDA</a><a href="https://paloaltohealthlabs.com/services/medical-data-labeling.html">Medical data labeling</a><a href="https://paloaltohealthlabs.com/services/expert-clinical-labeling.html">Expert clinical labeling</a><a href="https://paloaltohealthlabs.com/services/clinical-study-design.html">Clinical study design</a></div>
+        <div><span class="label">Tools</span><a href="/">Datasets</a><a href="https://paloaltohealthlabs.com/co-scientist/">Co-Scientist</a><a href="https://paloaltohealthlabs.com/blog/">Blog</a></div>
+        <div><span class="label">Site</span><a href="https://paloaltohealthlabs.com/about.html">About</a><a href="https://paloaltohealthlabs.com/privacy.html">Privacy</a><a href="https://www.linkedin.com/in/mikehittle/" target="_blank" rel="noopener">LinkedIn</a><a href="https://paloaltohealthlabs.com/">paloaltohealthlabs.com</a></div>
+      </div>
+      <div class="foot-row"><span>© Palo Alto Health Labs · Palo Alto, CA</span><span>Data: openFDA · FDA AI-enabled device list · Europe PMC · OpenAlex</span></div>
+    </div>
+  </footer>
 
   <template id="card-tpl">
     <article class="card">
