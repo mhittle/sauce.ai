@@ -65,7 +65,12 @@ class Settings:
     # Storage: one SQLite catalog + a directory of downloaded flat files.
     data_dir: Path = field(default_factory=resolve_data_dir)
     anthropic_api_key: str | None = os.environ.get("ANTHROPIC_API_KEY")
-    model: str = os.environ.get("DATASETS_MODEL", "claude-opus-5")
+    # Model for the crawl agents and the background linkers (many calls).
+    model: str = os.environ.get("DATASETS_MODEL", "claude-sonnet-5-5")
+    # Model for the planner (one call per crawl). Falls back to DATASETS_MODEL
+    # when that is set and this isn't, so one variable still sets everything.
+    planner_model: str = (os.environ.get("DATASETS_PLANNER_MODEL")
+                          or os.environ.get("DATASETS_MODEL") or "claude-opus-5-5")
     # Effort for the planner (one call per crawl) vs the crawl workers (many).
     planner_effort: str = os.environ.get("DATASETS_PLANNER_EFFORT", "high")
     worker_effort: str = os.environ.get("DATASETS_WORKER_EFFORT", "medium")

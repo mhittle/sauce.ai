@@ -103,3 +103,27 @@ def test_manager_runs_broad_crawl_in_510k_order(tmp_path, monkeypatch):
     planned = [call["messages"][0]["content"] for call in client.calls
                if "format" in (call.get("output_config") or {})]
     assert "Stroke" in planned[0] and "Pneumothorax" in planned[1]
+
+
+def test_planner_and_agents_use_their_own_models(tmp_path):
+    ctx, _ = ctx_for(tmp_path, model="worker-model", planner_model="planner-model")
+    client = FakeClient(PLAN)
+    crawler.plan_crawl(client, ctx, "MS brain MRI", 2)
+    crawler.run_agent(client, ctx, "task", "a1")
+    assert client.calls[0]["model"] == "planner-model"
+    assert all(c["model"] == "worker-model" for c in client.calls[1:])
+
+
+def test_planner_model_falls_back_to_datasets_model(monkeypatch):
+    import importlib
+    from app import config
+    monkeypatch.delenv("DATASETS_PLANNER_MODEL", raising=False)
+    monkeypatch.setenv("DATASETS_MODEL", "only-model")
+    try:
+        s = importlib.reload(config).Settings()
+        assert s.model == s.planner_model == "only-model"
+        monkeypatch.delenv("DATASETS_MODEL")
+        s = importlib.reload(config).Settings()
+        assert (s.model, s.planner_model) == ("claude-sonnet-5-5", "claude-opus-5-5")
+    finally:
+        importlib.reload(config)
