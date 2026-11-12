@@ -227,11 +227,12 @@ def make_client(settings: Settings):
     return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
-def _create(client, settings: Settings, **kw):
+def _create(client, settings: Settings, model: str | None = None, **kw):
     """One Messages API call with our defaults (adaptive thinking, auto
-    prompt-caching, server-side refusal fallback)."""
+    prompt-caching, server-side refusal fallback). `model` overrides
+    settings.model (the planner passes settings.planner_model)."""
     params: dict[str, Any] = {
-        "model": settings.model,
+        "model": model or settings.model,
         "max_tokens": 16000,
         "thinking": {"type": "adaptive"},
         "cache_control": {"type": "ephemeral"},
@@ -246,7 +247,7 @@ def _create(client, settings: Settings, **kw):
 # ---------------------------------------------------------------- planning
 def plan_crawl(client, ctx: CrawlContext, request: str, n_angles: int) -> dict:
     resp = _create(
-        client, ctx.settings,
+        client, ctx.settings, model=ctx.settings.planner_model,
         system=PLANNER_SYSTEM.replace("{n}", str(n_angles)),
         output_config={"effort": ctx.settings.planner_effort,
                        "format": {"type": "json_schema", "schema": PLAN_SCHEMA}},

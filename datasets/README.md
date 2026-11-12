@@ -39,8 +39,11 @@ query ─▶ planner (1 structured-output call)
                  ▼  each recorded dataset → background download pool (open access only)
 ```
 
-- Model: `claude-opus-5` (configurable), adaptive thinking, automatic prompt
-  caching, server-side refusal fallback (`fallbacks: "default"`).
+- Models: `claude-sonnet-5-5` for the crawl agents and background linkers
+  (`DATASETS_MODEL`), `claude-opus-5-5` for the one planner call per crawl
+  (`DATASETS_PLANNER_MODEL`; falls back to `DATASETS_MODEL` when unset).
+  Adaptive thinking, automatic prompt caching, server-side refusal fallback
+  (`fallbacks: "default"`).
 - Planner runs at effort `high`; crawl agents at `medium` (the bulk of spend).
 - Bounded by wall clock: agents check the deadline between turns; each agent
   also has a turn cap (`DATASETS_MAX_TURNS`). Token usage is recorded per crawl
