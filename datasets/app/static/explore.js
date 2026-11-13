@@ -519,7 +519,10 @@ function fmt(v) { if (v == null) return ""; const a = Math.abs(v); return a >= 1
 
 function miniMarkdown(md) {
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/(^|\s)_(.+?)_(?=\s|$)/g, "$1<i>$2</i>");
+  const links = s => s
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)"'<>]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<>)"']+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+  const inline = s => links(esc(s)).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/(^|\s)_(.+?)_(?=\s|$)/g, "$1<i>$2</i>");
   const out = []; let list = null;
   for (const line of md.split("\n")) {
     const m = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
