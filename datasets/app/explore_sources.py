@@ -24,6 +24,7 @@ import json
 import logging
 import math
 import re
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -209,13 +210,66 @@ class HFSource:
                     v = (t.get("names") or []).index(v) if v in (t.get("names") or []) else v
                 val = v if str(v).lstrip("-").replace(".", "", 1).isdigit() else f"'{v}'"
                 clauses.append(f'"{k}"={val}')
-            body = self._get("filter", config=self.config, split=self.split,
-                             where=" AND ".join(clauses), offset=offset, length=length)
+            try:
+                if getattr(self, "_filter_broken", False):
+                    raise SourceError("Hugging Face filter: unavailable")
+                body = self._get("filter", timeout=25, config=self.config, split=self.split,
+                                 where=" AND ".join(clauses), offset=offset, length=length)
+            except SourceError as exc:
+                self._filter_broken = True
+                # The filter endpoint 500s on some (often image-heavy) datasets:
+                # fall back to scanning spread-out pages of /rows.
+                log.info("HF filter failed for %s (%s); scanning rows", self.repo, exc)
+                matches, total = self._scan(where)
+                return {"rows": matches[offset: offset + length], "total": total,
+                        "note": "sampled: the Hugging Face filter is unavailable for this dataset"}
         else:
             body = self._get("rows", config=self.config, split=self.split,
                              offset=offset, length=length)
+        return {"rows": self._convert(body.get("rows", [])), "total": body.get("num_rows_total")}
+
+    SCAN_PAGES = 24
+
+    def _scan(self, where: dict) -> tuple[list[dict], int]:
+        rows, n = self._scan_rows()
+        want = {k: str(v) for k, v in where.items()}
+        matches = [r for r in rows if all(str(r.get(k)) == v for k, v in want.items())]
+        total = round(len(matches) * n / len(rows)) if rows and n else len(matches)
+        return matches, total
+
+    def _scan_rows(self) -> tuple[list[dict], int]:
+        """Pages spread evenly across the split, fetched once for every label
+        (cached ~20 min: image URLs from the API are signed and expire)."""
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        lock = self.__dict__.setdefault("_scan_lock", threading.Lock())
+        with lock:
+            hit = getattr(self, "_scan_hit", None)
+            if hit and time.time() - hit[0] < 1200:
+                return hit[1], hit[2]
+            first = self._get("rows", config=self.config, split=self.split, offset=0, length=100)
+            n = first.get("num_rows_total") or len(first.get("rows", []))
+            offsets = sorted({min(max(0, n - 100), int(i * n / self.SCAN_PAGES))
+                              for i in range(self.SCAN_PAGES)}) if n > 100 else [0]
+
+            def page(off: int) -> list[dict]:
+                try:
+                    body = first if off == 0 else self._get(
+                        "rows", timeout=40, config=self.config, split=self.split,
+                        offset=off, length=100)
+                except SourceError:
+                    return []
+                return self._convert(body.get("rows", []))
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                rows = [r for chunk in pool.map(page, offsets) for r in chunk]
+            self._scan_hit = (time.time(), rows, n)
+            return rows, n
+
+    def _convert(self, raw_rows: list[dict]) -> list[dict]:
+        feats = {f["name"]: f["type"] for f in self.features()}
         out = []
-        for r in body.get("rows", []):
+        for r in raw_rows:
             row = {"index": r.get("row_idx")}
             for k, v in r["row"].items():
                 t = feats.get(k, {})
@@ -227,7 +281,7 @@ class HFSource:
                 elif isinstance(v, (int, float, str, bool)) or v is None:
                     row[k] = v
             out.append(row)
-        return {"rows": out, "total": body.get("num_rows_total")}
+        return out
 
 
 # ------------------------------------------------------------------ PhysioNet WFDB
@@ -237,8 +291,9 @@ class WFDBSource:
     kind = "signals"
     ANN_EXTS = ("atr", "qrs", "apn", "ecg", "arousal", "st", "event", "ann", "pwave")
 
-    def __init__(self, pn_dir: str):
+    def __init__(self, pn_dir: str | None = None, local_dir: str | None = None):
         self.pn_dir = pn_dir
+        self.local_dir = local_dir      # WFDB records we converted (e.g. OpenNeuro EEG)
         self._ann_ext: str | None = None
         self._ann_cache: dict[str, Any] = {}
 
@@ -257,6 +312,10 @@ class WFDBSource:
         return wfdb
 
     def records(self) -> list[str]:
+        if self.local_dir:
+            f = Path(self.local_dir) / "RECORDS"
+            return [ln.strip() for ln in f.read_text().splitlines() if ln.strip()] \
+                if f.exists() else []
         try:
             return self._wfdb().get_record_list(self.pn_dir)
         except Exception as exc:
@@ -291,6 +350,8 @@ class WFDBSource:
     def _split(self, record: str) -> tuple[str, str]:
         """RECORDS entries can include subfolders (`tpehgdb/tpehg1039`); wfdb
         wants the folder in pn_dir and the bare record name."""
+        if self.local_dir:
+            return str(Path(self.local_dir) / record), None
         folder, _, name = record.rpartition("/")
         return name, f"{self.pn_dir}/{folder}" if folder else self.pn_dir
 
@@ -329,7 +390,8 @@ class WFDBSource:
             per_record[r] = seen
             for lab in seen:
                 labels[lab] = labels.get(lab, 0) + 1
-        return {"source": "physionet", "kind": "signals", "pn_dir": self.pn_dir,
+        return {"source": "wfdb" if self.local_dir else "physionet", "kind": "signals",
+                "pn_dir": self.pn_dir,
                 "records": len(recs), "record_ids": recs[:500], "fs": first.get("fs"),
                 "channels": first.get("channels"), "units": first.get("units"),
                 "record_seconds": first.get("seconds"), "annotation_ext": self._ann_ext,

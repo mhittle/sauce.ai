@@ -38,6 +38,8 @@ from typing import Any
 from . import download
 from .config import Settings
 from .explore_remote import SKIP_EXT, repository_files, sample_zip
+from .explore_repos import (RepoError, fetch_openneuro, fetch_tcia, openneuro_id,
+                            tcia_collection)
 from .explore_sources import (FilesSource, HFSource, SourceError, WFDBSource)
 from .store import Store, now_iso
 
@@ -62,13 +64,18 @@ VIEW_TYPES = {
     "notes": "Markdown text: what the data contain, caveats, and hypotheses to test with "
              "the views above. params: text.",
 }
-def _null(schema: dict) -> dict:
-    """Nullable without type arrays or null-in-enum (kept to the documented subset)."""
-    return {"anyOf": [schema, {"type": "null"}]}
-
-
+# The API caps union-typed (anyOf / nullable) parameters at 16 across a
+# strict schema, so "unset" is a plain sentinel ("" / [] / 0) here and is
+# turned back into null by `_unset_to_null` after parsing.
 _STR = {"type": "string"}
 _STRS = {"type": "array", "items": {"type": "string"}}
+_INT = {"type": "integer"}
+_NUM = {"type": "number"}
+PARAM_TYPES = {"field": _STR, "group_by": _STR, "image_field": _STR, "mask_field": _STR,
+               "per_group": _INT, "channels": _STRS, "channel": _STR, "labels": _STRS,
+               "n_per_group": _INT, "window_sec": _NUM,
+               "align": {"type": "string", "enum": ["", "event", "start"]},
+               "bins": _INT, "fields": _STRS, "columns": _STRS, "text": _STR}
 PANEL = {
     "type": "object", "additionalProperties": False,
     "required": ["type", "title", "description", "params"],
@@ -76,37 +83,40 @@ PANEL = {
         "type": {"type": "string", "enum": list(VIEW_TYPES)},
         "title": {"type": "string"},
         "description": {"type": "string"},
-        "params": {
-            "type": "object", "additionalProperties": False,
-            "required": ["field", "group_by", "image_field", "mask_field", "per_group",
-                         "channels", "channel", "labels", "n_per_group", "window_sec",
-                         "align", "bins", "fields", "columns", "text"],
-            "properties": {
-                "field": _null(_STR), "group_by": _null(_STR), "image_field": _null(_STR),
-                "mask_field": _null(_STR), "per_group": _null({"type": "integer"}),
-                "channels": _null(_STRS), "channel": _null(_STR), "labels": _null(_STRS),
-                "n_per_group": _null({"type": "integer"}),
-                "window_sec": _null({"type": "number"}),
-                "align": _null({"type": "string", "description": "'event' or 'start'"}),
-                "bins": _null({"type": "integer"}),
-                "fields": _null(_STRS), "columns": _null(_STRS), "text": _null(_STR),
-            },
-        },
+        "params": {"type": "object", "additionalProperties": False,
+                   "required": list(PARAM_TYPES), "properties": PARAM_TYPES},
     },
 }
 SERIES = {"type": "object", "additionalProperties": False,
           "required": ["id_col", "time_col", "label_col", "channels", "fs"],
-          "properties": {"id_col": _STR, "time_col": _null(_STR), "label_col": _null(_STR),
-                         "channels": _STRS, "fs": _null({"type": "number"})}}
+          "properties": {"id_col": _STR, "time_col": _STR, "label_col": _STR,
+                         "channels": _STRS, "fs": _NUM}}
 SPEC_SCHEMA = {
     "type": "object", "additionalProperties": False,
     "required": ["title", "summary", "series", "panels", "reply", "tool_requests"],
     "properties": {
-        "title": _STR, "summary": _STR, "series": _null(SERIES),
+        "title": _STR, "summary": _STR, "series": SERIES,
         "panels": {"type": "array", "items": PANEL},
         "reply": _STR, "tool_requests": _STRS,
     },
 }
+
+
+def _blank(v) -> bool:
+    return v is None or v == "" or v == [] or (isinstance(v, (int, float)) and not isinstance(v, bool) and v == 0)
+
+
+def _unset_to_null(spec: dict) -> dict:
+    """Map the schema's sentinels ("" / [] / 0) back to null."""
+    for panel in spec.get("panels") or []:
+        panel["params"] = {k: (None if _blank(v) else v) for k, v in (panel.get("params") or {}).items()}
+    ser = spec.get("series")
+    if not ser or not ser.get("id_col") or not ser.get("channels"):
+        spec["series"] = None
+    else:
+        spec["series"] = {k: (None if k != "channels" and _blank(v) else v) for k, v in ser.items()}
+    return spec
+
 
 COMPOSE_SYSTEM = """You design data-exploration pages for medical datasets, used by \
 researchers to look at the data and generate hypotheses before modeling.
@@ -127,9 +137,14 @@ field exists.
 sensor channels, e.g. IMU accelerometer x/y/z): set `series` (id_col, time_col if \
 any, label_col, channels, fs if known) and use signal_viewer and spaghetti.
 - spaghetti: pick 2-6 labels worth contrasting; n_per_group 10-30.
+- When the probe has a `catalog`, it describes the whole collection (series, \
+patients, modalities, groups); the views show a sample of it. Say so in the notes.
+- Signals with whole-record labels like `group=pd` (from participants.tsv): use \
+spaghetti with align 'start' to compare groups.
 - End with a notes view: 3-6 concrete, testable hypotheses the views can probe, and \
 caveats (class imbalance, label noise, small n).
-- Unused params are null. Keep titles short.
+- Unused params are empty ("", [] or 0); give `series` an empty id_col unless the \
+data are a time-series table. Keep titles short.
 
 When the user asks for a change, return the full revised spec and say what changed \
 in `reply`. If they ask for something no view can do, keep the spec, explain in \
@@ -218,7 +233,7 @@ def heuristic_spec(probe: dict) -> dict:
         if cats and nums:
             panels.append({"type": "group_summary", "title": f"By {cats[0]}", "description": "",
                            "params": p(fields=nums[:8], group_by=cats[0])})
-    return {"title": "Explore", "summary": "Default views (no Claude key configured).",
+    return {"title": "Explore", "summary": "Default views.",
             "series": spec_series, "panels": panels, "reply": "",
             "tool_requests": []}
 
@@ -245,7 +260,7 @@ def compose_llm(client, settings: Settings, ds: dict, probe: dict, current: dict
                    messages=[{"role": "user", "content": msg}])
     if resp.stop_reason == "refusal":
         raise RuntimeError("request declined")
-    return json.loads(next(b.text for b in resp.content if b.type == "text"))
+    return _unset_to_null(json.loads(next(b.text for b in resp.content if b.type == "text")))
 
 
 def validate_spec(spec: dict, probe: dict) -> dict:
@@ -392,6 +407,10 @@ class ExploreManager:
             return {"available": True, "via": "huggingface"}
         if WFDBSource.detect(ds):
             return {"available": True, "via": "physionet"}
+        if ds.get("access_type") == "open" and "cancerimagingarchive" in (ds.get("url") or ""):
+            return {"available": True, "via": "tcia"}
+        if ds.get("access_type") in ("open", "unknown") and openneuro_id(ds):
+            return {"available": True, "via": "openneuro"}
         if any(f.get("status") == "downloaded" for f in ds.get("files") or []):
             return {"available": True, "via": "files"}
         if ds.get("access_type") in ("open", "unknown"):
@@ -413,6 +432,8 @@ class ExploreManager:
             src = HFSource(info["repo"])
         elif via == "physionet":
             src = WFDBSource(info["pn_dir"])
+        elif via == "wfdb_local":
+            src = WFDBSource(local_dir=info["dir"])
         elif via == "files":
             src = FilesSource([Path(p) for p in info.get("paths", [])])
         else:
@@ -427,6 +448,11 @@ class ExploreManager:
         pn = WFDBSource.detect(ds)
         if pn:
             return {"via": "physionet", "pn_dir": pn}
+        # A sample already fetched through a repository API is reused on rebuild.
+        prev = (self.get(ds["id"]) or {}).get("source") or {}
+        if prev.get("repository") in ("tcia", "openneuro") and all(
+                Path(p).exists() for p in prev.get("paths") or [prev.get("dir", "")]):
+            return {k: v for k, v in prev.items() if k != "probe"}
         local = self.store.local_files(ds["id"])
         acq = self.explore_dir(ds["id"]) / "raw"
         if acq.exists() and any(acq.iterdir()):
@@ -437,6 +463,20 @@ class ExploreManager:
             raise NeedsAccess("This dataset needs credentials or an agreement before it can be "
                               "explored. " + (ds.get("access_instructions") or ""))
         budget = self.settings.explore_max_mb * 1_000_000
+        # Repositories with their own public APIs: no link hunting needed.
+        for name, detect, fetch in (("TCIA", tcia_collection, fetch_tcia),
+                                    ("OpenNeuro", openneuro_id, fetch_openneuro)):
+            key = detect(ds)
+            if not key:
+                continue
+            log_(f"{name}: fetching a sample through its API…")
+            try:
+                return fetch(key, acq, budget, log_)
+            except RepoError as exc:
+                log_(f"{name}: {exc}")
+            except Exception as exc:
+                log.warning("%s fetch failed for %s: %s", name, ds["id"], exc)
+                log_(f"{name} fetch failed ({type(exc).__name__}: {str(exc)[:200]})")
         repo = repository_files(ds)
         if repo and repo[1]:
             name, files = repo
@@ -549,17 +589,23 @@ class ExploreManager:
         probe = src.probe()
         if probe.get("kind") == "none":
             raise SourceError("The files contain no images or tables we can read yet.")
+        if info.get("catalog"):      # the whole collection, not just the sample
+            probe["catalog"] = info["catalog"]
         info["probe"] = probe
         self._save(ds_id, source=info)
         log_("composing the explore page…")
-        spec = None
+        spec, why = None, "no Claude key configured"
         if client is not None:
             try:
                 spec = compose_llm(client, self.settings, ds, probe)
             except Exception as exc:
                 log.warning("explore compose failed for %s: %s", ds_id, exc)
-                log_(f"Claude compose failed ({type(exc).__name__}: {str(exc)[:240]}); using defaults")
-        spec = validate_spec(spec or heuristic_spec(probe), probe)
+                why = f"Claude compose failed: {type(exc).__name__}: {str(exc)[:240]}"
+                log_(why + "; using defaults")
+        if spec is None:
+            spec = heuristic_spec(probe)
+            spec["summary"] = f"Default views ({why})."
+        spec = validate_spec(spec, probe)
         had = (self.get(ds_id) or {}).get("version")
         self._save_spec(ds_id, spec, "(rebuilt from the data)" if had else None)
         log_("ready")

@@ -12,6 +12,8 @@ function exploreAvailable(ds) {
   if (ds.explore_status === "unavailable") return null;
   if (/huggingface\.co\/datasets\//.test(ds.url || "") || (ds.download_urls || []).some(u => /huggingface\.co\/datasets\//.test(u))) return "huggingface";
   if (/physionet\.org\/content\//.test(ds.url || "") && ds.access_type === "open") return "physionet";
+  if (/cancerimagingarchive\.net/.test(ds.url || "") && ds.access_type === "open") return "tcia";
+  if (/openneuro\.org\/datasets\/ds\d{6}/.test(ds.url || "") && ["open", "unknown"].includes(ds.access_type)) return "openneuro";
   if ((ds.files || []).some(f => f.status === "downloaded")) return "files";
   if (["open", "unknown"].includes(ds.access_type)) return "acquire";
   return null;
@@ -83,6 +85,8 @@ async function loadExplore(id) {
       }
     } else {
       const how = { huggingface: "read samples through the Hugging Face API", physionet: "stream records from PhysioNet",
+                    tcia: "fetch a spread of DICOM series through the TCIA API and render them",
+                    openneuro: "fetch EEG recordings or anatomical MRI from OpenNeuro's open bucket",
                     files: "read the files already downloaded", acquire: "look for direct download links and fetch a sample (capped)" }[av.via];
       p.append(el("p", { class: "small" }, `Building will ${how}, then ${d.llm ? "have Claude compose views for this dataset" : "set up default views"}. The page is saved for everyone.`));
       const b = el("button", { class: "btn" }, d.status === "failed" ? "Try again" : "Build explore page");
