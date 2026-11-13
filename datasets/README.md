@@ -132,8 +132,8 @@ CLI backfill: `python -m jobs.literature --minutes 30`.
 ## Bulk imports
 
 Curated repositories are listed in one pass from their public catalog APIs
-instead of crawling them dataset by dataset (Crawls tab → Bulk imports,
-`POST /api/imports/{source}`, or `python -m jobs.importer physionet tcia openneuro`):
+instead of crawling them dataset by dataset (`POST /api/imports/{source}`, or
+`python -m jobs.importer physionet tcia openneuro`; there is no button in the UI):
 
 | Source | API | Kept |
 |---|---|---|
