@@ -93,6 +93,33 @@
 
     <!-- Directory -->
     <section id="view-directory" class="view hidden">
+      <div class="seg" id="dir-mode" style="margin-bottom:14px">
+        <button data-mode="conditions" class="on">Conditions</button><button data-mode="datasets">Datasets</button>
+      </div>
+      <div id="dir-datasets" class="hidden">
+        <h2>All datasets</h2>
+        <p id="br-sub" class="muted small"></p>
+        <div class="dev-controls">
+          <input id="br-q" type="search" placeholder="Search title, description, labels…">
+          <select id="br-mod" aria-label="Data type"></select>
+          <select id="br-cond" aria-label="Condition"><option value="">All conditions</option></select>
+          <select id="br-acc" aria-label="Access"></select>
+          <select id="br-src" aria-label="Source"></select>
+          <select id="br-sort" aria-label="Sort">
+            <option value="papers">Most-used first</option><option value="compatible">Most compatible</option>
+            <option value="newest">Newest in catalog</option><option value="title">Title A–Z</option>
+          </select>
+          <label class="small"><input id="br-repo" type="checkbox"> Include repositories</label>
+        </div>
+        <div class="table-wrap">
+          <table class="dir browse">
+            <thead><tr><th>Dataset</th><th>Data</th><th>Conditions</th><th>Access</th><th class="num">Papers</th><th class="num" title="Compatible datasets">Compat.</th><th class="num" title="FDA submissions referencing it">FDA</th><th></th></tr></thead>
+            <tbody id="br-body"></tbody>
+          </table>
+        </div>
+        <div class="pager"><button class="btn link" id="br-prev">← Previous</button><span id="br-page" class="muted small"></span><button class="btn link" id="br-next">Next →</button></div>
+      </div>
+      <div id="dir-conditions">
       <h2>Conditions, ranked by FDA 510(k) clearances</h2>
       <p id="dir-total" class="small" style="margin:0 0 6px"></p>
       <p class="muted small">Counts = FDA 510(k) clearances and De Novo grants whose device name matches the condition or its device terms (openFDA), plus devices on FDA's AI-enabled list that Claude assigned to the condition from their names and FDA codes. A proxy for how active the SaMD market is for that condition. Click a condition or its dataset counts to see the datasets; click an FDA count to review the submissions.</p>
@@ -104,6 +131,7 @@
         <thead><tr><th>#</th><th>Condition</th><th class="num">510(k)</th><th class="num">De Novo</th><th class="num" title="On FDA's AI-enabled list or AI per summary">AI</th><th class="num">Datasets</th><th class="num">Open</th><th class="num">Downloaded</th></tr></thead>
         <tbody id="dir-body"></tbody>
       </table>
+      </div>
     </section>
 
     <!-- One condition's datasets (from the Directory) -->

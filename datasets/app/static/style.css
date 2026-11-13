@@ -285,3 +285,11 @@ select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); backgro
 .ex-msg ul { margin: 0 0 4px; padding-left: 18px; }
 .ex-user { background: var(--chip); align-self: flex-end; }
 .ex-assistant { border-left: 2px solid var(--accent); }
+
+/* Browse all datasets */
+table.browse td { vertical-align: top; font-size: 13px; }
+table.browse tbody tr { cursor: default; }
+.br-title { min-width: 260px; }
+.br-title a { color: var(--ink); font-weight: 550; text-decoration: none; }
+.br-title a:hover { text-decoration: underline; }
+table.browse .chip { font-size: 11px; display: inline-block; margin: 1px 0; }

@@ -255,6 +255,16 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         c = store.get_condition(name)
         return {"name": name, "fda_510k_count": n, "fda_denovo_count": c["fda_denovo_count"]}
 
+    @app.get("/api/datasets/browse")
+    def browse(q: str | None = Query(None, max_length=200), condition: str | None = None,
+               modality: str | None = None, access: str | None = None,
+               source: str | None = None, repositories: bool = False,
+               sort: str = Query("papers", pattern="^(papers|title|newest|compatible)$"),
+               limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+        """Browse every dataset: filter by text, condition, data type, access, source."""
+        return store.browse_datasets(q, condition, modality, access, source, repositories,
+                                     sort, limit, offset)
+
     @app.get("/api/datasets")
     def datasets(condition: str | None = None, limit: int = Query(100, ge=1, le=500),
                  offset: int = Query(0, ge=0)):

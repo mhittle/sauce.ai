@@ -157,3 +157,27 @@ def test_articles_endpoint_filters_sorts_and_lists_datasets(tmp_path):
     assert years == [2019, 2021, 2023]
     assert client.get("/api/articles", params={"fda": "true"}).json()["total"] == 0
     assert client.get("/api/articles", params={"sort": "bogus"}).status_code == 422
+
+
+def test_browse_filters_by_data_type_condition_access(tmp_path):
+    client, store, _ = make(tmp_path, llm=False)
+    from app.compat import CompatWorker
+    a, _ = store.upsert_dataset({**RECORD, "modalities": ["mri"], "access_type": "registration"})
+    b, _ = store.upsert_dataset({"title": "Sleep EEG", "url": "https://x.org/eeg", "source": "PhysioNet",
+                                 "modalities": ["EEG"], "conditions": ["epilepsy"], "access_type": "open"})
+    c, _ = store.upsert_dataset({"title": "CXR set", "url": "https://x.org/cxr", "source": "NIH",
+                                 "modalities": ["chest x-ray"], "conditions": ["pneumothorax"],
+                                 "access_type": "open"})
+    store.upsert_dataset({"title": "dbGaP", "url": "https://dbgap.ncbi.nlm.nih.gov/", "modalities": ["ehr"]})
+    CompatWorker(store, client.app.state.settings).run_until_idle()
+    r = client.get("/api/datasets/browse").json()
+    assert r["total"] == 3                                    # repositories excluded by default
+    assert r["facets"]["modality"]["imaging"] == 2 and r["facets"]["modality"]["eeg"] == 1
+    assert [x["title"] for x in client.get("/api/datasets/browse", params={"modality": "eeg"}).json()["items"]] == ["Sleep EEG"]
+    img = client.get("/api/datasets/browse", params={"modality": "imaging", "sort": "title"}).json()
+    assert [x["title"] for x in img["items"]] == ["CXR set", "MSSEG-2"]
+    assert img["facets"]["modality"]["eeg"] == 1             # facet ignores its own filter
+    assert client.get("/api/datasets/browse", params={"condition": "Pneumothorax"}).json()["total"] == 1
+    assert client.get("/api/datasets/browse", params={"access": "open"}).json()["total"] == 2
+    assert client.get("/api/datasets/browse", params={"q": "lesion"}).json()["items"][0]["id"] == a
+    assert client.get("/api/datasets/browse", params={"repositories": "true"}).json()["total"] == 4

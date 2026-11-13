@@ -312,6 +312,99 @@ function watchCrawl(id) {
   state.poll = setInterval(tick, 3000);
 }
 
+// ------------------------------------------------------------------ browse all datasets
+const BR_DEFAULTS = { q: "", modality: "", condition: "", access: "", source: "", sort: "papers", repositories: "", offset: "0" };
+const br = { ...BR_DEFAULTS };
+let brCondsLoaded = false;
+const MOD_GROUPS = [["Imaging", ["imaging", "chest x-ray", "x-ray (other)", "mammography", "ct", "mri", "pet", "ultrasound", "echocardiography", "fundus", "oct", "dermatology photo", "pathology slide", "endoscopy", "dental x-ray"]],
+                    ["Signals", ["ecg", "eeg", "emg", "ppg", "imu", "polysomnography", "physiological waveforms", "audio"]],
+                    ["Other", ["ehr / tabular", "clinical text", "genomics", "video", "other", "unprofiled"]]];
+
+function browseHash(over = {}) {
+  const p = { ...br, ...over };
+  const qs = Object.entries(p).filter(([k, v]) => v !== "" && v !== BR_DEFAULTS[k]).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+  return `#/browse${qs ? "?" + qs : ""}`;
+}
+
+function setDirMode(mode) {
+  document.querySelectorAll("#dir-mode button").forEach(b => b.classList.toggle("on", b.dataset.mode === mode));
+  $("#dir-datasets").classList.toggle("hidden", mode !== "datasets");
+  $("#dir-conditions").classList.toggle("hidden", mode !== "conditions");
+}
+
+async function loadBrowse() {
+  setDirMode("datasets");
+  if (!brCondsLoaded) {
+    const conds = await api("/api/conditions?with_datasets=true");
+    const sel = $("#br-cond");
+    for (const c of conds.slice().sort((a, b) => (a.display || a.name).localeCompare(b.display || b.name)))
+      sel.append(el("option", { value: c.name }, `${c.display || c.name} (${c.n_datasets})`));
+    brCondsLoaded = true;
+  }
+  const params = new URLSearchParams({ sort: br.sort, limit: 50, offset: br.offset });
+  for (const k of ["q", "modality", "condition", "access", "source"]) if (br[k]) params.set(k, br[k]);
+  if (br.repositories) params.set("repositories", "true");
+  const r = await api(`/api/datasets/browse?${params}`);
+  const f = r.facets || {};
+  // Data type: grouped options with counts (counts ignore the data-type filter itself).
+  const mod = $("#br-mod");
+  mod.replaceChildren(el("option", { value: "" }, "All data types"));
+  for (const [group, keys] of MOD_GROUPS) {
+    const og = el("optgroup", { label: group });
+    for (const k of keys) {
+      const n = (f.modality || {})[k];
+      if (!n) continue;
+      og.append(el("option", { value: k }, `${k === "imaging" ? "Any imaging" : k} (${n})`));
+    }
+    if (og.children.length) mod.append(og);
+  }
+  mod.value = br.modality;
+  const fill = (sel, all, counts, label) => {
+    sel.replaceChildren(el("option", { value: "" }, all));
+    for (const [k, n] of Object.entries(counts || {}).sort((a, b) => b[1] - a[1])) sel.append(el("option", { value: k }, `${label ? label(k) : k} (${n})`));
+    if (br[sel.dataset.key] && ![...sel.options].some(o => o.value === br[sel.dataset.key])) sel.append(el("option", { value: br[sel.dataset.key] }, br[sel.dataset.key]));
+    sel.value = br[sel.dataset.key] || "";
+  };
+  $("#br-acc").dataset.key = "access"; $("#br-src").dataset.key = "source";
+  fill($("#br-acc"), "Any access", f.access, k => ACCESS_LABEL[k] || k);
+  fill($("#br-src"), "All sources", f.source);
+  $("#br-cond").value = br.condition; $("#br-q").value = br.q; $("#br-sort").value = br.sort; $("#br-repo").checked = !!br.repositories;
+  $("#br-sub").textContent = `${r.total.toLocaleString()} datasets match. Data type comes from each dataset's profile (what Claude read from its card); "unprofiled" ones haven't been profiled yet.`;
+  $("#br-body").replaceChildren(...r.items.map(d => {
+    const tr = el("tr");
+    const t = el("td", { class: "br-title" }); t.append(el("a", { href: `#/dataset/${encodeURIComponent(d.id)}` }, d.title));
+    t.append(el("div", { class: "pmeta" }, [d.source, d.n_subjects && `${d.n_subjects} subjects`].filter(Boolean).join(" · ")));
+    const data = [d.modality !== "unprofiled" && d.modality, (d.formats || []).slice(0, 2).join("/"), d.image_size || (d.sampling_hz ? `${d.sampling_hz} Hz` : "")].filter(Boolean).join(" · ");
+    const conds = el("td", { class: "small" });
+    d.conditions.slice(0, 3).forEach(c => conds.append(el("span", { class: "chip" }, c), " "));
+    if (d.conditions.length > 3) conds.append(el("span", { class: "pmeta" }, `+${d.conditions.length - 3}`));
+    const acc = el("td"); const b = el("span", { class: `badge access-${d.access_type}` }, ACCESS_LABEL[d.access_type] || d.access_type); acc.append(b);
+    if (d.kind === "repository") acc.append(" ", el("span", { class: "badge repo" }, "Repository"));
+    const ex = el("td");
+    if (typeof exploreAvailable === "function" && exploreAvailable({ ...d, files: [] }) && d.kind !== "repository")
+      ex.append(el("a", { class: "small", href: `#/explore/${encodeURIComponent(d.id)}` }, d.explore_status === "ready" ? "Explore" : "Explore…"));
+    tr.append(t, el("td", { class: "small" }, data), conds, acc, el("td", { class: "num" }, d.n_articles || ""),
+              el("td", { class: "num" }, d.n_compatible || ""), el("td", { class: "num" }, d.n_devices || ""), ex);
+    return tr;
+  }));
+  if (!r.items.length) $("#br-body").append(Object.assign(el("tr"), { innerHTML: `<td colspan="8" class="muted">No datasets match.</td>` }));
+  const off = +br.offset;
+  $("#br-page").textContent = r.total ? `${off + 1}–${off + r.items.length} of ${r.total.toLocaleString()}` : "";
+  $("#br-prev").disabled = off <= 0; $("#br-next").disabled = off + 50 >= r.total;
+}
+
+document.querySelectorAll("#dir-mode button").forEach(b => (b.onclick = () => {
+  if (b.dataset.mode === "datasets") location.hash = browseHash();
+  else { if (location.hash) history.pushState(null, "", location.pathname + location.search); setDirMode("conditions"); loadDirectory(); }
+}));
+let brTimer;
+$("#br-q").oninput = e => { clearTimeout(brTimer); brTimer = setTimeout(() => { location.hash = browseHash({ q: e.target.value.trim(), offset: "0" }); }, 350); };
+for (const [id, key] of [["#br-mod", "modality"], ["#br-cond", "condition"], ["#br-acc", "access"], ["#br-src", "source"], ["#br-sort", "sort"]])
+  $(id).onchange = e => { location.hash = browseHash({ [key]: e.target.value, offset: "0" }); };
+$("#br-repo").onchange = e => { location.hash = browseHash({ repositories: e.target.checked ? "1" : "", offset: "0" }); };
+$("#br-prev").onclick = () => { location.hash = browseHash({ offset: String(Math.max(0, +br.offset - 50)) }); };
+$("#br-next").onclick = () => { location.hash = browseHash({ offset: String(+br.offset + 50) }); };
+
 // ------------------------------------------------------------------ directory
 let dirSelected = null;
 async function loadDirectory() {
@@ -724,7 +817,13 @@ async function loadDataset(id) {
 // ------------------------------------------------------------------ routing
 function route() {
   const h = location.hash;
-  if (h.startsWith("#/explore/")) {
+  if (h.startsWith("#/browse")) {
+    const params = new URLSearchParams(h.split("?")[1] || "");
+    Object.assign(br, BR_DEFAULTS);
+    for (const k of Object.keys(BR_DEFAULTS)) if (params.has(k)) br[k] = params.get(k);
+    show("directory", false);
+    loadBrowse().catch(e => banner(e.message));
+  } else if (h.startsWith("#/explore/")) {
     show("explore", false);
     window.scrollTo(0, $(".hero").offsetHeight + $(".hero").offsetTop - 72);
     loadExplore(decodeURIComponent(h.slice(10))).catch(e => banner(e.message));
@@ -864,7 +963,7 @@ function show(view, clearHash = true) {
   const tabFor = { device: "devices", dataset: "search", crawl: "crawls", cond: "directory", explore: "search" }[view] || view;
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === tabFor));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("hidden", v.id !== `view-${view}`));
-  if (view === "directory") loadDirectory();
+  if (view === "directory" && !location.hash.startsWith("#/browse")) { setDirMode("conditions"); loadDirectory(); }
   if (view === "crawls") loadCrawls();
 }
 
