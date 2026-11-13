@@ -671,6 +671,86 @@ class Store:
                 out.append(d)
         return out
 
+    # Data-type families for the dataset browser (profile modality -> family).
+    IMAGING = ("chest x-ray", "x-ray (other)", "mammography", "ct", "mri", "pet", "ultrasound",
+               "echocardiography", "fundus", "oct", "dermatology photo", "pathology slide",
+               "endoscopy", "dental x-ray")
+    _BROWSE_SORTS = {"papers": "n_articles DESC", "title": "d.title COLLATE NOCASE ASC",
+                     "newest": "d.first_seen DESC", "compatible": "n_compatible DESC"}
+
+    def browse_datasets(self, q: str | None = None, condition: str | None = None,
+                        modality: str | None = None, access: str | None = None,
+                        source: str | None = None, include_repositories: bool = False,
+                        sort: str = "papers", limit: int = 50, offset: int = 0) -> dict:
+        """All catalog datasets, filterable by text, condition, data type (the
+        profile's modality, or 'imaging' for any image modality), access and
+        source; with facet counts for the current filters."""
+        where, params = ["1=1"], []
+        if not include_repositories:
+            where.append("d.kind = 'dataset'")
+        if q:
+            ids = self.search(q, limit=5000)
+            if not ids:
+                return {"total": 0, "items": [], "facets": {}}
+            where.append(f"d.id IN ({','.join('?' * len(ids))})")
+            params += ids
+        if condition:
+            where.append("d.id IN (SELECT dataset_id FROM dataset_conditions WHERE condition = ?)")
+            params.append(normalize_condition(condition))
+        if access:
+            where.append("d.access_type = ?")
+            params.append(access)
+        if source:
+            where.append("d.source = ?")
+            params.append(source)
+        mod_sql = ("COALESCE(json_extract(p.profile, '$.modality'), 'unprofiled')")
+        base_where = list(where)
+        base_params = list(params)
+        if modality == "imaging":
+            where.append(f"({mod_sql} IN ({','.join('?' * len(self.IMAGING))}))")
+            params += list(self.IMAGING)
+        elif modality:
+            where.append(f"({mod_sql} = ? OR EXISTS (SELECT 1 FROM json_each(p.profile, '$.other_modalities') j WHERE j.value = ?))")
+            params += [modality, modality]
+        frm = ("FROM datasets d LEFT JOIN dataset_profiles p ON p.dataset_id = d.id")
+        order = self._BROWSE_SORTS.get(sort, self._BROWSE_SORTS["papers"])
+        with self._conn() as c:
+            total = c.execute(f"SELECT COUNT(*) {frm} WHERE {' AND '.join(where)}", params).fetchone()[0]
+            rows = c.execute(
+                f"""SELECT d.id, d.title, d.source, d.url, d.access_type, d.kind, d.conditions,
+                           d.n_subjects, d.size, d.first_seen, {mod_sql} AS modality,
+                           json_extract(p.profile, '$.image_size') AS image_size,
+                           json_extract(p.profile, '$.sampling_hz') AS sampling_hz,
+                           json_extract(p.profile, '$.formats') AS formats,
+                           (SELECT COUNT(*) FROM dataset_articles a WHERE a.dataset_id = d.id
+                              AND a.is_descriptor = 0) AS n_articles,
+                           (SELECT COUNT(*) FROM dataset_relations r WHERE r.dataset_id = d.id)
+                              AS n_compatible,
+                           (SELECT COUNT(DISTINCT k_number) FROM device_links l
+                              WHERE l.dataset_id = d.id) AS n_devices,
+                           (SELECT status FROM explore e WHERE e.dataset_id = d.id) AS explore_status
+                    {frm} WHERE {' AND '.join(where)} ORDER BY {order}, d.title LIMIT ? OFFSET ?""",
+                [*params, limit, offset]).fetchall()
+            # Facets: data type counts ignore the data-type filter itself (so
+            # every option shows what it would return); others use all filters.
+            mods = {r[0]: r[1] for r in c.execute(
+                f"SELECT {mod_sql}, COUNT(*) {frm} WHERE {' AND '.join(base_where)} GROUP BY 1",
+                base_params)}
+            acc = {r[0]: r[1] for r in c.execute(
+                f"SELECT d.access_type, COUNT(*) {frm} WHERE {' AND '.join(where)} GROUP BY 1", params)}
+            src = {r[0] or "(unknown)": r[1] for r in c.execute(
+                f"SELECT d.source, COUNT(*) {frm} WHERE {' AND '.join(where)} GROUP BY 1"
+                " ORDER BY 2 DESC LIMIT 25", params)}
+        items = []
+        for r in rows:
+            d = dict(r)
+            d["conditions"] = json.loads(d["conditions"] or "[]")
+            d["formats"] = json.loads(d["formats"]) if d["formats"] else []
+            items.append(d)
+        mods["imaging"] = sum(v for k, v in mods.items() if k in self.IMAGING)
+        return {"total": total, "items": items,
+                "facets": {"modality": mods, "access": acc, "source": src}}
+
     def search(self, q: str, limit: int = 100, extra_terms: Iterable[str] = ()) -> list[str]:
         """Ranked dataset ids for a free-text query (FTS5 bm25, title/conditions
         weighted up). ``extra_terms`` widens the match (e.g. synonyms)."""
