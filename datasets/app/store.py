@@ -263,6 +263,33 @@ CREATE TABLE IF NOT EXISTS dataset_relations (
     PRIMARY KEY (dataset_id, other_id)
 );
 
+-- Explore pages (app/explore.py): one spec per dataset, versioned.
+CREATE TABLE IF NOT EXISTS explore (
+    dataset_id TEXT PRIMARY KEY REFERENCES datasets(id) ON DELETE CASCADE,
+    status     TEXT NOT NULL,              -- pending | building | ready | failed
+    source     TEXT,                       -- JSON: via, repo/pn_dir/paths, probe
+    spec       TEXT,                       -- JSON: current spec
+    version    INTEGER,
+    job        TEXT,                       -- JSON: build log
+    error      TEXT,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS explore_history (
+    dataset_id TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    version    INTEGER NOT NULL,
+    spec       TEXT NOT NULL,
+    prompt     TEXT,
+    reply      TEXT,
+    at         TEXT NOT NULL,
+    PRIMARY KEY (dataset_id, version)
+);
+CREATE TABLE IF NOT EXISTS explore_requests (   -- views users asked for that don't exist yet
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    dataset_id TEXT NOT NULL,
+    request    TEXT NOT NULL,
+    at         TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS literature_state (
     dataset_id   TEXT PRIMARY KEY REFERENCES datasets(id) ON DELETE CASCADE,
     status       TEXT NOT NULL,               -- active | retry | complete | unresolved
@@ -1431,6 +1458,12 @@ class Store:
                         "data": {k: prof.get(k) for k in ("modality", "formats", "image_size",
                                                           "sampling_hz", "age_group")}})
         return out
+
+    def local_files(self, ds_id: str) -> list[str]:
+        with self._conn() as c:
+            return [r[0] for r in c.execute(
+                "SELECT local_path FROM files WHERE dataset_id = ? AND status = 'downloaded'"
+                " AND local_path IS NOT NULL", (ds_id,))]
 
     def link_signature(self) -> str:
         """Changes whenever the catalog gains datasets, aliases or descriptor

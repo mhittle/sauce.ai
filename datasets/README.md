@@ -132,8 +132,8 @@ CLI backfill: `python -m jobs.literature --minutes 30`.
 ## Bulk imports
 
 Curated repositories are listed in one pass from their public catalog APIs
-instead of crawling them dataset by dataset (Crawls tab → Bulk imports,
-`POST /api/imports/{source}`, or `python -m jobs.importer physionet tcia openneuro`):
+instead of crawling them dataset by dataset (`POST /api/imports/{source}`, or
+`python -m jobs.importer physionet tcia openneuro`; there is no button in the UI):
 
 | Source | API | Kept |
 |---|---|---|
@@ -179,6 +179,35 @@ type, no shared label). Each pair lists the harmonization it needs (convert
 formats, resize, resample, select common leads, derive image labels from masks,
 collapse multi-label to binary) and warnings (possible shared patients, age
 mismatch).
+
+## Explore
+
+Each dataset card has an **Explore** button (when the data can be reached) that
+opens a per-dataset exploration page for hypothesis generation
+(`app/explore.py`, `app/explore_sources.py`, `app/static/explore.js`).
+
+- **Consistent views, unique pages.** Pages are built from a fixed view library:
+  image gallery grouped by label with a zoom/pan viewer and mask overlay
+  (opacity slider), multi-channel signal viewer with annotation markers,
+  spaghetti plots (individual traces + pooled mean ± SD per label), label
+  distributions, histograms split by group, per-group summary tables, record
+  tables, and notes. Claude composes each dataset's *spec* (which views,
+  configured with that dataset's real fields, labels and channels) from a
+  probe of the data; a heuristic does it without a key.
+- **Data on demand.** Hugging Face datasets via the datasets-server API (images,
+  masks, class labels, filters); open PhysioNet databases streamed with `wfdb`
+  (signals and annotations); files on the volume, or acquired for Explore: the
+  card's direct links, else a short Claude agent that finds and verifies direct
+  file links. Samples are capped at `DATASETS_EXPLORE_MAX_MB` (300) under
+  `<data>/explore/<id>/`. CSV/TSV/TXT tables (also inside zips) can be read as
+  sensor *series* (id, time, channels, label), which is how IMU data gets
+  signal and spaghetti views; zipped image folders use the folder as the label.
+  Datasets behind credentials or DUAs show their access steps instead.
+- **Stored and editable.** Specs are saved per dataset with version history and
+  restore. The page's prompt box sends a change request to Claude, which
+  rewrites the spec within the library; asks for views the library doesn't have
+  are answered and logged (`GET /api/explore-requests`). Specs are data, never
+  code. Set `DATASETS_EDIT_TOKEN` to require a token for building and editing.
 
 ## Layout
 

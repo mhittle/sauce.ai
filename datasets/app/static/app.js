@@ -6,7 +6,7 @@ const state = { query: "", crawlId: null, poll: null, seenHits: new Set(), newId
                 llm: false };
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const res = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
   return body;
@@ -109,6 +109,10 @@ function card(ds, markNew) {
     if (ds.devices.length > 6) fdaBox.append(" ", el("a", { href: `#/dataset/${ds.id}` }, "all…"));
   }
 
+  if (typeof exploreAvailable === "function" && exploreAvailable(ds) && ds.kind !== "repository") {
+    const b = el("a", { class: "btn secondary explore-btn", href: `#/explore/${encodeURIComponent(ds.id)}`, title: "Look at the data: images, signals or tables, grouped by label" }, "Explore");
+    $(".card-head", n).append(b);
+  }
   setupCompat($(".compat", n), ds);
   setupPapers($(".papers", n), ds);
 
@@ -720,7 +724,11 @@ async function loadDataset(id) {
 // ------------------------------------------------------------------ routing
 function route() {
   const h = location.hash;
-  if (h.startsWith("#/datasets")) {
+  if (h.startsWith("#/explore/")) {
+    show("explore", false);
+    window.scrollTo(0, $(".hero").offsetHeight + $(".hero").offsetTop - 72);
+    loadExplore(decodeURIComponent(h.slice(10))).catch(e => banner(e.message));
+  } else if (h.startsWith("#/datasets")) {
     const params = new URLSearchParams(h.split("?")[1] || "");
     show("cond", false);
     window.scrollTo(0, $(".hero").offsetHeight + $(".hero").offsetTop - 72);
@@ -749,31 +757,6 @@ function route() {
   }
 }
 window.addEventListener("hashchange", route);
-
-// ------------------------------------------------------------------ imports
-let importPoll = null;
-async function loadImports() {
-  const r = await api("/api/imports");
-  $("#imports-body").replaceChildren(...Object.entries(r.sources).map(([key, s]) => {
-    const tr = el("tr");
-    tr.style.cursor = "default";
-    const btn = el("button", { class: "btn secondary" }, s.state === "running" ? "Running…" : "Import");
-    btn.disabled = r.busy;
-    btn.onclick = async e => {
-      e.stopPropagation();
-      if (!confirm(`Import ${s.label}? This lists its datasets in the catalog` + (r.llm ? " and uses Claude to categorize them (a few dollars of API credits)." : "."))) return;
-      try { await api(`/api/imports/${key}`, { method: "POST" }); loadImports(); } catch (err) { banner(err.message); }
-    };
-    const state = s.state === "failed" ? `failed: ${s.error || ""}` : (s.state || "never run");
-    const td = el("td"); td.append(btn);
-    tr.append(el("td", {}, s.label), el("td", {}, state), el("td", { class: "num" }, s.seen ?? ""),
-              el("td", { class: "num" }, s.relevant ?? ""), el("td", { class: "num" }, s.new ?? ""),
-              el("td", {}, s.finished_at ? ago(s.finished_at) : s.started_at ? `started ${ago(s.started_at)}` : ""), td);
-    return tr;
-  }));
-  clearTimeout(importPoll);
-  if (r.busy && !$("#view-crawls").classList.contains("hidden")) importPoll = setTimeout(() => { loadImports().catch(() => {}); refreshStats(); }, 4000);
-}
 
 // ------------------------------------------------------------------ crawls
 async function loadCrawls() {
@@ -878,11 +861,11 @@ async function refreshStats() {
 
 function show(view, clearHash = true) {
   if (clearHash && location.hash) history.pushState(null, "", location.pathname + location.search);
-  const tabFor = { device: "devices", dataset: "search", crawl: "crawls", cond: "directory" }[view] || view;
+  const tabFor = { device: "devices", dataset: "search", crawl: "crawls", cond: "directory", explore: "search" }[view] || view;
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === tabFor));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("hidden", v.id !== `view-${view}`));
   if (view === "directory") loadDirectory();
-  if (view === "crawls") { loadCrawls(); loadImports().catch(e => banner(e.message)); }
+  if (view === "crawls") loadCrawls();
 }
 
 document.querySelectorAll(".tab").forEach(t => (t.onclick = () => {

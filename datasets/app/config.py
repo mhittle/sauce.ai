@@ -96,6 +96,10 @@ class Settings:
     literature_enabled: bool = _bool("DATASETS_LITERATURE", True)
     # Data profiles + compatible-dataset relations (app/compat.py).
     compat_enabled: bool = _bool("DATASETS_COMPAT", True)
+    # Explore: sample size cap for files fetched to explore a dataset, and an
+    # optional token required to build/edit explore pages (unset = open).
+    explore_max_mb: int = _int("DATASETS_EXPLORE_MAX_MB", 300)
+    edit_token: str | None = os.environ.get("DATASETS_EDIT_TOKEN") or None
     openalex_api_key: str | None = os.environ.get("OPENALEX_API_KEY")
     openalex_mailto: str | None = os.environ.get("OPENALEX_MAILTO")
     lit_refresh_days: int = _int("DATASETS_LIT_REFRESH_DAYS", 30)
