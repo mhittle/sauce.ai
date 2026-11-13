@@ -10,7 +10,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,12 +22,18 @@ import os
 from .config import Settings, get_settings, on_mounted_volume, on_railway
 from .devices import DeviceWorker, fda_database_url, fetch_one, summary_pdf_urls
 from .compat import CompatWorker
+from .explore import ExploreManager
+from .explore_sources import SourceError, file_url
 from .importers import SOURCES, ImportRunner
 from .literature import LiteratureWorker
 from .manager import CrawlBusy, CrawlManager
 from .store import Store
 
 STATIC = Path(__file__).resolve().parent / "static"
+
+
+class EditRequest(BaseModel):
+    prompt: str = Field(..., min_length=3, max_length=2000)
 
 
 class CrawlRequest(BaseModel):
@@ -55,6 +61,9 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         store, settings,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     compat = CompatWorker(
+        store, settings,
+        client_factory=crawler.make_client if settings.anthropic_api_key else None)
+    explorer = ExploreManager(
         store, settings,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     importer = ImportRunner(
@@ -110,6 +119,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     app.state.literature, app.state.devices = literature, devices
     app.state.importer = importer
     app.state.compat = compat
+    app.state.explorer = explorer
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins or ["*"],
                        allow_methods=["*"], allow_headers=["*"])
@@ -288,6 +298,168 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         if not d:
             raise HTTPException(404, "dataset not found")
         return {"profile": d["profile"], "items": store.compatible(ds_id, limit)}
+
+    # -------------------------------------------------------- explore
+    def _check_token(token: str | None) -> None:
+        if settings.edit_token and token != settings.edit_token:
+            raise HTTPException(401, "edit token required")
+
+    def _src(ds_id: str):
+        try:
+            return explorer.source(ds_id)
+        except SourceError as exc:
+            raise HTTPException(409, str(exc))
+
+    def _call(fn, *a, **kw):
+        try:
+            return fn(*a, **kw)
+        except SourceError as exc:
+            raise HTTPException(502, str(exc))
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(400, f"bad request: {exc}")
+
+    @app.get("/api/explore/{ds_id}")
+    def explore_get(ds_id: str):
+        ds = store.get_dataset(ds_id)
+        if not ds:
+            raise HTTPException(404, "dataset not found")
+        ex = explorer.get(ds_id) or {"status": "none", "spec": None}
+        if ex.get("source"):
+            ex["source"] = {k: v for k, v in ex["source"].items() if k != "paths"}
+            probe = ex["source"].get("probe") or {}
+            probe.pop("record_labels", None)
+        return {**ex, "busy": explorer.busy(ds_id), "availability": explorer.availability(ds),
+                "edit_locked": bool(settings.edit_token), "llm": bool(settings.anthropic_api_key),
+                "dataset": {k: ds.get(k) for k in ("id", "title", "source", "url", "access_type",
+                                                   "access_instructions", "description")}}
+
+    @app.post("/api/explore/{ds_id}/build", status_code=202)
+    def explore_build(ds_id: str, x_edit_token: str | None = Header(None)):
+        _check_token(x_edit_token)
+        if not store.get_dataset(ds_id):
+            raise HTTPException(404, "dataset not found")
+        if not explorer.build(ds_id):
+            raise HTTPException(409, "already building")
+        return {"building": True}
+
+    @app.post("/api/explore/{ds_id}/edit")
+    def explore_edit(ds_id: str, req: EditRequest, x_edit_token: str | None = Header(None)):
+        _check_token(x_edit_token)
+        return _call(explorer.edit, ds_id, req.prompt)
+
+    @app.post("/api/explore/{ds_id}/revert/{version}")
+    def explore_revert(ds_id: str, version: int, x_edit_token: str | None = Header(None)):
+        _check_token(x_edit_token)
+        _call(explorer.revert, ds_id, version)
+        return {"ok": True}
+
+    def _where(where: str | None) -> dict | None:
+        if not where:
+            return None
+        k, _, v = where.partition(":")
+        return {k: v}
+
+    @app.get("/api/explore/{ds_id}/rows")
+    def explore_rows(ds_id: str, where: str | None = None, offset: int = Query(0, ge=0),
+                     length: int = Query(24, ge=1, le=100), columns: str | None = None):
+        src = _src(ds_id)
+        if src.__class__.__name__ == "HFSource":
+            return _call(src.rows, _where(where), offset, length)
+        if getattr(src, "kind", "") == "images":
+            return _call(src.image_rows, _where(where), offset, length,
+                         lambda i: file_url(ds_id, i))
+        return _call(src.table_rows, _where(where), offset, length,
+                     columns.split(",") if columns else None)
+
+    @app.get("/api/explore/{ds_id}/file/{i}")
+    def explore_file(ds_id: str, i: int):
+        src = _src(ds_id)
+        imgs = src.images() if hasattr(src, "images") else []
+        if not 0 <= i < len(imgs):
+            raise HTTPException(404, "no such file")
+        name = (imgs[i][1] or imgs[i][0]).lower()
+        ctype = ("image/png" if name.endswith(".png") else "image/jpeg"
+                 if name.endswith((".jpg", ".jpeg")) else "application/octet-stream")
+        return Response(src.read_bytes(imgs[i]), media_type=ctype,
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+    @app.get("/api/explore/{ds_id}/distribution")
+    def explore_distribution(ds_id: str, field: str, group_by: str | None = None,
+                             bins: int = Query(20, ge=2, le=100)):
+        src = _src(ds_id)
+        if hasattr(src, "distribution") and src.kind == "table":
+            return _call(src.distribution, field, group_by, bins)
+        probe = ((explorer.get(ds_id) or {}).get("source") or {}).get("probe") or {}
+        if field in (probe.get("stats") or {}):
+            st = probe["stats"][field]
+            if st.get("frequencies"):
+                return {"type": "categorical", "groups": [{"group": "all", "counts": st["frequencies"]}]}
+            if st.get("histogram"):
+                h = st["histogram"]
+                return {"type": "histogram", "edges": h["bin_edges"],
+                        "groups": [{"group": "all", "counts": h["hist"]}]}
+        if field == "label" and probe.get("labels"):
+            return {"type": "categorical", "groups": [{"group": "all", "counts": probe["labels"]}]}
+        raise HTTPException(404, f"no distribution for {field}")
+
+    @app.get("/api/explore/{ds_id}/summary")
+    def explore_summary(ds_id: str, group_by: str, fields: str):
+        src = _src(ds_id)
+        if not hasattr(src, "group_summary"):
+            raise HTTPException(400, "not a table")
+        return _call(src.group_summary, fields.split(","), group_by)
+
+    def _series_cfg(ds_id: str) -> dict | None:
+        spec = (explorer.get(ds_id) or {}).get("spec") or {}
+        return spec.get("series")
+
+    @app.get("/api/explore/{ds_id}/records")
+    def explore_records(ds_id: str, label: str | None = None):
+        src = _src(ds_id)
+        if src.__class__.__name__ == "WFDBSource":
+            per = (((explorer.get(ds_id) or {}).get("source") or {}).get("probe") or {}).get(
+                "record_labels") or {}
+            recs = [{"id": r, "labels": per.get(r, [])} for r in _call(src.records)]
+        else:
+            cfg = _series_cfg(ds_id)
+            if not cfg:
+                raise HTTPException(400, "no series configured")
+            recs = _call(src.series_records, cfg["id_col"], cfg.get("label_col"))
+        if label:
+            recs = [r for r in recs if label in r["labels"]]
+        return {"records": recs[:1000], "total": len(recs)}
+
+    @app.get("/api/explore/{ds_id}/signal")
+    def explore_signal(ds_id: str, record: str, start: float = 0, dur: float = 10,
+                       channels: str | None = None):
+        src = _src(ds_id)
+        chans = channels.split(",") if channels else None
+        if src.__class__.__name__ == "WFDBSource":
+            return _call(src.window, record, start, dur, chans)
+        cfg = _series_cfg(ds_id)
+        if not cfg:
+            raise HTTPException(400, "no series configured")
+        return _call(src.series_window, cfg, record, start, dur, chans)
+
+    @app.get("/api/explore/{ds_id}/traces")
+    def explore_traces(ds_id: str, channel: str | None = None, label: str | None = None,
+                       n: int = Query(12, ge=1, le=50), window: float = Query(10, gt=0, le=600),
+                       align: str = "event"):
+        src = _src(ds_id)
+        if src.__class__.__name__ == "WFDBSource":
+            return _call(src.traces, channel, label, n, window, align)
+        cfg = _series_cfg(ds_id)
+        if not cfg:
+            raise HTTPException(400, "no series configured")
+        return _call(src.series_traces, cfg, channel or cfg["channels"][0], label, n, window)
+
+    @app.get("/api/explore-requests")
+    def explore_requests():
+        """Views users asked for that the template library doesn't have yet."""
+        with store._conn() as c:
+            return [dict(r) for r in c.execute(
+                "SELECT r.dataset_id, d.title, r.request, r.at FROM explore_requests r"
+                " LEFT JOIN datasets d ON d.id = r.dataset_id ORDER BY r.id DESC LIMIT 200")]
 
     @app.get("/api/compat")
     def compat_status():
