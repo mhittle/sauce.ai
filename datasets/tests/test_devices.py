@@ -48,7 +48,7 @@ class Session:
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(devmod, "PAGE", 2)
     settings = Settings(data_dir=tmp_path, device_interval_sec=0, openfda_api_key=None,
-                        fda_ai_list_url="", device_mapping=False)
+                        fda_ai_list_url="", device_mapping=False, fda_recent_months=0)
     store = Store(settings.db_path)
     store.upsert_condition("pneumothorax", fda_terms=["chest x-ray triage", "ms"])
     return settings, store
@@ -215,7 +215,8 @@ def test_ai_list_sync_flags_and_enriches(env):
             return super().get(url, **kw)
 
     s = S()
-    settings = Settings(data_dir=settings.data_dir, fda_ai_list_url="https://fda.test/ai.xlsx",
+    settings = Settings(data_dir=settings.data_dir, fda_recent_months=0,
+                        fda_ai_list_url="https://fda.test/ai.xlsx",
                         openfda_api_key=None)
     assert sync_ai_list(store, settings, s) == 3
     assert s.urls == ["https://api.fda.gov/device/510k.json?search=k_number:(DEN200001)&limit=100"]
@@ -245,6 +246,7 @@ def test_reclassify_existing_rows(env):
 def test_claude_maps_ai_devices_to_conditions(env):
     settings, store = env
     settings = Settings(data_dir=settings.data_dir, fda_ai_list_url="", device_mapping=True,
+                        fda_recent_months=0,
                         device_interval_sec=0)
     store.insert_device_stubs([
         {"k_number": "K260714", "submission_type": "510k", "device_name": "MammoScreen (5)"},
@@ -284,7 +286,8 @@ def test_claude_maps_ai_devices_to_conditions(env):
 
 def test_mapping_failure_backs_off(env):
     settings, store = env
-    settings = Settings(data_dir=settings.data_dir, fda_ai_list_url="", device_mapping=True)
+    settings = Settings(data_dir=settings.data_dir, fda_ai_list_url="", device_mapping=True,
+                        fda_recent_months=0)
     store.insert_device_stubs([{"k_number": "K1", "submission_type": "510k", "device_name": "X"}])
     store.mark_ai(["K1"], "fda_list")
 
@@ -324,3 +327,65 @@ def test_relink_matches_stored_summaries_to_datasets_added_later(env):
     assert w.relink_step() is True
     linked = store.list_devices(linked_only=True)["items"]
     assert [d["k_number"] for d in linked] == ["K200001"]
+
+
+def test_sync_recent_stores_every_recent_decision_and_runs_daily(env):
+    settings, store = env
+    settings = Settings(data_dir=settings.data_dir, device_interval_sec=0, fda_ai_list_url="",
+                        device_mapping=False, fda_recent_months=24)
+    pages = [[rec("K260001", "2026-10-30", name="Chest X-ray triage software"),
+              rec("DEN260002", "2026-10-01", name="AI ECG analysis software")],
+             [{**rec("K250003", "2025-03-02", name="Hip implant"),
+               "openfda": {"device_name": "Prosthesis, hip", "device_class": "2"}}]]
+    sess = Session(pages=pages)
+    out = devmod.sync_recent(store, settings, sess)
+    assert out["stored"] == 3 and out["total"] == 3 and out["newest"] == "2026-10-30"
+    assert out["denovo"] == 1 and out["software"] == 2
+    assert "decision_date:[" in sess.urls[0] and "sort=decision_date:desc" in sess.urls[0]
+    listed = store.list_devices(category="software", sort="decision_date")["items"]
+    assert [d["k_number"] for d in listed] == ["K260001", "DEN260002"]
+    recent = lambda: [u for u in sess.urls if "decision_date:[" in u]  # noqa: E731
+    w = DeviceWorker(store, settings, session=sess)
+    w.step()
+    assert len(recent()) == 2                                 # synced < 1 day ago: skipped
+    st = json.loads(store.kv_get(devmod.RECENT_KEY)); st["at"] = "2000-01-01T00:00:00+00:00"
+    store.kv_set(devmod.RECENT_KEY, json.dumps(st))
+    w.step()
+    assert len(recent()) == 4                                 # re-synced
+    assert devmod.sync_recent(store, Settings(data_dir=settings.data_dir, fda_recent_months=0),
+                              sess) is None
+
+
+def test_sync_recent_failure_backs_off(env):
+    settings, store = env
+    settings = Settings(data_dir=settings.data_dir, device_interval_sec=0, fda_ai_list_url="",
+                        device_mapping=False, fda_recent_months=24)
+
+    class Down:
+        urls = []
+
+        def get(self, url, **kw):
+            self.urls.append(url)
+            return NS(status_code=503, json=lambda: {})
+
+    w = DeviceWorker(store, settings, session=Down())
+    assert w.step() is True
+    assert "error" in json.loads(store.kv_get(devmod.RECENT_KEY))
+    recent = lambda: [u for u in Down.urls if "decision_date:[" in u]  # noqa: E731
+    w.step()
+    assert len(recent()) == 1            # not retried every step
+
+
+def test_software_devices_are_queued_for_condition_mapping(env):
+    settings, store = env
+    store.upsert_devices([devmod._classified(normalize_record(
+        rec("K260009", "2026-09-01", name="Brain MRI segmentation software")))])
+    assert [d["k_number"] for d in store.devices_to_map(10)] == ["K260009"]
+
+
+def test_fda_generic_software_name_beats_hardware_words():
+    assert devmod.is_software_record({"device_name": "3mensio Workstation",
+                                      "generic_name": "Automated Radiological Image Processing Software"})
+    assert devmod.is_software_record({"device_name": "SedLine Sedation Monitor",
+                                      "generic_name": "Index-Generating Electroencephalograph Software"})
+    assert not devmod.is_software_record({"device_name": "Hip implant", "generic_name": "Prosthesis, hip"})

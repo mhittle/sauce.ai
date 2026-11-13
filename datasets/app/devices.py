@@ -83,6 +83,11 @@ def is_software_record(d: dict) -> bool:
     generic = d.get("generic_name") or ""
     if _STRONG_SOFTWARE_RE.search(name):
         return True
+    # FDA's own product-code name says so ("Automated Radiological Image
+    # Processing Software", "Index-Generating Electroencephalograph Software"):
+    # trust it over hardware-sounding brand names ("Workstation", "Monitor").
+    if re.search(r"\bsoftware\b", generic, re.I):
+        return True
     if _HARDWARE_RE.search(name) or _HARDWARE_RE.search(generic):
         return False
     return (bool(_SOFTWARE_RE.search(f"{generic} {name}"))
@@ -204,6 +209,59 @@ def sync_condition(store: Store, name: str, settings: Settings,
     store.set_condition_devices(cond["name"], [d["k_number"] for d in devices],
                                 n_510k, n_denovo, capped)
     return {"n_510k": n_510k, "n_denovo": n_denovo, "stored": len(devices), "total": total}
+
+
+RECENT_KEY = "fda_recent_sync"
+OPENFDA_MAX_SKIP = 25_000  # openFDA refuses skip beyond this
+
+
+def sync_recent(store: Store, settings: Settings, session: Any = None,
+                months: int | None = None) -> dict | None:
+    """Store every 510(k)/De Novo decided in the last `months` months, so the
+    device list sorted by date is complete for that window (the Software
+    filter then shows every recent SaMD clearance). None on openFDA failure."""
+    from datetime import date, timedelta
+    months = settings.fda_recent_months if months is None else months
+    if months <= 0:
+        return None
+    today = date.today()
+    start = today - timedelta(days=round(months * 30.44))
+    expr = f"decision_date:[{start:%Y%m%d}+TO+{today:%Y%m%d}]"
+    http = session or requests
+    key = f"&api_key={settings.openfda_api_key}" if settings.openfda_api_key else ""
+    records: list[dict] = []
+    total, skip, updated = 0, 0, None
+    while True:
+        url = f"{fda.API}?search={expr}&limit={PAGE}&skip={skip}&sort=decision_date:desc{key}"
+        try:
+            resp = http.get(url, headers=_UA, timeout=60)
+        except requests.RequestException as exc:
+            log.warning("openFDA recent sync failed: %s", exc)
+            return None
+        if resp.status_code == 404:
+            break
+        if resp.status_code != 200:
+            log.warning("openFDA recent sync: HTTP %s", resp.status_code)
+            return None
+        body = resp.json()
+        total = int(body["meta"]["results"]["total"])
+        updated = body["meta"].get("last_updated")
+        batch = body.get("results", [])
+        records += batch
+        skip += len(batch)
+        if not batch or skip >= total or skip >= OPENFDA_MAX_SKIP:
+            break
+    devices = [_classified(normalize_record(r)) for r in records if r.get("k_number")]
+    store.upsert_devices(devices)
+    out = {"at": _now_iso(), "since": start.isoformat(), "months": months,
+           "total": total, "stored": len(devices),
+           "newest": max((d["decision_date"] or "" for d in devices), default=None),
+           "software": sum(bool(d["is_software"]) for d in devices),
+           "denovo": sum(d["submission_type"] == "denovo" for d in devices),
+           "openfda_updated": updated}
+    store.kv_set(RECENT_KEY, json.dumps(out))
+    log.info("openFDA recent sync: %s", out)
+    return out
 
 
 def fetch_one(store: Store, k: str, settings: Settings, session: Any = None) -> bool:
@@ -589,15 +647,23 @@ class DeviceWorker:
         job = self.store.next_device_doc(want_extraction=self._llm() is not None)
         if job and self._is_request(job[0]):
             return self.run_job(*job)
-        if not self.store.kv_get("software_classified_v2"):
+        if not self.store.kv_get("software_classified_v3"):
             self.store.reclassify_software(is_software_record)
-            self.store.kv_set("software_classified_v2", _now_iso())
+            self.store.kv_set("software_classified_v3", _now_iso())
         last = self.store.kv_get(AI_LIST_KEY)
         if self.settings.fda_ai_list_url and (not last or _older_than(last, days=7)):
             sync_ai_list(self.store, self.settings, self.session)
             if not self.store.kv_get(AI_LIST_KEY):  # failed: don't retry every step
                 self.store.kv_set(AI_LIST_KEY, _days_ago_iso(6))
             return True
+        if self.settings.fda_recent_months > 0:
+            last = json.loads(self.store.kv_get(RECENT_KEY) or "{}").get("at")
+            if not last or _older_than(last, days=1):
+                if sync_recent(self.store, self.settings, self.session) is None:
+                    # Failed: try again in ~6 h rather than every step.
+                    self.store.kv_set(RECENT_KEY, json.dumps({"at": _days_ago_iso(0.75),
+                                                              "error": "openFDA unavailable"}))
+                return True
         if self.settings.device_mapping and self.client_factory is not None:
             batch = self.store.devices_to_map(MAP_BATCH)
             if batch and not self._map_paused():

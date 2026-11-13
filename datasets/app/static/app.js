@@ -405,7 +405,9 @@ async function loadDevices() {
   $("#dev-sub").textContent = cond
     ? `Submissions whose device name contains ${[...new Set([cond.name, ...cond.fda_terms])].map(t => `“${t}”`).join(", ")}, plus AI-enabled devices Claude assigned to this condition.`
       + (cond.fda_devices_capped ? " Showing the most recent submissions only." : "")
-    : "All submissions stored so far: every device on FDA's AI-enabled list, those matched to directory conditions, and any opened directly.";
+    : "Every 510(k) and De Novo decided recently, plus older ones on FDA's AI-enabled list, matched to directory conditions, or opened directly.";
+  const rs = res.recent_sync;
+  if (!cond && rs && rs.since) $("#dev-sub").textContent += ` Complete for decisions since ${rs.since} (openFDA data as of ${rs.openfda_updated || rs.newest}; FDA posts with a lag of about two weeks).`;
   if (res.total) {
     const f = res.facets;
     $("#dev-sub").textContent += ` In this view: ${f.n_510k.toLocaleString()} 510(k) · ${f.n_denovo.toLocaleString()} De Novo`

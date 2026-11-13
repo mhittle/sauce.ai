@@ -92,7 +92,8 @@ def test_manager_runs_broad_crawl_in_510k_order(tmp_path, monkeypatch):
                         fake_refresh(lambda n: counts.get(n.lower(), 0)))
     monkeypatch.setattr("app.manager.load_seed", lambda: [
         {"name": "pneumothorax", "fda_terms": []}, {"name": "stroke", "fda_terms": []}])
-    settings = Settings(data_dir=tmp_path, swarm_size=1, download_enabled=False)
+    settings = Settings(data_dir=tmp_path, swarm_size=1, download_enabled=False,
+                        fda_recent_months=0)
     store = Store(settings.db_path)
     client = FakeClient(PLAN)
     mgr = CrawlManager(store, settings, client_factory=lambda s: client)
@@ -127,3 +128,28 @@ def test_planner_model_falls_back_to_datasets_model(monkeypatch):
         assert (s.model, s.planner_model) == ("claude-sonnet-5-5", "claude-opus-5-5")
     finally:
         importlib.reload(config)
+
+
+def test_broad_crawl_syncs_recent_fda_first(tmp_path, monkeypatch):
+    from app import devices as devmod
+    calls = []
+
+    def fake_sync(store, settings, session=None, months=None):
+        calls.append(1)
+        out = {"at": "2099-01-01T00:00:00+00:00", "since": "2024-11-13", "stored": 6600,
+               "software": 900, "newest": "2026-10-30"}
+        store.kv_set(devmod.RECENT_KEY, __import__("json").dumps(out))
+        return out
+
+    monkeypatch.setattr(devmod, "sync_recent", fake_sync)
+    monkeypatch.setattr(fda, "refresh_condition", fake_refresh(lambda n: 1))
+    monkeypatch.setattr("app.manager.load_seed", lambda: [{"name": "stroke", "fda_terms": []}])
+    settings = Settings(data_dir=tmp_path, swarm_size=1, download_enabled=False)
+    store = Store(settings.db_path)
+    mgr = CrawlManager(store, settings, client_factory=lambda s: FakeClient(PLAN))
+    for _ in range(2):
+        cid = mgr.start("broad", minutes=1)
+        mgr.wait(cid, timeout=10)
+    assert len(calls) == 1                     # second crawl: synced within 6 h, skipped
+    msgs = [m["msg"] for m in store.get_crawl(cid)["log"]]
+    assert any("already synced (6600 since 2024-11-13)" in m for m in msgs)
