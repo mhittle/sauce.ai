@@ -96,6 +96,25 @@ class CrawlManager:
         except Exception:
             log.exception("download failed for %s", ds_id)
 
+    def _sync_recent_fda(self, ctx) -> None:
+        """Before a broad crawl: make sure every recent 510(k)/De Novo is
+        stored (skipped if synced in the last 6 hours)."""
+        from .devices import RECENT_KEY, sync_recent
+        if self.settings.fda_recent_months <= 0:
+            return
+        last = json.loads(self.store.kv_get(RECENT_KEY) or "{}")
+        if last.get("stored") and last.get("at", "") > _hours_ago(6):
+            ctx.log(f"FDA: recent submissions already synced ({last['stored']} since {last['since']})")
+            return
+        try:
+            out = sync_recent(self.store, self.settings)
+        except Exception as exc:  # never block the crawl on openFDA
+            log.warning("recent FDA sync failed: %s", exc)
+            out = None
+        ctx.log(f"FDA: stored {out['stored']} submissions decided since {out['since']}"
+                f" ({out['software']} software; newest {out['newest']})" if out
+                else "FDA: openFDA unavailable; recent submissions not refreshed")
+
     def _run(self, crawl_id: int, mode: str, query: str | None, minutes: int,
              cancel: threading.Event) -> None:
         self.run_crawl_blocking(crawl_id, mode, query, minutes, cancel)
@@ -111,6 +130,7 @@ class CrawlManager:
         try:
             client = self.client_factory(self.settings)
             if mode == "broad":
+                self._sync_recent_fda(ctx)
                 crawler.run_broad(client, ctx, load_seed())
             else:
                 crawler.run_swarm(client, ctx, query or "")
@@ -138,3 +158,8 @@ class CrawlManager:
 def _now() -> str:
     from .store import now_iso
     return now_iso()
+
+
+def _hours_ago(h: float) -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(hours=h)).isoformat(timespec="seconds")

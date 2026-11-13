@@ -319,6 +319,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
                                  sort=sort, direction=dir, limit=limit, offset=offset)
         if condition:
             res["condition"] = store.get_condition(condition)
+        raw = store.kv_get("fda_recent_sync")
+        res["recent_sync"] = json.loads(raw) if raw else None
         return res
 
     @app.get("/api/devices/{k}")

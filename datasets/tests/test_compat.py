@@ -156,3 +156,19 @@ def test_worker_without_llm_uses_heuristic_and_api(tmp_path):
     assert c.get("/api/datasets/nope/compatible").status_code == 404
     assert c.get("/api/compat").json()["last"]["relations"] == 2
     assert card_hash(store.get_dataset(a)) == card_hash(store.get_dataset(a))
+
+
+def test_control_groups_are_not_targets():
+    p = prof([("healthy control", "classification"), ("healthy volunteers", "classification"),
+              ("normal", "classification"), ("no finding", "classification"),
+              ("alzheimer's disease", "classification")])
+    assert [t["name"] for t in p["targets"]] == ["alzheimer's disease"]
+    a = {"id": "a", "title": "A", "source": "S", "url": "https://a.org"}
+    b = {"id": "b", "title": "B", "source": "S", "url": "https://b.org"}
+    raw = {"modality": "eeg", "other_modalities": [], "body_region": "brain", "formats": [],
+           "image_size": "", "sampling_hz": None, "channels": None, "views": "",
+           "age_group": "adult", "countries": [], "n_subjects": 50,
+           "targets": [{"name": "healthy control", "label_type": "classification",
+                        "annotator": "clinical"}]}
+    rows = compute_relations([a, b], {"a": dict(raw), "b": dict(raw)})
+    assert all(r[2]["shared"] == [] for r in rows)        # only same-data-type (pretraining)

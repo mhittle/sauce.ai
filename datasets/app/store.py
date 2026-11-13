@@ -1199,12 +1199,14 @@ class Store:
         return len(hits)
 
     def devices_to_map(self, limit: int) -> list[dict]:
-        """AI-list devices Claude hasn't assigned to conditions yet, newest first."""
+        """AI and software devices Claude hasn't assigned to conditions yet,
+        newest first (so recent SaMD clearances count in the Directory)."""
         with self._conn() as c:
             return [dict(r) for r in c.execute(
                 "SELECT k_number, submission_type, device_name, applicant, generic_name,"
                 " product_code, advisory_committee, medical_specialty, regulation_number"
-                " FROM devices WHERE is_ai = 1 AND conditions_mapped_at IS NULL"
+                " FROM devices WHERE (is_ai = 1 OR is_software = 1)"
+                " AND conditions_mapped_at IS NULL"
                 " ORDER BY decision_date DESC LIMIT ?", (limit,))]
 
     def condition_names(self) -> list[str]:

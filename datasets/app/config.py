@@ -108,6 +108,10 @@ class Settings:
     openfda_api_key: str | None = os.environ.get("OPENFDA_API_KEY")
     devices_enabled: bool = _bool("DATASETS_DEVICES", True)
     fda_max_devices_per_condition: int = _int("DATASETS_FDA_MAX_DEVICES", 5000)
+    # Every 510(k)/De Novo decided in the last N months is stored (refreshed
+    # daily and at the start of each 1-hour crawl), so the FDA list sorted by
+    # date is complete for that window. 0 disables.
+    fda_recent_months: int = _int("DATASETS_FDA_RECENT_MONTHS", 24)
     device_interval_sec: float = float(_int("DATASETS_DEVICE_INTERVAL_SEC", 3))
     # LLM summaries of submission PDFs: "on_demand" (when a user opens one),
     # "all" (background, every submission — costs scale with the device count),

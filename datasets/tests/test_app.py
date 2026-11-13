@@ -14,7 +14,8 @@ from tests.test_crawler import PLAN, RECORD  # noqa: E402
 
 
 def make(tmp_path, llm=True):
-    settings = Settings(data_dir=tmp_path, swarm_size=1, download_enabled=False)
+    settings = Settings(data_dir=tmp_path, swarm_size=1, download_enabled=False,
+                        fda_recent_months=0)
     store = Store(settings.db_path)
     mgr = CrawlManager(store, settings, client_factory=(lambda s: FakeClient(PLAN))
                        if llm else None)

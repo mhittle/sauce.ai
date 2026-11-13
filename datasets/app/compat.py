@@ -197,13 +197,20 @@ def _int(v: Any) -> int | None:
         return None
 
 
+# Comparison groups aren't prediction targets: two case-control studies
+# shouldn't look compatible because both have healthy controls.
+_NOT_TARGET = re.compile(r"^(healthy|normal|control)\b|\b(healthy )?(controls?|volunteers?)$"
+                         r"|^no (finding|disease)", re.I)
+
+
 def clean_profile(p: dict) -> dict:
     p = dict(p)
     p["formats"] = sorted({f.lower().strip(".") for f in p.get("formats") or [] if f})
     seen, targets = set(), []
     for t in p.get("targets") or []:
         name = normalize_condition(t["name"])
-        if name and (name, t["label_type"]) not in seen and t["label_type"] != "none":
+        if (name and (name, t["label_type"]) not in seen and t["label_type"] != "none"
+                and not _NOT_TARGET.search(name)):
             seen.add((name, t["label_type"]))
             targets.append({**t, "name": name})
     p["targets"] = targets
@@ -370,6 +377,7 @@ def compare(a: dict, b: dict, pa: dict, pb: dict) -> dict | None:
 def compute_relations(datasets: list[dict], profiles: dict[str, dict],
                       per_dataset: int = 30) -> list[tuple]:
     """All directed relations, best `per_dataset` per dataset."""
+    profiles = {k: clean_profile(v) for k, v in profiles.items()}  # stored before rule changes
     by_mod: dict[str, list[str]] = defaultdict(list)
     for ds_id, p in profiles.items():
         for m in {p["modality"], *p.get("other_modalities", [])} - {"other"}:
