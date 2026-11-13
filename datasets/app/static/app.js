@@ -136,7 +136,10 @@ function setupPapers(det, ds) {
     for (const a of r.items) list.append(paper(a));
     offset += r.items.length;
     more.remove();
+    $(".all-papers", list)?.remove();
     if (r.items.length === 20) list.append(more);
+    if (r.total) list.append(el("a", { class: "all-papers small", href: `#/papers?dataset=${encodeURIComponent(ds.id)}` },
+                                `Browse all ${r.total.toLocaleString()} in the Papers tab →`));
   }
   more.onclick = () => load().catch(() => {});
   det.addEventListener("toggle", () => { if (det.open && !loaded) load().catch(() => {}); });
@@ -268,18 +271,40 @@ async function loadDirectory() {
     k510.append(countLink(sw ? (synced ? r.sw_510k : null) : r.fda_510k_count, `#/devices?condition=${q}&type=510k${cat}`));
     kden.append(countLink(sw ? (synced ? r.sw_denovo : null) : r.fda_denovo_count, `#/devices?condition=${q}&type=denovo${cat}`));
     kai.append(countLink(synced ? r.n_ai : null, `#/devices?condition=${q}&category=ai`));
-    tr.append(el("td", { class: "num" }, i + 1), el("td", {}, r.display), k510, kden, kai,
-              el("td", { class: "num" }, r.n_datasets), el("td", { class: "num" }, r.n_open),
-              el("td", { class: "num" }, r.n_downloaded));
-    tr.onclick = async () => {
-      dirSelected = r.name;
-      document.querySelectorAll("#dir-body tr").forEach(x => x.classList.remove("sel"));
-      tr.classList.add("sel");
-      renderCards($("#dir-results"), await api(`/api/datasets?condition=${encodeURIComponent(r.name)}`));
-    };
+    const name = el("td"); name.append(el("a", { class: "count", href: condHash(r.name) }, r.display));
+    const dl = (n, f) => { const td = el("td", { class: "num" }); td.append(countLink(n, condHash(r.name, f))); return td; };
+    tr.append(el("td", { class: "num" }, i + 1), name, k510, kden, kai,
+              dl(r.n_datasets, ""), dl(r.n_open, "open"), dl(r.n_downloaded, "downloaded"));
+    tr.onclick = () => { dirSelected = r.name; location.hash = condHash(r.name); };
     return tr;
   }));
 }
+
+// One condition's datasets, opened from the Directory.
+const condHash = (name, f = "") => `#/datasets?condition=${encodeURIComponent(name)}${f ? `&filter=${f}` : ""}`;
+async function loadCondition(name, filter) {
+  const [list, conds] = await Promise.all([
+    api(`/api/datasets?condition=${encodeURIComponent(name)}&limit=500`),
+    api("/api/conditions?with_datasets=true")]);
+  const c = conds.find(x => x.name === name) || { display: name };
+  const keep = filter === "open" ? list.filter(d => d.access_type === "open")
+    : filter === "downloaded" ? list.filter(d => ["downloaded", "partial"].includes(d.download_status)) : list;
+  keep.sort((a, b) => (b.n_articles || 0) - (a.n_articles || 0));
+  $("#cond-title").textContent = `${c.display}: datasets`;
+  $("#cond-sub").textContent = `${list.length} datasets in the catalog` +
+    (filter ? ` · showing ${keep.length} ${filter === "open" ? "open-access" : "downloaded"}` : "") + " · most-used first.";
+  document.querySelectorAll("#cond-filter button").forEach(b => {
+    b.classList.toggle("on", b.dataset.f === (filter || ""));
+    b.onclick = () => { location.hash = condHash(name, b.dataset.f); };
+  });
+  const q = encodeURIComponent(name);
+  const links = $("#cond-links"); links.replaceChildren();
+  links.append(el("a", { href: `#/papers?condition=${q}` }, "Papers using these datasets"), " · ",
+               el("a", { href: `#/devices?condition=${q}` }, "FDA submissions"));
+  renderCards($("#cond-results"), keep);
+  if (!keep.length) $("#cond-results").append(el("p", { class: "muted" }, "No datasets match."));
+}
+$("#cond-back").onclick = e => { e.preventDefault(); show("directory"); };
 
 // ------------------------------------------------------------------ FDA devices
 function countLink(n, href) {
@@ -366,6 +391,99 @@ $("#dev-q").oninput = e => { clearTimeout(devQTimer); devQTimer = setTimeout(() 
 $("#dev-linked").onchange = e => { location.hash = devicesHash({ linked: e.target.checked ? "1" : "", offset: "0" }); };
 $("#dev-prev").onclick = () => { location.hash = devicesHash({ offset: String(Math.max(0, +dev.offset - PAGE)) }); };
 $("#dev-next").onclick = () => { location.hash = devicesHash({ offset: String(+dev.offset + PAGE) }); };
+
+// ------------------------------------------------------------------ papers
+const PAP_DEFAULTS = { q: "", dataset: "", condition: "", relation: "", fda: "", sort: "cited_by_count", dir: "desc", offset: "0" };
+const pap = { ...PAP_DEFAULTS };
+const REL_TAG = { descriptor: ["descriptor", "Dataset paper"], cites: ["cites", "Cites"], mentions: ["mentions", "Mentions"] };
+let papCondsLoaded = false;
+
+function papersHash(over = {}) {
+  const p = { ...pap, ...over };
+  const qs = Object.entries(p).filter(([k, v]) => v !== "" && v !== PAP_DEFAULTS[k])
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+  return `#/papers${qs ? "?" + qs : ""}`;
+}
+
+async function loadPaperConditions() {
+  if (papCondsLoaded) return;
+  const conds = await api("/api/conditions?with_datasets=true");
+  const sel = $("#pap-cond");
+  for (const c of conds.slice().sort((a, b) => (a.display || a.name).localeCompare(b.display || b.name)))
+    sel.append(el("option", { value: c.name }, `${c.display || c.name} (${c.n_datasets})`));
+  papCondsLoaded = true;
+}
+
+async function loadPapers() {
+  loadPaperConditions().then(() => { $("#pap-cond").value = pap.condition; }).catch(() => {});
+  const params = new URLSearchParams({ sort: pap.sort, dir: pap.dir, limit: PAGE, offset: pap.offset });
+  for (const k of ["q", "dataset", "condition", "relation"]) if (pap[k]) params.set(k, pap[k]);
+  if (pap.fda) params.set("fda", "true");
+  const res = await api(`/api/articles?${params}`);
+  $("#pap-title").textContent = res.dataset ? `Papers: ${res.dataset.title}` : "Papers";
+  $("#pap-sub").textContent = "Papers that introduce, cite or name a catalog dataset, found by the literature linker in Europe PMC and OpenAlex. "
+    + `${res.total.toLocaleString()} match.`;
+  const filt = $("#pap-filter");
+  filt.replaceChildren();
+  if (pap.dataset) {
+    const clear = el("a", { href: papersHash({ dataset: "", offset: "0" }) }, "show all datasets");
+    const open = el("a", { href: `#/dataset/${encodeURIComponent(pap.dataset)}` }, "open dataset");
+    filt.append(el("span", { class: "chip" }, `Dataset: ${res.dataset ? res.dataset.title : pap.dataset}`), open, " · ", clear);
+  }
+  filt.classList.toggle("hidden", !pap.dataset);
+  document.querySelectorAll("#pap-rel button").forEach(b => b.classList.toggle("on", b.dataset.rel === pap.relation));
+  $("#pap-q").value = pap.q;
+  $("#pap-fda").checked = !!pap.fda;
+  document.querySelectorAll("table.papers th[data-sort]").forEach(th => {
+    th.classList.toggle("sorted", th.dataset.sort === pap.sort);
+    th.classList.toggle("asc", th.dataset.sort === pap.sort && pap.dir === "asc");
+  });
+  $("#pap-body").replaceChildren(...res.items.map(a => {
+    const tr = el("tr");
+    const t = el("td", { class: "ptitle" });
+    if (a.url && /^https?:/.test(a.url)) t.append(el("a", { href: a.url, target: "_blank", rel: "noopener" }, a.title));
+    else t.append(el("span", {}, a.title));
+    const au = a.authors ? a.authors.split(",") : [];
+    const meta = [au.length ? au.slice(0, 3).join(",") + (au.length > 3 ? " et al." : "") : "",
+                  a.doi ? `doi:${a.doi}` : a.pmid ? `PMID ${a.pmid}` : ""].filter(Boolean).join(" · ");
+    if (meta) t.append(el("div", { class: "pmeta" }, meta));
+    if (a.devices && a.devices.length) {
+      const u = el("div", { class: "used-in" });
+      u.append(el("span", { class: "pmeta" }, "Used in FDA submission: "));
+      for (const k of a.devices) u.append(el("a", { href: `#/device/${k}` }, k));
+      t.append(u);
+    }
+    const ds = el("td", { class: "pds" });
+    for (const d of a.datasets.slice(0, 4)) {
+      const l = el("a", { class: "ds-link", href: `#/dataset/${encodeURIComponent(d.id)}` });
+      const tag = REL_TAG[d.relation];
+      l.append(el("span", { class: `tag ${tag[0]}` }, tag[1]), d.title);
+      ds.append(l);
+    }
+    if (a.datasets.length > 4) ds.append(el("span", { class: "pmeta" }, `+${a.datasets.length - 4} more`));
+    tr.append(t, el("td", {}, a.venue || ""), el("td", { class: "num" }, a.year || ""),
+              el("td", { class: "num" }, (a.cited_by_count || 0).toLocaleString()), ds);
+    return tr;
+  }));
+  if (!res.items.length) $("#pap-body").append(Object.assign(el("tr"), { innerHTML: `<td colspan="5" class="muted">No papers match.</td>` }));
+  const off = +pap.offset;
+  $("#pap-page").textContent = res.total ? `${off + 1}–${off + res.items.length} of ${res.total.toLocaleString()}` : "";
+  $("#pap-prev").disabled = off <= 0;
+  $("#pap-next").disabled = off + PAGE >= res.total;
+}
+
+document.querySelectorAll("#pap-rel button").forEach(b => (b.onclick = () => { location.hash = papersHash({ relation: b.dataset.rel, offset: "0" }); }));
+document.querySelectorAll("table.papers th[data-sort]").forEach(th => (th.onclick = () => {
+  const same = th.dataset.sort === pap.sort;
+  const defDir = ["title", "venue"].includes(th.dataset.sort) ? "asc" : "desc";
+  location.hash = papersHash({ sort: th.dataset.sort, dir: same ? (pap.dir === "asc" ? "desc" : "asc") : defDir, offset: "0" });
+}));
+let papQTimer;
+$("#pap-q").oninput = e => { clearTimeout(papQTimer); papQTimer = setTimeout(() => { location.hash = papersHash({ q: e.target.value.trim(), offset: "0" }); }, 350); };
+$("#pap-cond").onchange = e => { location.hash = papersHash({ condition: e.target.value, offset: "0" }); };
+$("#pap-fda").onchange = e => { location.hash = papersHash({ fda: e.target.checked ? "1" : "", offset: "0" }); };
+$("#pap-prev").onclick = () => { location.hash = papersHash({ offset: String(Math.max(0, +pap.offset - PAGE)) }); };
+$("#pap-next").onclick = () => { location.hash = papersHash({ offset: String(+pap.offset + PAGE) }); };
 
 // One submission: public record, FDA links, catalog links, structured review.
 let devicePoll = null;
@@ -533,7 +651,18 @@ async function loadDataset(id) {
 // ------------------------------------------------------------------ routing
 function route() {
   const h = location.hash;
-  if (h.startsWith("#/devices")) {
+  if (h.startsWith("#/datasets")) {
+    const params = new URLSearchParams(h.split("?")[1] || "");
+    show("cond", false);
+    window.scrollTo(0, $(".hero").offsetHeight + $(".hero").offsetTop - 72);
+    loadCondition(params.get("condition") || "", params.get("filter") || "").catch(e => banner(e.message));
+  } else if (h.startsWith("#/papers")) {
+    const params = new URLSearchParams(h.split("?")[1] || "");
+    Object.assign(pap, PAP_DEFAULTS);
+    for (const k of Object.keys(PAP_DEFAULTS)) if (params.has(k)) pap[k] = params.get(k);
+    show("papers", false);
+    loadPapers().catch(e => banner(e.message));
+  } else if (h.startsWith("#/devices")) {
     const params = new URLSearchParams(h.split("?")[1] || "");
     Object.assign(dev, DEV_DEFAULTS);
     for (const k of Object.keys(DEV_DEFAULTS)) if (params.has(k)) dev[k] = params.get(k);
@@ -655,7 +784,7 @@ async function refreshStats() {
 
 function show(view, clearHash = true) {
   if (clearHash && location.hash) history.pushState(null, "", location.pathname + location.search);
-  const tabFor = { device: "devices", dataset: "search", crawl: "crawls" }[view] || view;
+  const tabFor = { device: "devices", dataset: "search", crawl: "crawls", cond: "directory" }[view] || view;
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === tabFor));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("hidden", v.id !== `view-${view}`));
   if (view === "directory") loadDirectory();
@@ -664,6 +793,7 @@ function show(view, clearHash = true) {
 
 document.querySelectorAll(".tab").forEach(t => (t.onclick = () => {
   if (t.dataset.view === "devices") location.hash = "#/devices";
+  else if (t.dataset.view === "papers") location.hash = "#/papers";
   else show(t.dataset.view);
 }));
 $("#only-with").onchange = loadDirectory;

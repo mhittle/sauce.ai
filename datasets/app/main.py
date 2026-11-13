@@ -230,6 +230,25 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             a["devices"] = used.get(a["id"], [])
         return res
 
+    @app.get("/api/articles")
+    def articles(q: str | None = None, dataset: str | None = None, condition: str | None = None,
+                 relation: str | None = Query(None, pattern="^(descriptor|cites|mentions)$"),
+                 fda: bool = False,
+                 sort: str = Query("cited_by_count", pattern="^(cited_by_count|year|title|venue|datasets)$"),
+                 dir: str = Query("desc", pattern="^(asc|desc)$"),
+                 limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+        """All papers linked to catalog datasets, most-cited first by default."""
+        res = store.list_articles(q=q.strip() if q else None, dataset_id=dataset,
+                                  condition=condition, relation=relation, fda_only=fda,
+                                  sort=sort, direction=dir, limit=limit, offset=offset)
+        used = store.devices_for_articles([a["id"] for a in res["items"]])
+        for a in res["items"]:
+            a["devices"] = used.get(a["id"], [])
+        if dataset:
+            d = store.get_dataset(dataset)
+            res["dataset"] = {"id": dataset, "title": d["title"]} if d else None
+        return res
+
     @app.post("/api/datasets/{ds_id}/articles/refresh", status_code=202)
     def refresh_articles(ds_id: str):
         if not store.get_dataset(ds_id):

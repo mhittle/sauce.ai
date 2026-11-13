@@ -85,3 +85,11 @@ def test_mark_stale(tmp_path):
     s.update_crawl(cid, status="running")
     s.mark_stale_crawls()
     assert s.get_crawl(cid)["status"] == "interrupted"
+
+
+def test_condition_display_labels():
+    from app.store import condition_display
+    assert condition_display("parkinson's disease") == "Parkinson's Disease"
+    assert condition_display("copd") == "COPD"
+    assert condition_display("covid-19") == "Covid-19"
+    assert condition_display("als-ftd") == "ALS-FTD"

@@ -125,6 +125,8 @@ CREATE TABLE IF NOT EXISTS articles (
     updated_at     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS articles_doi ON articles(doi);
+CREATE INDEX IF NOT EXISTS articles_cited ON articles(cited_by_count);
+CREATE INDEX IF NOT EXISTS articles_year ON articles(year);
 
 CREATE TABLE IF NOT EXISTS dataset_articles (
     dataset_id  TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
@@ -244,6 +246,21 @@ def normalize_condition(name: str) -> str:
     return re.sub(r"\s+", " ", name.strip().lower())
 
 
+_ACRONYMS = {"als", "adhd", "ards", "copd", "ct", "ecg", "eeg", "emg", "hiv", "hpv", "ibd",
+             "icu", "imu", "ms", "mri", "nash", "nafld", "oct", "ptsd", "sle", "tbi", "uti"}
+
+
+def condition_display(name: str) -> str:
+    """Readable label: "parkinson's disease" -> "Parkinson's disease"-style
+    title case without str.title()'s "Parkinson'S", acronyms upper-cased."""
+    def word(w: str) -> str:
+        base = w.split("-")[0]
+        if base.lower() in _ACRONYMS:
+            return w.upper()
+        return w[:1].upper() + w[1:]
+    return " ".join(word(w) for w in name.strip().split())
+
+
 def normalize_query(q: str) -> str:
     return " ".join(sorted(set(re.findall(r"[a-z0-9]+", q.lower()))))
 
@@ -291,6 +308,12 @@ class Store:
             c.execute("ALTER TABLE condition_devices ADD COLUMN source TEXT NOT NULL"
                       " DEFAULT 'name'")
         c.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+        # Labels auto-made with str.title() ("Parkinson'S Disease", "Copd"):
+        # regenerate them; labels set any other way are left alone.
+        for name, disp in c.execute("SELECT name, display FROM conditions").fetchall():
+            if disp == name.title() and disp != condition_display(name):
+                c.execute("UPDATE conditions SET display = ? WHERE name = ?",
+                          (condition_display(name), name))
 
     # ------------------------------------------------------------ plumbing
     @contextmanager
@@ -375,7 +398,7 @@ class Store:
                 [(ds_id, x) for x in conds])
             for x in conds:
                 c.execute("INSERT OR IGNORE INTO conditions (name, display) VALUES (?, ?)",
-                          (x, x.title()))
+                          (x, condition_display(x)))
             self._reindex(c, ds_id)
         return ds_id, is_new
 
@@ -511,7 +534,7 @@ class Store:
                 (json.loads(row["synonyms"]) if row else []) + [s.lower() for s in synonyms]))
             terms = list(dict.fromkeys(
                 (json.loads(row["fda_terms"]) if row else []) + [t.lower() for t in fda_terms]))
-            disp = display or (row["display"] if row else name.strip().title())
+            disp = display or (row["display"] if row else condition_display(name))
             c.execute(
                 "INSERT INTO conditions (name, display, synonyms, fda_terms) VALUES (?, ?, ?, ?)"
                 " ON CONFLICT (name) DO UPDATE SET display = excluded.display,"
@@ -782,6 +805,70 @@ class Store:
                 " AND is_descriptor = 0", (ds_id,)).fetchone()
         return {**dict(counts), "items": [dict(r) for r in rows],
                 "state": self.literature_state(ds_id)}
+
+    _ARTICLE_SORTS = {"cited_by_count": "a.cited_by_count", "year": "a.year",
+                      "title": "a.title COLLATE NOCASE", "venue": "a.venue COLLATE NOCASE",
+                      "datasets": "n_datasets"}
+
+    def list_articles(self, q: str | None = None, dataset_id: str | None = None,
+                      condition: str | None = None, relation: str | None = None,
+                      fda_only: bool = False, sort: str = "cited_by_count",
+                      direction: str = "desc", limit: int = 50, offset: int = 0) -> dict:
+        """Every linked paper across the catalog, filterable and sortable.
+        relation: descriptor | cites | mentions (scoped to dataset_id /
+        condition when given). Each row carries the datasets it is linked to."""
+        link, lparams = ["da.article_id = a.id"], []
+        if dataset_id:
+            link.append("da.dataset_id = ?")
+            lparams.append(dataset_id)
+        if condition:
+            link.append("da.dataset_id IN (SELECT dataset_id FROM dataset_conditions"
+                        " WHERE condition = ?)")
+            lparams.append(normalize_condition(condition))
+        if relation == "descriptor":
+            link.append("da.is_descriptor = 1")
+        elif relation == "cites":
+            link.append("da.cites = 1 AND da.is_descriptor = 0")
+        elif relation == "mentions":
+            link.append("da.mentions = 1 AND da.cites = 0 AND da.is_descriptor = 0")
+        where, params = [], []
+        if len(link) > 1:
+            where.append(f"EXISTS (SELECT 1 FROM dataset_articles da WHERE {' AND '.join(link)})")
+            params += lparams
+        if q:
+            where.append("(a.title LIKE ? OR a.authors LIKE ? OR a.venue LIKE ? OR a.doi = ?"
+                         " OR a.pmid = ?)")
+            params += [f"%{q}%"] * 3 + [q.lower().removeprefix("https://doi.org/"), q]
+        if fda_only:
+            where.append("a.id IN (SELECT article_id FROM device_links WHERE article_id != '')")
+        base = "FROM articles a" + (f" WHERE {' AND '.join(where)}" if where else "")
+        order = self._ARTICLE_SORTS.get(sort, "a.cited_by_count")
+        direction = "ASC" if str(direction).lower() == "asc" else "DESC"
+        with self._conn() as c:
+            total = c.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
+            rows = [dict(r) for r in c.execute(
+                f"""SELECT a.id, a.doi, a.pmid, a.title, a.authors, a.venue, a.year,
+                           a.cited_by_count, a.url,
+                           (SELECT COUNT(*) FROM dataset_articles x WHERE x.article_id = a.id)
+                             AS n_datasets
+                    {base} ORDER BY {order} {direction} NULLS LAST, a.cited_by_count DESC, a.id
+                    LIMIT ? OFFSET ?""", [*params, limit, offset])]
+            ids = [r["id"] for r in rows]
+            links: dict[str, list[dict]] = {}
+            if ids:
+                for r in c.execute(
+                        "SELECT da.article_id, d.id, d.title, da.cites, da.mentions,"
+                        " da.is_descriptor FROM dataset_articles da JOIN datasets d"
+                        " ON d.id = da.dataset_id WHERE da.article_id IN"
+                        f" ({','.join('?' * len(ids))})"
+                        " ORDER BY da.is_descriptor DESC, da.cites DESC, d.title", ids):
+                    links.setdefault(r["article_id"], []).append(
+                        {"id": r["id"], "title": r["title"],
+                         "relation": "descriptor" if r["is_descriptor"] else
+                         "cites" if r["cites"] else "mentions"})
+        for r in rows:
+            r["datasets"] = links.get(r["id"], [])
+        return {"total": total, "items": rows}
 
     def article_counts(self, ds_ids: Iterable[str]) -> dict[str, int]:
         ids = list(ds_ids)
