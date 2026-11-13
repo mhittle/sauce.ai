@@ -409,12 +409,22 @@ def _snippet(text: str, start: int, end: int) -> str:
     return re.sub(r"\s+", " ", text[max(0, start - 160):end + 160]).strip()
 
 
-def find_links(store: Store, text: str, extra_names: list[str] = ()) -> list[dict]:
+def compile_targets(store: Store) -> dict:
+    """Catalog match targets with alias patterns compiled once (re-matching
+    many summaries reuses them)."""
+    t = store.link_targets()
+    t["patterns"] = [(ds_id, alias, re.compile(
+        r"(?<![A-Za-z0-9])" + re.escape(alias) + r"(?![A-Za-z0-9])", re.I))
+        for ds_id, alias in t["aliases"]]
+    return t
+
+
+def find_links(store: Store, text: str, extra_names: list[str] = (),
+               targets: dict | None = None) -> list[dict]:
     """Catalog datasets/papers referenced in a submission summary."""
-    targets = store.link_targets()
+    targets = targets or compile_targets(store)
     links: dict[tuple, dict] = {}
-    for ds_id, alias in targets["aliases"]:
-        pat = re.compile(r"(?<![A-Za-z0-9])" + re.escape(alias) + r"(?![A-Za-z0-9])", re.I)
+    for ds_id, alias, pat in targets["patterns"]:
         m = pat.search(text)
         if m:
             links.setdefault((ds_id, ""), {"dataset_id": ds_id, "via": "alias",
@@ -602,9 +612,39 @@ class DeviceWorker:
                     cond, self._condition_ks(cond), c.get("fda_510k_count") or 0,
                     c.get("fda_denovo_count") or 0)
             return True
+        if self.relink_step():
+            return True
         if job:
             return self.run_job(*job)
         return False
+
+    RELINK_PAGE = 100
+    RELINK_MIN_HOURS = 6
+
+    def relink_step(self) -> bool:
+        """Re-match stored summaries against the catalog after it changes
+        (imports, crawls, newly resolved aliases), one page per step, at most
+        one full pass every RELINK_MIN_HOURS. Returns True if it did work."""
+        st = json.loads(self.store.kv_get("device_relink") or "{}")
+        if not st.get("running"):
+            sig = self.store.link_signature()
+            if sig == st.get("done_sig") or (
+                    st.get("done_at") and not _older_than(st["done_at"], days=self.RELINK_MIN_HOURS / 24)):
+                return False
+            st = {"running": True, "sig": sig, "cursor": "", "linked": 0,
+                  "done_sig": st.get("done_sig"), "done_at": st.get("done_at")}
+        page = self.store.device_docs_page(st["cursor"], self.RELINK_PAGE)
+        if page:
+            targets = compile_targets(self.store)
+            for d in page:
+                links = find_links(self.store, d["text"], d["datasets_named"], targets)
+                self.store.replace_device_links(d["k_number"], links)
+                st["linked"] += bool(links)
+            st["cursor"] = page[-1]["k_number"]
+        if len(page) < self.RELINK_PAGE:
+            st.update(running=False, done_sig=st["sig"], done_at=_now_iso())
+        self.store.kv_set("device_relink", json.dumps(st))
+        return True
 
     def _map_paused(self) -> bool:
         until = self.store.kv_get("device_mapping_paused_until")

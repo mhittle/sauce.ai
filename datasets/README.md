@@ -129,6 +129,28 @@ CLI backfill: `python -m jobs.literature --minutes 30`.
   strong evidence. Pre-~1996 submissions and 510(k) "Statements" have no
   summary PDF.
 
+## Bulk imports
+
+Curated repositories are listed in one pass from their public catalog APIs
+instead of crawling them dataset by dataset (Crawls tab → Bulk imports,
+`POST /api/imports/{source}`, or `python -m jobs.importer physionet tcia openneuro`):
+
+| Source | API | Kept |
+|---|---|---|
+| PhysioNet | `/api/v1/project/published/` | latest-version databases and challenges; access policy → open / credentialed / DUA / request |
+| TCIA | `/api/v1/collections/` | human collections; public vs limited access; cancer types → conditions |
+| OpenNeuro | GraphQL | clinically relevant datasets only (most are healthy-volunteer cognitive studies) |
+
+Nothing is downloaded (`DATASETS_DOWNLOAD` now defaults to false): each entry
+records the description, license, DOI citation and step-by-step access
+instructions for that source. Claude (`DATASETS_MODEL`, low effort, batches of
+25) keeps clinically relevant records and assigns canonical conditions and
+modalities, reusing existing condition names; without a key a per-source
+heuristic does it. Imported datasets then go through the literature linker,
+and the FDA worker re-matches stored submission summaries whenever the catalog
+changes (at most one pass every 6 hours), so imported datasets named in
+510(k)/De Novo summaries are linked to them.
+
 ## Layout
 
 ```
