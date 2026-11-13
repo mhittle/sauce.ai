@@ -225,3 +225,19 @@ table.papers td.pds { min-width: 200px; }
 #pap-filter .chip { margin-right: 6px; }
 @media (max-width: 640px) { table.papers th:nth-child(2), table.papers td:nth-child(2) { display: none; } }
 .badge.repo { background: var(--chip); color: var(--ink); border: 1px dashed var(--muted); }
+
+/* Compatible datasets */
+.compat-list { margin-top: 6px; }
+.compat-row { padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.compat-row:first-of-type { border-top: 0; }
+.compat-head { display: flex; gap: 8px; align-items: baseline; }
+.compat-head a { color: var(--ink); font-weight: 550; text-decoration: none; }
+.compat-head a:hover { text-decoration: underline; }
+.score { font: 600 12px/1 var(--mono); min-width: 28px; text-align: center; padding: 3px 4px;
+         background: var(--ink); color: #fff; flex-shrink: 0; }
+.compat-tags { margin: 3px 0 1px; }
+.tag.role-train { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.tag.role-val { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.tag.role-pre { background: var(--chip); color: var(--muted); }
+.compat-warn { color: var(--warn); font-size: 12px; }
+.pmeta { color: var(--muted); font-size: 12px; }
