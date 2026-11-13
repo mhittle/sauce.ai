@@ -63,6 +63,7 @@
       <nav class="tabs" role="tablist" aria-label="Datasets">
         <button class="tab active" data-view="search">Search</button>
         <button class="tab" data-view="directory">Directory</button>
+        <button class="tab" data-view="papers">Papers</button>
         <button class="tab" data-view="devices">FDA devices</button>
         <button class="tab" data-view="crawls">Crawls</button>
       </nav>
@@ -93,7 +94,7 @@
     <!-- Directory -->
     <section id="view-directory" class="view hidden">
       <h2>Conditions, ranked by FDA 510(k) clearances</h2>
-      <p class="muted small">Counts = FDA 510(k) clearances and De Novo grants whose device name matches the condition or its device terms (openFDA), plus devices on FDA's AI-enabled list that Claude assigned to the condition from their names and FDA codes. A proxy for how active the SaMD market is for that condition. Click a count to review the submissions.</p>
+      <p class="muted small">Counts = FDA 510(k) clearances and De Novo grants whose device name matches the condition or its device terms (openFDA), plus devices on FDA's AI-enabled list that Claude assigned to the condition from their names and FDA codes. A proxy for how active the SaMD market is for that condition. Click a condition or its dataset counts to see the datasets; click an FDA count to review the submissions.</p>
       <div class="dev-controls">
         <label class="small"><input id="only-with" type="checkbox"> Only conditions with datasets</label>
         <label class="small"><input id="dir-sw" type="checkbox"> Count software / AI devices only</label>
@@ -102,7 +103,46 @@
         <thead><tr><th>#</th><th>Condition</th><th class="num">510(k)</th><th class="num">De Novo</th><th class="num" title="On FDA's AI-enabled list or AI per summary">AI</th><th class="num">Datasets</th><th class="num">Open</th><th class="num">Downloaded</th></tr></thead>
         <tbody id="dir-body"></tbody>
       </table>
-      <div id="dir-results" class="cards"></div>
+    </section>
+
+    <!-- One condition's datasets (from the Directory) -->
+    <section id="view-cond" class="view hidden">
+      <a href="#" id="cond-back">← Directory</a>
+      <h2 id="cond-title" style="margin-top:10px">Datasets</h2>
+      <p id="cond-sub" class="muted small"></p>
+      <div class="dev-controls">
+        <div class="seg" id="cond-filter">
+          <button data-f="">All</button><button data-f="open">Open access</button><button data-f="downloaded">Downloaded</button>
+        </div>
+        <span id="cond-links" class="small"></span>
+      </div>
+      <div id="cond-results" class="cards"></div>
+    </section>
+
+    <!-- Papers: every paper linked to a catalog dataset -->
+    <section id="view-papers" class="view hidden">
+      <h2 id="pap-title">Papers</h2>
+      <p id="pap-sub" class="muted small"></p>
+      <div class="dev-controls">
+        <div class="seg" id="pap-rel">
+          <button data-rel="">All</button><button data-rel="descriptor">Dataset papers</button><button data-rel="cites">Cite a dataset</button><button data-rel="mentions">Name a dataset</button>
+        </div>
+        <select id="pap-cond" aria-label="Condition"><option value="">All conditions</option></select>
+        <input id="pap-q" type="search" placeholder="Filter by title, author, journal, DOI or PMID">
+        <label class="small"><input id="pap-fda" type="checkbox"> Only papers cited in FDA submissions</label>
+      </div>
+      <div id="pap-filter" class="small hidden"></div>
+      <div class="table-wrap">
+        <table class="dir papers">
+          <thead><tr>
+            <th data-sort="title">Paper</th><th data-sort="venue">Journal</th>
+            <th data-sort="year" class="num">Year</th><th data-sort="cited_by_count" class="num">Citations</th>
+            <th data-sort="datasets">Datasets</th>
+          </tr></thead>
+          <tbody id="pap-body"></tbody>
+        </table>
+      </div>
+      <div class="pager"><button class="btn link" id="pap-prev">← Previous</button><span id="pap-page" class="muted small"></span><button class="btn link" id="pap-next">Next →</button></div>
     </section>
 
     <!-- FDA devices: list -->

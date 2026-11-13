@@ -122,3 +122,37 @@ def test_crawl_datasets_new_first(tmp_path):
     body = client.get(f"/api/crawls/{cid}/datasets").json()
     assert [(d["title"], d["is_new"]) for d in body["items"]] == [("New", True), ("Old", False)]
     assert client.get("/api/crawls/999/datasets").status_code == 404
+
+
+def test_articles_endpoint_filters_sorts_and_lists_datasets(tmp_path):
+    client, store, _ = make(tmp_path, llm=False)
+    ds, _ = store.upsert_dataset(RECORD)
+    other, _ = store.upsert_dataset({**RECORD, "title": "BraTS", "url": "https://brats.org/",
+                                     "conditions": ["Glioma"]})
+    store.upsert_article({"id": "doi:10.1/desc", "doi": "10.1/desc", "title": "MSSEG-2 challenge",
+                          "year": 2021, "cited_by_count": 50, "venue": "NeuroImage"})
+    store.upsert_article({"id": "pmid:1", "pmid": "1", "title": "Lesion segmentation with U-Net",
+                          "year": 2023, "cited_by_count": 200, "authors": "Smith J, Lee K"})
+    store.upsert_article({"id": "pmid:2", "pmid": "2", "title": "Glioma survival", "year": 2019,
+                          "cited_by_count": 5})
+    store.link_article(ds, "doi:10.1/desc", "descriptor", "crawl")
+    store.link_article(ds, "pmid:1", "cites", "epmc_cites")
+    store.link_article(other, "pmid:1", "mentions", "openalex_mentions")
+    store.link_article(other, "pmid:2", "cites", "epmc_cites")
+
+    body = client.get("/api/articles").json()
+    assert body["total"] == 3
+    assert [a["id"] for a in body["items"]] == ["pmid:1", "doi:10.1/desc", "pmid:2"]
+    top = body["items"][0]
+    assert top["n_datasets"] == 2 and {d["relation"] for d in top["datasets"]} == {"cites", "mentions"}
+
+    by_ds = client.get("/api/articles", params={"dataset": ds}).json()
+    assert by_ds["dataset"]["title"] == "MSSEG-2" and by_ds["total"] == 2
+    assert client.get("/api/articles", params={"dataset": ds, "relation": "descriptor"}).json()["total"] == 1
+    assert client.get("/api/articles", params={"condition": "glioma"}).json()["total"] == 2
+    assert client.get("/api/articles", params={"q": "smith"}).json()["items"][0]["id"] == "pmid:1"
+    assert client.get("/api/articles", params={"q": "10.1/desc"}).json()["total"] == 1
+    years = [a["year"] for a in client.get("/api/articles", params={"sort": "year", "dir": "asc"}).json()["items"]]
+    assert years == [2019, 2021, 2023]
+    assert client.get("/api/articles", params={"fda": "true"}).json()["total"] == 0
+    assert client.get("/api/articles", params={"sort": "bogus"}).status_code == 422
