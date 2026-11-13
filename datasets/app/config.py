@@ -85,7 +85,9 @@ class Settings:
     # A search re-crawls only if the same query wasn't crawled this recently.
     recrawl_hours: int = _int("DATASETS_RECRAWL_HOURS", 24)
     # Downloads: flat files only, size-capped, public addresses only.
-    download_enabled: bool = _bool("DATASETS_DOWNLOAD", True)
+    # Off by default: the catalog lists datasets and how to obtain them; it
+    # doesn't host copies. Set DATASETS_DOWNLOAD=true to mirror open files.
+    download_enabled: bool = _bool("DATASETS_DOWNLOAD", False)
     max_download_mb: int = _int("DATASETS_MAX_DOWNLOAD_MB", 500)
     max_files_per_dataset: int = _int("DATASETS_MAX_FILES_PER_DATASET", 10)
     allow_private_hosts: bool = _bool("DATASETS_ALLOW_PRIVATE_HOSTS", False)

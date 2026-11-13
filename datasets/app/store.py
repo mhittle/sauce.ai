@@ -1353,6 +1353,29 @@ class Store:
             row = c.execute("SELECT text FROM device_docs WHERE k_number = ?", (k,)).fetchone()
         return zlib.decompress(row["text"]).decode() if row and row["text"] else None
 
+    def link_signature(self) -> str:
+        """Changes whenever the catalog gains datasets, aliases or descriptor
+        papers, i.e. whenever stored summaries could match something new."""
+        with self._conn() as c:
+            one = lambda sql: c.execute(sql).fetchone()[0]  # noqa: E731
+            return ":".join(str(x) for x in (
+                one("SELECT COUNT(*) FROM datasets"),
+                one("SELECT COALESCE(SUM(LENGTH(aliases) + LENGTH(descriptors)), 0)"
+                    " FROM literature_state")))
+
+    def device_docs_page(self, after: str, n: int) -> list[dict]:
+        """Stored summary texts in k_number order (for re-matching)."""
+        with self._conn() as c:
+            rows = c.execute("SELECT k_number, text, extracted FROM device_docs"
+                             " WHERE status = 'done' AND text IS NOT NULL AND k_number > ?"
+                             " ORDER BY k_number LIMIT ?", (after, n)).fetchall()
+        out = []
+        for r in rows:
+            ext = json.loads(r["extracted"]) if r["extracted"] else {}
+            out.append({"k_number": r["k_number"], "text": zlib.decompress(r["text"]).decode(),
+                        "datasets_named": (ext or {}).get("datasets_named") or []})
+        return out
+
     def save_device_doc(self, k: str, status: str, pdf_url: str | None = None,
                         pages: int | None = None, text: str | None = None,
                         predicates: list[str] | None = None, error: str | None = None) -> None:

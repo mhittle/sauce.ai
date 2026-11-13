@@ -143,6 +143,8 @@ def test_worker_reads_pdf_and_extracts_on_request(env, monkeypatch):
     assert [l["dataset_id"] for l in d["links"]] == [ds]
     assert store.get_dataset(ds)["devices"][0]["k_number"] == "K213941"
     assert Client.calls == 1
+    assert w.step() is True               # one re-match pass over stored summaries
+    assert [l["dataset_id"] for l in store.get_device("K213941")["links"]] == [ds]  # kept
     assert w.step() is False              # nothing left: background never calls the LLM
     assert Client.calls == 1
 
@@ -303,3 +305,22 @@ def test_mapping_failure_backs_off(env):
         w.step()
     assert store.devices_to_map(5)                    # still pending, retried after the pause
     assert len(calls) == 1
+
+
+def test_relink_matches_stored_summaries_to_datasets_added_later(env):
+    settings, store = env
+    store.upsert_devices([normalize_record(rec("K200001", "2021-05-01")),
+                          normalize_record(rec("K200002", "2021-06-01"))])
+    store.save_device_doc("K200001", "done", text="Validated on the MIT-BIH Arrhythmia Database.")
+    store.save_device_doc("K200002", "done", text="No public data.")
+    w = DeviceWorker(store, settings, session=Session())
+    assert w.relink_step() is True and w.relink_step() is False      # pass done, nothing new
+    assert store.list_devices(linked_only=True)["total"] == 0
+    store.upsert_dataset({"title": "MIT-BIH Arrhythmia Database",
+                          "url": "https://physionet.org/content/mitdb/1.0.0/"})
+    assert w.relink_step() is False                                   # catalog changed, but < 6 h
+    st = json.loads(store.kv_get("device_relink")); st["done_at"] = "2000-01-01T00:00:00+00:00"
+    store.kv_set("device_relink", json.dumps(st))
+    assert w.relink_step() is True
+    linked = store.list_devices(linked_only=True)["items"]
+    assert [d["k_number"] for d in linked] == ["K200001"]

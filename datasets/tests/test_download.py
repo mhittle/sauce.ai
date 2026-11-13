@@ -57,7 +57,8 @@ def test_probe(server):
 
 
 def test_fetch_dataset_files_statuses(server, tmp_path):
-    settings = Settings(data_dir=tmp_path / "d", allow_private_hosts=True, max_download_mb=1)
+    settings = Settings(data_dir=tmp_path / "d", allow_private_hosts=True, max_download_mb=1,
+                        download_enabled=True)
     s = Store(settings.db_path)
     open_id, _ = s.upsert_dataset({
         "title": "PTX labels", "url": "https://x.org/ptx", "access_type": "open",

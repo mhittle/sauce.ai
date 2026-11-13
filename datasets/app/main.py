@@ -20,6 +20,7 @@ import os
 
 from .config import Settings, get_settings, on_mounted_volume, on_railway
 from .devices import DeviceWorker, fda_database_url, fetch_one, summary_pdf_urls
+from .importers import SOURCES, ImportRunner
 from .literature import LiteratureWorker
 from .manager import CrawlBusy, CrawlManager
 from .store import Store
@@ -49,6 +50,9 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         store, settings,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     devices = devices or DeviceWorker(
+        store, settings,
+        client_factory=crawler.make_client if settings.anthropic_api_key else None)
+    importer = ImportRunner(
         store, settings,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     logging.basicConfig(level=logging.INFO)
@@ -96,6 +100,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
                   description="LLM-driven medical dataset finder", version="0.1.0")
     app.state.store, app.state.manager, app.state.settings = store, manager, settings
     app.state.literature, app.state.devices = literature, devices
+    app.state.importer = importer
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins or ["*"],
                        allow_methods=["*"], allow_headers=["*"])
@@ -142,6 +147,20 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             "recent_crawl": recent,
             "crawl_recommended": recent is None,
         }
+
+    # -------------------------------------------------------- bulk imports
+    @app.get("/api/imports")
+    def import_status():
+        return {"busy": importer.busy(), "llm": bool(settings.anthropic_api_key),
+                "sources": importer.status()}
+
+    @app.post("/api/imports/{source}", status_code=202)
+    def start_import(source: str):
+        if source not in SOURCES:
+            raise HTTPException(404, "unknown source")
+        if not importer.start(source):
+            raise HTTPException(409, "an import is already running")
+        return {"started": source}
 
     # -------------------------------------------------------- crawls
     @app.post("/api/crawls", status_code=202)

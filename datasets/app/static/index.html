@@ -185,6 +185,12 @@
 
     <!-- Crawls -->
     <section id="view-crawls" class="view hidden">
+      <h2>Bulk imports</h2>
+      <p class="muted small">List every relevant dataset from a curated repository's public catalog, with access steps. Claude keeps the clinically relevant ones and assigns conditions; papers and FDA submissions are then linked in the background. Nothing is downloaded.</p>
+      <table class="dir imports">
+        <thead><tr><th>Source</th><th>Status</th><th class="num">Checked</th><th class="num">Kept</th><th class="num">New</th><th>Last run</th><th></th></tr></thead>
+        <tbody id="imports-body"></tbody>
+      </table>
       <h2>Crawl sessions</h2>
       <table class="dir">
         <thead><tr><th>ID</th><th>Mode</th><th>Query</th><th>Status</th><th class="num">Found</th><th class="num">New</th><th class="num">Tokens (in/out)</th><th>Started</th><th></th></tr></thead>
