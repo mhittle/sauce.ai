@@ -203,6 +203,21 @@ opens a per-dataset exploration page for hypothesis generation
   sensor *series* (id, time, channels, label), which is how IMU data gets
   signal and spaghetti views; zipped image folders use the folder as the label.
   Datasets behind credentials or DUAs show their access steps instead.
+- **Repositories and huge archives.** Figshare and Zenodo records are listed
+  through their APIs (no agent needed). Archives larger than the cap are
+  *sampled*: HTTP range requests read the zip's index and pull a spread of
+  members (images, tables, signal files) from each archive, without
+  downloading the rest. Images join labels from a metadata table on file name
+  (e.g. GRAZPEDWRI-DX's `dataset.csv`); folders of one-recording-per-file
+  signals join a metadata sheet (xlsx/csv, title rows skipped) on the file
+  name's subject key (e.g. PPG-BP's `100_1.txt` -> subject 100).
+- **Chat with this dataset.** A side-panel chat where Claude answers questions
+  by querying the sample with read-only tools (distributions, group summaries,
+  rows, records, signal statistics, record header metadata). Gated by
+  `DATASETS_EDIT_TOKEN` unless `DATASETS_CHAT_OPEN=true`.
+- **Needs access.** When a build finds the data sit behind a login, DUA or
+  request, the dataset is marked as needing access: its page shows the access
+  steps and its card stops offering Explore.
 - **Stored and editable.** Specs are saved per dataset with version history and
   restore. The page's prompt box sends a change request to Claude, which
   rewrites the spec within the library; asks for views the library doesn't have

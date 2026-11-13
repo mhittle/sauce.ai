@@ -37,7 +37,8 @@ HF_SERVER = "https://datasets-server.huggingface.co"
 MAX_POINTS = 2000          # per channel per window returned to the browser
 TABLE_MAX_ROWS = 200_000   # rows read from one table file
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff")
-TABLE_EXT = (".csv", ".tsv", ".txt")
+TABLE_EXT = (".csv", ".tsv", ".txt", ".xlsx", ".xls")
+_NUM_TOKEN = re.compile(r"^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$")
 
 
 class SourceError(RuntimeError):
@@ -272,8 +273,9 @@ class WFDBSource:
         for ext in exts:
             if not ext:
                 continue
+            name, pn = self._split(record)
             try:
-                a = wfdb.rdann(record, ext, pn_dir=self.pn_dir)
+                a = wfdb.rdann(name, ext, pn_dir=pn)
             except Exception:
                 continue
             self._ann_ext = ext
@@ -286,17 +288,27 @@ class WFDBSource:
         self._ann_cache[record] = out
         return out
 
+    def _split(self, record: str) -> tuple[str, str]:
+        """RECORDS entries can include subfolders (`tpehgdb/tpehg1039`); wfdb
+        wants the folder in pn_dir and the bare record name."""
+        folder, _, name = record.rpartition("/")
+        return name, f"{self.pn_dir}/{folder}" if folder else self.pn_dir
+
     def header(self, record: str) -> dict:
         cache = self.__dict__.setdefault("_hdr", {})
         if record in cache:
             return cache[record]
+        name, pn = self._split(record)
         try:
-            h = self._wfdb().rdheader(record, pn_dir=self.pn_dir)
+            h = self._wfdb().rdheader(name, pn_dir=pn)
         except Exception as exc:
             raise SourceError(f"header {record}: {exc}") from exc
         cache[record] = {"fs": float(h.fs), "channels": list(h.sig_name or []),
                          "units": list(h.units or []),
-                         "seconds": round((h.sig_len or 0) / float(h.fs), 1)}
+                         "seconds": round((h.sig_len or 0) / float(h.fs), 1),
+                         # Many databases keep per-record metadata here (age,
+                         # sex, diagnosis, gestation...).
+                         "comments": [str(c)[:200] for c in (h.comments or [])][:40]}
         return cache[record]
 
     def probe(self, max_records: int = 25) -> dict:
@@ -321,6 +333,7 @@ class WFDBSource:
                 "records": len(recs), "record_ids": recs[:500], "fs": first.get("fs"),
                 "channels": first.get("channels"), "units": first.get("units"),
                 "record_seconds": first.get("seconds"), "annotation_ext": self._ann_ext,
+                "header_comments_example": first.get("comments"),
                 "labels": dict(sorted(labels.items(), key=lambda x: -x[1])[:40]),
                 "labels_sampled_from": min(len(recs), max_records),
                 "record_labels": per_record}
@@ -335,7 +348,8 @@ class WFDBSource:
         dur = max(0.5, min(float(dur), 600.0))
         a, b = int(start * fs), int(min(h["seconds"], start + dur) * fs)
         try:
-            rec = self._wfdb().rdrecord(record, pn_dir=self.pn_dir, sampfrom=a, sampto=max(a + 1, b))
+            name, pn = self._split(record)
+            rec = self._wfdb().rdrecord(name, pn_dir=pn, sampfrom=a, sampto=max(a + 1, b))
         except Exception as exc:
             raise SourceError(f"read {record}: {exc}") from exc
         names = list(rec.sig_name)
@@ -417,12 +431,41 @@ class FilesSource:
     def tables(self) -> list[tuple[str, str]]:
         return [m for m in self.members() if self._name(m).lower().endswith(TABLE_EXT)]
 
+    def signal_files(self) -> list[tuple[str, str]]:
+        """Text files that each hold one recording: a single row or column of
+        numbers (e.g. PPG-BP's 657 `100_1.txt` files). Labels for them come
+        from a metadata table joined on the file name."""
+        if getattr(self, "_signal_files", None) is not None:
+            return self._signal_files
+        out = []
+        for m in self.tables():
+            if not self._name(m).lower().endswith((".txt", ".csv", ".tsv")):
+                continue
+            try:
+                head = self.read_bytes(m)[:4096].decode("utf-8", "ignore")
+            except Exception:
+                continue
+            lines = [ln for ln in head.splitlines() if ln.strip()]
+            toks = [t for ln in lines for t in re.split(r"[\s,;]+", ln.strip()) if t]
+            if len(toks) >= 50 and all(_NUM_TOKEN.match(t) for t in toks[:400]) and (
+                    len(lines) <= 2 or all(len(re.split(r"[\s,;]+", ln.strip())) == 1
+                                            for ln in lines[:50])):
+                out.append(m)
+        self._signal_files = out if len(out) >= 10 else []
+        return self._signal_files
+
     @property
     def kind(self) -> str:
         imgs, tabs = self.images(), self.tables()
-        if len(imgs) >= 20 and len(imgs) >= len(tabs):
+        if (len(imgs) >= 20 and len(imgs) >= len(tabs)) or (len(imgs) >= 5 and len(imgs) > 3 * len(tabs)):
             return "images"
+        if self.signal_files():
+            return "signals"
         return "table" if tabs else ("images" if imgs else "none")
+
+    def has_table(self) -> bool:
+        sig = set(self.signal_files())
+        return any(m not in sig for m in self.tables())
 
     def read_bytes(self, m: tuple[str, str]) -> bytes:
         if m[1]:
@@ -430,21 +473,50 @@ class FilesSource:
                 return z.read(m[1])
         return Path(m[0]).read_bytes()
 
-    # -- images (label = parent folder)
+    # -- images (label = parent folder, plus any metadata table joined on name)
+    def image_join(self) -> dict | None:
+        """A metadata table column holding image file stems, if there is one."""
+        if getattr(self, "_img_join", 0) != 0:
+            return self._img_join
+        self._img_join = None
+        if self.has_table():
+            stems = {self._stem(m) for m in self.images()}
+            df = self.table()
+            for c in df.columns:
+                vals = set(df[c].astype(str))
+                hits = len(stems & vals)
+                if hits >= max(3, len(stems) // 3):
+                    cols = [x for x in df.columns if x != c and 1 < df[x].nunique(dropna=False) <= 40]
+                    rows = {str(k): r for k, r in zip(df[c].astype(str), df.to_dict("records"))}
+                    self._img_join = {"key": c, "columns": cols, "rows": rows, "matched": hits}
+                    break
+        return self._img_join
+
     def image_index(self) -> list[dict]:
+        if getattr(self, "_img_index", None) is not None:
+            return self._img_index
+        join = self.image_join()
         out = []
         for i, m in enumerate(self.images()):
             parts = self._name(m).replace("\\", "/").split("/")
             label = parts[-2] if len(parts) >= 2 else ""
-            out.append({"index": i, "label": label, "name": parts[-1],
-                        "split": next((p for p in parts[:-1] if p.lower() in
-                                       ("train", "test", "val", "valid", "validation")), "")})
+            row = {"index": i, "label": label, "name": parts[-1],
+                   "split": next((p for p in parts[:-1] if p.lower() in
+                                  ("train", "test", "val", "valid", "validation")), "")}
+            if join:
+                meta = join["rows"].get(self._stem(m)) or {}
+                for c in join["columns"]:
+                    v = meta.get(c)
+                    row[c] = None if v is None or v != v else (int(v) if isinstance(v, float) and v.is_integer() else v)
+            out.append(row)
+        self._img_index = out
         return out
 
     def image_rows(self, where: dict | None, offset: int, length: int, file_url) -> dict:
         idx = self.image_index()
         if where:
-            idx = [r for r in idx if all(str(r.get(k)) == str(v) for k, v in where.items())]
+            norm = lambda v: "(blank)" if v is None or v == "" else str(v)  # noqa: E731
+            idx = [r for r in idx if all(norm(r.get(k)) == str(v) for k, v in where.items())]
         page = idx[offset: offset + length]
         return {"rows": [{**r, "image": file_url(r["index"])} for r in page], "total": len(idx)}
 
@@ -453,27 +525,33 @@ class FilesSource:
         if self._table is not None:
             return self._table
         import pandas as pd
-        tabs = self.tables()
+        sig = set(self.signal_files())
+        tabs = [m for m in self.tables() if m not in sig]
         if not tabs:
             raise SourceError("no table files")
-        # Largest table first (usually the data, not a README-ish txt).
+        # Spreadsheets first (usually the labels/metadata), then the largest
+        # text table (usually the data, not a README-ish txt).
         sizes = []
         for m in tabs:
             try:
-                sizes.append((len(self.read_bytes(m)), m))
+                n = len(self.read_bytes(m))
             except Exception:
                 continue
+            xl = self._name(m).lower().endswith((".xlsx", ".xls"))
+            sizes.append(((xl, n), m))
         _, m = max(sizes, key=lambda x: x[0])
         raw = self.read_bytes(m)
         name = self._name(m).lower()
-        sep = "\t" if name.endswith(".tsv") else None
-        df = pd.read_csv(io.BytesIO(raw), sep=sep, engine="python", nrows=TABLE_MAX_ROWS,
-                         on_bad_lines="skip")
-        if df.shape[1] == 1 and name.endswith(".txt"):   # whitespace-delimited
-            df = pd.read_csv(io.BytesIO(raw), sep=r"\s+", engine="python", header=None,
-                             nrows=TABLE_MAX_ROWS)
-            df.columns = [f"col{i}" for i in range(df.shape[1])]
-        df.columns = [str(c).strip() for c in df.columns]
+        if name.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(io.BytesIO(raw), header=None, nrows=TABLE_MAX_ROWS)
+        else:
+            sep = "\t" if name.endswith(".tsv") else None
+            df = pd.read_csv(io.BytesIO(raw), sep=sep, engine="python", nrows=TABLE_MAX_ROWS,
+                             on_bad_lines="skip", header=None)
+            if df.shape[1] == 1 and name.endswith(".txt"):   # whitespace-delimited
+                df = pd.read_csv(io.BytesIO(raw), sep=r"\s+", engine="python", header=None,
+                                 nrows=TABLE_MAX_ROWS)
+        df = _with_header(df)
         self._table, self._table_name = df, self._name(m)
         return df
 
@@ -501,12 +579,129 @@ class FilesSource:
             labels: dict[str, int] = {}
             for r in idx:
                 labels[r["label"]] = labels.get(r["label"], 0) + 1
+            fields = [{"name": "image", "kind": "image"}]
+            if len(labels) > 1:
+                fields.append({"name": "label", "kind": "class_label"})
+            if any(r["split"] for r in idx):
+                fields.append({"name": "split", "kind": "class_label"})
+            stats = {}
+            join = self.image_join()
+            for c in (join or {}).get("columns", []):
+                counts: dict[str, int] = {}
+                for r in idx:
+                    k = "(blank)" if r.get(c) is None else str(r[c])
+                    counts[k] = counts.get(k, 0) + 1
+                fields.append({"name": c, "kind": "class_label"})
+                stats[c] = {"frequencies": dict(sorted(counts.items(), key=lambda x: -x[1])[:40])}
             base.update(images=len(idx), labels=dict(sorted(labels.items(), key=lambda x: -x[1])[:60]),
-                        fields=[{"name": "label", "kind": "class_label"},
-                                {"name": "split", "kind": "class_label"}])
+                        fields=fields, stats=stats,
+                        metadata_join={"key": join["key"], "matched": join["matched"]} if join else None)
         elif kind == "table":
             base.update(self.table_probe())
+        elif kind == "signals":
+            files = self.signal_files()
+            first = self.vector(files[0])
+            base.update(records=len(files), record_ids=[self._stem(m) for m in files[:500]],
+                        channels=["signal"], fs=None, samples_per_record=len(first),
+                        value_range=[_f(min(first)), _f(max(first))])
+            if self.has_table():
+                base["meta"] = self.table_probe()
+                join = self.guess_join()
+                if join:
+                    base["join"] = join
+                    base["labels"] = self.label_counts(join["id_col"], join["label_col"]) \
+                        if join.get("label_col") else {}
         return base
+
+    # -- one recording per file, labels from a metadata table
+    @staticmethod
+    def _stem(m: tuple[str, str]) -> str:
+        return re.sub(r"\.[^.]+$", "", (m[1] or m[0]).replace("\\", "/").split("/")[-1])
+
+    @staticmethod
+    def _key(stem: str) -> str:
+        """Subject key in a file name: `100_1` -> `100`, `s07-run2` -> `s07`."""
+        return re.split(r"[_\-. ]", stem)[0].lstrip("0") or "0"
+
+    def vector(self, m: tuple[str, str]) -> list[float]:
+        txt = self.read_bytes(m).decode("utf-8", "ignore")
+        return [float(t) for t in re.split(r"[\s,;]+", txt.strip()) if _NUM_TOKEN.match(t)]
+
+    def guess_join(self) -> dict | None:
+        """Which metadata column holds the file-name key, and a label column."""
+        df = self.table()
+        keys = {self._key(self._stem(m)) for m in self.signal_files()}
+        best, hits = None, 0
+        for c in df.columns:
+            vals = {str(v).split(".")[0].lstrip("0") or "0" for v in df[c].dropna()}
+            n = len(keys & vals)
+            if n > hits:
+                best, hits = c, n
+        if not best or hits < max(3, len(keys) // 4):
+            return None
+        cats = [c for c in df.columns if c != best and df[c].dtype.kind not in "if"
+                and 1 < df[c].nunique() <= 12]
+        pref = [c for c in cats if re.search(r"hypertension|class|label|diagnos|disease|group|status|grade|stage", str(c), re.I)]
+        return {"id_col": best, "matched_keys": hits, "label_col": (pref or cats or [None])[0],
+                "label_candidates": cats[:8]}
+
+    def _meta_index(self, id_col: str) -> dict[str, Any]:
+        df = self.table()
+        return {(str(v).split(".")[0].lstrip("0") or "0"): row for v, row in
+                zip(df[id_col], df.to_dict("records")) if v == v}
+
+    def label_counts(self, id_col: str, label_col: str) -> dict[str, int]:
+        meta = self._meta_index(id_col)
+        out: dict[str, int] = {}
+        for m in self.signal_files():
+            row = meta.get(self._key(self._stem(m)))
+            lab = str(row.get(label_col)) if row and row.get(label_col) == row.get(label_col) else "(none)"
+            out[lab] = out.get(lab, 0) + 1
+        return dict(sorted(out.items(), key=lambda x: -x[1]))
+
+    def file_records(self, cfg: dict | None) -> list[dict]:
+        cfg = cfg or {}
+        meta = self._meta_index(cfg["id_col"]) if cfg.get("id_col") and self.has_table() else {}
+        lab = cfg.get("label_col")
+        out = []
+        for m in self.signal_files():
+            stem = self._stem(m)
+            row = meta.get(self._key(stem)) or {}
+            v = row.get(lab) if lab else None
+            out.append({"id": stem, "labels": [str(v)] if v is not None and v == v else []})
+        return out
+
+    def _file(self, stem: str) -> tuple[str, str]:
+        for m in self.signal_files():
+            if self._stem(m) == stem:
+                return m
+        raise SourceError(f"no record {stem}")
+
+    def file_window(self, cfg: dict | None, record: str, start: float, dur: float) -> dict:
+        fs = float((cfg or {}).get("fs") or 1)
+        vals = self.vector(self._file(record))
+        a, b = int(max(0, start) * fs), int((max(0, start) + dur) * fs)
+        return {"record": record, "fs": (cfg or {}).get("fs"), "start": a / fs, "dur": (min(b, len(vals)) - a) / fs,
+                "record_seconds": round(len(vals) / fs, 3),
+                "channels": [{"name": "signal", "unit": "", "values": downsample(vals[a:b])}],
+                "annotations": []}
+
+    def file_traces(self, cfg: dict | None, label: str | None, n: int, window: float | None,
+                    points: int = 300) -> dict:
+        fs = float((cfg or {}).get("fs") or 1)
+        traces, used = [], []
+        for r in self.file_records(cfg):
+            if len(traces) >= n:
+                break
+            if label and label not in r["labels"]:
+                continue
+            vals = self.vector(self._file(r["id"]))
+            if window:
+                vals = vals[: int(window * fs)]
+            traces.append(resample(vals, points))
+            used.append(r["id"])
+        return {"traces": traces, "ids": used, "pooled": pooled(traces),
+                "seconds": round(len(vals) / fs, 3) if traces else window, "points": points}
 
     def table_rows(self, where: dict | None, offset: int, length: int,
                    columns: list[str] | None = None) -> dict:
@@ -625,6 +820,36 @@ class FilesSource:
             used.append(str(rid))
         return {"traces": traces, "ids": used, "pooled": pooled(traces),
                 "seconds": window, "points": points}
+
+
+def _with_header(df):
+    """Use the first row that looks like a header (mostly text, few blanks),
+    skipping title rows above it; numbered columns when there is none."""
+    head = None
+    for i in range(min(6, len(df))):
+        row = df.iloc[i]
+        filled = row.notna().mean()
+        texty = sum(isinstance(v, str) and not _NUM_TOKEN.match(v.strip()) for v in row) / max(1, len(row))
+        if filled >= 0.6 and texty >= 0.6:
+            head = i
+            break
+    if head is None:
+        df.columns = [f"col{i}" for i in range(df.shape[1])]
+        return df
+    cols, seen = [], {}
+    for j, c in enumerate(df.iloc[head]):
+        name = str(c).replace("\ufeff", "").strip() if c == c and str(c).strip() else f"col{j}"
+        seen[name] = seen.get(name, 0) + 1
+        cols.append(name if seen[name] == 1 else f"{name}_{seen[name]}")
+    out = df.iloc[head + 1:].reset_index(drop=True)
+    out.columns = cols
+    return out.apply(lambda s: _numeric(s))
+
+
+def _numeric(s):
+    import pandas as pd
+    conv = pd.to_numeric(s, errors="coerce")
+    return conv if conv.notna().sum() >= 0.8 * s.notna().sum() and s.notna().any() else s
 
 
 def _f(v) -> float | None:

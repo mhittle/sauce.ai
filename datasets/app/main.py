@@ -22,7 +22,7 @@ import os
 from .config import Settings, get_settings, on_mounted_volume, on_railway
 from .devices import DeviceWorker, fda_database_url, fetch_one, summary_pdf_urls
 from .compat import CompatWorker
-from .explore import ExploreManager
+from .explore import ExploreChat, ExploreManager
 from .explore_sources import SourceError, file_url
 from .importers import SOURCES, ImportRunner
 from .literature import LiteratureWorker
@@ -30,6 +30,15 @@ from .manager import CrawlBusy, CrawlManager
 from .store import Store
 
 STATIC = Path(__file__).resolve().parent / "static"
+
+
+class ChatTurn(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field(..., max_length=8000)
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatTurn] = Field(..., min_length=1, max_length=40)
 
 
 class EditRequest(BaseModel):
@@ -330,6 +339,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             probe.pop("record_labels", None)
         return {**ex, "busy": explorer.busy(ds_id), "availability": explorer.availability(ds),
                 "edit_locked": bool(settings.edit_token), "llm": bool(settings.anthropic_api_key),
+                "chat_locked": bool(settings.edit_token) and not settings.chat_open,
                 "dataset": {k: ds.get(k) for k in ("id", "title", "source", "url", "access_type",
                                                    "access_instructions", "description")}}
 
@@ -346,6 +356,15 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     def explore_edit(ds_id: str, req: EditRequest, x_edit_token: str | None = Header(None)):
         _check_token(x_edit_token)
         return _call(explorer.edit, ds_id, req.prompt)
+
+    chat = ExploreChat(explorer)
+
+    @app.post("/api/explore/{ds_id}/chat")
+    def explore_chat(ds_id: str, req: ChatRequest, x_edit_token: str | None = Header(None)):
+        """Ask questions about the dataset; Claude answers by querying its sample."""
+        if not settings.chat_open:
+            _check_token(x_edit_token)
+        return _call(chat.ask, ds_id, [t.model_dump() for t in req.messages])
 
     @app.post("/api/explore/{ds_id}/revert/{version}")
     def explore_revert(ds_id: str, version: int, x_edit_token: str | None = Header(None)):
@@ -368,6 +387,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         if getattr(src, "kind", "") == "images":
             return _call(src.image_rows, _where(where), offset, length,
                          lambda i: file_url(ds_id, i))
+        if not getattr(src, "has_table", lambda: False)():
+            raise HTTPException(400, "no table")
         return _call(src.table_rows, _where(where), offset, length,
                      columns.split(",") if columns else None)
 
@@ -387,8 +408,18 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     def explore_distribution(ds_id: str, field: str, group_by: str | None = None,
                              bins: int = Query(20, ge=2, le=100)):
         src = _src(ds_id)
-        if hasattr(src, "distribution") and src.kind == "table":
-            return _call(src.distribution, field, group_by, bins)
+        probe0 = ((explorer.get(ds_id) or {}).get("source") or {}).get("probe") or {}
+        if getattr(src, "kind", "") == "images" and field in (probe0.get("stats") or {}):
+            return {"type": "categorical",
+                    "groups": [{"group": "all", "counts": probe0["stats"][field]["frequencies"]}]}
+        if getattr(src, "kind", "") == "images" and field == "label" and probe0.get("labels"):
+            return {"type": "categorical", "groups": [{"group": "all", "counts": probe0["labels"]}]}
+        if hasattr(src, "distribution") and src.has_table():
+            try:
+                return src.distribution(field, group_by, bins)
+            except SourceError:
+                if not (src.kind == "signals" and field == "label"):
+                    raise HTTPException(404, f"no distribution for {field}")
         probe = ((explorer.get(ds_id) or {}).get("source") or {}).get("probe") or {}
         if field in (probe.get("stats") or {}):
             st = probe["stats"][field]
@@ -398,14 +429,14 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
                 h = st["histogram"]
                 return {"type": "histogram", "edges": h["bin_edges"],
                         "groups": [{"group": "all", "counts": h["hist"]}]}
-        if field == "label" and probe.get("labels"):
+        if probe.get("labels") and field in ("label", ((probe.get("join") or {}).get("label_col"))):
             return {"type": "categorical", "groups": [{"group": "all", "counts": probe["labels"]}]}
         raise HTTPException(404, f"no distribution for {field}")
 
     @app.get("/api/explore/{ds_id}/summary")
     def explore_summary(ds_id: str, group_by: str, fields: str):
         src = _src(ds_id)
-        if not hasattr(src, "group_summary"):
+        if not hasattr(src, "group_summary") or not src.has_table():
             raise HTTPException(400, "not a table")
         return _call(src.group_summary, fields.split(","), group_by)
 
@@ -420,6 +451,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             per = (((explorer.get(ds_id) or {}).get("source") or {}).get("probe") or {}).get(
                 "record_labels") or {}
             recs = [{"id": r, "labels": per.get(r, [])} for r in _call(src.records)]
+        elif getattr(src, "kind", "") == "signals":
+            recs = _call(src.file_records, _series_cfg(ds_id))
         else:
             cfg = _series_cfg(ds_id)
             if not cfg:
@@ -436,6 +469,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         chans = channels.split(",") if channels else None
         if src.__class__.__name__ == "WFDBSource":
             return _call(src.window, record, start, dur, chans)
+        if getattr(src, "kind", "") == "signals":
+            return _call(src.file_window, _series_cfg(ds_id), record, start, dur)
         cfg = _series_cfg(ds_id)
         if not cfg:
             raise HTTPException(400, "no series configured")
@@ -448,6 +483,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         src = _src(ds_id)
         if src.__class__.__name__ == "WFDBSource":
             return _call(src.traces, channel, label, n, window, align)
+        if getattr(src, "kind", "") == "signals":
+            return _call(src.file_traces, _series_cfg(ds_id), label, n, None)
         cfg = _series_cfg(ds_id)
         if not cfg:
             raise HTTPException(400, "no series configured")

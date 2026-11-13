@@ -100,6 +100,8 @@ class Settings:
     # optional token required to build/edit explore pages (unset = open).
     explore_max_mb: int = _int("DATASETS_EXPLORE_MAX_MB", 300)
     edit_token: str | None = os.environ.get("DATASETS_EDIT_TOKEN") or None
+    # Chat on explore pages costs Claude calls: gated by the edit token unless open.
+    chat_open: bool = _bool("DATASETS_CHAT_OPEN", False)
     openalex_api_key: str | None = os.environ.get("OPENALEX_API_KEY")
     openalex_mailto: str | None = os.environ.get("OPENALEX_MAILTO")
     lit_refresh_days: int = _int("DATASETS_LIT_REFRESH_DAYS", 30)

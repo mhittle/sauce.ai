@@ -37,6 +37,7 @@ from typing import Any
 
 from . import download
 from .config import Settings
+from .explore_remote import SKIP_EXT, repository_files, sample_zip
 from .explore_sources import (FilesSource, HFSource, SourceError, WFDBSource)
 from .store import Store, now_iso
 
@@ -61,7 +62,13 @@ VIEW_TYPES = {
     "notes": "Markdown text: what the data contain, caveats, and hypotheses to test with "
              "the views above. params: text.",
 }
-_NULLABLE = {"type": ["string", "null"]}
+def _null(schema: dict) -> dict:
+    """Nullable without type arrays or null-in-enum (kept to the documented subset)."""
+    return {"anyOf": [schema, {"type": "null"}]}
+
+
+_STR = {"type": "string"}
+_STRS = {"type": "array", "items": {"type": "string"}}
 PANEL = {
     "type": "object", "additionalProperties": False,
     "required": ["type", "title", "description", "params"],
@@ -75,37 +82,29 @@ PANEL = {
                          "channels", "channel", "labels", "n_per_group", "window_sec",
                          "align", "bins", "fields", "columns", "text"],
             "properties": {
-                "field": _NULLABLE, "group_by": _NULLABLE, "image_field": _NULLABLE,
-                "mask_field": _NULLABLE, "per_group": {"type": ["integer", "null"]},
-                "channels": {"type": ["array", "null"], "items": {"type": "string"}},
-                "channel": _NULLABLE,
-                "labels": {"type": ["array", "null"], "items": {"type": "string"}},
-                "n_per_group": {"type": ["integer", "null"]},
-                "window_sec": {"type": ["number", "null"]},
-                "align": {"type": ["string", "null"], "enum": ["event", "start", None]},
-                "bins": {"type": ["integer", "null"]},
-                "fields": {"type": ["array", "null"], "items": {"type": "string"}},
-                "columns": {"type": ["array", "null"], "items": {"type": "string"}},
-                "text": _NULLABLE,
+                "field": _null(_STR), "group_by": _null(_STR), "image_field": _null(_STR),
+                "mask_field": _null(_STR), "per_group": _null({"type": "integer"}),
+                "channels": _null(_STRS), "channel": _null(_STR), "labels": _null(_STRS),
+                "n_per_group": _null({"type": "integer"}),
+                "window_sec": _null({"type": "number"}),
+                "align": _null({"type": "string", "description": "'event' or 'start'"}),
+                "bins": _null({"type": "integer"}),
+                "fields": _null(_STRS), "columns": _null(_STRS), "text": _null(_STR),
             },
         },
     },
 }
+SERIES = {"type": "object", "additionalProperties": False,
+          "required": ["id_col", "time_col", "label_col", "channels", "fs"],
+          "properties": {"id_col": _STR, "time_col": _null(_STR), "label_col": _null(_STR),
+                         "channels": _STRS, "fs": _null({"type": "number"})}}
 SPEC_SCHEMA = {
     "type": "object", "additionalProperties": False,
     "required": ["title", "summary", "series", "panels", "reply", "tool_requests"],
     "properties": {
-        "title": {"type": "string"},
-        "summary": {"type": "string"},
-        "series": {"type": ["object", "null"], "additionalProperties": False,
-                   "required": ["id_col", "time_col", "label_col", "channels", "fs"],
-                   "properties": {"id_col": {"type": "string"}, "time_col": _NULLABLE,
-                                  "label_col": _NULLABLE,
-                                  "channels": {"type": "array", "items": {"type": "string"}},
-                                  "fs": {"type": ["number", "null"]}}},
+        "title": _STR, "summary": _STR, "series": _null(SERIES),
         "panels": {"type": "array", "items": PANEL},
-        "reply": {"type": "string"},
-        "tool_requests": {"type": "array", "items": {"type": "string"}},
+        "reply": _STR, "tool_requests": _STRS,
     },
 }
 
@@ -147,17 +146,27 @@ def heuristic_spec(probe: dict) -> dict:
         fields = probe.get("fields", [])
         img = next((f["name"] for f in fields if f["kind"] == "image"), "image")
         mask = next((f["name"] for f in fields if f["kind"] == "image" and f["name"] != img), None)
-        label = next((f["name"] for f in fields if f["kind"] in ("class_label", "label_number")),
-                     None)
+        idish = re.compile(r"(^|_)(id|number|num|idx|index|hash|spacing)$|^(study|patient)_", re.I)
+        cands = [f["name"] for f in fields if f["kind"] in ("class_label", "label_number")
+                 and not idish.search(f["name"])]
+        order = [r"fracture|lesion|abnormal|finding|disease|pneumo|tumou?r|nodule",
+                 r"label|class|target|has_|grade|stage", r"diagnos(?!.*uncertain)"]
+        label = next((c for pat in order for c in cands if re.search(pat, c, re.I)),
+                     cands[0] if cands else None)
         panels.append({"type": "image_gallery", "title": "Images by label",
                        "description": "", "params": p(image_field=img, mask_field=mask,
                                                       group_by=label, per_group=12)})
-        if label:
-            panels.append({"type": "label_distribution", "title": "Label counts",
-                           "description": "", "params": p(field=label)})
+        for c in ([label] if label else []) + [c for c in cands if c != label][:3]:
+            panels.append({"type": "label_distribution", "title": f"{c} (sample)",
+                           "description": "", "params": p(field=c)})
     elif kind == "signals":
         labels = list((probe.get("labels") or {}).keys())[:4]
         chans = (probe.get("channels") or [])[:4]
+        join = probe.get("join")
+        if probe.get("source") == "files":   # one recording per file (+ metadata table)
+            spec_series = {"id_col": (join or {}).get("id_col") or "", "time_col": None,
+                           "label_col": (join or {}).get("label_col"), "channels": chans,
+                           "fs": None}
         panels.append({"type": "signal_viewer", "title": "Recordings", "description": "",
                        "params": p(channels=chans, window_sec=10)})
         if labels and chans:
@@ -165,6 +174,20 @@ def heuristic_spec(probe: dict) -> dict:
                            "description": "", "params": p(channel=chans[0], labels=labels,
                                                           n_per_group=8, window_sec=10,
                                                           align="event")})
+        meta = probe.get("meta") or {}
+        if meta:
+            mcols = meta.get("columns", [])
+            lab = (join or {}).get("label_col")
+            if lab:
+                panels.append({"type": "label_distribution", "title": f"{lab} (subjects)",
+                               "description": "", "params": p(field=lab)})
+            idish = re.compile(r"(^|_)(id|index|idx)$|^num\.?$|^no\.?$", re.I)
+            nums = [c["name"] for c in mcols if c["kind"] == "number" and not idish.search(c["name"])]
+            if lab and nums:
+                panels.append({"type": "group_summary", "title": f"Subjects by {lab}",
+                               "description": "", "params": p(fields=nums[:8], group_by=lab)})
+            panels.append({"type": "record_table", "title": "Subject metadata", "description": "",
+                           "params": p(columns=[c["name"] for c in mcols[:12]])})
     elif kind == "table":
         cols = probe.get("columns", [])
         cats = [c["name"] for c in cols if c["kind"] == "text" and 1 < c["unique"] <= 20]
@@ -230,6 +253,7 @@ def validate_spec(spec: dict, probe: dict) -> dict:
     names: set[str] = set()
     names |= {f["name"] for f in probe.get("fields", [])}
     names |= {c["name"] for c in probe.get("columns", [])}
+    names |= {c["name"] for c in (probe.get("meta") or {}).get("columns", [])}
     names |= set(probe.get("channels") or [])
     keep, dropped = [], []
     for panel in spec.get("panels", []):
@@ -262,7 +286,10 @@ FIND_SYSTEM = """You find direct, unauthenticated download links for an open med
 dataset so a sample can be explored. Use web_search / web_fetch to locate the files \
 (repository file listings, GitHub releases, Zenodo/Figshare/Mendeley/OSF records), \
 check candidates with probe_url (must be a file, not an HTML page or login), then \
-call report_files once with up to 5 URLs, smallest useful sample first. If the data \
+call report_files once with up to 5 URLs: always include the file or archive that \
+holds the actual recordings, images or rows (not only a summary table or paper), \
+plus any label/metadata files; prefer a subset when the full release exceeds 300 MB. \
+Skip PDFs and READMEs. If the data \
 need an account, a DUA or a request form, call report_files with an empty list and \
 say so in the note."""
 
@@ -295,6 +322,10 @@ def find_files_llm(client, settings: Settings, ds: dict, max_turns: int = 8) -> 
                 results.append(_tool_result(b.id, {"error": "unknown tool"}, True))
         msgs.append({"role": "user", "content": results})
     return [], "no files found"
+
+
+class NeedsAccess(SourceError):
+    """The data exist but can't be fetched without an account, DUA or request."""
 
 
 # ------------------------------------------------------------------ manager
@@ -354,6 +385,9 @@ class ExploreManager:
 
     # -- availability (cheap, no network): what the card's Explore button says
     def availability(self, ds: dict) -> dict:
+        ex = self.get(ds["id"]) if ds.get("id") else None
+        if ex and ex.get("status") == "unavailable":
+            return {"available": False, "via": None, "reason": ex.get("error")}
         if HFSource.detect(ds):
             return {"available": True, "via": "huggingface"}
         if WFDBSource.detect(ds):
@@ -400,27 +434,72 @@ class ExploreManager:
         if local:
             return {"via": "files", "paths": local}
         if ds.get("access_type") not in ("open", "unknown"):
-            raise SourceError("This dataset needs credentials or an agreement before it can be "
+            raise NeedsAccess("This dataset needs credentials or an agreement before it can be "
                               "explored. " + (ds.get("access_instructions") or ""))
+        budget = self.settings.explore_max_mb * 1_000_000
+        repo = repository_files(ds)
+        if repo and repo[1]:
+            name, files = repo
+            log_(f"{name}: {len(files)} files listed by the repository API")
+            got = self._fetch_listed(files, acq, budget, log_)
+            if got:
+                return {"via": "files", "paths": [str(acq)], "repository": name}
         urls = [u for u in ds.get("download_urls") or [] if u.startswith("http")]
         note = ""
         if not urls and client is not None:
             log_("searching for direct download links…")
             urls, note = find_files_llm(client, self.settings, ds)
         if not urls:
-            raise SourceError("No direct download links found" + (f": {note}" if note else "."))
-        got = []
-        for u in urls[:5]:
-            log_(f"downloading {u[:120]}")
-            res = download.download(u, acq, self.settings.explore_max_mb * 1_000_000,
-                                    allow_private=self.settings.allow_private_hosts)
-            if res.status == "downloaded":
-                got.append(res.local_path)
-            else:
-                log_(f"skipped: {res.note}")
+            msg = "No open download links found" + (f": {note}" if note else ".")
+            # Only a stated login/DUA/request makes this permanent; tool or
+            # network trouble stays retryable.
+            if re.search(r"account|log ?in|sign[- ]?in|credential|agreement|\bDUA\b|request|"
+                         r"approv|register|restricted|controlled", note or "", re.I):
+                raise NeedsAccess(msg)
+            raise SourceError(msg)
+        got = self._fetch_listed([{"name": u.rsplit("/", 1)[-1], "size": 0, "url": u}
+                                  for u in urls[:5]], acq, budget, log_)
         if not got:
             raise SourceError("Could not download any of the candidate files.")
         return {"via": "files", "paths": [str(acq)]}
+
+    def _fetch_listed(self, files: list[dict], acq: Path, budget: int, log_) -> int:
+        """Small files whole (smallest first); archives over budget sampled
+        through range requests. Returns how many files/members landed."""
+        files = [f for f in files if f.get("url") and not (f["name"] or "").lower().endswith(SKIP_EXT)]
+        files.sort(key=lambda f: f.get("size") or 0)
+        cap = min(budget, 200_000_000)
+        n_big = sum(1 for f in files if (f.get("size") or 0) > cap and (f["name"] or "").lower().endswith(".zip"))
+        got = 0
+        for f in files:
+            if budget <= 0:
+                break
+            size = f.get("size") or 0
+            nm = (f["name"] or "").lower()
+            if size and size > min(budget, 200_000_000):
+                if nm.endswith(".zip"):
+                    log_(f"sampling {f['name']} ({size / 1e9:.1f} GB) without downloading all of it")
+                    try:   # share what's left across the remaining big archives
+                        share = budget // max(1, n_big)
+                        n_big -= 1
+                        out = sample_zip(f["url"], acq / re.sub(r"\.zip$", "", f["name"]),
+                                         share, size=size, log_=log_)
+                        log_(f"sampled {out['sampled']} of {out['members']} files from {f['name']}")
+                        got += out["sampled"]
+                        budget -= out["bytes"]
+                    except Exception as exc:
+                        log_(f"couldn't sample {f['name']}: {str(exc)[:160]}")
+                else:
+                    log_(f"skipped {f['name']} ({size / 1e9:.1f} GB, over the sample cap)")
+                continue
+            log_(f"downloading {f['name'] or f['url'][:100]}")
+            res = download.download(f["url"], acq, budget, allow_private=self.settings.allow_private_hosts)
+            if res.status == "downloaded":
+                got += 1
+                budget -= res.bytes or 0
+            else:
+                log_(f"skipped: {res.note}")
+        return got
 
     # -- jobs
     def busy(self, ds_id: str) -> bool:
@@ -442,6 +521,9 @@ class ExploreManager:
     def _build_safe(self, ds_id: str) -> None:
         try:
             self.build_blocking(ds_id)
+        except NeedsAccess as exc:
+            # Not a transient failure: the data sit behind a request/login.
+            self._save(ds_id, status="unavailable", error=str(exc)[:800])
         except Exception as exc:
             log.exception("explore build %s failed", ds_id)
             self._save(ds_id, status="failed", error=f"{type(exc).__name__}: {str(exc)[:500]}"
@@ -475,7 +557,8 @@ class ExploreManager:
             try:
                 spec = compose_llm(client, self.settings, ds, probe)
             except Exception as exc:
-                log_(f"Claude compose failed ({type(exc).__name__}); using defaults")
+                log.warning("explore compose failed for %s: %s", ds_id, exc)
+                log_(f"Claude compose failed ({type(exc).__name__}: {str(exc)[:240]}); using defaults")
         spec = validate_spec(spec or heuristic_spec(probe), probe)
         had = (self.get(ds_id) or {}).get("version")
         self._save_spec(ds_id, spec, "(rebuilt from the data)" if had else None)
@@ -508,3 +591,169 @@ class ExploreManager:
         spec["reply"] = f"Restored version {version}."
         spec["tool_requests"] = []
         self._save_spec(ds_id, spec, f"(restore version {version})")
+
+
+# ------------------------------------------------------------------ chat
+CHAT_SYSTEM = """You help a researcher explore one medical dataset to generate \
+hypotheses. You can query a sample of the actual data with the tools; use them to \
+answer with numbers rather than guessing, and say what you computed (n, groups, \
+which field). Be concise. Distinguish what the data show from what would need a \
+proper analysis (confounding, multiple comparisons, small n, label noise). When it \
+helps, suggest a view the user could add to the explore page (image gallery, signal \
+viewer, spaghetti, histogram by group, group summary, label distribution). Never \
+invent fields, labels or values that the tools don't return."""
+
+CHAT_TOOLS = [
+    {"name": "describe_data", "description": "The data probe: fields/columns, label "
+     "values with counts, channels, sampling rate, sizes, and the current explore views.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "distribution", "description": "Counts per value (categorical) or a histogram "
+     "(numeric) of one field, optionally split by a group field.",
+     "input_schema": {"type": "object", "properties": {
+         "field": {"type": "string"}, "group_by": {"type": "string"}}, "required": ["field"]}},
+    {"name": "group_summary", "description": "Mean ± SD of numeric fields per group.",
+     "input_schema": {"type": "object", "properties": {
+         "fields": {"type": "array", "items": {"type": "string"}},
+         "group_by": {"type": "string"}}, "required": ["fields", "group_by"]}},
+    {"name": "rows", "description": "Up to 50 rows (table or image metadata), optionally "
+     "where field == value.",
+     "input_schema": {"type": "object", "properties": {
+         "where_field": {"type": "string"}, "where_value": {"type": "string"},
+         "columns": {"type": "array", "items": {"type": "string"}},
+         "limit": {"type": "integer"}}}},
+    {"name": "records", "description": "Signal/series records, optionally only those "
+     "carrying a label; returns ids, labels and the total.",
+     "input_schema": {"type": "object", "properties": {"label": {"type": "string"}}}},
+    {"name": "signal_stats", "description": "Summary statistics (n, mean, SD, min, max) "
+     "of a record's channels over a time window (seconds).",
+     "input_schema": {"type": "object", "properties": {
+         "record": {"type": "string"}, "start": {"type": "number"},
+         "duration": {"type": "number"}}, "required": ["record"]}},
+]
+
+
+def _stats(vals: list) -> dict:
+    v = [x for x in vals if x is not None]
+    if not v:
+        return {"n": 0}
+    m = sum(v) / len(v)
+    sd = (sum((x - m) ** 2 for x in v) / max(1, len(v) - 1)) ** 0.5
+    return {"n": len(v), "mean": round(m, 4), "sd": round(sd, 4), "min": round(min(v), 4),
+            "max": round(max(v), 4)}
+
+
+class ExploreChat:
+    """Tool-using chat over one dataset's explore source (read-only)."""
+
+    MAX_TURNS = 8
+
+    def __init__(self, manager: ExploreManager):
+        self.m = manager
+
+    def _tool(self, ds_id: str, name: str, args: dict) -> Any:
+        m = self.m
+        ex = m.get(ds_id) or {}
+        probe = (ex.get("source") or {}).get("probe") or {}
+        spec = ex.get("spec") or {}
+        src = m.source(ds_id)
+        cls = src.__class__.__name__
+        if name == "describe_data":
+            slim = {k: v for k, v in probe.items() if k not in ("record_ids", "record_labels", "stats")}
+            if probe.get("stats"):
+                slim["stats"] = {k: {kk: vv for kk, vv in v.items() if kk != "histogram"}
+                                 for k, v in probe["stats"].items()}
+            return {"probe": slim, "views": [p["title"] for p in spec.get("panels", [])],
+                    "series": spec.get("series")}
+        if name == "distribution":
+            if cls == "FilesSource" and src.has_table():
+                return src.distribution(args["field"], args.get("group_by"))
+            st = (probe.get("stats") or {}).get(args["field"]) or {}
+            if st:
+                return {k: st.get(k) for k in ("frequencies", "min", "max", "mean", "histogram")}
+            if probe.get("labels"):
+                return {"label_counts": probe["labels"]}
+            return {"error": "no distribution available for that field"}
+        if name == "group_summary":
+            if cls == "FilesSource" and src.has_table():
+                return src.group_summary(args["fields"], args["group_by"])
+            return {"error": "group summaries need a table"}
+        if name == "rows":
+            where = {args["where_field"]: args.get("where_value")} if args.get("where_field") else None
+            n = max(1, min(50, int(args.get("limit") or 20)))
+            if cls == "HFSource":
+                r = src.rows(where, 0, n)
+                return {"total": r.get("total"), "rows": [{k: v for k, v in row.items()
+                        if not (isinstance(v, str) and v.startswith("http"))} for row in r["rows"]]}
+            if src.kind == "images":
+                return src.image_rows(where, 0, n, lambda i: None)
+            if src.has_table():
+                return src.table_rows(where, 0, n, args.get("columns"))
+            return {"error": "no rows for this data type"}
+        if name == "records":
+            if cls == "WFDBSource":
+                per = probe.get("record_labels") or {}
+                recs = [{"id": r, "labels": per.get(r, [])} for r in src.records()]
+            elif src.kind == "signals":
+                recs = src.file_records(spec.get("series"))
+            elif spec.get("series"):
+                recs = src.series_records(spec["series"]["id_col"], spec["series"].get("label_col"))
+            else:
+                return {"error": "no records for this data type"}
+            if args.get("label"):
+                recs = [r for r in recs if args["label"] in r["labels"]]
+            return {"total": len(recs), "records": recs[:60]}
+        if name == "signal_stats":
+            start, dur = float(args.get("start") or 0), float(args.get("duration") or 60)
+            if cls == "WFDBSource":
+                w = src.window(args["record"], start, dur)
+            elif src.kind == "signals":
+                w = src.file_window(spec.get("series"), args["record"], start, dur)
+            elif spec.get("series"):
+                w = src.series_window(spec["series"], args["record"], start, dur)
+            else:
+                return {"error": "no signals for this data type"}
+            meta = src.header(args["record"]).get("comments") if cls == "WFDBSource" else None
+            return {"record": w["record"], "fs": w["fs"], "seconds": w["dur"], "header_comments": meta,
+                    "channels": {c["name"]: _stats(c["values"]) for c in w["channels"]},
+                    "annotations": len(w["annotations"])}
+        return {"error": f"unknown tool {name}"}
+
+    def ask(self, ds_id: str, history: list[dict]) -> dict:
+        from .crawler import _create, _tool_result
+        if self.m.client_factory is None:
+            raise SourceError("chat needs ANTHROPIC_API_KEY")
+        ex = self.m.get(ds_id)
+        if not ex or not ex.get("source"):
+            raise SourceError("build the explore page first")
+        ds = self.m.store.get_dataset(ds_id)
+        card = {k: ds.get(k) for k in ("title", "source", "description", "labels", "conditions",
+                                       "modalities", "n_subjects", "access_type")}
+        client = self.m.client_factory(self.m.settings)
+        msgs: list[dict] = [{"role": h["role"], "content": str(h["content"])[:4000]}
+                            for h in history[-12:] if h.get("role") in ("user", "assistant")]
+        if not msgs or msgs[-1]["role"] != "user":
+            raise ValueError("last message must be from the user")
+        used: list[str] = []
+        for _ in range(self.MAX_TURNS):
+            resp = _create(client, self.m.settings,
+                           system=CHAT_SYSTEM + "\n\nDataset card:\n" + json.dumps(card, default=str),
+                           tools=CHAT_TOOLS, output_config={"effort": "medium"}, messages=msgs)
+            msgs.append({"role": "assistant", "content": resp.content})
+            if resp.stop_reason == "refusal":
+                return {"answer": "That request was declined.", "tools_used": used}
+            if resp.stop_reason != "tool_use":
+                text = "\n".join(b.text for b in resp.content if b.type == "text").strip()
+                return {"answer": text or "(no answer)", "tools_used": used}
+            results = []
+            for b in resp.content:
+                if b.type != "tool_use":
+                    continue
+                used.append(b.name)
+                try:
+                    out = self._tool(ds_id, b.name, b.input or {})
+                    results.append(_tool_result(b.id, json.dumps(out, default=str)[:15000]))
+                except Exception as exc:
+                    results.append(_tool_result(b.id, {"error": str(exc)[:300]}, True))
+            msgs.append({"role": "user", "content": results})
+        return {"answer": "I ran out of steps before finishing; try a narrower question.",
+                "tools_used": used}
