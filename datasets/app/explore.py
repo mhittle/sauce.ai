@@ -455,6 +455,25 @@ class ExploreManager:
             return {k: v for k, v in prev.items() if k != "probe"}
         local = self.store.local_files(ds["id"])
         acq = self.explore_dir(ds["id"]) / "raw"
+        budget = self.settings.explore_max_mb * 1_000_000
+        # Repositories with their own public APIs: no link hunting needed
+        # (and they win over leftovers from an earlier link search).
+        for name, detect, fetch in (("TCIA", tcia_collection, fetch_tcia),
+                                    ("OpenNeuro", openneuro_id, fetch_openneuro)):
+            if local or ds.get("access_type") not in ("open", "unknown"):
+                break
+            key = detect(ds)
+            if not key:
+                continue
+            log_(f"{name}: fetching a sample through its API…")
+            api_dir = self.explore_dir(ds["id"]) / name.lower()
+            try:
+                return fetch(key, api_dir, budget, log_)
+            except RepoError as exc:
+                log_(f"{name}: {exc}")
+            except Exception as exc:
+                log.warning("%s fetch failed for %s: %s", name, ds["id"], exc)
+                log_(f"{name} fetch failed ({type(exc).__name__}: {str(exc)[:200]})")
         if acq.exists() and any(acq.iterdir()):
             local.append(str(acq))
         if local:
@@ -462,21 +481,6 @@ class ExploreManager:
         if ds.get("access_type") not in ("open", "unknown"):
             raise NeedsAccess("This dataset needs credentials or an agreement before it can be "
                               "explored. " + (ds.get("access_instructions") or ""))
-        budget = self.settings.explore_max_mb * 1_000_000
-        # Repositories with their own public APIs: no link hunting needed.
-        for name, detect, fetch in (("TCIA", tcia_collection, fetch_tcia),
-                                    ("OpenNeuro", openneuro_id, fetch_openneuro)):
-            key = detect(ds)
-            if not key:
-                continue
-            log_(f"{name}: fetching a sample through its API…")
-            try:
-                return fetch(key, acq, budget, log_)
-            except RepoError as exc:
-                log_(f"{name}: {exc}")
-            except Exception as exc:
-                log.warning("%s fetch failed for %s: %s", name, ds["id"], exc)
-                log_(f"{name} fetch failed ({type(exc).__name__}: {str(exc)[:200]})")
         repo = repository_files(ds)
         if repo and repo[1]:
             name, files = repo
