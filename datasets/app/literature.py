@@ -439,10 +439,13 @@ class LiteratureWorker:
             self.resolve(ds_id)
         elif state["status"] == "complete":
             # Refresh: same descriptors/aliases, cursors reset.
-            streams = build_streams(state["descriptors"], state["aliases"],
-                                    bool(self.settings.openalex_api_key))
-            self.store.save_literature_state(ds_id, status="active", streams=streams,
-                                             completed_at=None)
+            streams = self.plan_streams(ds_id, state["descriptors"], state["aliases"])
+            if streams:
+                self.store.save_literature_state(ds_id, status="active", streams=streams,
+                                                 completed_at=None)
+            else:
+                self.store.save_literature_state(ds_id, status="complete", streams=[],
+                                                 completed_at=_now())
         else:
             self.harvest(ds_id, state)
         return True
@@ -481,10 +484,25 @@ class LiteratureWorker:
             descriptors.append({"article_id": aid, "title": art["title"],
                                 "epmc": art.get("_epmc"), "openalex_id": art.get("openalex_id")})
         aliases = clean_aliases(pick.get("aliases", []))
-        streams = build_streams(descriptors, aliases, bool(self.settings.openalex_api_key))
+        streams = self.plan_streams(ds_id, descriptors, aliases)
+        repository = self.store.dataset_kind(ds_id) == "repository"
         self.store.save_literature_state(
-            ds_id, status="active" if streams else "unresolved", descriptors=descriptors,
-            aliases=aliases, streams=streams, note=pick.get("note"))
+            ds_id, status="active" if streams else ("complete" if repository else "unresolved"),
+            descriptors=descriptors, aliases=aliases, streams=streams,
+            completed_at=_now() if repository else None,
+            note="repository: papers are linked to its datasets, not to it" if repository
+            else pick.get("note"))
+
+    def plan_streams(self, ds_id: str, descriptors: list[dict], aliases: list[str]) -> list[dict]:
+        """Harvest plan for a dataset. Repositories (dbGaP, Vivli...) get
+        none: papers naming them are about the studies they host. Platform
+        papers (PhysioNet, TCIA) are not followed: everything citing them would
+        be linked to every dataset on that platform."""
+        if self.store.dataset_kind(ds_id) == "repository":
+            return []
+        platform = self.store.platform_descriptor_ids()
+        own = [d for d in descriptors if d["article_id"] not in platform]
+        return build_streams(own, aliases, bool(self.settings.openalex_api_key))
 
     def harvest(self, ds_id: str, state: dict) -> None:
         streams = state["streams"]
@@ -497,6 +515,15 @@ class LiteratureWorker:
         cites = [s for s in pending if s["kind"].endswith("_cites")]
         stream = (cites or pending)[0]
         descriptor_ids = {d["article_id"] for d in state["descriptors"]}
+        if stream["kind"].endswith("_cites"):
+            # A descriptor that has since turned out to describe a platform
+            # (shared by several datasets): stop following its citations.
+            src = next((d["article_id"] for d in state["descriptors"]
+                        if stream["ref"] in (d.get("epmc"), d.get("openalex_id"))), None)
+            if src and src in self.store.platform_descriptor_ids():
+                stream.update(done=True, error="platform paper: not followed")
+                self.store.save_literature_state(ds_id, streams=streams)
+                return
         try:
             items, nxt, done, note = fetch_page(self.http, stream,
                                                 self.settings.lit_max_mention_hits)

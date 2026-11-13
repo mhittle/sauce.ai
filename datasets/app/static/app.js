@@ -57,6 +57,10 @@ function card(ds, markNew) {
   const dl = $(".badge.dl", n);
   dl.textContent = DL_LABEL[ds.download_status] || "";
   dl.classList.add(`dl-${ds.download_status}`);
+  if (ds.kind === "repository") {
+    const r = el("span", { class: "badge repo", title: "A multi-study archive or data-access platform, not one dataset. Not counted as a dataset; papers are linked to the studies it hosts, not to it." }, "Repository");
+    $(".sub", n).append(" ", r);
+  }
   $(".desc", n).textContent = ds.description || "";
 
   const chips = $(".chips", n);
@@ -259,7 +263,10 @@ async function loadDirectory() {
   const only = $("#only-with").checked;
   const sw = $("#dir-sw").checked;
   try { localStorage.setItem("dirSw", sw ? "1" : ""); } catch {}
-  const rows = await api(`/api/conditions?with_datasets=${only}`);
+  const [rows, st] = await Promise.all([api(`/api/conditions?with_datasets=${only}`), api("/api/stats")]);
+  $("#dir-total").textContent = `${st.datasets.toLocaleString()} unique datasets` +
+    (st.repositories ? ` (plus ${st.repositories} data repositories)` : "") +
+    ` across ${st.conditions.toLocaleString()} conditions. A dataset covering several conditions is listed under each, so the Datasets column adds up to more than ${st.datasets.toLocaleString()}.`;
   if (sw) rows.sort((a, b) => (b.sw_510k - a.sw_510k) || (b.sw_denovo - a.sw_denovo) || (b.n_datasets - a.n_datasets));
   $("#dir-body").replaceChildren(...rows.map((r, i) => {
     const tr = el("tr");
@@ -289,9 +296,10 @@ async function loadCondition(name, filter) {
   const c = conds.find(x => x.name === name) || { display: name };
   const keep = filter === "open" ? list.filter(d => d.access_type === "open")
     : filter === "downloaded" ? list.filter(d => ["downloaded", "partial"].includes(d.download_status)) : list;
-  keep.sort((a, b) => (b.n_articles || 0) - (a.n_articles || 0));
+  keep.sort((a, b) => ((a.kind === "repository") - (b.kind === "repository")) || (b.n_articles || 0) - (a.n_articles || 0));
+  const nRepo = list.filter(d => d.kind === "repository").length;
   $("#cond-title").textContent = `${c.display}: datasets`;
-  $("#cond-sub").textContent = `${list.length} datasets in the catalog` +
+  $("#cond-sub").textContent = `${list.length - nRepo} datasets` + (nRepo ? ` and ${nRepo} data ${nRepo === 1 ? "repository" : "repositories"} (listed last)` : "") + " in the catalog" +
     (filter ? ` · showing ${keep.length} ${filter === "open" ? "open-access" : "downloaded"}` : "") + " · most-used first.";
   document.querySelectorAll("#cond-filter button").forEach(b => {
     b.classList.toggle("on", b.dataset.f === (filter || ""));

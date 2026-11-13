@@ -57,8 +57,14 @@ RECORD_DATASET_TOOL = {
         "required": ["title", "url", "source", "description", "conditions", "modalities",
                      "labels", "size", "n_subjects", "file_formats", "license",
                      "access_type", "access_instructions", "download_urls", "citation",
-                     "tags"],
+                     "tags", "kind"],
         "properties": {
+            "kind": {"type": "string", "enum": ["dataset", "repository"],
+                     "description": "'dataset' for one specific dataset, study or "
+                                    "challenge. 'repository' only for a multi-study "
+                                    "archive or data-access platform (dbGaP, Vivli, "
+                                    "YODA, BioLINCC, FITBIR, EGA). Prefer recording the "
+                                    "specific study page inside a repository instead."},
             "title": {"type": "string"},
             "url": {"type": "string", "description": "Canonical landing page URL."},
             "source": {"type": "string",
