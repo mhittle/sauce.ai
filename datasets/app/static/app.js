@@ -71,6 +71,8 @@ function card(ds, markNew) {
   const rows = [["Labels", ds.labels], ["Size", ds.size], ["Subjects", ds.n_subjects],
                 ["Formats", ds.file_formats.join(", ")], ["License", ds.license],
                 ["Citation", ds.citation]];
+  const dp = dataLine(ds.profile);
+  if (dp) rows.unshift(["Data", dp]);
   for (const [k, v] of rows) if (v) { meta.append(el("dt", {}, k), el("dd", {}, v)); }
 
   const files = $(".files", n);
@@ -107,6 +109,7 @@ function card(ds, markNew) {
     if (ds.devices.length > 6) fdaBox.append(" ", el("a", { href: `#/dataset/${ds.id}` }, "all…"));
   }
 
+  setupCompat($(".compat", n), ds);
   setupPapers($(".papers", n), ds);
 
   $(".instructions", n).textContent = ds.access_instructions || "See the source page.";
@@ -117,6 +120,54 @@ function card(ds, markNew) {
     const li = el("li"); li.append(el("a", { href: u, target: "_blank", rel: "noopener" }, u)); links.append(li);
   }
   return n;
+}
+
+// Data profile, one line: "chest x-ray · png · 1024x1024 · adult".
+function dataLine(p) {
+  if (!p) return "";
+  const size = p.image_size || (p.sampling_hz ? `${p.sampling_hz} Hz${p.channels ? ` × ${p.channels} ch` : ""}` : "");
+  const labels = (p.targets || []).length;
+  return [p.modality !== "other" && p.modality, (p.formats || []).join("/"), size, p.views,
+          p.age_group !== "unknown" && p.age_group,
+          labels && `${labels} label target${labels === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+}
+
+const ROLE_LABEL = { "train together": ["role-train", "Train together"], "external validation": ["role-val", "External validation"],
+                     pretraining: ["role-pre", "Pretraining"], "related task": ["role-pre", "Related task"] };
+function compatRow(r) {
+  const d = el("div", { class: "compat-row" });
+  const head = el("div", { class: "compat-head" });
+  head.append(el("span", { class: "score", title: "Compatibility from this dataset's side (0–100): shared labels, data format/resolution, population" }, Math.round(r.score)));
+  head.append(el("a", { href: `#/dataset/${encodeURIComponent(r.id)}` }, r.title));
+  d.append(head);
+  const tags = el("div", { class: "compat-tags" });
+  for (const role of r.roles) { const [cls, lab] = ROLE_LABEL[role] || ["role-pre", role]; tags.append(el("span", { class: `tag ${cls}` }, lab)); }
+  const shared = (r.shared || []).map(x => `${x.target}${x.how ? ` (${x.how})` : ""}`).join(", ");
+  tags.append(el("span", { class: "pmeta" }, shared ? `Shared labels: ${shared}` : `Same data type: ${r.modality}`));
+  d.append(tags);
+  const dl = dataLine(r.data);
+  const meta = [r.source, dl, r.n_subjects && `${r.n_subjects} subjects`, ACCESS_LABEL[r.access_type]].filter(Boolean).join(" · ");
+  if (meta) d.append(el("div", { class: "pmeta" }, meta));
+  for (const w of r.warnings || []) d.append(el("div", { class: "compat-warn" }, `⚠ ${w}`));
+  if (r.notes && r.notes.length) d.append(el("div", { class: "pmeta" }, `To combine: ${r.notes.join("; ")}`));
+  return d;
+}
+
+// Compatible datasets (computed in the background); loaded on first open.
+function setupCompat(det, ds) {
+  if (!ds.n_compatible) return;
+  det.classList.remove("hidden");
+  $("summary", det).textContent = `Compatible datasets (${ds.n_compatible})`;
+  let loaded = false;
+  det.addEventListener("toggle", async () => {
+    if (!det.open || loaded) return;
+    loaded = true;
+    const r = await api(`/api/datasets/${encodeURIComponent(ds.id)}/compatible?limit=8`);
+    const list = $(".compat-list", det);
+    list.append(el("div", { class: "pmeta" }, "Other datasets usable in the same model or study, scored from this dataset's side."));
+    for (const x of r.items) list.append(compatRow(x));
+    if (ds.n_compatible > 8) list.append(el("a", { class: "small", href: `#/dataset/${encodeURIComponent(ds.id)}` }, `All ${ds.n_compatible} →`));
+  });
 }
 
 // Papers linked by the background literature worker; loaded on first open.
@@ -651,6 +702,14 @@ async function loadDataset(id) {
                  ` ${d.device_name || ""} · ${d.applicant || ""} · ${d.decision_date || ""}`);
       p.append(row);
     }
+    parts.push(p);
+  }
+  if (ds.n_compatible) {
+    const p = el("div", { class: "panel" }); p.style.marginTop = "14px";
+    p.append(el("h3", {}, `Compatible datasets (${ds.n_compatible})`));
+    p.append(el("p", { class: "muted small" }, "Datasets that can go into the same model or study. Train together: same labels and data close enough to pool. External validation: same task, with no sign of shared patients. Pretraining: same data type without shared labels. Scores are from this dataset's side: a single-label dataset scores a multi-label one higher than the reverse."));
+    const r = await api(`/api/datasets/${encodeURIComponent(id)}/compatible?limit=100`);
+    for (const x of r.items) p.append(compatRow(x));
     parts.push(p);
   }
   box.replaceChildren(...parts);

@@ -94,6 +94,8 @@ class Settings:
     cors_origins: str = os.environ.get("CORS_ORIGINS", "*")
     # Literature linker (background): articles that cite / mention each dataset.
     literature_enabled: bool = _bool("DATASETS_LITERATURE", True)
+    # Data profiles + compatible-dataset relations (app/compat.py).
+    compat_enabled: bool = _bool("DATASETS_COMPAT", True)
     openalex_api_key: str | None = os.environ.get("OPENALEX_API_KEY")
     openalex_mailto: str | None = os.environ.get("OPENALEX_MAILTO")
     lit_refresh_days: int = _int("DATASETS_LIT_REFRESH_DAYS", 30)

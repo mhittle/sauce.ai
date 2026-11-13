@@ -5,6 +5,7 @@ downloaded files, and the single-page UI.
 """
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,6 +21,7 @@ import os
 
 from .config import Settings, get_settings, on_mounted_volume, on_railway
 from .devices import DeviceWorker, fda_database_url, fetch_one, summary_pdf_urls
+from .compat import CompatWorker
 from .importers import SOURCES, ImportRunner
 from .literature import LiteratureWorker
 from .manager import CrawlBusy, CrawlManager
@@ -50,6 +52,9 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         store, settings,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     devices = devices or DeviceWorker(
+        store, settings,
+        client_factory=crawler.make_client if settings.anthropic_api_key else None)
+    compat = CompatWorker(
         store, settings,
         client_factory=crawler.make_client if settings.anthropic_api_key else None)
     importer = ImportRunner(
@@ -91,7 +96,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             literature.start()
         if settings.devices_enabled:
             devices.start()
+        if settings.compat_enabled:
+            compat.start()
         yield
+        compat.stop()
         literature.stop()
         devices.stop()
         manager.shutdown()
@@ -101,6 +109,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     app.state.store, app.state.manager, app.state.settings = store, manager, settings
     app.state.literature, app.state.devices = literature, devices
     app.state.importer = importer
+    app.state.compat = compat
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins or ["*"],
                        allow_methods=["*"], allow_headers=["*"])
@@ -270,6 +279,21 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             d = store.get_dataset(dataset)
             res["dataset"] = {"id": dataset, "title": d["title"]} if d else None
         return res
+
+    @app.get("/api/datasets/{ds_id}/compatible")
+    def dataset_compatible(ds_id: str, limit: int = Query(50, ge=1, le=200)):
+        """Other datasets usable in the same model or study: pooled training,
+        external validation or pretraining, with harmonization steps."""
+        d = store.get_dataset(ds_id)
+        if not d:
+            raise HTTPException(404, "dataset not found")
+        return {"profile": d["profile"], "items": store.compatible(ds_id, limit)}
+
+    @app.get("/api/compat")
+    def compat_status():
+        raw = store.kv_get("compat_computed")
+        return {"enabled": settings.compat_enabled, "worker_running": compat.running(),
+                "last": json.loads(raw) if raw else None, "last_error": compat.last_error}
 
     @app.post("/api/datasets/{ds_id}/articles/refresh", status_code=202)
     def refresh_articles(ds_id: str):

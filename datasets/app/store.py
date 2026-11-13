@@ -246,6 +246,23 @@ CREATE TABLE IF NOT EXISTS device_links (
 CREATE INDEX IF NOT EXISTS device_links_dataset ON device_links(dataset_id);
 CREATE INDEX IF NOT EXISTS device_links_article ON device_links(article_id);
 
+-- Compatible datasets (app/compat.py): a structured data profile per dataset
+-- and directed relations "other_id is useful to someone using dataset_id".
+CREATE TABLE IF NOT EXISTS dataset_profiles (
+    dataset_id  TEXT PRIMARY KEY REFERENCES datasets(id) ON DELETE CASCADE,
+    profile     TEXT NOT NULL,
+    card_hash   TEXT NOT NULL,
+    source      TEXT NOT NULL,              -- llm | heuristic
+    profiled_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dataset_relations (
+    dataset_id TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    other_id   TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    score      REAL NOT NULL,
+    relation   TEXT NOT NULL,               -- JSON: roles, shared, modality, notes, warnings
+    PRIMARY KEY (dataset_id, other_id)
+);
+
 CREATE TABLE IF NOT EXISTS literature_state (
     dataset_id   TEXT PRIMARY KEY REFERENCES datasets(id) ON DELETE CASCADE,
     status       TEXT NOT NULL,               -- active | retry | complete | unresolved
@@ -607,6 +624,11 @@ class Store:
                 "SELECT DISTINCT v.k_number, v.submission_type, v.device_name, v.applicant,"
                 " v.decision_date FROM device_links l JOIN devices v ON v.k_number = l.k_number"
                 " WHERE l.dataset_id = ? ORDER BY v.decision_date DESC", (ds_id,))]
+            prof = c.execute("SELECT profile, source FROM dataset_profiles WHERE dataset_id = ?",
+                             (ds_id,)).fetchone()
+            d["profile"] = {**json.loads(prof[0]), "source": prof[1]} if prof else None
+            d["n_compatible"] = c.execute(
+                "SELECT COUNT(*) FROM dataset_relations WHERE dataset_id = ?", (ds_id,)).fetchone()[0]
             d["files"] = [dict(r) for r in c.execute(
                 "SELECT id, url, filename, bytes, sha256, content_type, status, note,"
                 " fetched_at FROM files WHERE dataset_id = ? ORDER BY id", (ds_id,))]
@@ -1352,6 +1374,61 @@ class Store:
         with self._conn() as c:
             row = c.execute("SELECT text FROM device_docs WHERE k_number = ?", (k,)).fetchone()
         return zlib.decompress(row["text"]).decode() if row and row["text"] else None
+
+    # ------------------------------------------------------------ compatibility
+    _CARD_COLS = ("id, title, source, url, description, labels, size, n_subjects, file_formats,"
+                  " modalities, conditions")
+
+    def datasets_needing_profile(self, hash_fn, n: int) -> list[dict]:
+        """Datasets (not repositories) with no profile or a changed card."""
+        with self._conn() as c:
+            have = {r[0]: r[1] for r in c.execute("SELECT dataset_id, card_hash FROM dataset_profiles")}
+            out = []
+            for r in c.execute(f"SELECT {self._CARD_COLS} FROM datasets WHERE kind = 'dataset'"
+                               " ORDER BY first_seen"):
+                d = self._dataset_row(r)
+                if have.get(d["id"]) != hash_fn(d):
+                    out.append(d)
+                    if len(out) >= n:
+                        break
+        return out
+
+    def save_profile(self, ds_id: str, profile: dict, card_hash: str, source: str) -> None:
+        with self._write() as c:
+            c.execute("INSERT OR REPLACE INTO dataset_profiles VALUES (?, ?, ?, ?, ?)",
+                      (ds_id, json.dumps(profile), card_hash, source, now_iso()))
+
+    def all_profiles(self) -> tuple[list[dict], dict[str, dict]]:
+        with self._conn() as c:
+            rows = c.execute("SELECT d.id, d.title, d.source, d.url, p.profile FROM datasets d"
+                             " JOIN dataset_profiles p ON p.dataset_id = d.id"
+                             " WHERE d.kind = 'dataset'").fetchall()
+        return ([{"id": r["id"], "title": r["title"], "source": r["source"], "url": r["url"]}
+                 for r in rows], {r["id"]: json.loads(r["profile"]) for r in rows})
+
+    def replace_relations(self, rows: list[tuple]) -> None:
+        with self._write() as c:
+            c.execute("DELETE FROM dataset_relations")
+            c.executemany("INSERT OR REPLACE INTO dataset_relations VALUES (?, ?, ?, ?)",
+                          [(a, b, rel["score"], json.dumps(rel)) for a, b, rel in rows])
+
+    def compatible(self, ds_id: str, limit: int = 50) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT r.score, r.relation, d.id, d.title, d.source, d.access_type, d.n_subjects,"
+                " d.url, p.profile FROM dataset_relations r JOIN datasets d ON d.id = r.other_id"
+                " LEFT JOIN dataset_profiles p ON p.dataset_id = d.id"
+                " WHERE r.dataset_id = ? ORDER BY r.score DESC LIMIT ?", (ds_id, limit)).fetchall()
+        out = []
+        for r in rows:
+            rel = json.loads(r["relation"])
+            prof = json.loads(r["profile"]) if r["profile"] else {}
+            out.append({**rel, "id": r["id"], "title": r["title"], "source": r["source"],
+                        "access_type": r["access_type"], "n_subjects": r["n_subjects"],
+                        "url": r["url"],
+                        "data": {k: prof.get(k) for k in ("modality", "formats", "image_size",
+                                                          "sampling_hz", "age_group")}})
+        return out
 
     def link_signature(self) -> str:
         """Changes whenever the catalog gains datasets, aliases or descriptor

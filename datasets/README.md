@@ -151,6 +151,35 @@ and the FDA worker re-matches stored submission summaries whenever the catalog
 changes (at most one pass every 6 hours), so imported datasets named in
 510(k)/De Novo summaries are linked to them.
 
+## Compatible datasets
+
+Each card and dataset page lists **compatible datasets**: others that can go into
+the same model or study (`GET /api/datasets/{id}/compatible`). Built by
+`app/compat.py` in two steps:
+
+1. **Data profile** per dataset (Claude, low effort, batches of 8; heuristic
+   without a key; re-profiled when the card changes): primary modality, body
+   region, formats, image size or sampling rate and channels, views/protocol,
+   age group, countries, subjects, and every label target with its type
+   (classification, segmentation, detection, event, regression, report) and
+   annotator.
+2. **Pairwise comparison in code** within each modality, stored as directed
+   edges in `dataset_relations` (top 30 per dataset; a full recompute of ~1,500
+   datasets takes seconds, so no graph database is needed). Scores are
+   asymmetric: from a pneumothorax-only dataset's side, a 23-finding chest
+   X-ray set that includes pneumothorax scores high; from the 23-finding set's
+   side, the pneumothorax-only set covers 1 of its 23 tasks and scores lower.
+
+Score 0-100 = task (60: shared target, label-type match, how central the
+target is) + data (25: format, resolution or sampling rate, views, body region)
++ population (15: age group, partner size). Roles: **train together** (same
+label type, data close enough to pool), **external validation** (same task, no
+shared cohort name such as MIMIC in both titles), **pretraining** (same data
+type, no shared label). Each pair lists the harmonization it needs (convert
+formats, resize, resample, select common leads, derive image labels from masks,
+collapse multi-label to binary) and warnings (possible shared patients, age
+mismatch).
+
 ## Layout
 
 ```
