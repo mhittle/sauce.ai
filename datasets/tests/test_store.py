@@ -91,5 +91,78 @@ def test_condition_display_labels():
     from app.store import condition_display
     assert condition_display("parkinson's disease") == "Parkinson's Disease"
     assert condition_display("copd") == "COPD"
-    assert condition_display("covid-19") == "Covid-19"
+    assert condition_display("covid-19") == "COVID-19"
     assert condition_display("als-ftd") == "ALS-FTD"
+
+
+def test_condition_synonyms_canonicalized_and_merged_on_open(tmp_path):
+    import sqlite3
+    s = Store(tmp_path / "c.db")
+    a, _ = s.upsert_dataset(rec(conditions=["COPD"]))
+    assert s.get_dataset(a)["conditions"] == ["chronic obstructive pulmonary disease"]
+    s.upsert_condition("chronic obstructive pulmonary disease")
+    s.set_condition_510k("chronic obstructive pulmonary disease", 3)
+    # A catalog written before the alias map existed: rows under "copd".
+    con = sqlite3.connect(tmp_path / "c.db")
+    b = "b" * 12
+    con.execute("INSERT INTO datasets (id, canonical_url, url, title, conditions, first_seen,"
+                " last_seen) VALUES (?, 'x.org/b', 'https://x.org/b', 'B', '[\"copd\", \"asthma\"]',"
+                " '2026', '2026')", (b,))
+    con.execute("INSERT INTO dataset_conditions VALUES (?, 'copd')", (b,))
+    con.execute("INSERT INTO conditions (name, display, synonyms, fda_terms, fda_510k_count)"
+                " VALUES ('copd', 'Copd', '[]', '[\"copd\"]', 9)")
+    con.commit(); con.close()
+    s = Store(tmp_path / "c.db")
+    names = {r["name"]: r for r in s.conditions_ranked()}
+    assert "copd" not in names
+    copd = names["chronic obstructive pulmonary disease"]
+    assert copd["n_datasets"] == 2 and copd["openfda_510k"] == 9
+    assert "copd" in s.get_condition("COPD")["synonyms"]
+    assert s.get_dataset(b)["conditions"] == ["chronic obstructive pulmonary disease", "asthma"]
+
+
+def test_repositories_are_flagged_and_not_counted_as_datasets(tmp_path):
+    from app.store import guess_kind
+    assert guess_kind("https://dbgap.ncbi.nlm.nih.gov/home/", "dbGaP") == "repository"
+    assert guess_kind("https://vivli.org/", "Vivli Center") == "repository"
+    assert guess_kind("https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs1",
+                      "PCGC cohort (dbGaP phs001194)") == "dataset"
+    assert guess_kind("https://physionet.org/content/mitdb/1.0.0/", "MIT-BIH") == "dataset"
+    s = Store(tmp_path / "c.db")
+    s.upsert_dataset(rec())
+    r, _ = s.upsert_dataset(rec(title="dbGaP", url="https://dbgap.ncbi.nlm.nih.gov/home/",
+                                conditions=["glioma"]))
+    assert s.get_dataset(r)["kind"] == "repository"
+    assert (s.stats()["datasets"], s.stats()["repositories"]) == (1, 1)
+    glioma = next(x for x in s.conditions_ranked() if x["name"] == "glioma")
+    assert (glioma["n_datasets"], glioma["n_repositories"]) == (1, 1)
+    # The agent's own classification wins over the URL guess.
+    k, _ = s.upsert_dataset(rec(url="https://example.org/archive", kind="repository"))
+    assert s.get_dataset(k)["kind"] == "repository"
+
+
+def test_prune_literature_noise(tmp_path):
+    s = Store(tmp_path / "c.db")
+    repo, _ = s.upsert_dataset(rec(title="dbGaP", url="https://dbgap.ncbi.nlm.nih.gov/"))
+    ds = [s.upsert_dataset(rec(title=f"PhysioNet DB {i}", url=f"https://physionet.org/content/db{i}/"))[0]
+          for i in range(3)]
+    own, _ = s.upsert_dataset(rec(title="Own", url="https://own.org/"))
+    s.upsert_article({"id": "doi:platform", "doi": "10.1161/01.cir.101.23.e215", "title": "PhysioNet"})
+    s.upsert_article({"id": "doi:own", "doi": "10.1/own", "title": "Own dataset paper"})
+    for i, title in enumerate(["citer", "namer", "seurat", "own citer"]):
+        s.upsert_article({"id": f"p{i}", "title": title})
+    for d in ds:
+        s.link_article(d, "doi:platform", "descriptor", "llm")
+        s.link_article(d, "p0", "cites", "epmc_cites")
+    s.link_article(ds[0], "p1", "mentions", "epmc_mentions")
+    s.link_article(repo, "p2", "mentions", "epmc_mentions")
+    s.link_article(own, "doi:own", "descriptor", "llm")
+    s.link_article(own, "p3", "cites", "epmc_cites")
+    assert "doi:platform" in s.platform_descriptor_ids()
+    out = s.prune_literature_noise()
+    assert out["repository_links"] == 1 and out["platform_links"] == 3
+    assert out["datasets_reharvested"] == 3 and out["orphan_articles"] == 2   # p0, p2
+    assert [a["id"] for a in s.dataset_articles(ds[0])["items"]] == ["doi:platform", "p1"]
+    assert s.dataset_articles(repo)["total"] == 0
+    assert [a["id"] for a in s.dataset_articles(own)["items"]] == ["doi:own", "p3"]
+    assert s.run_once("k", lambda: {"n": 1}) == {"n": 1} and s.run_once("k", lambda: 2) is None

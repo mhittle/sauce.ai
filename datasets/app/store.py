@@ -21,6 +21,46 @@ from typing import Any, Iterable, Iterator
 from urllib.parse import urlsplit, urlunsplit
 
 ACCESS_TYPES = ("open", "registration", "credentialed", "dua", "request", "unknown")
+# "repository": a multi-study archive or data-access platform (dbGaP, Vivli,
+# YODA, FITBIR, ...) rather than one dataset. Listed, but not counted as a
+# dataset and not linked to literature (papers naming dbGaP aren't about it).
+KINDS = ("dataset", "repository")
+# Landing pages of multi-study repositories. Matched on host plus a shallow
+# path, so a specific study inside one (a dbGaP phs page) stays a dataset.
+_REPOSITORY_HOSTS = {"dbgap.ncbi.nlm.nih.gov", "vivli.org", "yoda.yale.edu",
+                     "biolincc.nhlbi.nih.gov", "ega-archive.org", "healthdatagateway.org",
+                     "clinicalstudydatarequest.com", "fitbir.nih.gov", "nda.nih.gov",
+                     "repository.niddk.nih.gov", "dash.nichd.nih.gov", "projectdatasphere.org"}
+_REPOSITORY_TITLE = re.compile(r"^(dbgap|vivli|yoda project|fitbir|biolincc|niddk central"
+                               r" repository|nimh data archive|project data sphere)\b", re.I)
+# Synonymous condition names -> the one name the catalog keeps. Only true
+# synonyms and abbreviations; subtypes (ischemic stroke) stay separate.
+CONDITION_ALIASES = {
+    "copd": "chronic obstructive pulmonary disease",
+    "coronavirus disease 2019": "covid-19", "covid": "covid-19",
+    "sars-cov-2 infection": "covid-19",
+    "arrhythmia": "cardiac arrhythmia",
+    "diabetes mellitus": "diabetes",
+    "type 1 diabetes mellitus": "type 1 diabetes", "type 2 diabetes mellitus": "type 2 diabetes",
+    "congestive heart failure": "heart failure", "chf": "heart failure",
+    "coronary stenosis": "coronary artery stenosis",
+    "lumbar disc degeneration": "lumbar degenerative disc disease",
+    "pulmonary nodule": "lung nodule",
+    "bone fracture": "fracture",
+    "periodontitis": "periodontal disease",
+    "ptsd": "post-traumatic stress disorder",
+    "als": "amyotrophic lateral sclerosis",
+    "afib": "atrial fibrillation",
+    "ckd": "chronic kidney disease",
+    "cad": "coronary artery disease",
+    "tbi": "traumatic brain injury",
+    "mci": "mild cognitive impairment",
+    "nafld": "nonalcoholic fatty liver disease",
+    "alzheimer disease": "alzheimer's disease",
+    "parkinson disease": "parkinson's disease",
+    "heart attack": "myocardial infarction",
+    "high blood pressure": "hypertension",
+}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS datasets (
@@ -38,6 +78,7 @@ CREATE TABLE IF NOT EXISTS datasets (
     file_formats        TEXT NOT NULL DEFAULT '[]',
     license             TEXT,
     access_type         TEXT NOT NULL DEFAULT 'unknown',
+    kind                TEXT NOT NULL DEFAULT 'dataset',
     access_instructions TEXT,
     download_urls       TEXT NOT NULL DEFAULT '[]',
     citation            TEXT,
@@ -243,10 +284,23 @@ def dataset_id_for(url: str) -> str:
 
 
 def normalize_condition(name: str) -> str:
-    return re.sub(r"\s+", " ", name.strip().lower())
+    key = re.sub(r"\s+", " ", name.strip().lower())
+    return CONDITION_ALIASES.get(key, key)
 
 
-_ACRONYMS = {"als", "adhd", "ards", "copd", "ct", "ecg", "eeg", "emg", "hiv", "hpv", "ibd",
+def guess_kind(url: str, title: str) -> str:
+    """Backfill for records made before agents reported `kind`."""
+    parts = urlsplit(url if "//" in url else "https://" + url)
+    host = (parts.hostname or "").removeprefix("www.")
+    depth = len([p for p in parts.path.split("/") if p and p not in ("home", "index.html")])
+    if host in _REPOSITORY_HOSTS and depth <= 1:
+        return "repository"
+    if host == "nitrc.org" and "/projects/fitbir" in parts.path:
+        return "repository"
+    return "repository" if _REPOSITORY_TITLE.match(title or "") else "dataset"
+
+
+_ACRONYMS = {"covid", "als", "adhd", "ards", "copd", "ct", "ecg", "eeg", "emg", "hiv", "hpv", "ibd",
              "icu", "imu", "ms", "mri", "nash", "nafld", "oct", "ptsd", "sle", "tbi", "uti"}
 
 
@@ -308,12 +362,130 @@ class Store:
             c.execute("ALTER TABLE condition_devices ADD COLUMN source TEXT NOT NULL"
                       " DEFAULT 'name'")
         c.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+        have = {r[1] for r in c.execute("PRAGMA table_info(datasets)")}
+        if "kind" not in have:
+            c.execute("ALTER TABLE datasets ADD COLUMN kind TEXT NOT NULL DEFAULT 'dataset'")
+            for r in c.execute("SELECT id, url, title FROM datasets").fetchall():
+                if guess_kind(r[1], r[2]) == "repository":
+                    c.execute("UPDATE datasets SET kind = 'repository' WHERE id = ?", (r[0],))
+        Store._merge_condition_aliases(c)
         # Labels auto-made with str.title() ("Parkinson'S Disease", "Copd"):
         # regenerate them; labels set any other way are left alone.
         for name, disp in c.execute("SELECT name, display FROM conditions").fetchall():
             if disp == name.title() and disp != condition_display(name):
                 c.execute("UPDATE conditions SET display = ? WHERE name = ?",
                           (condition_display(name), name))
+
+    @staticmethod
+    def _merge_condition_aliases(c: sqlite3.Connection) -> None:
+        """Fold rows stored under a synonym (CONDITION_ALIASES) into the
+        canonical condition: dataset tags, FDA device mappings, and the
+        condition row itself (synonyms and FDA terms unioned)."""
+        present = [r[0] for r in c.execute("SELECT name FROM conditions")]
+        present += [r[0] for r in c.execute("SELECT DISTINCT condition FROM dataset_conditions")]
+        for alias in sorted(set(present) & set(CONDITION_ALIASES)):
+            canon = CONDITION_ALIASES[alias]
+            for table, key in (("dataset_conditions", "dataset_id"), ("condition_devices", "k_number")):
+                cols = [r[1] for r in c.execute(f"PRAGMA table_info({table})")]
+                rest = [x for x in cols if x not in ("condition", key)]
+                sel = ", ".join([key, *rest])
+                c.execute(f"INSERT OR IGNORE INTO {table} (condition, {sel})"
+                          f" SELECT ?, {sel} FROM {table} WHERE condition = ?", (canon, alias))
+                c.execute(f"DELETE FROM {table} WHERE condition = ?", (alias,))
+            a = c.execute("SELECT * FROM conditions WHERE name = ?", (alias,)).fetchone()
+            b = c.execute("SELECT * FROM conditions WHERE name = ?", (canon,)).fetchone()
+            if a is not None and b is None:
+                c.execute("UPDATE conditions SET name = ?, display = ? WHERE name = ?",
+                          (canon, condition_display(canon), alias))
+                b, a = a, None
+                c.execute("UPDATE conditions SET synonyms = ? WHERE name = ?",
+                          (json.dumps(list(dict.fromkeys(json.loads(b["synonyms"]) + [alias]))),
+                           canon))
+            if a is not None:
+                syn = list(dict.fromkeys(json.loads(b["synonyms"]) + json.loads(a["synonyms"])
+                                         + [alias]))
+                terms = list(dict.fromkeys(json.loads(b["fda_terms"]) + json.loads(a["fda_terms"])))
+                c.execute("UPDATE conditions SET synonyms = ?, fda_terms = ?,"
+                          " fda_510k_count = MAX(COALESCE(fda_510k_count, 0), ?),"
+                          " fda_denovo_count = MAX(COALESCE(fda_denovo_count, 0), ?)"
+                          " WHERE name = ?",
+                          (json.dumps(syn), json.dumps(terms), a["fda_510k_count"] or 0,
+                           a["fda_denovo_count"] or 0, canon))
+                c.execute("DELETE FROM conditions WHERE name = ?", (alias,))
+            for r in c.execute("SELECT id, conditions FROM datasets WHERE conditions LIKE ?",
+                               (f'%"{alias}"%',)).fetchall():
+                conds = [CONDITION_ALIASES.get(x, x) for x in json.loads(r[1])]
+                c.execute("UPDATE datasets SET conditions = ? WHERE id = ?",
+                          (json.dumps(list(dict.fromkeys(conds))), r[0]))
+                c.execute("UPDATE datasets_fts SET conditions = ? WHERE id = ?",
+                          (" ".join(dict.fromkeys(conds)), r[0]))
+
+    # Papers that describe a whole platform (PhysioNet, TCIA, dbGaP), not one
+    # dataset. Everything citing them would otherwise be linked to every
+    # dataset hosted there. Also caught automatically: any paper that is the
+    # descriptor of >= PLATFORM_MIN_DATASETS catalog datasets.
+    PLATFORM_DOIS = {"10.1161/01.cir.101.23.e215",   # PhysioBank/PhysioToolkit/PhysioNet
+                     "10.1007/s10278-013-9622-7",    # The Cancer Imaging Archive
+                     "10.1038/ng1007-1181",          # dbGaP (Mailman 2007)
+                     "10.1093/nar/gkt1211"}          # dbGaP (Tryka 2014)
+    PLATFORM_MIN_DATASETS = 3
+
+    def platform_descriptor_ids(self) -> set[str]:
+        with self._conn() as c:
+            ids = {r[0] for r in c.execute(
+                "SELECT article_id FROM dataset_articles WHERE is_descriptor = 1"
+                " GROUP BY article_id HAVING COUNT(*) >= ?", (self.PLATFORM_MIN_DATASETS,))}
+            ids |= {r[0] for r in c.execute(
+                f"SELECT id FROM articles WHERE lower(doi) IN"
+                f" ({','.join('?' * len(self.PLATFORM_DOIS))})", sorted(self.PLATFORM_DOIS))}
+        return ids
+
+    def dataset_kind(self, ds_id: str) -> str:
+        with self._conn() as c:
+            row = c.execute("SELECT kind FROM datasets WHERE id = ?", (ds_id,)).fetchone()
+        return row[0] if row else "dataset"
+
+    def prune_literature_noise(self) -> dict:
+        """Drop paper links that came from a repository's name or a platform
+        paper: all non-descriptor links of repositories, and cites-only links
+        of datasets whose descriptors include a platform paper (those datasets
+        are re-harvested from their own papers). Orphaned papers are removed."""
+        platform = self.platform_descriptor_ids()
+        with self._write() as c:
+            repos = [r[0] for r in c.execute("SELECT id FROM datasets WHERE kind = 'repository'")]
+            n_repo = n_plat = 0
+            for ds in repos:
+                n_repo += c.execute("DELETE FROM dataset_articles WHERE dataset_id = ?"
+                                    " AND is_descriptor = 0", (ds,)).rowcount
+                c.execute("UPDATE literature_state SET status = 'complete', streams = '[]',"
+                          " completed_at = ? WHERE dataset_id = ?", (now_iso(), ds))
+            hit = []
+            if platform:
+                hit = [r[0] for r in c.execute(
+                    "SELECT DISTINCT dataset_id FROM dataset_articles WHERE is_descriptor = 1"
+                    f" AND article_id IN ({','.join('?' * len(platform))})", sorted(platform))
+                    if r[0] not in repos]
+            for ds in hit:
+                n_plat += c.execute("DELETE FROM dataset_articles WHERE dataset_id = ?"
+                                    " AND is_descriptor = 0 AND mentions = 0", (ds,)).rowcount
+                # Due for refresh now: streams are rebuilt without platform papers.
+                c.execute("UPDATE literature_state SET status = 'complete',"
+                          " completed_at = '2000-01-01T00:00:00+00:00' WHERE dataset_id = ?", (ds,))
+            orphans = c.execute(
+                "DELETE FROM articles WHERE id NOT IN (SELECT article_id FROM dataset_articles)"
+                " AND id NOT IN (SELECT article_id FROM device_links)").rowcount
+        return {"repository_links": n_repo, "platform_links": n_plat,
+                "datasets_reharvested": len(hit), "orphan_articles": orphans}
+
+    def run_once(self, key: str, fn) -> Any:
+        """Run a one-off data migration the first time this catalog sees `key`."""
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM kv WHERE k = ?", (key,)).fetchone():
+                return None
+        out = fn()
+        with self._write() as c:
+            c.execute("INSERT OR REPLACE INTO kv VALUES (?, ?)", (key, json.dumps(out)))
+        return out
 
     # ------------------------------------------------------------ plumbing
     @contextmanager
@@ -377,18 +549,20 @@ class Store:
                     existing[f] if existing else None)
             if existing and access == "unknown":
                 access = existing["access_type"]
+            kind = rec.get("kind") if rec.get("kind") in KINDS else (
+                existing["kind"] if existing else guess_kind(url, rec.get("title") or ""))
             merged["title"] = merged["title"] or url
             if existing:
                 c.execute(f"""
                     UPDATE datasets SET {", ".join(f"{k} = :{k}" for k in merged)},
-                        access_type = :access_type, last_seen = :ts
+                        access_type = :access_type, kind = :kind, last_seen = :ts
                     WHERE id = :id""",
-                    {**merged, "access_type": access, "ts": ts, "id": ds_id})
+                    {**merged, "access_type": access, "kind": kind, "ts": ts, "id": ds_id})
             else:
-                cols = ["id", "canonical_url", "url", *merged, "access_type",
+                cols = ["id", "canonical_url", "url", *merged, "access_type", "kind",
                         "first_seen", "last_seen", "found_by"]
                 vals = {**merged, "id": ds_id, "canonical_url": canon, "url": url,
-                        "access_type": access, "first_seen": ts, "last_seen": ts,
+                        "access_type": access, "kind": kind, "first_seen": ts, "last_seen": ts,
                         "found_by": found_by}
                 c.execute(f"INSERT INTO datasets ({', '.join(cols)}) VALUES "
                           f"({', '.join(':' + k for k in cols)})", vals)
@@ -485,7 +659,8 @@ class Store:
         with self._conn() as c:
             one = lambda sql: c.execute(sql).fetchone()[0]  # noqa: E731
             return {
-                "datasets": one("SELECT COUNT(*) FROM datasets"),
+                "datasets": one("SELECT COUNT(*) FROM datasets WHERE kind = 'dataset'"),
+                "repositories": one("SELECT COUNT(*) FROM datasets WHERE kind = 'repository'"),
                 "open": one("SELECT COUNT(*) FROM datasets WHERE access_type = 'open'"),
                 "with_files": one("SELECT COUNT(DISTINCT dataset_id) FROM files"
                                   " WHERE status = 'downloaded'"),
@@ -584,10 +759,12 @@ class Store:
                        (SELECT COUNT(*) FROM condition_devices cd JOIN devices v
                           ON v.k_number = cd.k_number WHERE cd.condition = c.name
                           AND v.is_ai = 1) AS n_ai,
-                       c.synonyms, COUNT(dc.dataset_id) AS n_datasets,
-                       SUM(CASE WHEN d.access_type = 'open' THEN 1 ELSE 0 END) AS n_open,
-                       SUM(CASE WHEN d.download_status IN ('downloaded', 'partial')
-                           THEN 1 ELSE 0 END) AS n_downloaded
+                       c.synonyms,
+                       COALESCE(SUM(d.kind = 'dataset'), 0) AS n_datasets,
+                       COALESCE(SUM(d.kind = 'repository'), 0) AS n_repositories,
+                       COALESCE(SUM(d.kind = 'dataset' AND d.access_type = 'open'), 0) AS n_open,
+                       COALESCE(SUM(d.kind = 'dataset' AND d.download_status IN
+                           ('downloaded', 'partial')), 0) AS n_downloaded
                 FROM conditions c
                 LEFT JOIN dataset_conditions dc ON dc.condition = c.name
                 LEFT JOIN datasets d ON d.id = dc.dataset_id

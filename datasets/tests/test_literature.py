@@ -137,3 +137,27 @@ def test_refresh_resets_cursors(tmp_path):
     w.step()
     st = store.literature_state(ds_id)
     assert st["status"] == "active" and all(not s["done"] for s in st["streams"])
+
+
+def test_repository_gets_no_streams_and_platform_papers_are_skipped(tmp_path):
+    w, store, ds_id = worker(tmp_path, FakeSession(routes()))
+    repo, _ = store.upsert_dataset({**DS, "title": "dbGaP", "url": "https://dbgap.ncbi.nlm.nih.gov/"})
+    desc = [{"article_id": "doi:x", "title": "t", "epmc": "MED:1", "openalex_id": None}]
+    assert w.plan_streams(repo, desc, ["dbGaP"]) == []
+    assert [s["kind"] for s in w.plan_streams(ds_id, desc, ["MSSEG-2"])] == ["epmc_cites", "epmc_mentions"]
+    store.upsert_article({"id": "doi:x", "doi": "10.1007/s10278-013-9622-7", "title": "TCIA"})
+    assert [s["kind"] for s in w.plan_streams(ds_id, desc, ["MSSEG-2"])] == ["epmc_mentions"]
+
+
+def test_harvest_stops_following_a_descriptor_that_became_a_platform(tmp_path):
+    w, store, ds_id = worker(tmp_path, FakeSession(routes()))
+    w.step()                                     # resolve: descriptor = MSSEG paper
+    desc_id = store.literature_state(ds_id)["descriptors"][0]["article_id"]
+    for i in range(3):                           # now shared by 3 more datasets
+        other, _ = store.upsert_dataset({**DS, "url": f"https://other{i}.org/"})
+        store.link_article(other, desc_id, "descriptor", "llm")
+    w.harvest(ds_id, store.literature_state(ds_id))
+    st = store.literature_state(ds_id)
+    cites = next(s for s in st["streams"] if s["kind"] == "epmc_cites")
+    assert cites["done"] and "platform" in cites["error"]
+    assert store.dataset_articles(ds_id)["cites"] == 0

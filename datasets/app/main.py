@@ -41,6 +41,9 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     settings = settings or get_settings()
     store = store or Store(settings.db_path)
     store.mark_stale_crawls()
+    pruned = store.run_once("prune_literature_noise_v1", store.prune_literature_noise)
+    if pruned:
+        logging.getLogger(__name__).info("pruned literature noise: %s", pruned)
     manager = manager or CrawlManager(store, settings)
     literature = literature or LiteratureWorker(
         store, settings,
