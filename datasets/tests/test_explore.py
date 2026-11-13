@@ -56,7 +56,8 @@ def test_files_source_images_by_folder(tmp_path):
     assert page["total"] == 12 and all(r["label"] == "normal" for r in page["rows"])
     assert src.read_bytes(src.images()[0]).startswith(b"\x89PNG")
     spec = heuristic_spec(pr)
-    assert [p["type"] for p in spec["panels"]] == ["image_gallery", "label_distribution"]
+    assert [p["type"] for p in spec["panels"]][:2] == ["image_gallery", "label_distribution"]
+    assert spec["panels"][0]["params"]["group_by"] == "label"
 
 
 def test_files_source_table_as_series(tmp_path):
@@ -149,7 +150,7 @@ def test_needs_access_and_no_links(tmp_path):
         m.build_blocking(locked)
     nolinks, _ = store.upsert_dataset({"title": "Open, no files", "url": "https://y.org/",
                                        "access_type": "open"})
-    with pytest.raises(Exception, match="No direct download links"):
+    with pytest.raises(Exception, match="No open download links"):
         m.build_blocking(nolinks)
 
 
@@ -176,3 +177,89 @@ def test_explore_api_and_token(tmp_path):
     assert c.post(f"/api/explore/{ds}/edit", json={"prompt": "add stuff"},
                   headers={"X-Edit-Token": "s3cret"}).status_code == 502   # no API key
     assert c.get("/api/explore/nope").status_code == 404
+
+
+def ppg_zip(path):
+    import pandas as pd
+    meta = pd.DataFrame({"Num.": range(1, 13), "subject_ID": range(100, 112),
+                         "Age(year)": [40 + i for i in range(12)],
+                         "Systolic Blood Pressure(mmHg)": [110 + 5 * i for i in range(12)],
+                         "Hypertension": ["Normal"] * 6 + ["Stage 1 hypertension"] * 6})
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf) as xw:   # title row above the real header, like PPG-BP
+        pd.DataFrame([["Cardiovascular Dataset Information File"]]).to_excel(xw, index=False, header=False)
+        meta.to_excel(xw, index=False, startrow=1)
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("Data File/PPG-BP dataset.xlsx", buf.getvalue())
+        for sid in range(100, 112):
+            for k in (1, 2):
+                amp = 2.0 if sid >= 106 else 1.0
+                z.writestr(f"Data File/0_subject/{sid}_{k}.txt",
+                           "\t".join(f"{amp * ((i % 50) / 50):.3f}" for i in range(200)))
+    return path
+
+
+def test_one_recording_per_file_with_metadata_join(tmp_path):
+    src = FilesSource([ppg_zip(tmp_path / "ppg.zip")])
+    assert src.kind == "signals" and len(src.signal_files()) == 24
+    pr = src.probe()
+    assert pr["records"] == 24 and pr["samples_per_record"] == 200
+    assert pr["join"]["id_col"] == "subject_ID" and pr["join"]["label_col"] == "Hypertension"
+    assert pr["labels"] == {"Normal": 12, "Stage 1 hypertension": 12}
+    assert "Systolic Blood Pressure(mmHg)" in [c["name"] for c in pr["meta"]["columns"]]
+    spec = validate_spec(heuristic_spec(pr), pr)
+    assert [p["type"] for p in spec["panels"]] == ["signal_viewer", "spaghetti", "label_distribution",
+                                                   "group_summary", "record_table"]
+    cfg = spec["series"]
+    recs = src.file_records(cfg)
+    assert recs[0] == {"id": "100_1", "labels": ["Normal"]}
+    hi = src.file_traces(cfg, "Stage 1 hypertension", 5, None, points=20)
+    lo = src.file_traces(cfg, "Normal", 5, None, points=20)
+    assert max(hi["pooled"]["mean"]) > max(lo["pooled"]["mean"])
+    w = src.file_window({**cfg, "fs": 100}, "101_2", 0, 1)
+    assert w["record_seconds"] == 2.0 and w["channels"][0]["name"] == "signal"
+    s = src.group_summary(["Systolic Blood Pressure(mmHg)"], "Hypertension")
+    assert s["rows"][0]["Systolic Blood Pressure(mmHg)"]["mean"] == 122.5
+
+
+def test_chat_queries_the_data(tmp_path):
+    from app.explore import ExploreChat
+
+    class Client:
+        def __init__(self):
+            self.n = 0
+            self.beta = NS(messages=NS(create=self.create))
+
+        def create(self, **kw):
+            self.n += 1
+            if self.n == 1:      # compose (build)
+                return response([text(json.dumps(heuristic_spec(m.get(ds)["source"]["probe"])))], "end_turn")
+            if self.n == 2:
+                return response([NS(type="tool_use", id="t1", name="group_summary",
+                                    input={"fields": ["acc_x"], "group_by": "activity"})], "tool_use")
+            tool_out = json.loads(kw["messages"][-1]["content"][0]["content"])
+            assert tool_out["rows"][0]["group"] == "fall"
+            return response([text("Falls have higher mean acc_x.")], "end_turn")
+
+    client = Client()
+    m, store, ds = _manager(tmp_path, client_factory=lambda s: client)
+    m.build_blocking(ds)
+    out = ExploreChat(m).ask(ds, [{"role": "user", "content": "How does acc_x differ by activity?"}])
+    assert out == {"answer": "Falls have higher mean acc_x.", "tools_used": ["group_summary"]}
+    with pytest.raises(ValueError):
+        ExploreChat(m).ask(ds, [{"role": "assistant", "content": "hi"}])
+
+
+def test_images_join_metadata_table(tmp_path):
+    with zipfile.ZipFile(tmp_path / "imgs.zip", "w") as z:
+        for i in range(10):
+            z.writestr(f"images_part1/case{i}.png", b"\x89PNG")
+        z.writestr("dataset.csv", "﻿filestem,fracture_visible,gender\n" +
+                   "\n".join(f"case{i},{1 if i < 6 else ''},{'M' if i % 2 else 'F'}" for i in range(10)))
+    src = FilesSource([tmp_path / "imgs.zip"])
+    pr = src.probe()
+    assert pr["kind"] == "images" and pr["metadata_join"] == {"key": "filestem", "matched": 10}
+    assert pr["stats"]["fracture_visible"]["frequencies"] == {"1": 6, "(blank)": 4}
+    spec = heuristic_spec(pr)
+    assert spec["panels"][0]["params"]["group_by"] == "fracture_visible"
+    assert src.image_rows({"fracture_visible": "(blank)"}, 0, 50, lambda i: i)["total"] == 4

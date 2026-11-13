@@ -278,3 +278,10 @@ table.papers td.pds { min-width: 200px; }
 .ex-notes p, .ex-notes li { font-size: 14px; max-width: 80ch; }
 .ex-notes h4 { margin: 10px 0 4px; }
 select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); background: #fff; max-width: 320px; }
+.ex-side { max-height: calc(100vh - 150px); overflow-y: auto; }
+.ex-chat-log { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.ex-msg { font-size: 13px; padding: 6px 8px; max-width: 100%; overflow-wrap: anywhere; }
+.ex-msg p { margin: 0 0 4px; }
+.ex-msg ul { margin: 0 0 4px; padding-left: 18px; }
+.ex-user { background: var(--chip); align-self: flex-end; }
+.ex-assistant { border-left: 2px solid var(--accent); }

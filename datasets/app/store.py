@@ -654,6 +654,8 @@ class Store:
             prof = c.execute("SELECT profile, source FROM dataset_profiles WHERE dataset_id = ?",
                              (ds_id,)).fetchone()
             d["profile"] = {**json.loads(prof[0]), "source": prof[1]} if prof else None
+            ex = c.execute("SELECT status FROM explore WHERE dataset_id = ?", (ds_id,)).fetchone()
+            d["explore_status"] = ex[0] if ex else None
             d["n_compatible"] = c.execute(
                 "SELECT COUNT(*) FROM dataset_relations WHERE dataset_id = ?", (ds_id,)).fetchone()[0]
             d["files"] = [dict(r) for r in c.execute(

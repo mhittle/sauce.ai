@@ -9,6 +9,7 @@ const C = { ink: "#0A0A0B", muted: "#5C5C62", line: "#DEDEDA", accent: "#2433D9"
             palette: ["#2433D9", "#D9480F", "#1F7A3A", "#9A6400", "#7A2CBF", "#0F7C8C", "#B3261E", "#5C5C62"] };
 
 function exploreAvailable(ds) {
+  if (ds.explore_status === "unavailable") return null;
   if (/huggingface\.co\/datasets\//.test(ds.url || "") || (ds.download_urls || []).some(u => /huggingface\.co\/datasets\//.test(u))) return "huggingface";
   if (/physionet\.org\/content\//.test(ds.url || "") && ds.access_type === "open") return "physionet";
   if ((ds.files || []).some(f => f.status === "downloaded")) return "files";
@@ -59,7 +60,10 @@ async function loadExplore(id) {
   }
   if (!d.spec) {
     const p = el("div", { class: "panel" });
-    if (d.status === "failed") {
+    if (d.status === "unavailable") {
+      p.append(el("h3", {}, ""));
+      p.append(el("p", { class: "small" }, d.error || ""));
+    } else if (d.status === "failed") {
       p.append(el("h3", {}, "Couldn't build an explore page"));
       p.append(el("p", { class: "small" }, d.error || "Unknown error."));
     } else {
@@ -67,8 +71,16 @@ async function loadExplore(id) {
     }
     const av = d.availability || {};
     if (!av.available) {
-      p.append(el("p", { class: "small" }, av.reason || "This dataset can't be explored yet."));
-      p.append(el("pre", { class: "instructions" }, ds.access_instructions || ""));
+      if (d.status === "unavailable") p.firstChild.textContent = "This dataset needs access before it can be explored";
+      else p.append(el("p", { class: "small" }, av.reason || "This dataset can't be explored yet."));
+      p.append(el("h3", {}, "How to get access"));
+      p.append(el("pre", { class: "instructions" }, ds.access_instructions || "See the source page."));
+      const src = el("p", { class: "small" }); src.append(el("a", { href: ds.url, target: "_blank", rel: "noopener" }, "Source page →")); p.append(src);
+      if (d.status === "unavailable") {
+        const again = el("button", { class: "btn link small" }, "Look for open files again");
+        again.onclick = async () => { try { await exApi(`/api/explore/${encodeURIComponent(EX.id)}/build`, { method: "POST" }); loadExplore(EX.id); } catch (e) { banner(e.message); } };
+        p.append(again);
+      }
     } else {
       const how = { huggingface: "read samples through the Hugging Face API", physionet: "stream records from PhysioNet",
                     files: "read the files already downloaded", acquire: "look for direct download links and fetch a sample (capped)" }[av.via];
@@ -102,8 +114,45 @@ async function loadExplore(id) {
   box.replaceChildren(...parts);
 }
 
+function chatPanel(d) {
+  const p = el("div", { class: "panel ex-chat" });
+  p.append(el("h3", {}, "Chat with this dataset"));
+  p.append(el("p", { class: "muted small" }, "Ask questions about the data, e.g. “how does systolic pressure differ by hypertension stage?”, “which labels are rare?”, “what could explain the difference between these groups?”. Answers come from queries on the data sample."));
+  const log = el("div", { class: "ex-chat-log" });
+  const key = `pahlChat:${EX.id}`;
+  let history = [];
+  try { history = JSON.parse(sessionStorage.getItem(key) || "[]"); } catch {}
+  const render = () => {
+    log.replaceChildren(...history.map(h => { const m = el("div", { class: `ex-msg ex-${h.role}` }); if (h.role === "assistant") m.innerHTML = miniMarkdown(h.content); else m.textContent = h.content; return m; }));
+    log.scrollTop = log.scrollHeight;
+  };
+  const ta = el("textarea", { rows: "3", placeholder: "Ask about this dataset…" });
+  const send = el("button", { class: "btn" }, "Ask");
+  const clear = el("button", { class: "btn link small" }, "Clear");
+  async function ask() {
+    const q = ta.value.trim();
+    if (!q) return;
+    history.push({ role: "user", content: q }); ta.value = ""; render();
+    send.disabled = true; send.textContent = "Thinking…";
+    try {
+      const r = await exApi(`/api/explore/${encodeURIComponent(EX.id)}/chat`, { method: "POST", body: JSON.stringify({ messages: history.slice(-12) }) });
+      history.push({ role: "assistant", content: r.answer + (r.tools_used && r.tools_used.length ? `\n\n_(queried: ${[...new Set(r.tools_used)].join(", ")})_` : "") });
+    } catch (e) { history.push({ role: "assistant", content: `Error: ${e.message}` }); }
+    try { sessionStorage.setItem(key, JSON.stringify(history.slice(-30))); } catch {}
+    send.disabled = false; send.textContent = "Ask"; render();
+  }
+  send.onclick = ask;
+  ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } });
+  clear.onclick = () => { history = []; try { sessionStorage.removeItem(key); } catch {} render(); };
+  if (!d.llm) { ta.disabled = true; send.disabled = true; }
+  p.append(log, ta, send, clear);
+  render();
+  return p;
+}
+
 function sidePanel(d) {
   const side = el("aside", { class: "ex-side" });
+  side.append(chatPanel(d));
   const p = el("div", { class: "panel" });
   p.append(el("h3", {}, "Change this page"));
   p.append(el("p", { class: "muted small" }, "Ask for new views or changes, e.g. “group images by view position”, “spaghetti of accel_z for falls vs walking, 5 s around the event”. Requests the view library can't do yet are logged as tool requests."));
@@ -316,7 +365,8 @@ const VIEWS = {
       more.classList.toggle("hidden", r.rows.length < per);
     }
     groups.forEach((gEntry, i) => {
-      const b = el("button", {}, gEntry ? `${gEntry[0]} (${gEntry[1].toLocaleString()})` : "All");
+      const short = gEntry && (gEntry[0].length <= 3 || gEntry[0] === "(blank)");
+      const b = el("button", {}, gEntry ? `${short ? `${groupBy}: ` : ""}${gEntry[0]} (${gEntry[1].toLocaleString()})` : "All");
       b.onclick = () => { tabs.querySelectorAll("button").forEach(x => x.classList.remove("on")); b.classList.add("on"); cur = gEntry ? gEntry[0] : null; load(true).catch(e => grid.append(el("p", { class: "compat-warn" }, e.message))); };
       tabs.append(b);
       if (i === 0) b.classList.add("on");
@@ -465,7 +515,7 @@ function fmt(v) { if (v == null) return ""; const a = Math.abs(v); return a >= 1
 
 function miniMarkdown(md) {
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>");
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/(^|\s)_(.+?)_(?=\s|$)/g, "$1<i>$2</i>");
   const out = []; let list = null;
   for (const line of md.split("\n")) {
     const m = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
