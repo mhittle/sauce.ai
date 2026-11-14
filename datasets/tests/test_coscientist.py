@@ -123,3 +123,17 @@ def test_api_requires_token_and_built_page(tmp_path, monkeypatch):
     assert client.post(f"/api/explore/{ds}/hypotheses").status_code == 401
     r = client.post(f"/api/explore/{ds}/hypotheses", headers={"X-Edit-Token": "s3cret"})
     assert r.status_code == 409 and "build the explore page" in r.json()["detail"]
+
+
+def test_index_versions_assets_and_static_revalidates(tmp_path):
+    from app.config import Settings
+    from app.main import create_app
+    settings = Settings(data_dir=tmp_path, literature_enabled=False, devices_enabled=False,
+                        compat_enabled=False)
+    client = TestClient(create_app(settings))
+    r = client.get("/")
+    assert r.headers["cache-control"] == "no-cache"
+    import re
+    assert re.search(r'src="/static/explore\.js\?v=[0-9a-f]{10}"', r.text)
+    assert re.search(r'href="/static/style\.css\?v=[0-9a-f]{10}"', r.text)
+    assert client.get("/static/explore.js").headers["cache-control"] == "no-cache"

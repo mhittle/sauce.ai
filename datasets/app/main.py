@@ -5,14 +5,16 @@ downloaded files, and the single-page UI.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -631,9 +633,28 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         return FileResponse(path, filename=f["filename"] or path.name)
 
     # -------------------------------------------------------- UI
+    # Version the page's scripts and styles by content so a deploy is picked
+    # up immediately instead of browsers running a cached older copy.
+    def _asset_version() -> str:
+        h = hashlib.sha256()
+        for name in sorted(p.name for p in STATIC.iterdir() if p.suffix in (".js", ".css")):
+            h.update((STATIC / name).read_bytes())
+        return h.hexdigest()[:10]
+
+    asset_v = _asset_version()
+    index_html = re.sub(r'((?:src|href)="/static/[\w.-]+\.(?:js|css))"', rf'\1?v={asset_v}"',
+                        (STATIC / "index.html").read_text())
+
     @app.get("/", include_in_schema=False)
     def index():
-        return FileResponse(STATIC / "index.html")
+        return HTMLResponse(index_html, headers={"Cache-Control": "no-cache"})
+
+    @app.middleware("http")
+    async def revalidate_static(request, call_next):
+        resp = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            resp.headers["Cache-Control"] = "no-cache"   # revalidate (ETag) every load
+        return resp
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app

@@ -552,7 +552,9 @@ const SCORE_LABELS = { feasibility: "Feasibility", value: "Value", novelty: "Nov
 
 function coScientistMenu(id, d, box) {
   const wrap = el("div", { class: "cosci" });
-  const btn = el("button", { class: "btn cosci-btn", "aria-haspopup": "menu", "aria-expanded": "false" }, "Co-Scientist");
+  const btn = el("button", { class: "cosci-btn", "aria-haspopup": "menu", "aria-expanded": "false" });
+  btn.append(el("span", { class: "cosci-spark", "aria-hidden": "true" }, "✦"), el("span", {}, "Co-Scientist"),
+             el("span", { class: "cosci-caret", "aria-hidden": "true" }, "▾"));
   const menu = el("div", { class: "cosci-menu hidden", role: "menu" });
   const opt = (title, desc, disabled) => {
     const b = el("button", { class: "cosci-opt", role: "menuitem" });

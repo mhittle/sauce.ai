@@ -297,6 +297,14 @@ table.browse .chip { font-size: 11px; display: inline-block; margin: 1px 0; }
 /* Co-Scientist */
 .ex-head-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .cosci { position: relative; margin-top: 10px; }
+.cosci-btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; font: 600 15px/1 var(--sans);
+             letter-spacing: -.005em; color: #fff; background: var(--accent); border: 1px solid var(--accent); cursor: pointer;
+             box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); transition: transform .12s ease, box-shadow .12s ease; }
+.cosci-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent); }
+.cosci-btn[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
+.cosci-spark { font-size: 16px; }
+.cosci-caret { font-size: 11px; opacity: .8; }
+@media (prefers-reduced-motion: reduce) { .cosci-btn { transition: none; } .cosci-btn:hover { transform: none; } }
 .cosci-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, calc(100vw - 32px)); background: #fff; border: 1px solid var(--ink); box-shadow: 0 8px 24px rgba(10,10,11,.12); }
 .cosci-opt { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 12px 14px; background: #fff; border: 0; border-bottom: 1px solid var(--line); font: inherit; cursor: pointer; color: var(--ink); }
 .cosci-opt:last-child { border-bottom: 0; }
