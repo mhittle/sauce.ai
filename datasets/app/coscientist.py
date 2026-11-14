@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 
 N_GENERATE, N_SELECT = 10, 5
 LIVE_CHARS = 1600
+DEFAULT_GENERATE_S, DEFAULT_REVIEW_S = 300, 150   # until real runs give medians
 SCORES = ("feasibility", "value", "novelty", "rigor")
 
 _STR = {"type": "string"}
@@ -239,6 +240,9 @@ class CoScientist:
             d[k] = json.loads(d[k]) if d[k] else None
         d["runs_ready"] = n
         d["busy"] = self.busy(ds_id)
+        if d["status"] in ("generating", "reviewing"):
+            d["expected"] = self.expected_durations()
+            d["now"] = now_iso()
         if d["busy"] and ds_id in self._live:
             live = self._live[ds_id]
             d["live"] = {"agent": live["agent"], "text": live["text"][-LIVE_CHARS:],
@@ -246,6 +250,26 @@ class CoScientist:
         if d["candidates"] and d["review"]:
             d["selected"] = self.selection(d["candidates"], d["review"])
         return d
+
+    def expected_durations(self) -> dict:
+        """Median seconds for the generate and review phases over recent
+        finished runs (any dataset), so the page can pace its animation."""
+        from datetime import datetime
+        gen, rev = [], []
+        with self.store._conn() as c:
+            rows = c.execute("SELECT started_at, reviewing_at, finished_at FROM hypothesis_runs"
+                             " WHERE status = 'ready' AND reviewing_at IS NOT NULL"
+                             " ORDER BY id DESC LIMIT 20").fetchall()
+        ts = lambda v: datetime.fromisoformat(v.replace("Z", "+00:00"))  # noqa: E731
+        for a, b, e in rows:
+            try:
+                gen.append((ts(b) - ts(a)).total_seconds())
+                rev.append((ts(e) - ts(b)).total_seconds())
+            except (TypeError, ValueError):
+                continue
+        med = lambda xs, d: sorted(xs)[len(xs) // 2] if xs else d  # noqa: E731
+        return {"generate": round(med(gen, DEFAULT_GENERATE_S)),
+                "review": round(med(rev, DEFAULT_REVIEW_S)), "from_runs": len(gen)}
 
     @staticmethod
     def selection(cands: list[dict], review: dict) -> list[dict]:
@@ -322,7 +346,7 @@ class CoScientist:
                         tool_fn=tool_fn, log_=log_, on_delta=on_delta)
         cands = gen["hypotheses"]
         log_(f"Generator: submitted {len(cands)} hypotheses")
-        self._update(run_id, status="reviewing", candidates=cands)
+        self._update(run_id, status="reviewing", candidates=cands, reviewing_at=now_iso())
 
         live.update(agent="Reviewer", text="", kind=None)
         log_("Reviewer: scoring feasibility, value, novelty and rigor…")

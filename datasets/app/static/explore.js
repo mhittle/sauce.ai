@@ -640,6 +640,15 @@ function renderHypotheses(r, box) {
     box._running.update(r);
     return;
   }
+  if (box._running && box.contains(box._running.panel) && r.status === "ready") {
+    // Let the blocks fill the stage before the results appear.
+    const rp = box._running;
+    if (!rp.finishing) {
+      rp.finishing = true;
+      rp.finish(() => { if (box._running === rp) { box._running = null; renderHypotheses(r, box); } });
+    }
+    return;
+  }
   box._running = null;
   const p = el("section", { class: "panel cosci-panel" });
   const head = el("div", { class: "cosci-panel-head" });
@@ -731,7 +740,19 @@ function runningPanel(box) {
   const logPre = el("pre", { class: "log" });
   det.append(el("summary", {}, "Activity log"), logPre);
   panel.append(head, steps, stage, note, det);
-  blockRain(canvas);
+  let latest = null, clockSkew = 0;
+  // Share of the run done, from the median phase lengths of past runs.
+  // Slows near the end of each phase instead of overshooting.
+  const soft = x => x < 0.85 ? x : 0.85 + 0.15 * (1 - Math.exp(-(x - 0.85) / 0.15));
+  const progress = () => {
+    if (!latest) return 0;
+    const e = latest.expected || { generate: 300, review: 150 };
+    const now = (Date.now() - clockSkew) / 1000, share = e.generate / (e.generate + e.review);
+    if (latest.status === "generating") return share * soft((now - Date.parse(latest.started_at) / 1000) / e.generate);
+    const rs = latest.reviewing_at ? Date.parse(latest.reviewing_at) / 1000 : now;
+    return share + (1 - share) * soft((now - rs) / e.review);
+  };
+  const rain = blockRain(canvas, progress);
 
   // Typewriter: new characters (by the server's running count) queue up and
   // are typed at a pace that catches up when far behind.
@@ -762,6 +783,8 @@ function runningPanel(box) {
                    "Checking what has already been published…", "Weighing confounders…"];
   let musing = 0;
   const update = r => {
+    latest = r;
+    if (r.now) clockSkew = Date.now() - Date.parse(r.now);
     const gen = r.status === "generating";
     s1.className = gen ? "active" : "done";
     s1.textContent = gen ? "Generating 10 hypotheses" : "Generated 10 hypotheses";
@@ -783,128 +806,169 @@ function runningPanel(box) {
       text.lastChild.append(cursor);
     }
   };
-  return { panel, update };
+  const finish = cb => {
+    s1.className = "done"; s2.className = "done"; s2.textContent = "Selected 5";
+    who.textContent = "Done";
+    rain.finish(cb);
+  };
+  return { panel, update, finish };
 }
 
-function blockRain(canvas) {
+// Falling blocks paced to the run: tetrominoes drop, shatter into single
+// blocks on impact (with the stack or with each other), tumble and bounce,
+// settle into piles that slide down steep slopes. How full the stage gets
+// follows the run's expected progress; finish() fills it the rest of the way.
+function blockRain(canvas, progress) {
   const ctx = canvas.getContext("2d");
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const COLORS = ["#2433D9", "#4B57E6", "#7C86EE", "#AEB4F5", "#0A0A0B", "#1F7A3A", "#D9480F", "#7A2CBF"];
   const SHAPES = [[[0, 0], [1, 0], [2, 0], [3, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]], [[1, 0], [0, 1], [1, 1], [2, 1]],
                   [[0, 0], [0, 1], [1, 1], [2, 1]], [[2, 0], [0, 1], [1, 1], [2, 1]], [[1, 0], [2, 0], [0, 1], [1, 1]],
                   [[0, 0], [1, 0], [1, 1], [2, 1]]];
-  let W = 0, H = 0, cell = 16, cols = 0, rows = 0, grid = [], pieces = [], debris = [];
-  let spawnIn = 0, fade = 0, fading = false, last = 0;
+  const G = 34;                // gravity, cells/s²
+  let W = 0, H = 0, cell = 8, cols = 0, rows = 0, grid = [], tops = [], settled = 0;
+  let pieces = [], bits = [], spawnIn = 0, last = 0, primed = false, finishing = null;
   const rnd = (a, b) => a + Math.random() * (b - a);
-  const occ = (x, y) => y >= rows || x < 0 || x >= cols || (y >= 0 && grid[y][x]);
-  function reset() { grid = Array.from({ length: rows }, () => Array(cols).fill(null)); pieces = []; debris = []; }
+  const pick = a => a[(Math.random() * a.length) | 0];
+
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     W = canvas.clientWidth; H = canvas.clientHeight;
     if (!W || !H) return;
     canvas.width = W * dpr; canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    cell = Math.max(10, Math.round(W / 46));
+    cell = Math.max(6, Math.round(W / 90));
     cols = Math.floor(W / cell); rows = Math.floor(H / cell);
-    reset();
+    grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+    tops = Array(cols).fill(rows);      // first occupied row per column
+    settled = 0; pieces = []; bits = []; primed = false;
   }
-  const height = c => { for (let y = 0; y < rows; y++) if (grid[y][c]) return rows - y; return 0; };
+  const cap = () => cols * rows;
+  const inFlight = () => pieces.length * 4 + bits.length;
+
+  // Put one block on column c, then let it slide down any slope of 2+.
+  function place(c, color) {
+    for (let guard = 0; guard < cols; guard++) {
+      const l = c > 0 ? tops[c - 1] : -1, r = c < cols - 1 ? tops[c + 1] : -1;
+      const cands = [];
+      if (l - tops[c] >= 2) cands.push(c - 1);
+      if (r - tops[c] >= 2) cands.push(c + 1);
+      if (!cands.length) break;
+      c = pick(cands);
+    }
+    const y = tops[c] - 1;
+    if (y < 0) return false;
+    grid[y][c] = color; tops[c] = y; settled++;
+    return true;
+  }
+
   function spawn() {
-    let shape = SHAPES[(Math.random() * SHAPES.length) | 0];
+    let shape = pick(SHAPES);
     for (let k = (Math.random() * 4) | 0; k > 0; k--) shape = shape.map(([x, y]) => [-y, x]);
     const mx = Math.min(...shape.map(c => c[0])), my = Math.min(...shape.map(c => c[1]));
     shape = shape.map(([x, y]) => [x - mx, y - my]);
     const w = Math.max(...shape.map(c => c[0])) + 1;
-    pieces.push({ cells: shape, x: (Math.random() * (cols - w + 1)) | 0, y: -4, vy: rnd(3, 6),
-                  color: COLORS[(Math.random() * COLORS.length) | 0] });
+    pieces.push({ cells: shape, x: (Math.random() * (cols - w + 1)) | 0, y: -4 - Math.random() * 3,
+                  vy: rnd(2, 6), color: pick(COLORS) });
   }
-  function lock(p, y) {
-    for (const [dx, dy] of p.cells) { const gy = y + dy; if (gy < 0) { fading = true; continue; } grid[gy][p.x + dx] = p.color; }
-    topple();
-  }
-  function topple() {   // a tower much taller than a neighbour falls over
-    for (let c = 0; c < cols; c++) {
-      const h = height(c), l = c > 0 ? height(c - 1) : rows, r = c < cols - 1 ? height(c + 1) : rows;
-      const low = Math.min(l, r);
-      if (h - low < 5 || Math.random() < 0.35) continue;
-      const dir = l < r ? -1 : 1, n = Math.ceil((h - low) / 2);
-      for (let k = 0; k < n; k++) {
-        const y = rows - h + k;
-        if (!grid[y] || !grid[y][c]) continue;
-        debris.push({ px: c * cell, py: y * cell, vx: dir * rnd(40, 110) * (1 + k * 0.25), vy: rnd(-40, 10),
-                      rot: 0, vr: dir * rnd(2, 6), color: grid[y][c] });
-        grid[y][c] = null;
-      }
-      return;
+
+  // A piece breaks into single blocks that fly apart with the impact.
+  function shatter(p, impact) {
+    const cx = p.x + 1.5, cy = p.y + 1;
+    for (const [dx, dy] of p.cells) {
+      const x = p.x + dx, y = p.y + dy;
+      bits.push({ x, y, vx: (x - cx) * rnd(1.5, 3.5) + rnd(-1.5, 1.5) * impact * 0.18,
+                  vy: -impact * rnd(0.12, 0.35), rot: 0, vr: rnd(-9, 9), color: p.color, bounces: 0 });
     }
+    p.dead = true;
   }
-  function settle(d) {
-    const cx = Math.max(0, Math.min(cols - 1, Math.round(d.px / cell)));
-    const y = rows - height(cx) - 1;
-    if (y < 0) { fading = true; return; }
-    grid[y][cx] = d.color;
-  }
+
+  const solid = (x, y) => y >= rows || (y >= 0 && x >= 0 && x < cols && grid[y][x]);
+  const overlaps = (a, b) => a.cells.some(([ax, ay]) => b.cells.some(([bx, by]) =>
+    a.x + ax === b.x + bx && Math.abs((a.y + ay) - (b.y + by)) < 1));
+
   function step(dt) {
-    if (fading) {
-      fade = Math.min(1, fade + dt / 1.2);
-      if (fade >= 1) { reset(); fading = false; }
-      return;
+    const target = finishing ? 1 : Math.max(0, Math.min(0.985, progress()));
+    if (!primed) {            // arriving mid-run: start at the current level
+      primed = true;
+      const n = Math.floor(target * cap() * 0.95);
+      for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, pick(COLORS));
     }
-    fade = Math.max(0, fade - dt / 0.8);
     spawnIn -= dt;
-    if (spawnIn <= 0 && pieces.length < 5) { spawn(); spawnIn = rnd(0.18, 0.4); }
+    const want = target * cap() - settled - inFlight();
+    if (want > 0 && spawnIn <= 0) {
+      spawn();
+      spawnIn = finishing ? 0.004 : Math.max(0.05, 0.6 - want / cap() * 4);
+    }
     for (const p of pieces) {
-      p.vy = Math.min(p.vy + 9 * dt, 16);
+      p.vy = Math.min(p.vy + G * dt, 40);
       const ny = p.y + p.vy * dt;
       let hit = false;
       for (let y = Math.floor(p.y); y <= Math.floor(ny) && !hit; y++) {
-        if (p.cells.some(([dx, dy]) => occ(p.x + dx, y + dy + 1))) { lock(p, y); p.done = true; hit = true; }
+        if (p.cells.some(([dx, dy]) => solid(p.x + dx, y + dy + 1))) { p.y = y; hit = true; }
       }
-      if (!hit) p.y = ny;
+      if (hit) { shatter(p, p.vy); continue; }
+      p.y = ny;
+      for (const q of pieces) if (q !== p && !q.dead && overlaps(p, q)) {   // mid-air collision
+        shatter(p, p.vy); shatter(q, q.vy); break;
+      }
     }
-    pieces = pieces.filter(p => !p.done);
-    for (const d of debris) {
-      d.vy += 420 * dt; d.px += d.vx * dt; d.py += d.vy * dt; d.rot += d.vr * dt;
-      if (d.px < 0 || d.px > W - cell) { d.vx *= -0.5; d.px = Math.max(0, Math.min(W - cell, d.px)); }
-      const cx = Math.max(0, Math.min(cols - 1, Math.round(d.px / cell))), cy = Math.floor(d.py / cell);
-      if (d.vy > 0 && occ(cx, cy + 1)) { settle(d); d.done = true; }
+    pieces = pieces.filter(p => !p.dead);
+    for (const b of bits) {
+      b.vy = Math.min(b.vy + G * dt, 40); b.x += b.vx * dt; b.y += b.vy * dt; b.rot += b.vr * dt;
+      if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx) * 0.5; }
+      if (b.x > cols - 1) { b.x = cols - 1; b.vx = -Math.abs(b.vx) * 0.5; }
+      const cx = Math.round(b.x), below = Math.floor(b.y) + 1;
+      if (b.vy > 0 && solid(cx, below)) {
+        if (b.vy > 6 && b.bounces < 2) {           // bounce, losing energy
+          b.y = below - 1; b.vy = -b.vy * rnd(0.2, 0.38); b.vx = b.vx * 0.7 + rnd(-1.5, 1.5);
+          b.vr *= 0.6; b.bounces++;
+        } else { if (!place(cx, b.color)) settled = cap(); b.dead = true; }
+      }
     }
-    debris = debris.filter(d => !d.done);
-    let filled = 0;
-    for (const row of grid) for (const v of row) if (v) filled++;
-    if (filled > cols * rows * 0.9) fading = true;
+    bits = bits.filter(b => !b.dead);
+    if (finishing && (settled >= cap() * 0.97 || performance.now() - finishing.at > 4500) && !finishing.done) {
+      finishing.done = true;
+      setTimeout(finishing.cb, 700);
+    }
   }
+
   function box(x, y, color) {
-    ctx.fillStyle = color; ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
-    ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(x + 1, y + 1, cell - 2, 3);
+    ctx.fillStyle = color; ctx.fillRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
+    if (cell >= 8) { ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(x + 0.5, y + 0.5, cell - 1, Math.max(1, cell / 6)); }
   }
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    const ox = (W - cols * cell) / 2, oy = H - rows * cell;
-    ctx.save(); ctx.translate(ox, oy);
+    ctx.save(); ctx.translate((W - cols * cell) / 2, H - rows * cell);
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (grid[y][x]) box(x * cell, y * cell, grid[y][x]);
     for (const p of pieces) for (const [dx, dy] of p.cells) box((p.x + dx) * cell, (p.y + dy) * cell, p.color);
-    for (const d of debris) {
-      ctx.save(); ctx.translate(d.px + cell / 2, d.py + cell / 2); ctx.rotate(d.rot);
-      box(-cell / 2, -cell / 2, d.color); ctx.restore();
+    for (const b of bits) {
+      ctx.save(); ctx.translate(b.x * cell + cell / 2, b.y * cell + cell / 2); ctx.rotate(b.rot);
+      box(-cell / 2, -cell / 2, b.color); ctx.restore();
     }
     ctx.restore();
-    if (fade > 0) { ctx.fillStyle = `rgba(255,255,255,${fade})`; ctx.fillRect(0, 0, W, H); }
   }
   function frame(t) {
-    if (!canvas.isConnected) return;               // panel replaced: stop
+    if (!canvas.isConnected) return;
     if (canvas.clientWidth !== W || canvas.clientHeight !== H) resize();
-    const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
-    if (cols && rows) { step(dt); draw(); }
+    const dt = Math.min(0.04, (t - (last || t)) / 1000); last = t;
+    if (cols && rows) {
+      if (reduce) {        // no motion: show the current level as a still pile
+        const n = Math.floor((finishing ? 1 : progress()) * cap()) - settled;
+        for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, pick(COLORS));
+        primed = true;
+        if (finishing && !finishing.done) { finishing.done = true; setTimeout(finishing.cb, 300); }
+      } else step(dt);
+      draw();
+    }
     requestAnimationFrame(frame);
   }
-  if (reduce) {     // a still life instead of motion
-    requestAnimationFrame(() => {
-      resize();
-      for (let i = 0; i < cols * rows * 0.12; i++) { const x = (Math.random() * cols) | 0, h = height(x); if (h < rows / 2) grid[rows - h - 1][x] = COLORS[i % COLORS.length]; }
-      draw();
-    });
-    return;
-  }
   requestAnimationFrame(frame);
+  return {
+    finish(cb) {
+      if (finishing) return;
+      if (!canvas.isConnected || !cols) { cb(); return; }
+      finishing = { cb, at: performance.now(), done: false };
+    },
+  };
 }
