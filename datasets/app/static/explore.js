@@ -727,19 +727,24 @@ function runningPanel(box) {
   const steps = el("ol", { class: "cosci-steps" });
   const s1 = el("li"), s2 = el("li", {}, "Reviewing and selecting 5");
   steps.append(s1, s2);
+  const grid = el("div", { class: "cosci-run-grid" });
+  const stageCol = el("figure", { class: "cosci-mural" });
   const stage = el("div", { class: "cosci-stage" });
-  const canvas = el("canvas", { class: "cosci-canvas", "aria-hidden": "true" });
+  const canvas = el("canvas", { class: "cosci-canvas", role: "img", "aria-label": "A mural assembling from falling blocks" });
+  const caption = el("figcaption", { class: "cosci-caption" }, "Today's mural: a mystery thinker, revealed when the hypotheses are ready.");
+  stage.append(canvas);
+  stageCol.append(stage, caption);
   const dream = el("div", { class: "cosci-dream", "aria-live": "off" });
   const who = el("div", { class: "cosci-who" });
   const text = el("div", { class: "cosci-thought" });
   const cursor = el("span", { class: "cosci-cursor", "aria-hidden": "true" });
   dream.append(who, text);
-  stage.append(canvas, dream);
+  grid.append(stageCol, dream);
   const note = el("p", { class: "muted small" }, "The agents query the data sample, the linked papers and the web. A run usually takes several minutes; you can leave the page and come back.");
   const det = el("details", { class: "small" });
   const logPre = el("pre", { class: "log" });
   det.append(el("summary", {}, "Activity log"), logPre);
-  panel.append(head, steps, stage, note, det);
+  panel.append(head, steps, grid, note, det);
   let latest = null, clockSkew = 0;
   // Share of the run done, from the median phase lengths of past runs.
   // Slows near the end of each phase instead of overshooting.
@@ -753,6 +758,15 @@ function runningPanel(box) {
     return share + (1 - share) * soft((now - rs) / e.review);
   };
   const rain = blockRain(canvas, progress);
+  let muralSet = false, revealed = false, portrait = null;
+  const reveal = () => {
+    if (revealed || !portrait) return;
+    revealed = true;
+    caption.replaceChildren(el("b", {}, portrait.name), document.createTextNode(` (${portrait.years}). ${portrait.blurb} `));
+    const credit = el("a", { href: portrait.source, target: "_blank", rel: "noopener noreferrer", class: "muted" }, "Portrait: Wikimedia Commons, public domain");
+    caption.append(credit);
+  };
+  rain.onLevel = level => { if (level > 0.93) reveal(); };
 
   // Typewriter: new characters (by the server's running count) queue up and
   // are typed at a pace that catches up when far behind.
@@ -784,6 +798,10 @@ function runningPanel(box) {
   let musing = 0;
   const update = r => {
     latest = r;
+    if (!muralSet) {
+      muralSet = true;
+      pickPortrait(r.id).then(p => { portrait = p; if (p) rain.setMural(`/static/portraits/${p.slug}.jpg`); });
+    }
     if (r.now) clockSkew = Date.now() - Date.parse(r.now);
     const gen = r.status === "generating";
     s1.className = gen ? "active" : "done";
@@ -809,7 +827,7 @@ function runningPanel(box) {
   const finish = cb => {
     s1.className = "done"; s2.className = "done"; s2.textContent = "Selected 5";
     who.textContent = "Done";
-    rain.finish(cb);
+    rain.finish(() => { reveal(); setTimeout(cb, 2600); });
   };
   return { panel, update, finish };
 }
@@ -818,6 +836,17 @@ function runningPanel(box) {
 // blocks on impact (with the stack or with each other), tumble and bounce,
 // settle into piles that slide down steep slopes. How full the stage gets
 // follows the run's expected progress; finish() fills it the rest of the way.
+// Murals rotate by run: famous and obscure thinkers, weighted to medicine.
+let PORTRAITS = null;
+async function pickPortrait(runId) {
+  try {
+    if (!PORTRAITS) PORTRAITS = (await api("/static/portraits/index.json")).portraits || [];
+  } catch { PORTRAITS = []; }
+  if (!PORTRAITS.length) return null;
+  const n = PORTRAITS.length, step = 7 % n || 1;   // stride through the list
+  return PORTRAITS[((runId || 0) * step) % n];
+}
+
 function blockRain(canvas, progress) {
   const ctx = canvas.getContext("2d");
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -828,6 +857,29 @@ function blockRain(canvas, progress) {
   const G = 34;                // gravity, cells/s²
   let W = 0, H = 0, cell = 8, cols = 0, rows = 0, grid = [], tops = [], settled = 0;
   let pieces = [], bits = [], spawnIn = 0, last = 0, primed = false, finishing = null;
+  let muralImg = null, mural = null;      // mural: cols×rows colors sampled from the portrait
+  const api_ = { onLevel: null };
+  // Sample the portrait onto the grid ("cover" fit, framed on the upper part
+  // where the face is), with a little per-dot jitter for a pointillist look.
+  function buildMural() {
+    mural = null;
+    if (!muralImg || !cols || !rows) return;
+    const off = document.createElement("canvas");
+    off.width = cols; off.height = rows;
+    const o = off.getContext("2d");
+    o.fillStyle = "#EFE9DD"; o.fillRect(0, 0, cols, rows);
+    const s = Math.max(cols / muralImg.width, rows / muralImg.height) * 1.2;   // a little closer in
+    const w = muralImg.width * s, h = muralImg.height * s;
+    o.drawImage(muralImg, (cols - w) / 2, (rows - h) * 0.12, w, h);
+    const px = o.getImageData(0, 0, cols, rows).data;
+    mural = Array.from({ length: rows }, (_, y) => Array.from({ length: cols }, (_, x) => {
+      const i = (y * cols + x) * 4, j = rnd(-14, 14);
+      const c = v => Math.max(0, Math.min(255, Math.round(v + j)));
+      return `rgb(${c(px[i])},${c(px[i + 1])},${c(px[i + 2])})`;
+    }));
+  }
+  const muralAt = (x, y) => mural && mural[y] && mural[y][x];
+  const anyMural = () => mural ? mural[(Math.random() * rows) | 0][(Math.random() * cols) | 0] : pick(COLORS);
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = a => a[(Math.random() * a.length) | 0];
 
@@ -842,6 +894,7 @@ function blockRain(canvas, progress) {
     grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     tops = Array(cols).fill(rows);      // first occupied row per column
     settled = 0; pieces = []; bits = []; primed = false;
+    buildMural();
   }
   const cap = () => cols * rows;
   const inFlight = () => pieces.length * 4 + bits.length;
@@ -858,7 +911,8 @@ function blockRain(canvas, progress) {
     }
     const y = tops[c] - 1;
     if (y < 0) return false;
-    grid[y][c] = color; tops[c] = y; settled++;
+    grid[y][c] = { from: color, at: performance.now(), r: rnd(0.42, 0.56) };
+    tops[c] = y; settled++;
     return true;
   }
 
@@ -869,7 +923,7 @@ function blockRain(canvas, progress) {
     shape = shape.map(([x, y]) => [x - mx, y - my]);
     const w = Math.max(...shape.map(c => c[0])) + 1;
     pieces.push({ cells: shape, x: (Math.random() * (cols - w + 1)) | 0, y: -4 - Math.random() * 3,
-                  vy: rnd(2, 6), color: pick(COLORS) });
+                  vy: rnd(2, 6), color: anyMural() });
   }
 
   // A piece breaks into single blocks that fly apart with the impact.
@@ -892,7 +946,7 @@ function blockRain(canvas, progress) {
     if (!primed) {            // arriving mid-run: start at the current level
       primed = true;
       const n = Math.floor(target * cap() * 0.95);
-      for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, pick(COLORS));
+      for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, anyMural());
     }
     spawnIn -= dt;
     const want = target * cap() - settled - inFlight();
@@ -927,9 +981,19 @@ function blockRain(canvas, progress) {
       }
     }
     bits = bits.filter(b => !b.dead);
-    if (finishing && (settled >= cap() * 0.97 || performance.now() - finishing.at > 4500) && !finishing.done) {
-      finishing.done = true;
-      setTimeout(finishing.cb, 700);
+    if (finishing && !finishing.done) {
+      // After a short burst of falling pieces, flood the rest so the mural
+      // completes in about two seconds whatever was left.
+      const t = performance.now() - finishing.at;
+      if (t > 1200) {
+        const per = Math.ceil(cap() * dt / 1.2);
+        for (let i = 0; i < per && settled < cap(); i++) {
+          let c = (Math.random() * cols) | 0;
+          for (let k = 0; k < 4 && tops[c] <= 0; k++) c = (Math.random() * cols) | 0;
+          if (!place(c, anyMural())) { const open = tops.findIndex(v => v > 0); if (open < 0) break; place(open, anyMural()); }
+        }
+      }
+      if (settled >= cap() || t > 6000) { finishing.done = true; setTimeout(finishing.cb, 600); }
     }
   }
 
@@ -937,10 +1001,22 @@ function blockRain(canvas, progress) {
     ctx.fillStyle = color; ctx.fillRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
     if (cell >= 8) { ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(x + 0.5, y + 0.5, cell - 1, Math.max(1, cell / 6)); }
   }
+  function dot(x, y, color, r) {
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * r, 0, 6.2832); ctx.fill();
+  }
   function draw() {
     ctx.clearRect(0, 0, W, H);
     ctx.save(); ctx.translate((W - cols * cell) / 2, H - rows * cell);
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (grid[y][x]) box(x * cell, y * cell, grid[y][x]);
+    const now = performance.now();
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const g = grid[y][x];
+      if (!g) continue;
+      const k = Math.min(1, (now - g.at) / 450), target = muralAt(x, y);
+      if (target && k >= 1) dot(x, y, target, g.r);
+      else if (target) { box(x * cell, y * cell, g.from); ctx.globalAlpha = k; dot(x, y, target, g.r); ctx.globalAlpha = 1; }
+      else box(x * cell, y * cell, g.from);
+    }
     for (const p of pieces) for (const [dx, dy] of p.cells) box((p.x + dx) * cell, (p.y + dy) * cell, p.color);
     for (const b of bits) {
       ctx.save(); ctx.translate(b.x * cell + cell / 2, b.y * cell + cell / 2); ctx.rotate(b.rot);
@@ -953,9 +1029,10 @@ function blockRain(canvas, progress) {
     if (canvas.clientWidth !== W || canvas.clientHeight !== H) resize();
     const dt = Math.min(0.04, (t - (last || t)) / 1000); last = t;
     if (cols && rows) {
+      if (api_.onLevel) api_.onLevel(settled / cap());
       if (reduce) {        // no motion: show the current level as a still pile
         const n = Math.floor((finishing ? 1 : progress()) * cap()) - settled;
-        for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, pick(COLORS));
+        for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, anyMural());
         primed = true;
         if (finishing && !finishing.done) { finishing.done = true; setTimeout(finishing.cb, 300); }
       } else step(dt);
@@ -964,11 +1041,16 @@ function blockRain(canvas, progress) {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  return {
+  return Object.assign(api_, {
+    setMural(url) {
+      const img = new Image();
+      img.onload = () => { muralImg = img; buildMural(); };
+      img.src = url;
+    },
     finish(cb) {
       if (finishing) return;
       if (!canvas.isConnected || !cols) { cb(); return; }
       finishing = { cb, at: performance.now(), done: false };
     },
-  };
+  });
 }

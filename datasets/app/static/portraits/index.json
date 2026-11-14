@@ -1,0 +1,311 @@
+{
+ "note": "Public-domain portraits from Wikimedia Commons, resized; see each source page.",
+ "portraits": [
+  {
+   "slug": "john-snow",
+   "name": "John Snow",
+   "years": "1813–1858",
+   "blurb": "Physician who mapped London's 1854 cholera deaths to the Broad Street pump, a founding moment for epidemiology.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:John_Snow.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "isaac-newton",
+   "name": "Isaac Newton",
+   "years": "1643–1727",
+   "blurb": "Mathematician and physicist; laws of motion, universal gravitation and calculus.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Portrait_of_Sir_Isaac_Newton,_1689_(brightened).jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "pierre-charles-alexandre-louis",
+   "name": "Pierre Charles Alexandre Louis",
+   "years": "1787–1872",
+   "blurb": "Physician whose 'numerical method' counted outcomes and showed bloodletting did little for pneumonia.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Pierre-Charles_Alexandre_Louis.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "ignaz-semmelweis",
+   "name": "Ignaz Semmelweis",
+   "years": "1818–1865",
+   "blurb": "Obstetrician who showed that handwashing with chlorinated lime prevented childbed fever.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Borsos_%26_Doctor_Semmelweis_Ign%C3%A1c_cropped.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "baruch-spinoza",
+   "name": "Baruch Spinoza",
+   "years": "1632–1677",
+   "blurb": "Philosopher of a single substance, Deus sive Natura; a lens grinder by trade.",
+   "field": "philosophy",
+   "source": "https://commons.wikimedia.org/wiki/File:Spinoza.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "florence-nightingale",
+   "name": "Florence Nightingale",
+   "years": "1820–1910",
+   "blurb": "Nurse and statistician whose polar-area diagrams showed most Crimean War deaths were preventable.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Florence_Nightingale_(H_Hering_NPG_x82368).jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "james-lind",
+   "name": "James Lind",
+   "years": "1716–1794",
+   "blurb": "Naval surgeon who ran one of the first controlled trials, citrus against scurvy in 1747.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:James_Lind_by_Chalmers.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "ada-lovelace",
+   "name": "Ada Lovelace",
+   "years": "1815–1852",
+   "blurb": "Mathematician who wrote the first published algorithm for Babbage's Analytical Engine.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Ada_Lovelace_daguerreotype_by_Antoine_Claudet_1843_-_cropped.png",
+   "license": "Public domain"
+  },
+  {
+   "slug": "william-farr",
+   "name": "William Farr",
+   "years": "1807–1883",
+   "blurb": "Statistician who built England's system of vital statistics and cause-of-death classification.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:PSM_V23_D302_William_Farr.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "edward-jenner",
+   "name": "Edward Jenner",
+   "years": "1749–1823",
+   "blurb": "Country doctor who showed cowpox inoculation protects against smallpox.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Edward_Jenner.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "rene-descartes",
+   "name": "René Descartes",
+   "years": "1596–1650",
+   "blurb": "Philosopher and mathematician; methodic doubt and the coordinate plane.",
+   "field": "philosophy",
+   "source": "https://commons.wikimedia.org/wiki/File:Frans_Hals_-_Portret_van_Ren%C3%A9_Descartes.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "girolamo-fracastoro",
+   "name": "Girolamo Fracastoro",
+   "years": "1476/8–1553",
+   "blurb": "Physician who proposed that 'seeds' of contagion spread disease, and named syphilis.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Titian_Girolamo_FracastoroFXD.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "antonie-van-leeuwenhoek",
+   "name": "Antonie van Leeuwenhoek",
+   "years": "1632–1723",
+   "blurb": "Draper of Delft whose hand-ground lenses first revealed bacteria and protozoa.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Anthonie_van_Leeuwenhoek_(1632-1723)._Natuurkundige_te_Delft_Rijksmuseum_SK-A-957.jpeg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "mary-somerville",
+   "name": "Mary Somerville",
+   "years": "1780–1872",
+   "blurb": "Mathematician and science writer whose work hinted at a planet beyond Uranus.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Thomas_Phillips_-_Mary_Fairfax,_Mrs_William_Somerville,_1780_-_1872._Writer_on_science_-_Google_Art_Project.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "louis-pasteur",
+   "name": "Louis Pasteur",
+   "years": "1822–1895",
+   "blurb": "Chemist behind germ theory, pasteurisation and vaccines for anthrax and rabies.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Louis_Pasteur,_foto_av_Paul_Nadar,_Crisco_edit.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "elizabeth-blackwell",
+   "name": "Elizabeth Blackwell",
+   "years": "1821–1910",
+   "blurb": "First woman to receive a medical degree in the United States (1849).",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Elizabeth_Blackwell.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "michel-de-montaigne",
+   "name": "Michel de Montaigne",
+   "years": "1533–1592",
+   "blurb": "Inventor of the essay; 'Que sais-je?' What do I know?",
+   "field": "philosophy",
+   "source": "https://commons.wikimedia.org/wiki/File:Portrait_of_Michel_de_Montaigne,_circa_unknown.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "robert-koch",
+   "name": "Robert Koch",
+   "years": "1843–1910",
+   "blurb": "Microbiologist who identified the causes of tuberculosis and cholera; Koch's postulates.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:RobertKoch_cropped.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "rudolf-virchow",
+   "name": "Rudolf Virchow",
+   "years": "1821–1902",
+   "blurb": "Pathologist of 'omnis cellula e cellula' and an early voice for social medicine.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Rudolf_Virchow_NLM3.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "charles-darwin",
+   "name": "Charles Darwin",
+   "years": "1809–1882",
+   "blurb": "Naturalist of evolution by natural selection.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Charles_Darwin_seated_crop.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "mary-seacole",
+   "name": "Mary Seacole",
+   "years": "1805–1881",
+   "blurb": "Jamaican-Scottish nurse who ran the British Hotel for soldiers in the Crimean War.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Mary_Jane_Seacole.jpeg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "rene-laennec",
+   "name": "René Laennec",
+   "years": "1781–1826",
+   "blurb": "Physician who invented the stethoscope and described its sounds.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Rene-Theophile-Hyacinthe_Laennec.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "emilie-du-chatelet",
+   "name": "Émilie du Châtelet",
+   "years": "1706–1749",
+   "blurb": "Natural philosopher whose translation of Newton's Principia is still the standard French one.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Emilie_Chatelet_portrait_by_Latour.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "andreas-vesalius",
+   "name": "Andreas Vesalius (attributed portrait)",
+   "years": "1514–1564",
+   "blurb": "Anatomist of De humani corporis fabrica, built on his own dissections.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Man_dressed_in_Black_by_Calcar_(Hermitage).jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "santiago-ramon-y-cajal",
+   "name": "Santiago Ramón y Cajal",
+   "years": "1852–1934",
+   "blurb": "Neuroscientist who showed the nervous system is made of separate neurons.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Santiago_Ram%C3%B3n_y_Cajal_(1852-1934)_portrait_(restored).jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "gregor-mendel",
+   "name": "Gregor Mendel",
+   "years": "1822–1884",
+   "blurb": "Friar whose pea experiments uncovered the laws of inheritance.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Gregor_Mendel_2.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "william-harvey",
+   "name": "William Harvey",
+   "years": "1578–1657",
+   "blurb": "Physician who demonstrated the circulation of the blood.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:William_Harvey_2.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "mary-wollstonecraft",
+   "name": "Mary Wollstonecraft",
+   "years": "1759–1797",
+   "blurb": "Philosopher, author of A Vindication of the Rights of Woman.",
+   "field": "philosophy",
+   "source": "https://commons.wikimedia.org/wiki/File:Mary_Wollstonecraft_Portrait.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "joseph-lister",
+   "name": "Joseph Lister",
+   "years": "1827–1912",
+   "blurb": "Surgeon who introduced antiseptic surgery with carbolic acid.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Joseph_Lister_1902.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "alexander-von-humboldt",
+   "name": "Alexander von Humboldt",
+   "years": "1769–1859",
+   "blurb": "Naturalist and explorer who saw nature as one interconnected web.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Stieler,_Joseph_Karl_-_Alexander_von_Humboldt_-_1843.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "hippocrates",
+   "name": "Hippocrates",
+   "years": "c. 460–370 BCE",
+   "blurb": "Physician of Kos, father of medicine; disease has natural causes.",
+   "field": "medicine",
+   "source": "https://commons.wikimedia.org/wiki/File:Hippocrates.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "sofya-kovalevskaya",
+   "name": "Sofya Kovalevskaya",
+   "years": "1850–1891",
+   "blurb": "Mathematician of partial differential equations; first woman full professor in northern Europe.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Sofja_Wassiljewna_Kowalewskaja_1.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "pierre-simon-laplace",
+   "name": "Pierre-Simon Laplace",
+   "years": "1749–1827",
+   "blurb": "Mathematician of celestial mechanics and probability, the 'rule of succession'.",
+   "field": "science",
+   "source": "https://commons.wikimedia.org/wiki/File:Laplace,_Pierre-Simon,_marquis_de.jpg",
+   "license": "Public domain"
+  },
+  {
+   "slug": "aristotle",
+   "name": "Aristotle",
+   "years": "384–322 BCE",
+   "blurb": "Philosopher who classified animals by dissection and founded formal logic.",
+   "field": "philosophy",
+   "source": "https://commons.wikimedia.org/wiki/File:Aristotle_Altemps_Inv8575.jpg",
+   "license": "Public domain"
+  }
+ ]
+}

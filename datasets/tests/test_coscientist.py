@@ -175,3 +175,14 @@ def test_stream_reports_deltas():
     client = NS(beta=NS(messages=NS(stream=lambda **kw: S(**kw))))
     out = _stream(client, Settings(), lambda k, t: seen.append((k, t)), messages=[])
     assert out == "final" and seen == [("thinking", "hmm"), ("text", "ok")]
+
+
+def test_portrait_manifest():
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parent.parent / "app" / "static" / "portraits"
+    items = json.loads((root / "index.json").read_text())["portraits"]
+    assert len(items) >= 20 and len({p["slug"] for p in items}) == len(items)
+    assert sum(p["field"] == "medicine" for p in items) > len(items) / 2     # medicine-weighted
+    for p in items:
+        assert (root / f"{p['slug']}.jpg").exists() and p["name"] and p["years"] and p["blurb"]
+        assert p["license"].lower().startswith("public domain") and p["source"].startswith("https://commons.wikimedia.org/")
