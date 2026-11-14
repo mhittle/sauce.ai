@@ -295,6 +295,7 @@ CREATE TABLE IF NOT EXISTS hypothesis_runs (
     error       TEXT,
     model       TEXT,
     started_at  TEXT NOT NULL,
+    reviewing_at TEXT,
     finished_at TEXT
 );
 CREATE INDEX IF NOT EXISTS hypothesis_runs_ds ON hypothesis_runs(dataset_id, id);
@@ -422,6 +423,9 @@ class Store:
             c.execute("ALTER TABLE condition_devices ADD COLUMN source TEXT NOT NULL"
                       " DEFAULT 'name'")
         c.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+        have = {r[1] for r in c.execute("PRAGMA table_info(hypothesis_runs)")}
+        if have and "reviewing_at" not in have:
+            c.execute("ALTER TABLE hypothesis_runs ADD COLUMN reviewing_at TEXT")
         have = {r[1] for r in c.execute("PRAGMA table_info(datasets)")}
         if "kind" not in have:
             c.execute("ALTER TABLE datasets ADD COLUMN kind TEXT NOT NULL DEFAULT 'dataset'")
