@@ -848,19 +848,26 @@ async function pickPortrait(runId) {
 }
 
 function blockRain(canvas, progress) {
+  // Every block is planned before it falls: a piece reserves four cells on
+  // the mural's rising skyline and each of its blocks already carries the
+  // portrait colour of its cell. Pieces fall, shatter on impact, and the
+  // fragments fly (damped spring, a little overshoot) into their own cells.
+  // Nothing is recoloured after landing.
   const ctx = canvas.getContext("2d");
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const COLORS = ["#2433D9", "#4B57E6", "#7C86EE", "#AEB4F5", "#0A0A0B", "#1F7A3A", "#D9480F", "#7A2CBF"];
+  const FALLBACK = ["#2433D9", "#4B57E6", "#7C86EE", "#AEB4F5", "#0A0A0B", "#1F7A3A", "#D9480F", "#7A2CBF"];
   const SHAPES = [[[0, 0], [1, 0], [2, 0], [3, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]], [[1, 0], [0, 1], [1, 1], [2, 1]],
                   [[0, 0], [0, 1], [1, 1], [2, 1]], [[2, 0], [0, 1], [1, 1], [2, 1]], [[1, 0], [2, 0], [0, 1], [1, 1]],
                   [[0, 0], [1, 0], [1, 1], [2, 1]]];
-  const G = 34;                // gravity, cells/s²
-  let W = 0, H = 0, cell = 8, cols = 0, rows = 0, grid = [], tops = [], settled = 0;
+  const G = 34, K = 55, DAMP = 9;
+  let W = 0, H = 0, cell = 8, cols = 0, rows = 0, grid = [], planned = [], settled = 0, reserved = 0;
   let pieces = [], bits = [], spawnIn = 0, last = 0, primed = false, finishing = null;
-  let muralImg = null, mural = null;      // mural: cols×rows colors sampled from the portrait
+  let muralImg = null, mural = null;
   const api_ = { onLevel: null };
-  // Sample the portrait onto the grid ("cover" fit, framed on the upper part
-  // where the face is), with a little per-dot jitter for a pointillist look.
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[(Math.random() * a.length) | 0];
+  const cap = () => cols * rows;
+
   function buildMural() {
     mural = null;
     if (!muralImg || !cols || !rows) return;
@@ -878,10 +885,7 @@ function blockRain(canvas, progress) {
       return `rgb(${c(px[i])},${c(px[i + 1])},${c(px[i + 2])})`;
     }));
   }
-  const muralAt = (x, y) => mural && mural[y] && mural[y][x];
-  const anyMural = () => mural ? mural[(Math.random() * rows) | 0][(Math.random() * cols) | 0] : pick(COLORS);
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  const pick = a => a[(Math.random() * a.length) | 0];
+  const colorAt = (x, y) => (mural ? mural[y][x] : FALLBACK[(x * 7 + y * 3) % FALLBACK.length]);
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -892,114 +896,140 @@ function blockRain(canvas, progress) {
     cell = Math.max(6, Math.round(W / 90));
     cols = Math.floor(W / cell); rows = Math.floor(H / cell);
     grid = Array.from({ length: rows }, () => Array(cols).fill(null));
-    tops = Array(cols).fill(rows);      // first occupied row per column
-    settled = 0; pieces = []; bits = []; primed = false;
+    planned = Array(cols).fill(0);          // filled + reserved cells per column
+    settled = 0; reserved = 0; pieces = []; bits = []; primed = false;
     buildMural();
   }
-  const cap = () => cols * rows;
-  const inFlight = () => pieces.length * 4 + bits.length;
 
-  // Put one block on column c, then let it slide down any slope of 2+.
-  function place(c, color) {
-    for (let guard = 0; guard < cols; guard++) {
-      const l = c > 0 ? tops[c - 1] : -1, r = c < cols - 1 ? tops[c + 1] : -1;
-      const cands = [];
-      if (l - tops[c] >= 2) cands.push(c - 1);
-      if (r - tops[c] >= 2) cands.push(c + 1);
-      if (!cands.length) break;
-      c = pick(cands);
+  // Reserve the next cell in column c (bottom-up).
+  function reserve(c) {
+    if (planned[c] >= rows) return null;
+    const y = rows - 1 - planned[c]; planned[c]++; reserved++;
+    return [c, y];
+  }
+  function settle(x, y, color) {
+    grid[y][x] = { color, r: rnd(0.42, 0.56) };
+    settled++;
+  }
+  const supported = (x, y) => y === rows - 1 || !!grid[y + 1][x];
+
+  // Choose four cells close together on the lowest part of the skyline, so
+  // the mural rises evenly with an organic edge.
+  function planTargets() {
+    const low = Math.min(...planned);
+    if (low >= rows) return null;
+    const cands = [];
+    for (let c = 0; c < cols; c++) if (planned[c] <= low + 2) cands.push(c);
+    const c0 = Math.max(0, Math.min(cols - 4, pick(cands) - 1));
+    const out = [];
+    for (let k = 0; k < 4; k++) {
+      let best = -1;
+      for (let c = c0; c < c0 + 4 && c < cols; c++) {
+        if (planned[c] >= rows) continue;
+        if (best < 0 || planned[c] < planned[best] || (planned[c] === planned[best] && Math.random() < 0.5)) best = c;
+      }
+      if (best < 0) break;
+      out.push(reserve(best));
     }
-    const y = tops[c] - 1;
-    if (y < 0) return false;
-    grid[y][c] = { from: color, at: performance.now(), r: rnd(0.42, 0.56) };
-    tops[c] = y; settled++;
-    return true;
+    return out.length ? { c0, targets: out } : null;
   }
 
   function spawn() {
+    const plan = planTargets();
+    if (!plan) return false;
     let shape = pick(SHAPES);
     for (let k = (Math.random() * 4) | 0; k > 0; k--) shape = shape.map(([x, y]) => [-y, x]);
     const mx = Math.min(...shape.map(c => c[0])), my = Math.min(...shape.map(c => c[1]));
-    shape = shape.map(([x, y]) => [x - mx, y - my]);
+    shape = shape.map(([x, y]) => [x - mx, y - my]).slice(0, plan.targets.length);
+    // Pair cells left-to-right / bottom-up with targets the same way, so
+    // fragments don't cross over each other much.
+    const cellsSorted = shape.slice().sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+    const tSorted = plan.targets.slice().sort((a, b) => a[0] - b[0] || b[1] - a[1]);
     const w = Math.max(...shape.map(c => c[0])) + 1;
-    pieces.push({ cells: shape, x: (Math.random() * (cols - w + 1)) | 0, y: -4 - Math.random() * 3,
-                  vy: rnd(2, 6), color: anyMural() });
-  }
-
-  // A piece breaks into single blocks that fly apart with the impact.
-  function shatter(p, impact) {
-    const cx = p.x + 1.5, cy = p.y + 1;
-    for (const [dx, dy] of p.cells) {
-      const x = p.x + dx, y = p.y + dy;
-      bits.push({ x, y, vx: (x - cx) * rnd(1.5, 3.5) + rnd(-1.5, 1.5) * impact * 0.18,
-                  vy: -impact * rnd(0.12, 0.35), rot: 0, vr: rnd(-9, 9), color: p.color, bounces: 0 });
-    }
-    p.dead = true;
+    const x = Math.max(0, Math.min(cols - w, plan.c0 + (((4 - w) / 2) | 0)));
+    const lowestTarget = Math.min(...tSorted.map(t => t[1]));
+    pieces.push({ x, y: -4 - Math.random() * 3, vy: rnd(2, 6), stopAt: lowestTarget - 2,
+                  cells: cellsSorted.map(([dx, dy], i) => ({ dx, dy, tx: tSorted[i][0], ty: tSorted[i][1],
+                                                            color: colorAt(tSorted[i][0], tSorted[i][1]) })) });
+    return true;
   }
 
   const solid = (x, y) => y >= rows || (y >= 0 && x >= 0 && x < cols && grid[y][x]);
-  const overlaps = (a, b) => a.cells.some(([ax, ay]) => b.cells.some(([bx, by]) =>
-    a.x + ax === b.x + bx && Math.abs((a.y + ay) - (b.y + by)) < 1));
+  function shatter(p) {
+    const cx = p.x + 1.5;
+    for (const c of p.cells) {
+      const x = p.x + c.dx, y = p.y + c.dy;
+      bits.push({ x, y, vx: (x - cx) * rnd(1.5, 3) + rnd(-2, 2), vy: -p.vy * rnd(0.12, 0.3),
+                  rot: 0, vr: rnd(-9, 9), age: 0, tx: c.tx, ty: c.ty, color: c.color });
+    }
+    p.dead = true;
+  }
+  const overlaps = (a, b) => Math.abs(a.x - b.x) <= 4 && Math.abs(a.y - b.y) < 4 && a.cells.some(ca => b.cells.some(cb =>
+    a.x + ca.dx === b.x + cb.dx && Math.abs((a.y + ca.dy) - (b.y + cb.dy)) < 1));
 
   function step(dt) {
     const target = finishing ? 1 : Math.max(0, Math.min(0.985, progress()));
-    if (!primed) {            // arriving mid-run: start at the current level
+    if (!primed && mural) {     // arriving mid-run: the finished rows are already there
       primed = true;
       const n = Math.floor(target * cap() * 0.95);
-      for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, anyMural());
+      for (let i = 0; i < n; i++) {
+        const low = Math.min(...planned);
+        const cands = []; for (let c = 0; c < cols; c++) if (planned[c] <= low + 1) cands.push(c);
+        const t = reserve(pick(cands)); if (!t) break;
+        settle(t[0], t[1], colorAt(t[0], t[1]));
+      }
     }
+    if (!mural && !finishing) return;          // wait for the portrait
     spawnIn -= dt;
-    const want = target * cap() - settled - inFlight();
+    const want = target * cap() - reserved;
     if (want > 0 && spawnIn <= 0) {
-      spawn();
-      spawnIn = finishing ? 0.004 : Math.max(0.05, 0.6 - want / cap() * 4);
+      if (spawn()) spawnIn = finishing ? 0.01 : Math.max(0.05, 0.6 - want / cap() * 4);
+    }
+    if (finishing && reserved < cap()) {          // the last rows pour in
+      for (let i = 0; i < 3 && pieces.length < 70; i++) spawn();
     }
     for (const p of pieces) {
       p.vy = Math.min(p.vy + G * dt, 40);
       const ny = p.y + p.vy * dt;
-      let hit = false;
+      const bottom = Math.max(...p.cells.map(c => c.dy));
+      let hit = ny + bottom >= p.stopAt;
       for (let y = Math.floor(p.y); y <= Math.floor(ny) && !hit; y++) {
-        if (p.cells.some(([dx, dy]) => solid(p.x + dx, y + dy + 1))) { p.y = y; hit = true; }
+        if (p.cells.some(c => solid(p.x + c.dx, y + c.dy + 1))) hit = true;
       }
-      if (hit) { shatter(p, p.vy); continue; }
+      if (hit) { shatter(p); continue; }
       p.y = ny;
-      for (const q of pieces) if (q !== p && !q.dead && overlaps(p, q)) {   // mid-air collision
-        shatter(p, p.vy); shatter(q, q.vy); break;
-      }
+      for (const q of pieces) if (q !== p && !q.dead && overlaps(p, q)) { shatter(p); shatter(q); break; }
     }
     pieces = pieces.filter(p => !p.dead);
     for (const b of bits) {
-      b.vy = Math.min(b.vy + G * dt, 40); b.x += b.vx * dt; b.y += b.vy * dt; b.rot += b.vr * dt;
-      if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx) * 0.5; }
-      if (b.x > cols - 1) { b.x = cols - 1; b.vx = -Math.abs(b.vx) * 0.5; }
-      const cx = Math.round(b.x), below = Math.floor(b.y) + 1;
-      if (b.vy > 0 && solid(cx, below)) {
-        if (b.vy > 6 && b.bounces < 2) {           // bounce, losing energy
-          b.y = below - 1; b.vy = -b.vy * rnd(0.2, 0.38); b.vx = b.vx * 0.7 + rnd(-1.5, 1.5);
-          b.vr *= 0.6; b.bounces++;
-        } else { if (!place(cx, b.color)) settled = cap(); b.dead = true; }
+      b.age += dt;
+      if (b.age < 0.2) {                    // scatter from the impact
+        b.vy += G * dt;
+      } else {                              // then home in on the reserved cell
+        b.vx += (K * (b.tx - b.x) - DAMP * b.vx) * dt;
+        b.vy += (K * (b.ty - b.y) - DAMP * b.vy) * dt;
+        b.vr *= Math.exp(-5 * dt); b.rot *= Math.exp(-5 * dt);
       }
+      b.x += b.vx * dt; b.y += b.vy * dt; b.rot += b.vr * dt;
+      const d = Math.hypot(b.tx - b.x, b.ty - b.y), v = Math.hypot(b.vx, b.vy);
+      if (b.age > 0.2 && d < 0.08 && v < 2 && supported(b.tx, b.ty)) { settle(b.tx, b.ty, b.color); b.dead = true; }
+      else if (b.age > 6) { settle(b.tx, b.ty, b.color); b.dead = true; }   // never strand a block
     }
     bits = bits.filter(b => !b.dead);
     if (finishing && !finishing.done) {
-      // After a short burst of falling pieces, flood the rest so the mural
-      // completes in about two seconds whatever was left.
       const t = performance.now() - finishing.at;
-      if (t > 1200) {
-        const per = Math.ceil(cap() * dt / 1.2);
-        for (let i = 0; i < per && settled < cap(); i++) {
-          let c = (Math.random() * cols) | 0;
-          for (let k = 0; k < 4 && tops[c] <= 0; k++) c = (Math.random() * cols) | 0;
-          if (!place(c, anyMural())) { const open = tops.findIndex(v => v > 0); if (open < 0) break; place(open, anyMural()); }
-        }
+      if (t > 9000) {                       // safety net: complete what's left
+        for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (!grid[y][x]) settle(x, y, colorAt(x, y));
+        pieces = []; bits = [];
       }
-      if (settled >= cap() || t > 6000) { finishing.done = true; setTimeout(finishing.cb, 600); }
+      if (settled >= cap()) { finishing.done = true; setTimeout(finishing.cb, 500); }
     }
   }
 
-  function box(x, y, color) {
-    ctx.fillStyle = color; ctx.fillRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
-    if (cell >= 8) { ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(x + 0.5, y + 0.5, cell - 1, Math.max(1, cell / 6)); }
+  function square(x, y, color, rot) {
+    ctx.fillStyle = color;
+    if (rot) { ctx.save(); ctx.translate(x + cell / 2, y + cell / 2); ctx.rotate(rot); ctx.fillRect(-cell / 2 + 0.5, -cell / 2 + 0.5, cell - 1, cell - 1); ctx.restore(); }
+    else ctx.fillRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
   }
   function dot(x, y, color, r) {
     ctx.fillStyle = color;
@@ -1008,19 +1038,12 @@ function blockRain(canvas, progress) {
   function draw() {
     ctx.clearRect(0, 0, W, H);
     ctx.save(); ctx.translate((W - cols * cell) / 2, H - rows * cell);
-    const now = performance.now();
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-      const g = grid[y][x];
-      if (!g) continue;
-      const k = Math.min(1, (now - g.at) / 450), target = muralAt(x, y);
-      if (target && k >= 1) dot(x, y, target, g.r);
-      else if (target) { box(x * cell, y * cell, g.from); ctx.globalAlpha = k; dot(x, y, target, g.r); ctx.globalAlpha = 1; }
-      else box(x * cell, y * cell, g.from);
-    }
-    for (const p of pieces) for (const [dx, dy] of p.cells) box((p.x + dx) * cell, (p.y + dy) * cell, p.color);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) { const g = grid[y][x]; if (g) dot(x, y, g.color, g.r); }
+    for (const p of pieces) for (const c of p.cells) square((p.x + c.dx) * cell, (p.y + c.dy) * cell, c.color, 0);
     for (const b of bits) {
-      ctx.save(); ctx.translate(b.x * cell + cell / 2, b.y * cell + cell / 2); ctx.rotate(b.rot);
-      box(-cell / 2, -cell / 2, b.color); ctx.restore();
+      const d = Math.hypot(b.tx - b.x, b.ty - b.y);
+      if (d < 0.6 && b.age > 0.2) dot(b.x, b.y, b.color, 0.5);   // rounding off as it arrives
+      else square(b.x * cell, b.y * cell, b.color, b.rot);
     }
     ctx.restore();
   }
@@ -1030,10 +1053,9 @@ function blockRain(canvas, progress) {
     const dt = Math.min(0.04, (t - (last || t)) / 1000); last = t;
     if (cols && rows) {
       if (api_.onLevel) api_.onLevel(settled / cap());
-      if (reduce) {        // no motion: show the current level as a still pile
+      if (reduce) {        // no motion: the mural at the current level, bottom-up
         const n = Math.floor((finishing ? 1 : progress()) * cap()) - settled;
-        for (let i = 0; i < n; i++) place((Math.random() * cols) | 0, anyMural());
-        primed = true;
+        for (let i = 0; i < n; i++) { const low = Math.min(...planned); const c = planned.indexOf(low); const r = reserve(c); if (!r) break; settle(r[0], r[1], colorAt(r[0], r[1])); }
         if (finishing && !finishing.done) { finishing.done = true; setTimeout(finishing.cb, 300); }
       } else step(dt);
       draw();
