@@ -947,14 +947,16 @@ function blockRain(canvas, progress) {
     const tSorted = plan.targets.slice().sort((a, b) => a[0] - b[0] || b[1] - a[1]);
     const w = Math.max(...shape.map(c => c[0])) + 1;
     const x = Math.max(0, Math.min(cols - w, plan.c0 + (((4 - w) / 2) | 0)));
-    const lowestTarget = Math.min(...tSorted.map(t => t[1]));
-    pieces.push({ x, y: -4 - Math.random() * 3, vy: rnd(2, 6), stopAt: lowestTarget - 2,
+    pieces.push({ x, y: -4 - Math.random() * 3, vy: rnd(2, 6),
                   cells: cellsSorted.map(([dx, dy], i) => ({ dx, dy, tx: tSorted[i][0], ty: tSorted[i][1],
                                                             color: colorAt(tSorted[i][0], tSorted[i][1]) })) });
     return true;
   }
 
-  const solid = (x, y) => y >= rows || (y >= 0 && x >= 0 && x < cols && grid[y][x]);
+  // Contact surfaces: the floor, settled dots, and fragments already resting
+  // at their cell (waiting for the one below to land).
+  let resting = new Set();
+  const solid = (x, y) => y >= rows || (y >= 0 && x >= 0 && x < cols && (grid[y][x] || resting.has(y * cols + x)));
   function shatter(p) {
     const cx = p.x + 1.5;
     for (const c of p.cells) {
@@ -988,13 +990,14 @@ function blockRain(canvas, progress) {
     if (finishing && reserved < cap()) {          // the last rows pour in
       for (let i = 0; i < 3 && pieces.length < 70; i++) spawn();
     }
+    resting = new Set();
+    for (const b of bits) if (b.age > 0.2 && Math.hypot(b.tx - b.x, b.ty - b.y) < 0.35) resting.add(b.ty * cols + b.tx);
     for (const p of pieces) {
       p.vy = Math.min(p.vy + G * dt, 40);
       const ny = p.y + p.vy * dt;
-      const bottom = Math.max(...p.cells.map(c => c.dy));
-      let hit = ny + bottom >= p.stopAt;
+      let hit = false;
       for (let y = Math.floor(p.y); y <= Math.floor(ny) && !hit; y++) {
-        if (p.cells.some(c => solid(p.x + c.dx, y + c.dy + 1))) hit = true;
+        if (p.cells.some(c => solid(p.x + c.dx, y + c.dy + 1))) { p.y = y; hit = true; }   // touching: stop there
       }
       if (hit) { shatter(p); continue; }
       p.y = ny;
