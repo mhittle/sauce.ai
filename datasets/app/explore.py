@@ -651,7 +651,15 @@ which field). Be concise. Distinguish what the data show from what would need a 
 proper analysis (confounding, multiple comparisons, small n, label noise). When it \
 helps, suggest a view the user could add to the explore page (image gallery, signal \
 viewer, spaghetti, histogram by group, group summary, label distribution). Never \
-invent fields, labels or values that the tools don't return."""
+invent fields, labels or values that the tools don't return.
+
+Literature: `publications` returns the papers our catalog links to this dataset \
+(its descriptor paper, papers citing it, papers naming it) and `fda_devices` the \
+FDA submissions linked to it; check these first. Use web_search / web_fetch for \
+anything else (the repository's citation list, recent work, a specific finding), \
+preferring the repository page, PubMed/PMC, DOIs and publishers. Cite each paper \
+with title, first author, year and a DOI or URL as a markdown link, only as the \
+tools returned it; never invent or complete a citation from memory."""
 
 CHAT_TOOLS = [
     {"name": "describe_data", "description": "The data probe: fields/columns, label "
@@ -674,6 +682,17 @@ CHAT_TOOLS = [
     {"name": "records", "description": "Signal/series records, optionally only those "
      "carrying a label; returns ids, labels and the total.",
      "input_schema": {"type": "object", "properties": {"label": {"type": "string"}}}},
+    {"name": "publications", "description": "Papers our catalog links to this dataset: "
+     "the descriptor paper(s), papers citing them, and papers naming the dataset; most-"
+     "cited first. Optional `query` filters titles/venues; `relation` is descriptor, "
+     "cites, mentions or all.",
+     "input_schema": {"type": "object", "properties": {
+         "query": {"type": "string"}, "relation": {"type": "string",
+                                                   "enum": ["all", "descriptor", "cites", "mentions"]},
+         "limit": {"type": "integer"}}}},
+    {"name": "fda_devices", "description": "FDA 510(k)/De Novo submissions linked to this "
+     "dataset (trained or validated on it, or citing its papers).",
+     "input_schema": {"type": "object", "properties": {}}},
     {"name": "signal_stats", "description": "Summary statistics (n, mean, SD, min, max) "
      "of a record's channels over a time window (seconds).",
      "input_schema": {"type": "object", "properties": {
@@ -695,12 +714,42 @@ def _stats(vals: list) -> dict:
 class ExploreChat:
     """Tool-using chat over one dataset's explore source (read-only)."""
 
-    MAX_TURNS = 8
+    MAX_TURNS = 10
 
     def __init__(self, manager: ExploreManager):
         self.m = manager
 
+    def _literature(self, ds_id: str, name: str, args: dict) -> Any:
+        store = self.m.store
+        if name == "fda_devices":
+            ds = store.get_dataset(ds_id) or {}
+            return {"devices": ds.get("devices") or []}
+        rel = args.get("relation") or "all"
+        n = max(1, min(50, int(args.get("limit") or 20)))
+        q = (args.get("query") or "").lower().strip()
+        res = store.dataset_articles(ds_id, relation=rel if rel in ("cites", "mentions") else None,
+                                     limit=500 if q or rel == "descriptor" else n)
+        items = res["items"]
+        if rel == "descriptor":
+            items = [a for a in items if a.get("is_descriptor")]
+        if q:
+            items = [a for a in items if all(w in f"{a.get('title')} {a.get('venue')}".lower()
+                                             for w in q.split())]
+        out = []
+        for a in items[:n]:
+            url = a.get("url") or (f"https://doi.org/{a['doi']}" if a.get("doi") else None) or \
+                (f"https://pubmed.ncbi.nlm.nih.gov/{a['pmid']}/" if a.get("pmid") else None)
+            out.append({"title": a.get("title"), "authors": (a.get("authors") or "")[:160],
+                        "venue": a.get("venue"), "year": a.get("year"), "doi": a.get("doi"),
+                        "pmid": a.get("pmid"), "url": url, "cited_by": a.get("cited_by_count"),
+                        "relation": "descriptor" if a.get("is_descriptor") else
+                        "cites" if a.get("cites") else "mentions"})
+        return {"papers_using_total": res.get("total"), "citing": res.get("cites"),
+                "mentioning_only": res.get("mentions_only"), "returned": len(out), "papers": out}
+
     def _tool(self, ds_id: str, name: str, args: dict) -> Any:
+        if name in ("publications", "fda_devices"):
+            return self._literature(ds_id, name, args)
         m = self.m
         ex = m.get(ds_id) or {}
         probe = (ex.get("source") or {}).get("probe") or {}
@@ -776,21 +825,27 @@ class ExploreChat:
         if not ex or not ex.get("source"):
             raise SourceError("build the explore page first")
         ds = self.m.store.get_dataset(ds_id)
-        card = {k: ds.get(k) for k in ("title", "source", "description", "labels", "conditions",
-                                       "modalities", "n_subjects", "access_type")}
+        card = {k: ds.get(k) for k in ("title", "url", "source", "description", "labels",
+                                       "conditions", "modalities", "n_subjects", "access_type",
+                                       "citation", "n_articles")}
         client = self.m.client_factory(self.m.settings)
         msgs: list[dict] = [{"role": h["role"], "content": str(h["content"])[:4000]}
                             for h in history[-12:] if h.get("role") in ("user", "assistant")]
         if not msgs or msgs[-1]["role"] != "user":
             raise ValueError("last message must be from the user")
         used: list[str] = []
+        from .crawler import WEB_TOOLS
         for _ in range(self.MAX_TURNS):
             resp = _create(client, self.m.settings,
                            system=CHAT_SYSTEM + "\n\nDataset card:\n" + json.dumps(card, default=str),
-                           tools=CHAT_TOOLS, output_config={"effort": "medium"}, messages=msgs)
+                           tools=[*CHAT_TOOLS, *WEB_TOOLS], output_config={"effort": "medium"},
+                           messages=msgs)
             msgs.append({"role": "assistant", "content": resp.content})
+            used += [b.name for b in resp.content if b.type == "server_tool_use"]
             if resp.stop_reason == "refusal":
                 return {"answer": "That request was declined.", "tools_used": used}
+            if resp.stop_reason == "pause_turn":       # long server-side web search
+                continue
             if resp.stop_reason != "tool_use":
                 text = "\n".join(b.text for b in resp.content if b.type == "text").strip()
                 return {"answer": text or "(no answer)", "tools_used": used}

@@ -3,7 +3,7 @@
 // view type below renders the same way on every dataset.
 /* global $, el, api, banner, ACCESS_LABEL, escapeHtml */
 
-const EX = { id: null, data: null, poll: null };
+const EX = { id: null, data: null, poll: null, hpoll: null };
 const tokenKey = "pahlEditToken";
 const C = { ink: "#0A0A0B", muted: "#5C5C62", line: "#DEDEDA", accent: "#2433D9",
             palette: ["#2433D9", "#D9480F", "#1F7A3A", "#9A6400", "#7A2CBF", "#0F7C8C", "#B3261E", "#5C5C62"] };
@@ -36,6 +36,7 @@ async function exApi(path, opts = {}) {
 async function loadExplore(id) {
   EX.id = id;
   clearTimeout(EX.poll);
+  clearTimeout(EX.hpoll);
   const box = $("#explore");
   const d = await api(`/api/explore/${encodeURIComponent(id)}`);
   EX.data = d;
@@ -101,6 +102,12 @@ async function loadExplore(id) {
   const spec = d.spec;
   const layout = el("div", { class: "ex-layout" });
   const main = el("div", { class: "ex-main" });
+  const hypBox = el("div", { class: "cosci-box" });
+  const row = el("div", { class: "ex-head-row" });
+  row.append(head.querySelector("h2"), coScientistMenu(id, d, hypBox));
+  head.insertBefore(row, sub);
+  main.append(hypBox);
+  loadHypotheses(id, hypBox);
   if (spec.summary) main.append(el("p", { class: "ex-summary" }, spec.summary));
   const ctx = { id, probe: (d.source && d.source.probe) || {}, series: spec.series };
   for (const panel of spec.panels) {
@@ -519,7 +526,10 @@ function fmt(v) { if (v == null) return ""; const a = Math.abs(v); return a >= 1
 
 function miniMarkdown(md) {
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/(^|\s)_(.+?)_(?=\s|$)/g, "$1<i>$2</i>");
+  const links = s => s
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)"'<>]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<>)"']+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+  const inline = s => links(esc(s)).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/(^|\s)_(.+?)_(?=\s|$)/g, "$1<i>$2</i>");
   const out = []; let list = null;
   for (const line of md.split("\n")) {
     const m = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
@@ -530,4 +540,165 @@ function miniMarkdown(md) {
   }
   if (list) out.push(`<ul>${list.join("")}</ul>`);
   return out.join("");
+}
+
+
+// ---------------------------------------------------------------- Co-Scientist
+// Generate: a generator agent proposes 10 hypotheses from the data, linked
+// papers and the web; a reviewer agent scores them and picks 5. Test is not
+// built yet.
+document.addEventListener("click", e => { if (EX.cosciClose) EX.cosciClose(e); });
+const SCORE_LABELS = { feasibility: "Feasibility", value: "Value", novelty: "Novelty", rigor: "Rigor" };
+
+function coScientistMenu(id, d, box) {
+  const wrap = el("div", { class: "cosci" });
+  const btn = el("button", { class: "btn cosci-btn", "aria-haspopup": "menu", "aria-expanded": "false" }, "Co-Scientist");
+  const menu = el("div", { class: "cosci-menu hidden", role: "menu" });
+  const opt = (title, desc, disabled) => {
+    const b = el("button", { class: "cosci-opt", role: "menuitem" });
+    if (disabled) { b.disabled = true; b.setAttribute("aria-disabled", "true"); b.title = "Coming soon"; }
+    b.append(el("b", {}, title), el("span", {}, desc));
+    return b;
+  };
+  const gen = opt("Generate Hypotheses", "An agent studies the data, linked papers and the web and proposes 10. A reviewer agent scores them and picks the best 5.");
+  const test = opt("Test Hypotheses", "Coming soon", true);
+  menu.append(gen, test);
+  const close = () => { menu.classList.add("hidden"); btn.setAttribute("aria-expanded", "false"); };
+  btn.onclick = e => {
+    e.stopPropagation();
+    const open = menu.classList.toggle("hidden") === false;
+    btn.setAttribute("aria-expanded", String(open));
+  };
+  EX.cosciClose = e => { if (!wrap.contains(e.target)) close(); };
+  wrap.addEventListener("keydown", e => { if (e.key === "Escape") { close(); btn.focus(); } });
+  gen.onclick = async () => {
+    close();
+    if (!d.llm) { banner("Co-Scientist needs an Anthropic API key on the server."); return; }
+    gen.disabled = true;
+    try {
+      await exApi(`/api/explore/${encodeURIComponent(id)}/hypotheses`, { method: "POST" });
+      await loadHypotheses(id, box);
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) { banner(e.message); } finally { gen.disabled = false; }
+  };
+  wrap.append(btn, menu);
+  return wrap;
+}
+
+async function loadHypotheses(id, box) {
+  clearTimeout(EX.hpoll);
+  let r;
+  try { r = await api(`/api/explore/${encodeURIComponent(id)}/hypotheses`); } catch { return; }
+  if (EX.id !== id) return;
+  renderHypotheses(r, box);
+  if (r.busy || r.status === "generating" || r.status === "reviewing") {
+    EX.hpoll = setTimeout(() => { if (location.hash.startsWith(`#/explore/${id}`)) loadHypotheses(id, box); }, 3000);
+  }
+}
+
+function hypLink(lit) {
+  const li = el("li");
+  if (/^https?:\/\//.test(lit.url || "")) li.append(el("a", { href: lit.url, target: "_blank", rel: "noopener noreferrer" }, lit.citation || lit.url));
+  else li.textContent = lit.citation || "";
+  return li;
+}
+
+function hypField(label, value) {
+  if (!value || (Array.isArray(value) && !value.length)) return null;
+  const f = el("div", { class: "hyp-field" });
+  f.append(el("div", { class: "hyp-label" }, label));
+  if (Array.isArray(value)) {
+    const ul = el("ul");
+    for (const v of value) ul.append(v instanceof Node ? v : el("li", {}, v));
+    f.append(ul);
+  } else f.append(el("p", {}, value));
+  return f;
+}
+
+function scoreChips(scores) {
+  const row = el("div", { class: "hyp-scores" });
+  for (const [k, label] of Object.entries(SCORE_LABELS)) {
+    const v = (scores || {})[k];
+    const c = el("span", { class: "hyp-score", title: `${label}: ${v} of 5` });
+    c.append(el("span", {}, label), el("b", {}, v == null ? "–" : `${v}/5`));
+    row.append(c);
+  }
+  return row;
+}
+
+function renderHypotheses(r, box) {
+  if (!r || r.status === "none") { box.replaceChildren(); return; }
+  const p = el("section", { class: "panel cosci-panel" });
+  const head = el("div", { class: "cosci-panel-head" });
+  head.append(el("h3", {}, "Co-Scientist · Hypotheses"));
+  const hide = el("button", { class: "btn link small" }, "Hide");
+  hide.onclick = () => box.replaceChildren();
+  head.append(hide);
+  p.append(head);
+  const logLines = r.log || [];
+  if (r.busy || r.status === "generating" || r.status === "reviewing") {
+    const steps = el("ol", { class: "cosci-steps" });
+    const gen = r.status === "generating";
+    steps.append(el("li", { class: gen ? "active" : "done" }, gen ? "Generating 10 hypotheses" : "Generated 10 hypotheses"),
+                 el("li", { class: gen ? "" : "active" }, "Reviewing and selecting 5"));
+    p.append(steps);
+    p.append(el("p", { class: "muted small" }, "The agents query the data sample, the linked papers and the web. This usually takes a few minutes; you can leave the page and come back."));
+    p.append(el("pre", { class: "log" }, logLines.slice(-14).join("\n") || "starting…"));
+    box.replaceChildren(p);
+    return;
+  }
+  if (r.status === "failed") {
+    p.append(el("p", { class: "small" }, `The run failed: ${r.error || "unknown error"}`));
+    if (logLines.length) {
+      const det = el("details"); det.append(el("summary", { class: "small" }, "Log"), el("pre", { class: "log" }, logLines.join("\n")));
+      p.append(det);
+    }
+    box.replaceChildren(p);
+    return;
+  }
+  const review = r.review || {};
+  if (review.summary) p.append(el("p", { class: "cosci-summary" }, review.summary));
+  const list = el("ol", { class: "hyp-list" });
+  for (const h of r.selected || []) {
+    const li = el("li", { class: "hyp" });
+    const top = el("div", { class: "hyp-top" });
+    top.append(el("span", { class: "hyp-rank" }, String(h.rank)), el("h4", {}, h.title));
+    li.append(top);
+    li.append(el("p", { class: "hyp-statement" }, h.statement));
+    li.append(scoreChips(h.scores));
+    const vars = [h.exposure && `Exposure: ${h.exposure}`, h.outcome && `Outcome: ${h.outcome}`,
+                  (h.covariates || []).length ? `Adjust for: ${h.covariates.join(", ")}` : ""].filter(Boolean).join(" · ");
+    for (const f of [hypField("Why the reviewer picked it", h.why), hypField("Rationale", h.rationale),
+                     hypField("Evidence from the data", h.evidence), hypField("Variables", vars),
+                     hypField("How to test it", h.test_plan), hypField("Data gaps", h.data_gaps),
+                     hypField("Literature", (h.literature || []).map(hypLink)),
+                     hypField("Reviewer critique", h.critique)]) if (f) li.append(f);
+    list.append(li);
+  }
+  p.append(list);
+  // All 10, with the reviewer's scores
+  const det = el("details", { class: "hyp-all" });
+  det.append(el("summary", { class: "small" }, `All ${(r.candidates || []).length} candidates and scores`));
+  const tbl = el("table", { class: "hyp-table" });
+  const thead = el("tr");
+  for (const t of ["#", "Hypothesis", ...Object.values(SCORE_LABELS), "Total", "Critique"]) thead.append(el("th", {}, t));
+  tbl.append(thead);
+  const picked = new Set((review.selected || []).map(s => s.number));
+  const byNum = Object.fromEntries((review.reviews || []).map(x => [x.number, x]));
+  (r.candidates || []).forEach((c, i) => {
+    const n = i + 1, rv = byNum[n] || {};
+    const tr = el("tr", { class: picked.has(n) ? "picked" : "" });
+    tr.append(el("td", {}, picked.has(n) ? `${n} ✓` : String(n)));
+    const td = el("td"); td.append(el("b", {}, c.title), el("div", { class: "muted" }, c.statement)); tr.append(td);
+    let total = 0;
+    for (const k of Object.keys(SCORE_LABELS)) { total += rv[k] || 0; tr.append(el("td", { class: "num" }, rv[k] == null ? "–" : String(rv[k]))); }
+    tr.append(el("td", { class: "num" }, String(total)), el("td", {}, rv.critique || ""));
+    tbl.append(tr);
+  });
+  const scroll = el("div", { class: "table-scroll" }); scroll.append(tbl);
+  det.append(scroll);
+  p.append(det);
+  const when = r.finished_at ? new Date(r.finished_at).toLocaleString() : "";
+  p.append(el("p", { class: "muted small" }, `Generated ${when}${r.runs_ready > 1 ? ` · ${r.runs_ready} runs so far` : ""}. Observations come from a data sample; treat these as leads to test, not findings. Run again from the Co-Scientist menu.`));
+  box.replaceChildren(p);
 }

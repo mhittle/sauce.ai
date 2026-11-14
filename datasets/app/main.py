@@ -22,6 +22,7 @@ import os
 from .config import Settings, get_settings, on_mounted_volume, on_railway
 from .devices import DeviceWorker, fda_database_url, fetch_one, summary_pdf_urls
 from .compat import CompatWorker
+from .coscientist import CoScientist
 from .explore import ExploreChat, ExploreManager
 from .explore_sources import SourceError, file_url
 from .importers import SOURCES, ImportRunner
@@ -375,6 +376,27 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         if not settings.chat_open:
             _check_token(x_edit_token)
         return _call(chat.ask, ds_id, [t.model_dump() for t in req.messages])
+
+    cosci = CoScientist(explorer)
+    app.state.coscientist = cosci
+
+    @app.get("/api/explore/{ds_id}/hypotheses")
+    def hypotheses_get(ds_id: str):
+        """The latest Co-Scientist run: progress log while running, then the
+        10 candidates, the review and the 5 selected."""
+        return cosci.latest(ds_id) or {"status": "none"}
+
+    @app.post("/api/explore/{ds_id}/hypotheses", status_code=202)
+    def hypotheses_start(ds_id: str, x_edit_token: str | None = Header(None)):
+        _check_token(x_edit_token)
+        if not store.get_dataset(ds_id):
+            raise HTTPException(404, "dataset not found")
+        try:
+            return {"run": cosci.start(ds_id)}
+        except SourceError as exc:
+            raise HTTPException(409, str(exc))
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc))
 
     @app.post("/api/explore/{ds_id}/revert/{version}")
     def explore_revert(ds_id: str, version: int, x_edit_token: str | None = Header(None)):

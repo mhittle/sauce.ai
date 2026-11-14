@@ -283,6 +283,22 @@ CREATE TABLE IF NOT EXISTS explore_history (
     at         TEXT NOT NULL,
     PRIMARY KEY (dataset_id, version)
 );
+-- Co-Scientist runs (app/coscientist.py): 10 generated hypotheses, a review,
+-- and the 5 picked for the user.
+CREATE TABLE IF NOT EXISTS hypothesis_runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    dataset_id  TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    status      TEXT NOT NULL,              -- generating | reviewing | ready | failed
+    log         TEXT NOT NULL DEFAULT '[]',
+    candidates  TEXT,                       -- JSON: the 10 hypotheses
+    review      TEXT,                       -- JSON: scores, critiques, selection
+    error       TEXT,
+    model       TEXT,
+    started_at  TEXT NOT NULL,
+    finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS hypothesis_runs_ds ON hypothesis_runs(dataset_id, id);
+
 CREATE TABLE IF NOT EXISTS explore_requests (   -- views users asked for that don't exist yet
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     dataset_id TEXT NOT NULL,

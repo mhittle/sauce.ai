@@ -263,3 +263,43 @@ def test_images_join_metadata_table(tmp_path):
     spec = heuristic_spec(pr)
     assert spec["panels"][0]["params"]["group_by"] == "fracture_visible"
     assert src.image_rows({"fracture_visible": "(blank)"}, 0, 50, lambda i: i)["total"] == 4
+
+
+def test_chat_looks_up_publications_and_web(tmp_path):
+    from app.explore import ExploreChat
+
+    class Client:
+        def __init__(self):
+            self.n, self.calls = 0, []
+            self.beta = NS(messages=NS(create=self.create))
+
+        def create(self, **kw):
+            self.n += 1
+            self.calls.append(kw)
+            if self.n == 1:      # compose (build)
+                return response([text(json.dumps(heuristic_spec(m.get(ds)["source"]["probe"])))], "end_turn")
+            if self.n == 2:
+                return response([NS(type="tool_use", id="t1", name="publications",
+                                    input={"query": "fall"})], "tool_use")
+            if self.n == 3:      # server-side web search paused mid-turn
+                lit = json.loads(kw["messages"][-1]["content"][0]["content"])
+                assert lit["papers_using_total"] == 1 and [p["title"] for p in lit["papers"]] == ["Fall detection with IMUs"]
+                assert lit["papers"][0]["url"] == "https://doi.org/10.1/fall"
+                return response([NS(type="server_tool_use", id="s1", name="web_search", input={"query": "x"})],
+                                "pause_turn")
+            return response([text("See [Fall detection with IMUs](https://doi.org/10.1/fall).")], "end_turn")
+
+    client = Client()
+    m, store, ds = _manager(tmp_path, client_factory=lambda s: client)
+    for i, (title, rel) in enumerate([("Fall detection with IMUs", "descriptor"), ("Gait speed", "cites")]):
+        aid = store.upsert_article({"id": f"doi:10.1/{i}", "title": title, "doi": "10.1/fall" if i == 0 else None,
+                                    "year": 2020 + i})
+        store.link_article(ds, aid, rel, "test")
+    m.build_blocking(ds)
+    out = ExploreChat(m).ask(ds, [{"role": "user", "content": "Which papers used this?"}])
+    assert out["tools_used"] == ["publications", "web_search"]
+    assert "doi.org/10.1/fall" in out["answer"]
+    names = [t.get("name") for t in client.calls[1]["tools"]]
+    assert {"publications", "fda_devices", "web_search", "web_fetch"} <= set(names)
+    lit = ExploreChat(m)._tool(ds, "publications", {"relation": "descriptor"})
+    assert [p["relation"] for p in lit["papers"]] == ["descriptor"]
