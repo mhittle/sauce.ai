@@ -137,3 +137,41 @@ def test_index_versions_assets_and_static_revalidates(tmp_path):
     assert re.search(r'src="/static/explore\.js\?v=[0-9a-f]{10}"', r.text)
     assert re.search(r'href="/static/style\.css\?v=[0-9a-f]{10}"', r.text)
     assert client.get("/static/explore.js").headers["cache-control"] == "no-cache"
+
+
+def test_feed_live_counts_separators():
+    from app.coscientist import feed_live
+    live = {"text": "", "seq": 0, "kind": None}
+    for kind, t in [("thinking", "Spikes "), ("thinking", "in falls."), ("tool", "→ a"), ("tool", "→ b"),
+                    ("thinking", "Next.")]:
+        feed_live(live, kind, t)
+    assert live["text"] == "Spikes in falls.\n\n→ a\n\n→ b\n\nNext."
+    assert live["seq"] == len(live["text"])
+
+
+def test_stream_reports_deltas():
+    from app.config import Settings
+    from app.crawler import _stream
+    seen = []
+
+    class S:
+        def __init__(self, **kw):
+            self.kw = kw
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def __iter__(self):
+            yield NS(type="content_block_delta", delta=NS(type="thinking_delta", thinking="hmm"))
+            yield NS(type="content_block_delta", delta=NS(type="text_delta", text="ok"))
+            yield NS(type="message_stop")
+
+        def get_final_message(self):
+            return "final"
+
+    client = NS(beta=NS(messages=NS(stream=lambda **kw: S(**kw))))
+    out = _stream(client, Settings(), lambda k, t: seen.append((k, t)), messages=[])
+    assert out == "final" and seen == [("thinking", "hmm"), ("text", "ok")]

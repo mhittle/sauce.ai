@@ -31,6 +31,7 @@ from .store import now_iso
 log = logging.getLogger(__name__)
 
 N_GENERATE, N_SELECT = 10, 5
+LIVE_CHARS = 1600
 SCORES = ("feasibility", "value", "novelty", "rigor")
 
 _STR = {"type": "string"}
@@ -139,17 +140,31 @@ def _validate_review(inp: dict) -> str | None:
     return None
 
 
+def feed_live(live: dict, kind: str, text: str) -> None:
+    """Append streamed text to a run's live buffer. `seq` counts every
+    character ever appended (separators included) so the page can tell
+    exactly which characters are new."""
+    if live["text"] and (kind != live["kind"] or kind == "tool"):
+        text = "\n\n" + text                 # a new thought, reply or tool call
+    live["kind"] = kind
+    live["text"] = (live["text"] + text)[-4 * LIVE_CHARS:]
+    live["seq"] += len(text)
+
+
 def run_agent(client, settings, *, system: str, user: str, submit: dict,
               validate: Callable[[dict], str | None], tool_fn: Callable[[str, dict], Any],
-              log_: Callable[[str], None], max_turns: int = 24) -> dict:
-    """Tool loop until the agent calls `submit` with valid input."""
-    from .crawler import WEB_TOOLS, _create, _tool_result
+              log_: Callable[[str], None], on_delta: Callable[[str, str], None] | None = None,
+              max_turns: int = 24) -> dict:
+    """Tool loop until the agent calls `submit` with valid input. Streams
+    reasoning summaries and text to `on_delta` as they arrive."""
+    from .crawler import WEB_TOOLS, _stream, _tool_result
     tools = [*CHAT_TOOLS, *WEB_TOOLS, submit]
     msgs: list[dict] = [{"role": "user", "content": user}]
     for _ in range(max_turns):
-        resp = _create(client, settings, model=settings.planner_model, system=system,
-                       tools=tools, output_config={"effort": settings.planner_effort},
-                       messages=msgs)
+        resp = _stream(client, settings, on_delta or (lambda k, t: None),
+                       model=settings.planner_model, system=system, tools=tools,
+                       thinking={"type": "adaptive", "display": "summarized"},
+                       output_config={"effort": settings.planner_effort}, messages=msgs)
         msgs.append({"role": "assistant", "content": resp.content})
         for b in resp.content:
             if b.type == "server_tool_use":
@@ -174,6 +189,8 @@ def run_agent(client, settings, *, system: str, user: str, submit: dict,
                 continue
             log_(f"{b.name}" + (f" ({', '.join(f'{k}={v}' for k, v in args.items())[:90]})"
                                 if args else ""))
+            if on_delta:
+                on_delta("tool", f"→ {b.name.replace('_', ' ')}")
             try:
                 out = tool_fn(b.name, args)
                 results.append(_tool_result(b.id, json.dumps(out, default=str)[:15000]))
@@ -192,6 +209,9 @@ class CoScientist:
         self.tools = ExploreChat(explorer)
         self._jobs: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
+        # What the agents are thinking right now (in memory only; shown while
+        # a run is going so it's clear it hasn't stalled).
+        self._live: dict[str, dict] = {}
         with self.store._write() as c:     # threads don't survive a restart
             c.execute("UPDATE hypothesis_runs SET status = 'failed', error = 'interrupted by a"
                       " restart', finished_at = ? WHERE status IN ('generating', 'reviewing')",
@@ -219,6 +239,10 @@ class CoScientist:
             d[k] = json.loads(d[k]) if d[k] else None
         d["runs_ready"] = n
         d["busy"] = self.busy(ds_id)
+        if d["busy"] and ds_id in self._live:
+            live = self._live[ds_id]
+            d["live"] = {"agent": live["agent"], "text": live["text"][-LIVE_CHARS:],
+                         "seq": live["seq"]}
         if d["candidates"] and d["review"]:
             d["selected"] = self.selection(d["candidates"], d["review"])
         return d
@@ -263,6 +287,7 @@ class CoScientist:
         try:
             self.run(ds_id, run_id)
         except Exception as exc:
+            self._live.pop(ds_id, None)
             log.exception("co-scientist run %s failed", run_id)
             self._update(run_id, status="failed", finished_at=now_iso(),
                          error=str(exc)[:800] if isinstance(exc, SourceError)
@@ -285,22 +310,28 @@ class CoScientist:
                    + ", ".join(p["title"] for p in (ex.get("spec") or {}).get("panels", [])))
         client = m.client_factory(m.settings)
         tool_fn = lambda name, args: self.tools._tool(ds_id, name, args)  # noqa: E731
+        live = self._live[ds_id] = {"agent": "Generator", "text": "", "seq": 0, "kind": None}
+
+        def on_delta(kind: str, text: str) -> None:
+            feed_live(live, kind, text)
 
         log_("Generator: investigating the data and literature…")
         gen = run_agent(client, m.settings, system=GENERATOR_SYSTEM,
                         user=context + f"\n\nInvestigate, then submit {N_GENERATE} hypotheses.",
                         submit=SUBMIT_HYPOTHESES, validate=_validate_hypotheses,
-                        tool_fn=tool_fn, log_=log_)
+                        tool_fn=tool_fn, log_=log_, on_delta=on_delta)
         cands = gen["hypotheses"]
         log_(f"Generator: submitted {len(cands)} hypotheses")
         self._update(run_id, status="reviewing", candidates=cands)
 
+        live.update(agent="Reviewer", text="", kind=None)
         log_("Reviewer: scoring feasibility, value, novelty and rigor…")
         listing = "\n\n".join(f"#{i}. {h['title']}\n{json.dumps(h)}" for i, h in enumerate(cands, 1))
         review = run_agent(client, m.settings, system=REVIEWER_SYSTEM,
                            user=f"{context}\n\nHypotheses:\n\n{listing}",
                            submit=SUBMIT_REVIEW, validate=_validate_review,
-                           tool_fn=tool_fn, log_=log_)
+                           tool_fn=tool_fn, log_=log_, on_delta=on_delta)
         log_(f"Reviewer: selected #{', #'.join(str(s['number']) for s in review['selected'])}")
         self._update(run_id, status="ready", review=review, finished_at=now_iso())
+        self._live.pop(ds_id, None)
         return review
