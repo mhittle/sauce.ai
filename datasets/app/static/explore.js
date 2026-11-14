@@ -552,7 +552,9 @@ const SCORE_LABELS = { feasibility: "Feasibility", value: "Value", novelty: "Nov
 
 function coScientistMenu(id, d, box) {
   const wrap = el("div", { class: "cosci" });
-  const btn = el("button", { class: "btn cosci-btn", "aria-haspopup": "menu", "aria-expanded": "false" }, "Co-Scientist");
+  const btn = el("button", { class: "cosci-btn", "aria-haspopup": "menu", "aria-expanded": "false" });
+  btn.append(el("span", { class: "cosci-spark", "aria-hidden": "true" }, "✦"), el("span", {}, "Co-Scientist"),
+             el("span", { class: "cosci-caret", "aria-hidden": "true" }, "▾"));
   const menu = el("div", { class: "cosci-menu hidden", role: "menu" });
   const opt = (title, desc, disabled) => {
     const b = el("button", { class: "cosci-opt", role: "menuitem" });
@@ -592,7 +594,7 @@ async function loadHypotheses(id, box) {
   if (EX.id !== id) return;
   renderHypotheses(r, box);
   if (r.busy || r.status === "generating" || r.status === "reviewing") {
-    EX.hpoll = setTimeout(() => { if (location.hash.startsWith(`#/explore/${id}`)) loadHypotheses(id, box); }, 3000);
+    EX.hpoll = setTimeout(() => { if (location.hash.startsWith(`#/explore/${id}`)) loadHypotheses(id, box); }, 1500);
   }
 }
 
@@ -628,6 +630,17 @@ function scoreChips(scores) {
 
 function renderHypotheses(r, box) {
   if (!r || r.status === "none") { box.replaceChildren(); return; }
+  const running = r.busy || r.status === "generating" || r.status === "reviewing";
+  if (running) {
+    // Keep one panel across polls so the animation and typing don't restart.
+    if (!box._running || !box.contains(box._running.panel)) {
+      box._running = runningPanel(box);
+      box.replaceChildren(box._running.panel);
+    }
+    box._running.update(r);
+    return;
+  }
+  box._running = null;
   const p = el("section", { class: "panel cosci-panel" });
   const head = el("div", { class: "cosci-panel-head" });
   head.append(el("h3", {}, "Co-Scientist · Hypotheses"));
@@ -636,17 +649,6 @@ function renderHypotheses(r, box) {
   head.append(hide);
   p.append(head);
   const logLines = r.log || [];
-  if (r.busy || r.status === "generating" || r.status === "reviewing") {
-    const steps = el("ol", { class: "cosci-steps" });
-    const gen = r.status === "generating";
-    steps.append(el("li", { class: gen ? "active" : "done" }, gen ? "Generating 10 hypotheses" : "Generated 10 hypotheses"),
-                 el("li", { class: gen ? "" : "active" }, "Reviewing and selecting 5"));
-    p.append(steps);
-    p.append(el("p", { class: "muted small" }, "The agents query the data sample, the linked papers and the web. This usually takes a few minutes; you can leave the page and come back."));
-    p.append(el("pre", { class: "log" }, logLines.slice(-14).join("\n") || "starting…"));
-    box.replaceChildren(p);
-    return;
-  }
   if (r.status === "failed") {
     p.append(el("p", { class: "small" }, `The run failed: ${r.error || "unknown error"}`));
     if (logLines.length) {
@@ -701,4 +703,208 @@ function renderHypotheses(r, box) {
   const when = r.finished_at ? new Date(r.finished_at).toLocaleString() : "";
   p.append(el("p", { class: "muted small" }, `Generated ${when}${r.runs_ready > 1 ? ` · ${r.runs_ready} runs so far` : ""}. Observations come from a data sample; treat these as leads to test, not findings. Run again from the Co-Scientist menu.`));
   box.replaceChildren(p);
+}
+
+
+// While a run is going: what the agents are thinking, typed out as it
+// streams in, over a field of falling blocks.
+function runningPanel(box) {
+  const panel = el("section", { class: "panel cosci-panel cosci-running" });
+  const head = el("div", { class: "cosci-panel-head" });
+  head.append(el("h3", {}, "Co-Scientist · Thinking"));
+  const hide = el("button", { class: "btn link small" }, "Hide");
+  hide.onclick = () => { box._running = null; box.replaceChildren(); };
+  head.append(hide);
+  const steps = el("ol", { class: "cosci-steps" });
+  const s1 = el("li"), s2 = el("li", {}, "Reviewing and selecting 5");
+  steps.append(s1, s2);
+  const stage = el("div", { class: "cosci-stage" });
+  const canvas = el("canvas", { class: "cosci-canvas", "aria-hidden": "true" });
+  const dream = el("div", { class: "cosci-dream", "aria-live": "off" });
+  const who = el("div", { class: "cosci-who" });
+  const text = el("div", { class: "cosci-thought" });
+  const cursor = el("span", { class: "cosci-cursor", "aria-hidden": "true" });
+  dream.append(who, text);
+  stage.append(canvas, dream);
+  const note = el("p", { class: "muted small" }, "The agents query the data sample, the linked papers and the web. A run usually takes several minutes; you can leave the page and come back.");
+  const det = el("details", { class: "small" });
+  const logPre = el("pre", { class: "log" });
+  det.append(el("summary", {}, "Activity log"), logPre);
+  panel.append(head, steps, stage, note, det);
+  blockRain(canvas);
+
+  // Typewriter: new characters (by the server's running count) queue up and
+  // are typed at a pace that catches up when far behind.
+  let shown = "", queue = "", lastSeq = 0, agent = null, typing = false;
+  const MAX = 1400;
+  const paint = () => {
+    text.replaceChildren();
+    const paras = shown.split(/\n{2,}/).filter(x => x.trim()).slice(-6);
+    paras.forEach((para, i) => {
+      const isTool = para.startsWith("→");
+      const node = el(isTool ? "div" : "p", { class: isTool ? "cosci-tool" : "" }, para.trim());
+      if (i === paras.length - 1 && !isTool) node.append(cursor);
+      text.append(node);
+    });
+    if (!paras.length || paras[paras.length - 1].startsWith("→")) text.append(cursor);
+  };
+  const type = () => {
+    if (!panel.isConnected) return;
+    if (!queue) { typing = false; return; }
+    typing = true;
+    const n = Math.max(1, Math.ceil(queue.length / 40));
+    shown = (shown + queue.slice(0, n)).slice(-MAX);
+    queue = queue.slice(n);
+    paint();
+    setTimeout(type, 28);
+  };
+  const MUSINGS = ["Reading the data probe…", "Wondering what the labels really mean…", "Looking for structure in the noise…",
+                   "Checking what has already been published…", "Weighing confounders…"];
+  let musing = 0;
+  const update = r => {
+    const gen = r.status === "generating";
+    s1.className = gen ? "active" : "done";
+    s1.textContent = gen ? "Generating 10 hypotheses" : "Generated 10 hypotheses";
+    s2.className = gen ? "" : "active";
+    logPre.textContent = (r.log || []).slice(-20).join("\n") || "starting…";
+    const live = r.live;
+    if (live) {
+      if (live.agent !== agent) { agent = live.agent; shown = ""; queue = ""; lastSeq = 0; }
+      who.textContent = `${agent} is thinking`;
+      const fresh = live.seq - lastSeq;
+      if (fresh > 0) {
+        queue += fresh <= live.text.length ? live.text.slice(-fresh) : live.text;
+        lastSeq = live.seq;
+        if (!typing) type();
+      }
+    } else if (!shown) {
+      who.textContent = gen ? "Generator is starting" : "Reviewer is starting";
+      text.replaceChildren(el("p", {}, MUSINGS[musing++ % MUSINGS.length]));
+      text.lastChild.append(cursor);
+    }
+  };
+  return { panel, update };
+}
+
+function blockRain(canvas) {
+  const ctx = canvas.getContext("2d");
+  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const COLORS = ["#2433D9", "#4B57E6", "#7C86EE", "#AEB4F5", "#0A0A0B", "#1F7A3A", "#D9480F", "#7A2CBF"];
+  const SHAPES = [[[0, 0], [1, 0], [2, 0], [3, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]], [[1, 0], [0, 1], [1, 1], [2, 1]],
+                  [[0, 0], [0, 1], [1, 1], [2, 1]], [[2, 0], [0, 1], [1, 1], [2, 1]], [[1, 0], [2, 0], [0, 1], [1, 1]],
+                  [[0, 0], [1, 0], [1, 1], [2, 1]]];
+  let W = 0, H = 0, cell = 16, cols = 0, rows = 0, grid = [], pieces = [], debris = [];
+  let spawnIn = 0, fade = 0, fading = false, last = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const occ = (x, y) => y >= rows || x < 0 || x >= cols || (y >= 0 && grid[y][x]);
+  function reset() { grid = Array.from({ length: rows }, () => Array(cols).fill(null)); pieces = []; debris = []; }
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    if (!W || !H) return;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cell = Math.max(10, Math.round(W / 46));
+    cols = Math.floor(W / cell); rows = Math.floor(H / cell);
+    reset();
+  }
+  const height = c => { for (let y = 0; y < rows; y++) if (grid[y][c]) return rows - y; return 0; };
+  function spawn() {
+    let shape = SHAPES[(Math.random() * SHAPES.length) | 0];
+    for (let k = (Math.random() * 4) | 0; k > 0; k--) shape = shape.map(([x, y]) => [-y, x]);
+    const mx = Math.min(...shape.map(c => c[0])), my = Math.min(...shape.map(c => c[1]));
+    shape = shape.map(([x, y]) => [x - mx, y - my]);
+    const w = Math.max(...shape.map(c => c[0])) + 1;
+    pieces.push({ cells: shape, x: (Math.random() * (cols - w + 1)) | 0, y: -4, vy: rnd(3, 6),
+                  color: COLORS[(Math.random() * COLORS.length) | 0] });
+  }
+  function lock(p, y) {
+    for (const [dx, dy] of p.cells) { const gy = y + dy; if (gy < 0) { fading = true; continue; } grid[gy][p.x + dx] = p.color; }
+    topple();
+  }
+  function topple() {   // a tower much taller than a neighbour falls over
+    for (let c = 0; c < cols; c++) {
+      const h = height(c), l = c > 0 ? height(c - 1) : rows, r = c < cols - 1 ? height(c + 1) : rows;
+      const low = Math.min(l, r);
+      if (h - low < 5 || Math.random() < 0.35) continue;
+      const dir = l < r ? -1 : 1, n = Math.ceil((h - low) / 2);
+      for (let k = 0; k < n; k++) {
+        const y = rows - h + k;
+        if (!grid[y] || !grid[y][c]) continue;
+        debris.push({ px: c * cell, py: y * cell, vx: dir * rnd(40, 110) * (1 + k * 0.25), vy: rnd(-40, 10),
+                      rot: 0, vr: dir * rnd(2, 6), color: grid[y][c] });
+        grid[y][c] = null;
+      }
+      return;
+    }
+  }
+  function settle(d) {
+    const cx = Math.max(0, Math.min(cols - 1, Math.round(d.px / cell)));
+    const y = rows - height(cx) - 1;
+    if (y < 0) { fading = true; return; }
+    grid[y][cx] = d.color;
+  }
+  function step(dt) {
+    if (fading) {
+      fade = Math.min(1, fade + dt / 1.2);
+      if (fade >= 1) { reset(); fading = false; }
+      return;
+    }
+    fade = Math.max(0, fade - dt / 0.8);
+    spawnIn -= dt;
+    if (spawnIn <= 0 && pieces.length < 5) { spawn(); spawnIn = rnd(0.18, 0.4); }
+    for (const p of pieces) {
+      p.vy = Math.min(p.vy + 9 * dt, 16);
+      const ny = p.y + p.vy * dt;
+      let hit = false;
+      for (let y = Math.floor(p.y); y <= Math.floor(ny) && !hit; y++) {
+        if (p.cells.some(([dx, dy]) => occ(p.x + dx, y + dy + 1))) { lock(p, y); p.done = true; hit = true; }
+      }
+      if (!hit) p.y = ny;
+    }
+    pieces = pieces.filter(p => !p.done);
+    for (const d of debris) {
+      d.vy += 420 * dt; d.px += d.vx * dt; d.py += d.vy * dt; d.rot += d.vr * dt;
+      if (d.px < 0 || d.px > W - cell) { d.vx *= -0.5; d.px = Math.max(0, Math.min(W - cell, d.px)); }
+      const cx = Math.max(0, Math.min(cols - 1, Math.round(d.px / cell))), cy = Math.floor(d.py / cell);
+      if (d.vy > 0 && occ(cx, cy + 1)) { settle(d); d.done = true; }
+    }
+    debris = debris.filter(d => !d.done);
+    let filled = 0;
+    for (const row of grid) for (const v of row) if (v) filled++;
+    if (filled > cols * rows * 0.9) fading = true;
+  }
+  function box(x, y, color) {
+    ctx.fillStyle = color; ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+    ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(x + 1, y + 1, cell - 2, 3);
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const ox = (W - cols * cell) / 2, oy = H - rows * cell;
+    ctx.save(); ctx.translate(ox, oy);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (grid[y][x]) box(x * cell, y * cell, grid[y][x]);
+    for (const p of pieces) for (const [dx, dy] of p.cells) box((p.x + dx) * cell, (p.y + dy) * cell, p.color);
+    for (const d of debris) {
+      ctx.save(); ctx.translate(d.px + cell / 2, d.py + cell / 2); ctx.rotate(d.rot);
+      box(-cell / 2, -cell / 2, d.color); ctx.restore();
+    }
+    ctx.restore();
+    if (fade > 0) { ctx.fillStyle = `rgba(255,255,255,${fade})`; ctx.fillRect(0, 0, W, H); }
+  }
+  function frame(t) {
+    if (!canvas.isConnected) return;               // panel replaced: stop
+    if (canvas.clientWidth !== W || canvas.clientHeight !== H) resize();
+    const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
+    if (cols && rows) { step(dt); draw(); }
+    requestAnimationFrame(frame);
+  }
+  if (reduce) {     // a still life instead of motion
+    requestAnimationFrame(() => {
+      resize();
+      for (let i = 0; i < cols * rows * 0.12; i++) { const x = (Math.random() * cols) | 0, h = height(x); if (h < rows / 2) grid[rows - h - 1][x] = COLORS[i % COLORS.length]; }
+      draw();
+    });
+    return;
+  }
+  requestAnimationFrame(frame);
 }

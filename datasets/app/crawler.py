@@ -237,6 +237,29 @@ def _create(client, settings: Settings, model: str | None = None, **kw):
     """One Messages API call with our defaults (adaptive thinking, auto
     prompt-caching, server-side refusal fallback). `model` overrides
     settings.model (the planner passes settings.planner_model)."""
+    return client.beta.messages.create(**_params(settings, model, **kw))
+
+
+def _stream(client, settings: Settings, on_delta, model: str | None = None, **kw):
+    """Like _create, but streamed: `on_delta(kind, text)` gets each thinking
+    summary / text fragment as it arrives ("thinking" | "text"). Falls back
+    to a plain call for clients without streaming."""
+    stream = getattr(client.beta.messages, "stream", None)
+    if stream is None:
+        return _create(client, settings, model, **kw)
+    with stream(**_params(settings, model, **kw)) as s:
+        for ev in s:
+            if getattr(ev, "type", "") != "content_block_delta":
+                continue
+            d = ev.delta
+            if d.type == "thinking_delta" and d.thinking:
+                on_delta("thinking", d.thinking)
+            elif d.type == "text_delta" and d.text:
+                on_delta("text", d.text)
+        return s.get_final_message()
+
+
+def _params(settings: Settings, model: str | None = None, **kw) -> dict:
     params: dict[str, Any] = {
         "model": model or settings.model,
         "max_tokens": 16000,
@@ -247,7 +270,7 @@ def _create(client, settings: Settings, model: str | None = None, **kw):
     if settings.fallbacks and settings.fallbacks != "off":
         params["betas"] = [FALLBACK_BETA]
         params["fallbacks"] = settings.fallbacks
-    return client.beta.messages.create(**params)
+    return params
 
 
 # ---------------------------------------------------------------- planning
