@@ -110,6 +110,7 @@ def test_condition_and_hubs(site):
     t = r.text
     assert "<title>Epilepsy datasets — open data, papers &amp; FDA clearances | Palo Alto Health Labs</title>" in t
     assert "<h1>Epilepsy datasets</h1>" in t
+    assert 'href="/#/datasets?condition=epilepsy"' in t      # the SPA's condition route
     assert "<b>2</b> datasets for Epilepsy (<b>1</b> open access)" in t and "FDA 510(k)" in t and "De Novo" in t
     ld = ld_blocks(t)[0]
     assert ld["@type"] == "ItemList" and ld["numberOfItems"] == 2

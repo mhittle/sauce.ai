@@ -369,7 +369,7 @@ def render_condition(store: Store, c: dict, asset_v: str) -> HTMLResponse:
 {f'<p class="meta">Also known as: {e(", ".join(syn[:12]))}</p>' if syn else ''}
 <h2>Datasets, most-used first</h2>
 <ul class="links">{rows}</ul>
-<p class="meta"><a href="/#/condition/{quote(c['name'])}">Open {e(name)} in the interactive catalog</a>
+<p class="meta"><a href="/#/datasets?condition={quote(c['name'])}">Open {e(name)} in the interactive catalog</a>
 (FDA submissions, papers and filters)</p>"""
     desc = (f"{n} {name} datasets ({n_open} open access) with access steps and the papers that "
             f"use them, plus {k510} FDA 510(k) and {dn} De Novo submissions.")
