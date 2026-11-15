@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import crawler, fda
+from . import crawler, fda, seo
 import os
 
 from .config import Settings, get_settings, on_mounted_volume, on_railway
@@ -655,6 +655,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
         if request.url.path.startswith("/static/"):
             resp.headers["Cache-Control"] = "no-cache"   # revalidate (ETag) every load
         return resp
+
+    # Server-rendered pages for search engines (/datasets/, /conditions/,
+    # /robots.txt, /sitemap.xml); additive, the SPA and API are unchanged.
+    seo.register(app, store, asset_v)
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app
