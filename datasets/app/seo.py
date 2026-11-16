@@ -44,6 +44,10 @@ ROBOTS = (
     "\n"
     f"Sitemap: {PUBLIC_URL}/sitemap.xml\n"
 )
+# Ownership/key files for search engines, served byte-for-byte as issued.
+BING_SITE_AUTH = ('<?xml version="1.0"?>\n<users>\n\t<user>EB4E3F5B02489117E4B4979A488800DF'
+                  "</user>\n</users>")
+INDEXNOW_KEY = "4e7cb8cfba444e299c57c0d936696e24"
 ACCESS_TEXT = {"open": "Open access", "credentialed": "Credentialed access",
                "dua": "Data use agreement", "request": "On request", "commercial": "Commercial",
                "restricted": "Restricted", "unknown": "Access unknown"}
@@ -395,6 +399,14 @@ def register(app: FastAPI, store: Store, asset_v: str = "") -> Catalog:
     @app.api_route("/robots.txt", methods=["GET", "HEAD"], include_in_schema=False)
     def robots():
         return PlainTextResponse(ROBOTS)
+
+    @app.api_route("/BingSiteAuth.xml", methods=["GET", "HEAD"], include_in_schema=False)
+    def bing_site_auth():
+        return Response(BING_SITE_AUTH, media_type="application/xml")
+
+    @app.api_route(f"/{INDEXNOW_KEY}.txt", methods=["GET", "HEAD"], include_in_schema=False)
+    def indexnow_key():
+        return PlainTextResponse(INDEXNOW_KEY)
 
     @app.api_route("/sitemap.xml", methods=["GET", "HEAD"], include_in_schema=False)
     def sitemap():
