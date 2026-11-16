@@ -129,3 +129,15 @@ def test_spa_and_api_unchanged(site):
     assert r.status_code == 200 and 'src="/static/app.js?v=' in r.text
     assert client.get("/api/stats").status_code == 200
     assert client.get("/api/datasets/browse?limit=1").json()["total"] == 2
+
+
+def test_bing_and_indexnow_files(site):
+    client, *_ = site
+    r = client.get("/BingSiteAuth.xml")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/xml")
+    assert r.text == ('<?xml version="1.0"?>\n<users>\n\t<user>EB4E3F5B02489117E4B4979A488800DF</user>\n'
+                      '</users>')
+    r = client.get("/4e7cb8cfba444e299c57c0d936696e24.txt")
+    assert r.status_code == 200 and r.text == "4e7cb8cfba444e299c57c0d936696e24"
+    assert r.headers["content-type"].startswith("text/plain")
+    assert client.get("/robots.txt").text == ROBOTS
