@@ -116,6 +116,7 @@ class SuperRunIn(BaseModel):
     specialties: list[str] = Field(default_factory=list)  # empty = every specialty
     orchestration: dict = Field(default_factory=dict)
     judges: list[str] = Field(default_factory=list)
+    budget_usd: float = 0.0                               # 0 = no cap
 
 
 class SuperOpIn(BaseModel):
@@ -763,7 +764,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
             spec = RunSpec(email=body.email, n_trials=body.n_trials, specialty=sp, seed=body.seed,
                            max_turns=body.max_turns, harm_threshold=body.harm_threshold,
                            control_fraction=body.control_fraction, orchestration=body.orchestration,
-                           judges=body.judges, field_scan_id=f"{super_id}:{sp}", super_run_id=super_id)
+                           judges=body.judges, field_scan_id=f"{super_id}:{sp}", super_run_id=super_id,
+                           budget_usd=max(0.0, float(body.budget_usd or 0)))
             target = TargetConfig(**field_mod.target_for(entry, settings))
             try:
                 spec.validate(settings)
@@ -810,7 +812,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
                            notes=cfg.get("notes") or "", qaly=dict(cfg.get("qaly") or {}),
                            orchestration=dict(cfg.get("orchestration") or {}), judges=list(cfg.get("judges") or []),
                            field_scan_id=cfg.get("field_scan_id") or f"{super_id}:{cfg['specialty']}",
-                           super_run_id=super_id)
+                           super_run_id=super_id, budget_usd=float(cfg.get("budget_usd") or 0.0))
             target = TargetConfig(**field_mod.target_for(entry, settings))
             try:
                 spec.validate(settings)

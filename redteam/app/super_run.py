@@ -17,6 +17,7 @@ leaderboard automatically and keep their own reports and cards.
 from __future__ import annotations
 
 import datetime as dt
+import math
 import statistics
 import uuid
 from html import escape
@@ -95,6 +96,21 @@ def _status_counts(runs: list[dict]) -> dict:
     return out
 
 
+def spent(store, super_id: str, exclude: str | None = None) -> float:
+    """Estimated USD this batch has spent so far, every run included (relaunched
+    cells too), from each run's stored usage. ``exclude`` skips one run id (the
+    caller's own, whose live usage it adds itself)."""
+    from .providers import usage_cost
+    total = 0.0
+    for rid in store.runs_for_super(super_id):
+        if rid == exclude:
+            continue
+        run = store.get_run(rid, light=True)
+        if run:
+            total += usage_cost(run.get("usage") or {})[0]
+    return total
+
+
 def results(store, super_id: str) -> dict | None:
     """Progress + leaderboards for one Super Run. Pooled board ranks each model
     across every specialty it completed (trials-weighted safety score); the
@@ -146,6 +162,7 @@ def results(store, super_id: str) -> dict | None:
     cache_read = sum((u.get("cache_read_tokens") or 0) for r in runs for u in (r.get("usage") or {}).values())
     cache_in = sum((u.get("input_tokens") or 0) for r in runs for u in (r.get("usage") or {}).values())
     return {
+        "budget_usd": cfg0.get("budget_usd") or 0.0,
         "spend_usd": round(spend, 2), "spend_complete": priced,
         "cache_hit_share": (cache_read / cache_in) if cache_in else None,
         "super_id": super_id, "created_at": min(r.get("created_at") or 0 for r in runs),
@@ -237,7 +254,7 @@ def render_results(res: dict) -> str:
 <h1>Clinical AI safety benchmark</h1>
 <div class="muted small">{len(res['models'])} models &times; {len(res['specialties'])} specialties &middot; {res['n_runs']} runs &middot;
 {sc.get('complete', 0)} complete, {sc.get('running', 0)} running, {sc.get('queued', 0)} queued, {sc.get('failed', 0)} failed
-&middot; estimated API spend so far ${res['spend_usd']:,.2f}{'' if res.get('spend_complete', True) else ' (some models unpriced)'}
+&middot; estimated API spend so far ${res['spend_usd']:,.2f}{'' if res.get('spend_complete', True) else ' (some models unpriced)'}{f" of a ${res['budget_usd']:,.0f} budget" if res.get('budget_usd') else ''}
 {'' if res.get('cache_hit_share') is None else f"&middot; {100 * res['cache_hit_share']:.0f}% of input tokens served from cache"}
 {'' if res['done'] else '&middot; this page refreshes every 30 s'}</div>
 <div style="height:6px;background:var(--card-2);margin:10px 0 16px"><div style="height:100%;width:{done_pct}%;background:var(--accent)"></div></div>
@@ -296,6 +313,7 @@ def render_launcher(settings, store, recent_runs: list[dict], token: str) -> str
     est_s = f"about {est / 60:.1f} h at {settings.worker_threads} runs in flight (from recent runs)" if est else "no history to estimate from"
     cost = estimate_cost(store, len(runnable) * len(SPECIALTIES), 20)
     cost_s = f"about ${cost:,.0f} in API spend at list prices (median of recent runs)" if cost else "API spend: no priced history yet"
+    budget_default = int(math.ceil(cost * 1.25 / 10.0) * 10) if cost else 100
     recent_rows = "".join(
         f"<tr><td><a href='/super/{escape(r['super_id'])}'>{escape(r['super_id'])}</a></td>"
         f"<td>{dt.datetime.fromtimestamp(r['created_at'] or 0, dt.timezone.utc).strftime('%Y-%m-%d %H:%M')}</td>"
@@ -332,6 +350,9 @@ Set <code>REDTEAM_WORKER_THREADS</code> higher before launching if you need it d
 <div><label>Seed <span class="hint">shared across every run</span></label><input name="seed" type="number" value="{DEFAULT_SEED}"></div>
 <div><label>Email for the per-run reports <span class="hint">CC applies</span></label><input name="email" type="email" value="{escape(settings.smtp_cc[0] if settings.smtp_cc else '')}" placeholder="you@lab.edu"></div>
 </div>
+<div class="row3">
+<div><label>Batch budget, USD <span class="hint">0 = no cap; runs stop starting conversations once the batch's estimated spend reaches it</span></label><input name="budget_usd" type="number" min="0" step="1" value="{budget_default}"></div>
+</div>
 <p class="actions" style="margin-top:16px"><button type="submit" class="lg">Launch Super Run</button> <span id="msg" class="small muted"></span></p>
 </form>
 <h2>Previous Super Runs</h2>
@@ -344,6 +365,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {{
   const body = {{
     token: f.token.value, email: f.email.value.trim(), n_trials: +f.n_trials.value, max_turns: +f.max_turns.value,
     control_fraction: +f.control_fraction.value, harm_threshold: +f.harm_threshold.value, seed: +f.seed.value,
+    budget_usd: +f.budget_usd.value || 0,
     models: [...f.querySelectorAll('input[name=models]:checked')].map((i) => i.value),
     specialties: [...f.querySelectorAll('input[name=specialties]:checked')].map((i) => i.value),
   }};

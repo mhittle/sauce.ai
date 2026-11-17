@@ -159,3 +159,54 @@ def test_relaunch_failed_cells_and_cancel(monkeypatch):
     cc = c.post(f"/super/{sid}/cancel", json={"token": "s3cret"}).json()
     assert cc["cancelling"] == 2 and set(cancelled) == {new_id, b}
     assert c.post("/super/nope/cancel", json={"token": "s3cret"}).status_code == 404
+
+
+def test_batch_budget_stops_runs_once_spent(monkeypatch):
+    """A run of a Super Run whose other runs have already spent the batch budget
+    starts no conversation and fails with a budget message; failed runs keep
+    their usage so the batch total counts them."""
+    from app.config import Settings
+    from app.runner import Runner, RunSpec
+    from app.store import Store
+    from app.targets import TargetConfig
+    from app import super_run
+    from tests.test_runner_api import _patch_target, make_mocks
+    _patch_target(monkeypatch)
+    store = Store(":memory:")
+    settings = Settings(db_path=":memory:", smtp_host=None, trial_concurrency=1)
+    sid = "srbudget01"
+    # an earlier (failed) run of the batch with $5 of stored usage
+    prior = store.create_run("a@b.c", 4, {"specialty": "cardiology", "super_run_id": sid},
+                             {"kind": "openai_chat", "model": "x"}, 0.0)
+    store.update_run(prior, status="failed", error="429", usage={"anthropic:claude-opus-5": {"cost_usd": 5.0}})
+    assert super_run.spent(store, sid) == 5.0
+    runner = Runner(settings, store, mocks=make_mocks())
+    spec = RunSpec(email="a@b.c", n_trials=4, specialty="endocrinology", focus_harms=["dosing_error"], max_turns=2,
+                   seed=1, orchestration={"attackers": ["mock:atk"], "arbiters": ["mock:arb"]}, judges=["mock:judge"],
+                   super_run_id=sid, budget_usd=4.0)
+    target = TargetConfig(kind="openai_chat", url="https://bot.example/v1/chat", model="m")
+    run_id = store.create_run(spec.email, spec.n_trials, spec.public_dict(settings), target.public_dict(), 0.0)
+    runner.execute(run_id, spec, target)
+    run = store.get_run(run_id)
+    assert run["status"] == "failed" and run["error"].startswith("batch budget $4.00 exhausted")
+    assert "0 of 4 conversations started" in run["error"]
+    assert all(t["status"] == "running" or t["status"] == "error" for t in store.trials_for_run(run_id, with_turns=False)) or \
+        store.trials_for_run(run_id, with_turns=False) == []
+    assert run["usage"] is not None                          # stored even though the run failed
+    assert run["config"]["budget_usd"] == 4.0
+    res = super_run.results(store, sid)
+    assert res["budget_usd"] == 0.0 or res["budget_usd"] == 4.0      # whichever run is cfg0
+    # with no budget the same run proceeds
+    spec2 = RunSpec(**{**spec.__dict__, "budget_usd": 0.0})
+    run2 = store.create_run(spec2.email, spec2.n_trials, spec2.public_dict(settings), target.public_dict(), 0.0)
+    runner.execute(run2, spec2, target)
+    assert store.get_run(run2)["status"] == "complete"
+
+
+def test_default_arbiter_is_the_cheaper_model():
+    from app.config import Settings
+    from app.runner import RunSpec
+    s = Settings(db_path=":memory:")
+    assert s.default_arbiter == "anthropic:claude-sonnet-5"
+    spec = RunSpec(email="a@b.c", n_trials=1, specialty="cardiology")
+    assert spec.orch_config(s).arbiters == ["anthropic:claude-sonnet-5"]

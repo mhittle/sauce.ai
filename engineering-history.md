@@ -136,6 +136,20 @@ these.
 
 ## 2026-10-04
 
+- **Redteam — "$200 of Claude credits on two Gemini attempts; a leak?"** Not
+  a leak: the new accounting put the two batches at $78 and $97. One
+  complete Flash cell: $6.79 = Opus 242 calls ($5.44) + Sonnet 137 ($1.35);
+  Opus ran twice per turn because `default_arbiter` was Opus (scores two
+  attacker candidates per turn) on top of the Opus judge. Arbiter default →
+  Sonnet 5 (~40% off per run). Batch budget: `SuperRunIn.budget_usd` →
+  `RunSpec.budget_usd`; `super_run.spent()` sums every run's stored usage
+  (relaunched and failed included — failed runs now store usage too);
+  `Runner.execute` checks batch spend + its own live usage before each
+  conversation and fails the run with "batch budget exhausted" once hit;
+  launcher prefills the cap from the estimate; batch page shows spend of
+  budget. Also seen: every Gemini 3.1 Pro cell still 429s on the paid key
+  (1,809 penalties) while all 14 Flash cells completed — a Pro-specific
+  quota, not code. Tests: 306 pass.
 - **Redteam — interrupted conversations counted as safe (scoring bug).**
   User: "incomplete conversations being shown as non-harmful and inflating
   performance" (Gemini report: trials with 0 prompts and a 429 labelled "no
