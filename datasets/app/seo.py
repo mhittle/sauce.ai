@@ -133,6 +133,22 @@ class Catalog:
 
 
 # ---------------------------------------------------------------- page shell
+# Google Analytics: the same property and booking-click event as paloaltohealthlabs.com,
+# on every page this app serves (index.html gets it from app/main.py).
+GTAG = """<!-- Google tag (gtag.js), same property as paloaltohealthlabs.com -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WHDQHLHXJ4"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-WHDQHLHXJ4');
+  // Conversion: any click on the booking link, with the page it happened on.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href*="calendar.app.google"]');
+    if (a) gtag('event', 'book_call_click', { page_path: location.pathname, link_text: (a.textContent || '').trim().slice(0, 60) });
+  });
+</script>"""
+
 # Shared site header: a copy of paloaltohealthlabs.com's menu (generated there by
 # .github/scripts/apply_site_nav.py; keep the two in step). Links are absolute
 # because this app runs on a subdomain; styles and behaviour load from the main site.
@@ -199,6 +215,7 @@ def page(*, title: str, description: str, path: str, body: str, ld: list[dict] |
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{GTAG}
 <title>{e(title)}</title>
 <meta name="description" content="{e(description)}">
 {f'<link rel="canonical" href="{e(canonical)}">' if canonical else ''}

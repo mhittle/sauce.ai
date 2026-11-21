@@ -645,6 +645,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
     index_html = re.sub(r'((?:src|href)="/static/[\w.-]+\.(?:js|css))"', rf'\1?v={asset_v}"',
                         (STATIC / "index.html").read_text())
     index_html = index_html.replace("<!-- site-nav (inserted by app/main.py from seo.SITE_NAV) -->", seo.SITE_NAV, 1)
+    index_html = index_html.replace("<!-- google-tag (inserted by app/main.py from seo.GTAG) -->", seo.GTAG, 1)
 
     @app.get("/", include_in_schema=False)
     def index():
