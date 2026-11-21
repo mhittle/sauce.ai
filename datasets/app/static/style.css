@@ -19,21 +19,6 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 
 /* Site chrome */
 .wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--pad); }
-.nav { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid var(--line); }
-.nav .wrap { display: flex; align-items: center; height: 72px; gap: 32px; }
-.nav ul { display: flex; gap: 28px; list-style: none; margin: 0 0 0 auto; padding: 0; font-size: 15px; font-weight: 500; }
-.nav ul a { text-decoration: none; white-space: nowrap; }
-.nav ul a:hover { text-decoration: underline; text-underline-offset: 6px; }
-.nav ul a[aria-current] { text-decoration: underline; text-underline-offset: 6px; text-decoration-color: var(--accent); }
-.wordmark { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 17px; letter-spacing: -.01em;
-            text-decoration: none; color: var(--ink); display: inline-flex; align-items: center; gap: 11px; white-space: nowrap; }
-.wordmark-mark { width: 24px; height: 24px; flex-shrink: 0; }
-@media (max-width: 960px) { .nav ul { gap: 18px; font-size: 14px; } }
-@media (max-width: 720px) {
-  .nav .wrap { flex-wrap: wrap; height: auto; row-gap: 8px; padding-top: 10px; padding-bottom: 10px; }
-  .nav nav { width: 100%; } .nav ul { margin: 0; flex-wrap: wrap; gap: 14px; font-size: 13px; }
-  .wordmark { font-size: 15px; gap: 8px; } .wordmark-mark { width: 20px; height: 20px; }
-}
 .label { font: 400 13px/1.35 var(--mono); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .crumb a { color: inherit; text-decoration: underline; text-underline-offset: 4px; }
 .hero { padding: clamp(36px, 5vw, 72px) 0 40px; border-bottom: 1px solid var(--line); }

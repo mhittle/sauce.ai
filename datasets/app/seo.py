@@ -133,6 +133,49 @@ class Catalog:
 
 
 # ---------------------------------------------------------------- page shell
+# Google Analytics: the same property and booking-click event as paloaltohealthlabs.com,
+# on every page this app serves (index.html gets it from app/main.py).
+GTAG = """<!-- Google tag (gtag.js), same property as paloaltohealthlabs.com -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WHDQHLHXJ4"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-WHDQHLHXJ4');
+  // Conversion: any click on the booking link, with the page it happened on.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href*="calendar.app.google"]');
+    if (a) gtag('event', 'book_call_click', { page_path: location.pathname, link_text: (a.textContent || '').trim().slice(0, 60) });
+  });
+</script>"""
+
+# Shared site header: a copy of paloaltohealthlabs.com's menu (generated there by
+# .github/scripts/apply_site_nav.py; keep the two in step). Links are absolute
+# because this app runs on a subdomain; styles and behaviour load from the main site.
+SITE_NAV_CSS = '<link rel="stylesheet" href="https://paloaltohealthlabs.com/assets/css/site-nav.css?v=20261119b">'
+SITE_NAV_JS = '<script src="https://paloaltohealthlabs.com/assets/js/site-nav.js?v=20261119b" defer></script>'
+SITE_NAV = """<header class="pn" id="site-nav">
+  <div class="pn-in">
+    <a class="pn-brand" href="https://paloaltohealthlabs.com/" aria-label="Palo Alto Health Labs home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 13 H6 L8 8 L11 17 L14 10 L16 13 H22" fill="none" stroke="#2433D9" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Palo Alto Health Labs</a>
+    <button class="pn-toggle" type="button" aria-expanded="false" aria-controls="pn-links" hidden>Menu</button>
+    <nav class="pn-links" id="pn-links" aria-label="Site">
+      <a class="pn-l" href="https://paloaltohealthlabs.com/fabrica/">Fabrica</a>
+      <a class="pn-l" href="https://paloaltohealthlabs.com/co-scientist/">Co-Scientist</a>
+      <a class="pn-l pn-cur" aria-current="true" href="/">Datasets</a>
+      <a class="pn-l" href="https://thebrief.paloaltohealthlabs.com">The Brief</a>
+      <div class="pn-dd">
+        <button class="pn-l pn-dd-t" type="button" aria-expanded="false" aria-controls="pn-panel">Services<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.2l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="pn-panel" id="pn-panel">
+          <div class="pn-col"><span class="pn-h">Services</span><a href="https://paloaltohealthlabs.com/fractional-cto/">Fractional CTO</a><a href="https://paloaltohealthlabs.com/services/vibe-coded-app-to-hipaa/">Vibe-coded app to HIPAA-ready</a><a href="https://paloaltohealthlabs.com/services/clinical-ai-assessment.html">Clinical AI assessment</a><a href="https://paloaltohealthlabs.com/services/expert-clinical-labeling.html">Expert data labeling</a><a href="https://paloaltohealthlabs.com/#services">All services</a></div>
+          <div class="pn-col"><span class="pn-h">Guides and resources</span><a href="https://paloaltohealthlabs.com/guides/vibe-coded-hipaa/">HIPAA guide for vibe-coded apps</a><a href="https://paloaltohealthlabs.com/guides/vibe-coded-hipaa/2026-baa-matrix/">2026 BAA matrix</a><a href="https://paloaltohealthlabs.com/guides/vibe-coded-hipaa/stack-checker/">Stack Checker</a><a href="https://paloaltohealthlabs.com/resources/">Resource hub</a><a href="https://paloaltohealthlabs.com/resources/downloads/">Downloads</a><a href="https://paloaltohealthlabs.com/blog/">Blog</a></div>
+          <div class="pn-foot"><a href="https://paloaltohealthlabs.com/about.html">About</a><a href="https://calendar.app.google/eJZVyYnoFJD67mGX9" target="_blank" rel="noopener">Book a free call</a></div>
+        </div>
+      </div>
+    </nav>
+  </div>
+</header>"""
+
+
 STYLE = """
 .seo { max-width: 960px; margin: 0 auto; padding: 28px var(--pad, 24px) 64px; }
 .seo h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.12; letter-spacing: -.02em; margin: 6px 0 12px; }
@@ -154,10 +197,11 @@ STYLE = """
 .seo .cols { columns: 3 220px; column-gap: 24px; font-size: 14px; }
 .seo .cols a { display: block; margin: 3px 0; break-inside: avoid; }
 .seo .pager { display: flex; gap: 12px; align-items: center; margin-top: 18px; font-size: 14px; }
-.seo-nav { border-bottom: 1px solid var(--line); }
-.seo-nav .wrap { display: flex; gap: 24px; align-items: center; height: 60px; }
-.seo-nav a { text-decoration: none; font-weight: 500; }
-.seo-nav .brand { font-weight: 600; margin-right: auto; }
+.seo-nav { border-bottom: 1px solid var(--line); background: #fafafa; }
+.seo-nav .wrap { display: flex; gap: 24px; align-items: center; height: 44px; font-size: 14px;
+                 max-width: 1600px; padding: 0 clamp(20px, 5vw, 80px); }  /* same box as the site menu */
+.seo-nav a { text-decoration: none; font-weight: 500; color: var(--muted); }
+.seo-nav a:hover { color: var(--ink); }
 """
 
 
@@ -171,6 +215,7 @@ def page(*, title: str, description: str, path: str, body: str, ld: list[dict] |
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{GTAG}
 <title>{e(title)}</title>
 <meta name="description" content="{e(description)}">
 {f'<link rel="canonical" href="{e(canonical)}">' if canonical else ''}
@@ -181,18 +226,20 @@ def page(*, title: str, description: str, path: str, body: str, ld: list[dict] |
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css{('?v=' + asset_v) if asset_v else ''}">
+{SITE_NAV_CSS}
 <style>{STYLE}</style>
 {ld_html}</head>
 <body>
-<header class="seo-nav"><div class="wrap">
-<a class="brand" href="/">{SITE} · Datasets</a>
+{SITE_NAV}
+<nav class="seo-nav" aria-label="Catalog"><div class="wrap">
+<a href="/">Search</a>
 <a href="/datasets/">All datasets</a>
 <a href="/conditions/">Conditions</a>
-<a href="/">Search</a>
-</div></header>
+</div></nav>
 <main class="seo">
 {body}
 </main>
+{SITE_NAV_JS}
 </body>
 </html>"""
     return HTMLResponse(doc, status_code=status)
