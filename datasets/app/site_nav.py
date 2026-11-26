@@ -5,11 +5,13 @@ Mirrors header() in mhittle/paloaltohealthlabs.com .github/scripts/apply_site_na
 links point at the main site absolutely, and Datasets is the current item. Styles
 and behaviour are static/site-nav.css and static/site-nav.js, copied from the main
 site. Used by the app page (index.html) and the server-rendered pages (seo.py).
+The header carries Fabrica's page action, "Get started", linking to its start page.
 """
 from __future__ import annotations
 
 MAIN = "https://paloaltohealthlabs.com"
 BOOKING = "https://calendar.app.google/eJZVyYnoFJD67mGX9"
+CTA = ("Get started", f"{MAIN}/fabrica/start/")
 
 TOP = [  # (label, href, current)
     ("Fabrica", f"{MAIN}/fabrica/", False),
@@ -48,7 +50,7 @@ def header() -> str:
         return (f'<div class="pn-col"><span class="pn-h">{title}</span>'
                 + "".join(f'<a href="{MAIN}{h}">{label}</a>' for label, h in items) + "</div>")
 
-    return f'''<header class="pn" id="site-nav">
+    return f'''<header class="pn pn-has-cta" id="site-nav">
   <div class="pn-in">
     <a class="pn-brand" href="{MAIN}/" aria-label="Palo Alto Health Labs home">{MARK}Palo Alto Health Labs</a>
     <button class="pn-toggle" type="button" aria-expanded="false" aria-controls="pn-links" hidden>Menu</button>
@@ -62,5 +64,6 @@ def header() -> str:
         </div>
       </div>
     </nav>
+    <a class="pn-cta" href="{CTA[1]}">{CTA[0]}</a>
   </div>
 </header>'''
