@@ -951,7 +951,6 @@ async function refreshStats() {
     state.llm = s.llm_configured;
     $("#stats").textContent = `${s.datasets} datasets · ${s.conditions} conditions · ${s.files} files (${fmtBytes(s.bytes)}) · ${s.papers.toLocaleString()} papers · ${s.fda_submissions.toLocaleString()} FDA submissions` +
       (s.active_crawls.length ? ` · ${s.active_crawls.length} crawl running` : "");
-    $("#broad-btn").disabled = !s.llm_configured;
     if (s.storage && s.storage.persistent === false)
       banner(`Storage is NOT persistent: the catalog at ${s.storage.data_dir} is on the container's disk and will be erased on the next deploy. Attach a Railway volume to this service.`);
     else banner(s.llm_configured ? "" : "Crawling is disabled: set ANTHROPIC_API_KEY on the server. Search still works over the indexed catalog.");
@@ -980,14 +979,6 @@ $("#search-form").onsubmit = e => {
   if (location.hash) history.pushState(null, "", location.pathname + location.search);
   const q = $("#q").value.trim();
   if (q) runSearch(q).catch(err => banner(err.message));
-};
-$("#broad-btn").onclick = async () => {
-  if (!confirm("Launch a 1-hour crawl across all conditions (highest 510(k) count first)? This uses Claude API credits.")) return;
-  try {
-    const r = await api("/api/crawls", { method: "POST", body: JSON.stringify({ mode: "broad" }) });
-    banner(`Broad crawl #${r.crawl_id} started — follow it on the Crawls tab.`);
-    refreshStats();
-  } catch (e) { banner(e.message); }
 };
 
 (async () => {

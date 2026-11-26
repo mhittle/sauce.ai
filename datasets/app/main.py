@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import crawler, fda, seo
+from . import crawler, fda, seo, site_nav
 import os
 
 from .config import Settings, get_settings, on_mounted_volume, on_railway
@@ -643,7 +643,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
 
     asset_v = _asset_version()
     index_html = re.sub(r'((?:src|href)="/static/[\w.-]+\.(?:js|css))"', rf'\1?v={asset_v}"',
-                        (STATIC / "index.html").read_text())
+                        (STATIC / "index.html").read_text()).replace("<!-- site-nav -->",
+                                                                     site_nav.header())
 
     @app.get("/", include_in_schema=False)
     def index():

@@ -29,25 +29,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/site-nav.css">
 </head>
 <body>
-  <header class="nav">
-    <div class="wrap">
-      <a class="wordmark" href="https://paloaltohealthlabs.com/" aria-label="Palo Alto Health Labs home">
-        <svg class="wordmark-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 13 H6 L8 8 L11 17 L14 10 L16 13 H22" fill="none" stroke="#2433D9" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Palo Alto Health Labs
-      </a>
-      <nav aria-label="Site">
-        <ul>
-          <li><a href="https://paloaltohealthlabs.com/index.html#resources">Resources</a></li>
-          <li><a href="https://paloaltohealthlabs.com/blog/">Blog</a></li>
-          <li><a href="https://paloaltohealthlabs.com/co-scientist/">Co-Scientist</a></li>
-          <li><a href="/" aria-current="page">Datasets</a></li>
-          <li><a href="https://paloaltohealthlabs.com/index.html#services">All services</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+  <!-- site-nav -->
 
   <header class="hero hero-s">
     <div class="wrap">
@@ -69,7 +54,6 @@
       </nav>
       <div class="top-right">
         <span id="stats" class="muted"></span>
-        <button id="broad-btn" class="btn secondary" title="Crawl the web for datasets across all conditions, highest 510(k) count first">Run 1-hour crawl</button>
       </div>
     </div>
   </div>
@@ -255,5 +239,6 @@
 
   <script src="/static/explore.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/site-nav.js" defer></script>
 </body>
 </html>
