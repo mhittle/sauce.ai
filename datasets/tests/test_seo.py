@@ -148,7 +148,8 @@ def test_shared_site_header(site):
     client, store, a, b = site
     for path in ("/", "/datasets/", f"/datasets/siena-scalp-eeg-database-{a}", "/conditions/epilepsy"):
         t = client.get(path).text
-        assert t.count('<header class="pn" id="site-nav">') == 1, path
+        assert t.count('<header class="pn pn-has-cta" id="site-nav">') == 1, path
+        assert '<a class="pn-cta" href="https://paloaltohealthlabs.com/fabrica/start/">Get started</a>' in t
         assert '<a class="pn-l pn-cur" aria-current="true" href="/">Datasets</a>' in t
         for label in ("Fabrica", "Co-Scientist", "The Brief", "Services", "Fractional CTO", "Book a free call"):
             assert label in t, (path, label)
