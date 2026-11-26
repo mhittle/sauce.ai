@@ -29,6 +29,7 @@ from urllib.parse import quote
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
+from . import site_nav
 from .devices import fda_database_url
 from .store import Store, normalize_condition
 
@@ -154,10 +155,6 @@ STYLE = """
 .seo .cols { columns: 3 220px; column-gap: 24px; font-size: 14px; }
 .seo .cols a { display: block; margin: 3px 0; break-inside: avoid; }
 .seo .pager { display: flex; gap: 12px; align-items: center; margin-top: 18px; font-size: 14px; }
-.seo-nav { border-bottom: 1px solid var(--line); }
-.seo-nav .wrap { display: flex; gap: 24px; align-items: center; height: 60px; }
-.seo-nav a { text-decoration: none; font-weight: 500; }
-.seo-nav .brand { font-weight: 600; margin-right: auto; }
 """
 
 
@@ -181,18 +178,15 @@ def page(*, title: str, description: str, path: str, body: str, ld: list[dict] |
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css{('?v=' + asset_v) if asset_v else ''}">
+<link rel="stylesheet" href="/static/site-nav.css{('?v=' + asset_v) if asset_v else ''}">
 <style>{STYLE}</style>
 {ld_html}</head>
 <body>
-<header class="seo-nav"><div class="wrap">
-<a class="brand" href="/">{SITE} · Datasets</a>
-<a href="/datasets/">All datasets</a>
-<a href="/conditions/">Conditions</a>
-<a href="/">Search</a>
-</div></header>
+{site_nav.header()}
 <main class="seo">
 {body}
 </main>
+<script src="/static/site-nav.js{('?v=' + asset_v) if asset_v else ''}" defer></script>
 </body>
 </html>"""
     return HTMLResponse(doc, status_code=status)

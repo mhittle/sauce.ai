@@ -1,0 +1,68 @@
+/* Copied verbatim from paloaltohealthlabs.com /assets/css/site-nav.css (mhittle/paloaltohealthlabs.com @ 392a1c7).
+   Keep in sync with that file; the menu markup comes from app/site_nav.py. */
+/* Shared site header (the "pn" block). One menu on every page, whatever template the page body uses.
+   The markup is written into each page by .github/scripts/apply_site_nav.py. Edit the menu there, not in pages.
+   Every rule is scoped under .pn and sets its own type and colour so page styles cannot leak in. */
+.pn{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);backdrop-filter:saturate(150%) blur(12px);-webkit-backdrop-filter:saturate(150%) blur(12px);border-bottom:1px solid #E6E6E1;color:#1A1C2B;font:500 15px/1.2 "Geist","Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-align:left;letter-spacing:0}
+.pn *,.pn *::before,.pn *::after{box-sizing:border-box}
+.pn .pn-in{max-width:1600px;margin:0 auto;padding:0 clamp(20px,5vw,80px);min-height:64px;display:flex;align-items:center;gap:28px}
+.pn a{text-decoration:none}
+.pn .pn-brand{display:inline-flex;align-items:center;gap:10px;min-height:44px;color:#1A1C2B;font:600 17px/1 "Space Grotesk","Geist",ui-sans-serif,system-ui,sans-serif;letter-spacing:-.01em;white-space:nowrap;flex:none}
+.pn .pn-brand svg{width:24px;height:24px;flex:none}
+.pn .pn-links{display:flex;align-items:center;flex-wrap:wrap;gap:4px 26px;margin:0;padding:0}
+.pn .pn-l{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0;margin:0;border:0;background:none;color:#474B61;font:inherit;cursor:pointer;white-space:nowrap}
+.pn .pn-l:hover,.pn .pn-l[aria-expanded="true"]{color:#1A1C2B}
+.pn .pn-l.pn-cur{color:#1A1C2B;text-decoration:underline;text-decoration-color:#2433D9;text-decoration-thickness:2px;text-underline-offset:8px}
+.pn .pn-l svg{width:11px;height:11px;transition:transform .15s ease}
+.pn .pn-l[aria-expanded="true"] svg{transform:rotate(180deg)}
+.pn a:focus-visible,.pn button:focus-visible{outline:3px solid #2433D9;outline-offset:3px;border-radius:6px}
+
+/* Services dropdown */
+.pn .pn-dd{position:relative;display:inline-flex}
+.pn .pn-panel{display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);z-index:2;width:min(560px,calc(100vw - 40px));padding:22px 24px 18px;background:#fff;border:1px solid #E6E6E1;border-radius:14px;box-shadow:0 24px 60px rgba(26,28,43,.14);grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 28px}
+.pn .pn-dd:hover .pn-panel,.pn .pn-dd:focus-within .pn-panel,.pn .pn-dd.pn-on .pn-panel{display:grid}
+.pn .pn-dd.pn-off .pn-panel{display:none}
+.pn .pn-h{display:block;margin:0 0 6px;color:#6E7288;font:500 11.5px/1.4 "Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.07em}
+.pn .pn-col a{display:block;padding:7px 0;color:#1A1C2B;font-family:inherit;font-weight:500;font-size:15px;line-height:1.35}
+.pn .pn-col a:hover{color:#2433D9}
+.pn .pn-foot{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:10px;padding-top:12px;border-top:1px solid #E6E6E1}
+.pn .pn-foot a{padding:5px 0;color:#474B61;font-size:14.5px}
+.pn .pn-foot a:hover{color:#1A1C2B}
+
+/* Optional page action on the right (for example "Get started" on Fabrica) */
+.pn .pn-cta{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;border-radius:12px;background:#2433D9;color:#fff;font-family:inherit;font-weight:600;font-size:15px;line-height:1;white-space:nowrap;flex:none;box-shadow:0 6px 16px rgba(36,51,217,.16)}
+.pn .pn-cta:hover{background:#1B27B0;color:#fff}
+.pn .pn-cta.pn-plain{background:none;color:#474B61;box-shadow:none;padding:0;font-weight:500}
+.pn .pn-cta.pn-plain:hover{background:none;color:#1A1C2B;text-decoration:underline}
+
+/* Small screens: the links fold behind a Menu button once the script has loaded.
+   Without the script they simply wrap under the wordmark. */
+.pn .pn-toggle{display:none;align-items:center;gap:8px;min-height:42px;padding:0 14px;margin:0 0 0 auto;border:1px solid #D9D9D2;border-radius:10px;background:#fff;color:#1A1C2B;font-family:inherit;font-weight:500;font-size:15px;line-height:1;cursor:pointer}
+@media(max-width:940px){
+  .pn .pn-in{flex-wrap:wrap;gap:0 16px}
+  .pn .pn-links{flex-basis:100%;order:5;padding:0 0 10px;gap:0 22px}
+  .pn .pn-panel{left:0;transform:none}
+  .pn.pn-js .pn-toggle{display:inline-flex}
+  .pn.pn-js .pn-cta{margin-left:0}
+  .pn.pn-js .pn-toggle + .pn-links{display:none}
+  .pn.pn-js.pn-open .pn-links{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:6px 0 16px}
+  .pn.pn-js .pn-l{min-height:48px;font-size:16.5px;border-top:1px solid #EEEEE9;justify-content:space-between}
+  .pn.pn-js .pn-dd{display:block}
+  .pn.pn-js .pn-dd .pn-l{width:100%}
+  .pn.pn-js .pn-panel{position:static;width:auto;box-shadow:none;border:0;border-radius:0;padding:4px 0 8px;grid-template-columns:minmax(0,1fr);gap:14px}
+  .pn.pn-js .pn-dd:hover .pn-panel,.pn.pn-js .pn-dd:focus-within .pn-panel{display:none}
+  .pn.pn-js .pn-dd.pn-on .pn-panel{display:grid}
+}
+@media(max-width:480px){
+  .pn .pn-in{min-height:60px;gap:0 10px}
+  /* With a page action in the header there is no room for the full name: show the short one. */
+  .pn.pn-has-cta .pn-brand{font-size:0;gap:8px}
+  .pn.pn-has-cta .pn-brand::after{content:"PAHL";font-size:15.5px;letter-spacing:.02em}
+  .pn.pn-js.pn-has-cta .pn-toggle{order:3;margin-left:0}
+  .pn.pn-js.pn-has-cta .pn-cta{order:2;margin-left:auto}
+  .pn .pn-brand{font-size:15.5px}
+  .pn .pn-cta{min-height:40px;padding:0 13px;font-size:14px}
+  .pn .pn-toggle{padding:0 12px}
+}
+@media(prefers-reduced-motion:reduce){.pn .pn-l svg{transition:none}}
+@media print{.pn{position:static}.pn .pn-links,.pn .pn-toggle,.pn .pn-cta{display:none!important}}

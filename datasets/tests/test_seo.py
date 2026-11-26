@@ -141,3 +141,19 @@ def test_bing_and_indexnow_files(site):
     assert r.status_code == 200 and r.text == "4e7cb8cfba444e299c57c0d936696e24"
     assert r.headers["content-type"].startswith("text/plain")
     assert client.get("/robots.txt").text == ROBOTS
+
+
+def test_shared_site_header(site):
+    """Same header as paloaltohealthlabs.com (Fabrica etc.), Datasets current."""
+    client, store, a, b = site
+    for path in ("/", "/datasets/", f"/datasets/siena-scalp-eeg-database-{a}", "/conditions/epilepsy"):
+        t = client.get(path).text
+        assert t.count('<header class="pn" id="site-nav">') == 1, path
+        assert '<a class="pn-l pn-cur" aria-current="true" href="/">Datasets</a>' in t
+        for label in ("Fabrica", "Co-Scientist", "The Brief", "Services", "Fractional CTO", "Book a free call"):
+            assert label in t, (path, label)
+        assert 'href="https://paloaltohealthlabs.com/fabrica/"' in t
+        assert re.search(r'href="/static/site-nav\.css\?v=[0-9a-f]+"', t)
+        assert re.search(r'src="/static/site-nav\.js\?v=[0-9a-f]+"', t)
+        assert '<header class="nav">' not in t and "seo-nav" not in t
+    assert client.get("/static/site-nav.css").status_code == 200
