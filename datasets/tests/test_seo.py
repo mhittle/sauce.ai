@@ -151,9 +151,14 @@ def test_shared_site_header(site):
         assert t.count('<header class="pn pn-has-cta" id="site-nav">') == 1, path
         assert '<a class="pn-cta" href="https://paloaltohealthlabs.com/fabrica/start/">Get started</a>' in t
         assert '<a class="pn-l pn-cur" aria-current="true" href="/">Datasets</a>' in t
-        for label in ("Fabrica", "Co-Scientist", "The Brief", "Services", "Fractional CTO", "Book a free call"):
+        for label in ("Fabrica", "Co-Scientist", "Populus", "Datasets", "The Brief", "Services", "Fractional CTO", "Book a free call"):
             assert label in t, (path, label)
         assert 'href="https://paloaltohealthlabs.com/fabrica/"' in t
+        # Same top-level order as the main site's menu (apply_site_nav.TOP), Populus included.
+        nav = t[t.index('id="pn-links"'):t.index('class="pn-dd"')]
+        assert re.findall(r'class="pn-l[^"]*"[^>]*>([^<]+)</a>', nav) == ["Fabrica", "Co-Scientist", "Populus", "Datasets", "The Brief"]
+        assert 'href="https://populus.paloaltohealthlabs.com"' in t
+        assert 'href="https://paloaltohealthlabs.com/book/scoping/"' in t and "calendar.app.google" not in t
         assert re.search(r'href="/static/site-nav\.css\?v=[0-9a-f]+"', t)
         assert re.search(r'src="/static/site-nav\.js\?v=[0-9a-f]+"', t)
         assert '<header class="nav">' not in t and "seo-nav" not in t

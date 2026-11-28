@@ -10,12 +10,13 @@ The header carries Fabrica's page action, "Get started", linking to its start pa
 from __future__ import annotations
 
 MAIN = "https://paloaltohealthlabs.com"
-BOOKING = "https://calendar.app.google/eJZVyYnoFJD67mGX9"
+BOOKING = f"{MAIN}/book/scoping/"  # offer-specific booking path; fires GA4 book_call_click, then the calendar
 CTA = ("Get started", f"{MAIN}/fabrica/start/")
 
 TOP = [  # (label, href, current)
     ("Fabrica", f"{MAIN}/fabrica/", False),
     ("Co-Scientist", f"{MAIN}/co-scientist/", False),
+    ("Populus", "https://populus.paloaltohealthlabs.com", False),
     ("Datasets", "/", True),
     ("The Brief", "https://thebrief.paloaltohealthlabs.com", False),
 ]
